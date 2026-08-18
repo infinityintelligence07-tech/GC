@@ -1,0 +1,1 @@
+ALTER TABLE public.conciliacao_items ADD COLUMN IF NOT EXISTS autor_observacao text;

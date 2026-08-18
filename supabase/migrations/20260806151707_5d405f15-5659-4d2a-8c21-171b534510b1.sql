@@ -1,0 +1,1 @@
+UPDATE public.students SET status_cancelamento = 'revertido', updated_at = now() WHERE id = '51ab4668-7608-4607-9b0e-e34de2f21540';

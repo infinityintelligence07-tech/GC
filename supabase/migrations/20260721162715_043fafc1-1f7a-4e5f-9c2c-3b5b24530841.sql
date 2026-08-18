@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "company_logos_authenticated_list" ON storage.objects;

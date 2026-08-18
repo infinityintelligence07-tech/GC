@@ -1,0 +1,1 @@
+DELETE FROM public.student_tags WHERE name IN ('Conta Caixa - Academy', 'Sicoob 2 - Academy');

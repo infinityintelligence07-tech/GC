@@ -1,0 +1,1 @@
+ALTER TABLE public.cancellation_cases ADD COLUMN IF NOT EXISTS inscricoes_revertidas integer NOT NULL DEFAULT 0;

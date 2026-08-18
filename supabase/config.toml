@@ -1,0 +1,8 @@
+project_id = "cbqkoverzdzmhceztldv"
+
+[functions.migrate-app-users]
+verify_jwt = false
+
+[functions.auto-renda-extra]
+verify_jwt = false
+

@@ -1,0 +1,1 @@
+ALTER TABLE public.cancellation_cases ADD COLUMN IF NOT EXISTS external_import boolean NOT NULL DEFAULT false;

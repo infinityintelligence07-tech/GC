@@ -1,0 +1,1 @@
+UPDATE public.students SET status_cancelamento = 'nenhum', cancellation_case_id = NULL, updated_at = now() WHERE id = '45202896-b948-4425-bd28-5a9c46e70af1';

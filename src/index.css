@@ -1,0 +1,185 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 224 40% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 40% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 40% 14%;
+
+    --primary: 225 80% 56%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 30% 96%;
+    --secondary-foreground: 224 40% 14%;
+
+    --muted: 220 20% 95%;
+    --muted-foreground: 220 12% 50%;
+
+    --accent: 200 80% 52%;
+    --accent-foreground: 224 40% 14%;
+
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 60% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 40 85% 52%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 16% 92%;
+    --input: 220 16% 90%;
+    --ring: 225 80% 56%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 225 36% 12%;
+    --sidebar-foreground: 220 25% 85%;
+    --sidebar-primary: 225 80% 56%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 30% 18%;
+    --sidebar-accent-foreground: 220 25% 85%;
+    --sidebar-border: 225 25% 20%;
+    --sidebar-ring: 225 80% 56%;
+
+    --gradient-start: 225 80% 56%;
+    --gradient-end: 200 80% 52%;
+
+    --sidebar-width: 260px;
+  }
+
+  .dark {
+    --background: 224 40% 6%;
+    --foreground: 220 25% 96%;
+    --card: 224 36% 9%;
+    --card-foreground: 220 25% 96%;
+    --popover: 224 36% 9%;
+    --popover-foreground: 220 25% 96%;
+    --primary: 225 80% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 28% 16%;
+    --secondary-foreground: 220 25% 96%;
+    --muted: 220 28% 16%;
+    --muted-foreground: 220 16% 60%;
+    --accent: 200 80% 52%;
+    --accent-foreground: 220 25% 96%;
+    --destructive: 0 56% 38%;
+    --destructive-foreground: 220 25% 96%;
+    --border: 220 28% 16%;
+    --input: 220 28% 16%;
+    --ring: 220 22% 78%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.011em;
+  }
+}
+
+@layer utilities {
+  .iam-gradient {
+    background: linear-gradient(135deg, hsl(var(--gradient-start)) 0%, hsl(var(--gradient-end)) 100%);
+  }
+  .iam-text-gradient {
+    background: linear-gradient(135deg, hsl(var(--gradient-start)) 0%, hsl(var(--gradient-end)) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .saas-shadow {
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 3px -1px rgba(0, 0, 0, 0.03);
+  }
+  .saas-shadow-md {
+    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.06), 0 1px 3px -1px rgba(0, 0, 0, 0.04);
+  }
+  .saas-shadow-lg {
+    box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.04);
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.slide-in {
+  animation: slideIn 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@layer components {
+  .input-field {
+    @apply px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring/15 focus:border-primary/40 transition-all duration-200;
+  }
+  .action-btn {
+    @apply w-8 h-8 flex items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:-translate-y-0.5 hover:shadow-sm hover:border-border transition-all duration-200 cursor-pointer text-xs;
+  }
+  /* ─── KPI value ──────────────────────────────────────────────────────────
+     Tamanho fluido entre mobile e desktop. Garante que números longos
+     (R$ 12.345.678,90) nunca vazem do card: usa tabular-nums para alinhar,
+     min-w-0 para deixar o flex/grid encolher, e truncate como rede de proteção.
+     Use sempre dentro de um container com `min-w-0` (ex.: card de KPI). */
+  .kpi-value {
+    @apply font-bold tabular-nums tracking-tight whitespace-nowrap block overflow-hidden text-ellipsis max-w-full;
+    font-size: clamp(0.8rem, 1.15vw, 1.05rem);
+    line-height: 1.2;
+  }
+  /* KPI value que SE ADAPTA à largura do container (container query).
+     Use junto com a classe `kpi-fit` no card pai. */
+  .kpi-fit {
+    container-type: inline-size;
+  }
+  .kpi-value-fit {
+    @apply font-bold tabular-nums tracking-tight whitespace-nowrap block overflow-hidden max-w-full;
+    /* 9cqi ≈ 9% da largura do card. Mín 0.7rem, Máx 1.1rem. */
+    font-size: clamp(0.7rem, 9cqi, 1.1rem);
+    line-height: 1.2;
+  }
+  .kpi-value-lg {
+    @apply font-bold tabular-nums tracking-tight whitespace-nowrap block overflow-hidden text-ellipsis max-w-full;
+    font-size: clamp(0.9rem, 1.4vw, 1.25rem);
+    line-height: 1.2;
+  }
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Better select styling */
+select.input-field {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25em 1.25em;
+  padding-right: 2rem;
+}

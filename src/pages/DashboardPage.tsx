@@ -1,0 +1,1427 @@
+import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, getInstallmentFinancialValueExport } from '@/store/useAppStore';
+import ACRankingCard from '@/components/ui/ACRankingCard';
+import ReversalRankingMirror from '@/components/ui/ReversalRankingMirror';
+import { useConciliacaoStore } from '@/store/useConciliacaoStore';
+import DashDateFilter, { DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
+import { getCurrentMonthDates } from '@/lib/periodFilter';
+import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Student, StudentStatus } from '@/types';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { getTodayBrasilia, calcularDiasVencido } from '@/lib/brasiliaDate';
+import { getTagStyle } from '@/lib/tagColors';
+import { computeTagKpis } from '@/lib/tagKpis';
+import { studentMatchesTagFilter, applyTagFilterToStudent } from '@/lib/tagFilter';
+import TagMultiSelect from '@/components/ui/TagMultiSelect';
+import { supabase } from '@/integrations/supabase/client';
+import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
+import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
+
+type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'tag';
+
+function MediaDiasTag({ media }: { media: number | null }) {
+  if (media === null) return <span className="text-[10px] text-muted-foreground">—</span>;
+  const color = media < 0 ? 'text-emerald-600' : media <= 5 ? 'text-amber-600' : 'text-red-600';
+  const prefix = media < 0 ? '' : '+';
+  return <span className={`text-[11px] font-semibold ${color}`}>{prefix}{media}d</span>;
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  'Em Dia': '#10b981',
+  'Vencido 1': '#f59e0b',
+  'Vencido 2': '#f97316',
+  'À Negativar': '#ef4444',
+  'Negativado': '#9f1239',
+  'Pago': '#14b8a6',
+};
+
+export default function DashboardPage() {
+  const { students, acs, products, cancellationCases, studentTags } = useAppStore();
+  const conciliacaoItems = useConciliacaoStore((s) => s.items);
+  const [forecastIndex, setForecastIndex] = useState(0);
+  const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
+  const [acFilter, setAcFilter] = useState('');
+  const [scoreFilter, setScoreFilter] = useState<number | null>(null);
+  const [productFilter, setProductFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StudentStatus | 'cancelamento_solicitado' | ''>('');
+  const [infoStatus, setInfoStatus] = useState<string | null>(null);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [paymentDetailModal, setPaymentDetailModal] = useState<null | 'pago' | 'recebido'>(null);
+  const [kpiModalKey, setKpiModalKey] = useState<KpiModalKey | null>(null);
+
+  // ── Evolução Mensal (filtro exclusivo do bloco) ───────────────────────────
+  // Presets: 3m, 6m (default), 12m, custom (datepickers de mês)
+  type EvolPreset = '3m' | '6m' | '12m' | 'custom';
+  const [evolPreset, setEvolPreset] = useState<EvolPreset>('6m');
+  const _evolToday = getTodayBrasilia();
+  const _evolDefStart = new Date(_evolToday.getFullYear(), _evolToday.getMonth() - 5, 1);
+  const fmtMonthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const [evolCustomStart, setEvolCustomStart] = useState<string>(fmtMonthKey(_evolDefStart));
+  const [evolCustomEnd, setEvolCustomEnd] = useState<string>(fmtMonthKey(_evolToday));
+
+
+  // ── DashDateFilter state ──────────────────────────────────────────────────
+  const { firstDay: currentMonthStart, lastDay: currentMonthEnd } = getCurrentMonthDates();
+  const [mode, setMode] = useState<DashFilterMode>('performance');
+  const [perfPreset, setPerfPreset] = useState<PerfPreset>('todos');
+  const [perfCustomStart, setPerfCustomStart] = useState(currentMonthStart);
+  const [perfCustomEnd, setPerfCustomEnd] = useState(currentMonthEnd);
+  const [historicoStart, setHistoricoStart] = useState(currentMonthStart);
+  const [historicoEnd, setHistoricoEnd] = useState(currentMonthEnd);
+
+  // Quantidade de alunos distintos transferidos via Renegociação por AC.
+  const renegByAc = (() => {
+    const sets: Record<string, Set<string>> = {};
+    const start = mode === 'historico' && historicoStart ? new Date(historicoStart + 'T00:00:00') : null;
+    const end = mode === 'historico' && historicoEnd ? new Date(historicoEnd + 'T23:59:59') : null;
+    conciliacaoItems.forEach((it) => {
+      if (it.tipo !== 'parcela_quantidade' || !it.ac) return;
+      if (start || end) {
+        const c = new Date(it.createdAt);
+        if (start && c < start) return;
+        if (end && c > end) return;
+      }
+      const key = it.studentId || it.studentName;
+      if (!key) return;
+      (sets[it.ac!] ??= new Set()).add(key);
+    });
+    const map: Record<string, number> = {};
+    Object.entries(sets).forEach(([k, v]) => (map[k] = v.size));
+    return map;
+  })();
+
+  // ── Forecast custom dates ─────────────────────────────────────────────────
+  const [forecastCustomStart, setForecastCustomStart] = useState(currentMonthStart);
+  const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
+
+  // ── Base dataset: filter by AC + Produto (Score aplicado depois) ─────────
+  // Mantemos dois estágios para que a distribuição de Score continue refletindo
+  // a carteira filtrada por AC+Produto (sem se auto-zerar quando o próprio
+  // filtro de Score está ativo).
+  const acProductFilteredRaw = students.filter((s) => {
+    if (acFilter && s.ac !== acFilter) return false;
+    if (productFilter && s.product !== productFilter) return false;
+    if (!studentMatchesTagFilter(s, tagFilters)) return false;
+    return true;
+  });
+  // Quando filtro de tag está ativo, recalculamos installments/status/value
+  // para refletir SOMENTE as parcelas marcadas com a tag.
+  const acProductFiltered = tagFilters.length > 0
+    ? acProductFilteredRaw.map((s) => applyTagFilterToStudent(s, tagFilters))
+    : acProductFilteredRaw;
+
+  const baseStudents = scoreFilter !== null
+    ? acProductFiltered.filter((s) => calcularScoreComportamento(s.installments) === scoreFilter)
+    : acProductFiltered;
+
+  // ── KPI students (mode-dependent) ─────────────────────────────────────────
+  // Regra: Pagos NÃO entram na carteira/KPIs. Aparecem somente quando o
+  // usuário filtra explicitamente por "Pago" (consulta).
+  const [kpiStudents, setKpiStudents] = useState<Student[]>([]);
+
+  // Snapshot histórico congelado (uma foto por dia por empresa). Quando o
+  // usuário consulta uma data passada, lemos a foto salva na tabela
+  // dashboard_snapshots em vez de recalcular a partir do estado atual.
+  const [snapshotStudents, setSnapshotStudents] = useState<Student[] | null>(null);
+  const [snapshotDate, setSnapshotDate] = useState<string | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+
+  useEffect(() => {
+    if (mode !== 'historico' || !historicoEnd) {
+      setSnapshotStudents(null); setSnapshotDate(null); return;
+    }
+    const todayISO = (() => { const d = getTodayBrasilia(); return d.toISOString().slice(0,10); })();
+    if (historicoEnd >= todayISO) {
+      setSnapshotStudents(null); setSnapshotDate(null); return;
+    }
+    let cancelled = false;
+    setSnapshotLoading(true);
+    (async () => {
+      try {
+        const { data: activeCompany } = await supabase
+          .from('user_active_company')
+          .select('company_id')
+          .maybeSingle();
+        const companyId = activeCompany?.company_id;
+        if (!companyId) { if (!cancelled) { setSnapshotStudents(null); setSnapshotDate(null); } return; }
+        const { data: snap } = await supabase
+          .from('dashboard_snapshots')
+          .select('snapshot_date, payload')
+          .eq('company_id', companyId)
+          .eq('snapshot_date', historicoEnd)
+          .maybeSingle();
+        if (cancelled) return;
+        if (!snap) { setSnapshotStudents(null); setSnapshotDate(null); return; }
+        const byId = new Map(students.map((s) => [s.id, s]));
+        const arr = (snap.payload as any[]).map((p) => {
+          const cur = byId.get(p.id);
+          const base: Student = cur ? { ...cur } : ({
+            id: p.id, name: p.name, whatsapp: '', cpf: '', address: '', numero: '',
+            cidade: '', estado: '', cep: '', status: p.status as StudentStatus,
+            statusMode: p.status_mode ?? 'Automático', ac: p.ac_id ?? '',
+            product: p.product ?? '', enrollmentDate: p.enrollment_date ?? '',
+            dueDay: 1, saleValue: 0, downPayment: 0, totalInstallments: 0,
+            paidInstallments: 0, installmentValue: 0, installments: [], history: [],
+          } as unknown as Student);
+          return {
+            ...base,
+            status: p.status as StudentStatus,
+            statusMode: p.status_mode ?? base.statusMode,
+            isRendaExtra: p.is_renda_extra ?? base.isRendaExtra,
+            rendaExtraStatus: p.renda_extra_status ?? base.rendaExtraStatus,
+            statusCancelamento: p.status_cancelamento ?? base.statusCancelamento,
+            tags: p.tags ?? base.tags,
+            installments: Array.isArray(p.installments) ? p.installments : base.installments,
+          } as Student;
+        });
+        setSnapshotStudents(arr);
+        setSnapshotDate(snap.snapshot_date);
+      } finally {
+        if (!cancelled) setSnapshotLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mode, historicoEnd, students]);
+
+  useEffect(() => {
+    // Cancelados conciliados (statusCancelamento === 'cancelado') NÃO entram na carteira/KPIs.
+    // Exceção: quando o filtro é "cancelamento_solicitado", exibimos apenas os
+    // alunos com solicitação em aberto (statusCancelamento='solicitado').
+    const stripCancelados = (arr: Student[]) =>
+      statusFilter === 'cancelamento_solicitado'
+        ? arr.filter((s) => s.statusCancelamento === 'solicitado')
+        : arr.filter((s) => s.statusCancelamento !== 'cancelado');
+    // Renda Extra já conciliada (saiu de "Conciliar Exclusão") NÃO entra na carteira/KPIs;
+    // só aparece quando o usuário filtrar explicitamente por status "Renda Extra".
+    const stripRendaExtraConciliada = (arr: Student[]) =>
+      statusFilter === 'Renda Extra'
+        ? arr
+        : arr.filter((s) => !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão'));
+    if (mode === 'historico') {
+      if (!historicoEnd) { setKpiStudents([]); return; }
+      const refDate = new Date(historicoEnd + 'T23:59:59');
+      const todayEnd = getTodayBrasilia(); todayEnd.setHours(23, 59, 59, 999);
+      const isTodaySnapshot = refDate.getTime() >= todayEnd.getTime();
+
+      // 🎯 Foto congelada disponível: usa direto sem recalcular.
+      if (!isTodaySnapshot && snapshotStudents && snapshotDate === historicoEnd) {
+        const filteredByFront = snapshotStudents.filter((s) => {
+          if (acFilter && s.ac !== acFilter) return false;
+          if (productFilter && s.product !== productFilter) return false;
+          if (!studentMatchesTagFilter(s, tagFilters)) return false;
+          if (scoreFilter !== null && calcularScoreComportamento(s.installments) !== scoreFilter) return false;
+          return true;
+        });
+        const withoutPagos = statusFilter === 'Pago' ? filteredByFront : filteredByFront.filter((s) => s.status !== 'Pago');
+        const withoutCancelados = stripCancelados(withoutPagos);
+        const withoutREConciliada = stripRendaExtraConciliada(withoutCancelados);
+        const filtered = statusFilter
+          ? (statusFilter === 'Renda Extra'
+              ? withoutREConciliada.filter((s) => isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
+              : statusFilter === 'cancelamento_solicitado'
+                ? withoutREConciliada
+                : withoutREConciliada.filter((s) => s.status === statusFilter))
+          : withoutREConciliada;
+        setKpiStudents(filtered);
+        return;
+      }
+
+      // Fallback: sem foto salva para a data → reconstrução como antes.
+      const base = isTodaySnapshot
+        ? baseStudents
+        : baseStudents.filter((s) => new Date(s.enrollmentDate) <= refDate);
+      const remapped = base.map((s) => {
+        // "Negativado" é preservado sempre — nunca rebaixado por auto-cálculo.
+        if (s.status === 'Negativado' || s.status === 'Solicitação Cancelamento') return s;
+        if (s.statusMode === 'Automático') {
+          const st = isTodaySnapshot
+            ? calculateAutoStatus(s.installments)
+            : calculateAutoStatusAt(s.installments, refDate);
+          return { ...s, status: st as StudentStatus };
+        }
+        return s;
+      });
+      const withoutPagos = statusFilter === 'Pago'
+        ? remapped
+        : remapped.filter((s) => s.status !== 'Pago');
+      const withoutCancelados = stripCancelados(withoutPagos);
+      const withoutREConciliada = stripRendaExtraConciliada(withoutCancelados);
+      const filtered = statusFilter
+        ? (statusFilter === 'Renda Extra'
+            ? withoutREConciliada.filter((s) => isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
+            : statusFilter === 'cancelamento_solicitado'
+              ? withoutREConciliada
+              : withoutREConciliada.filter((s) => s.status === statusFilter))
+        : withoutREConciliada;
+      setKpiStudents(filtered);
+    } else {
+      const mapped = baseStudents.map((s) => {
+        if (s.status === 'Negativado' || s.status === 'Solicitação Cancelamento') return s;
+        if (s.statusMode === 'Automático') {
+          return { ...s, status: calculateAutoStatus(s.installments) } as Student;
+        }
+        return s;
+      });
+      const withoutPagos = statusFilter === 'Pago'
+        ? mapped
+        : mapped.filter((s) => s.status !== 'Pago');
+      const withoutCancelados = stripCancelados(withoutPagos);
+      const withoutREConciliada = stripRendaExtraConciliada(withoutCancelados);
+      const filtered = statusFilter
+        ? (statusFilter === 'Renda Extra'
+            ? withoutREConciliada.filter((s) => isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
+            : statusFilter === 'cancelamento_solicitado'
+              ? withoutREConciliada
+              : withoutREConciliada.filter((s) => s.status === statusFilter))
+        : withoutREConciliada;
+      setKpiStudents(filtered);
+    }
+  }, [mode, historicoEnd, baseStudents.length, acFilter, productFilter, scoreFilter, statusFilter, tagFilters, students, snapshotStudents, snapshotDate]);
+
+
+
+  // ── Média dias ────────────────────────────────────────────────────────────
+  const allPaidInstallments = baseStudents.flatMap((s) => s.installments);
+  const mediaCarteira = calcularMediaDiasPagamento(allPaidInstallments);
+
+  // ── KPI derivations ───────────────────────────────────────────────────────
+  // Aplica o filtro "Data de Vencimento" (forecastIndex) também aos KPIs de status:
+  // só conta alunos que possuem ao menos uma parcela com dueDate dentro do range.
+  const _fcRange = (() => {
+    const today = getTodayBrasilia();
+    if (forecastIndex === 0) return null;
+    if (forecastIndex === 6) {
+      if (!forecastCustomStart || !forecastCustomEnd) return null;
+      return { start: new Date(forecastCustomStart + 'T00:00:00'), end: new Date(forecastCustomEnd + 'T23:59:59') };
+    }
+    const offsetMap: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 5 };
+    const offset = offsetMap[forecastIndex] ?? 0;
+    const target = new Date(today); target.setDate(target.getDate() + offset);
+    const end = new Date(target); end.setHours(23, 59, 59, 999);
+    return { start: target, end };
+  })();
+  const _instInRange = (i: { dueDate: string }) => {
+    if (!_fcRange) return true;
+    const due = new Date(i.dueDate + 'T00:00:00');
+    return due >= _fcRange.start && due <= _fcRange.end;
+  };
+  // Quando há filtro de período (modo de pesquisa), a carteira mostra somente
+  // alunos com parcelas EM ABERTO (vencidas ou a vencer) dentro do intervalo —
+  // parcelas já pagas no período não devem inflar o contador de alunos, já que
+  // o valor da carteira (sumUnpaid) também ignora pagas. Isso alinha o
+  // "Carteira Total" com a aba Alunos.
+  const kpiStudentsScoped = _fcRange
+    ? kpiStudents.filter((s) => s.installments.some((i) => !i.paid && _instInRange(i)))
+    : kpiStudents;
+  const total = kpiStudentsScoped.length;
+  const emDia = kpiStudentsScoped.filter((s) => s.status === 'Em Dia');
+  const alunosNovos = kpiStudentsScoped.filter((s) => s.status === 'Aluno Novo');
+  const vencido1 = kpiStudentsScoped.filter((s) => s.status === 'Vencido 1');
+  const vencido2 = kpiStudentsScoped.filter((s) => s.status === 'Vencido 2');
+  const aNegativar = kpiStudentsScoped.filter((s) => s.status === 'À Negativar');
+  const negativado = kpiStudentsScoped.filter((s) => s.status === 'Negativado');
+  const solicitacaoCancelamento = kpiStudentsScoped.filter((s) => s.status === 'Solicitação Cancelamento');
+  const inadimplentes = vencido1.length + vencido2.length + aNegativar.length + negativado.length;
+  // À Negativar "estagnado" = oldestOverdue > 65 dias (mais de 5 dias no status À Negativar).
+  const aNegativarStale = aNegativar.some((s) => {
+    const dias = calcularDiasVencido(s.installments);
+    return dias !== null && dias > 65;
+  });
+
+  const sumUnpaid = (arr: Student[]) =>
+    arr.reduce((acc, s) => {
+      if (s.statusCancelamento === 'cancelado') {
+        return acc + s.installments
+          .filter((i) => !i.paid && _instInRange(i) && (i.tags ?? []).includes('multa-cancelamento'))
+          .reduce((a, i) => a + i.value, 0);
+      }
+      if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
+      return acc + s.installments.filter((i) => !i.paid && _instInRange(i)).reduce((a, i) => a + i.value, 0);
+    }, 0);
+
+  const _todayMs = (() => { const d = getTodayBrasilia(); d.setHours(0,0,0,0); return d.getTime(); })();
+  const sumOverdue = (arr: Student[]) =>
+    arr.reduce((acc, s) => {
+      if (s.statusCancelamento === 'cancelado') return acc;
+      if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
+      return acc + s.installments
+        .filter((i) => !i.paid && _instInRange(i) && new Date(i.dueDate + 'T00:00:00').getTime() < _todayMs)
+        .reduce((a, i) => a + i.value, 0);
+    }, 0);
+
+  const totalValue = sumUnpaid(kpiStudentsScoped);
+  const emDiaValue = sumUnpaid(emDia);
+  const alunosNovosValue = sumUnpaid(alunosNovos);
+  const v1Value = sumOverdue(vencido1);
+  const v2Value = sumOverdue(vencido2);
+  // À Negativar: considera TODO o saldo em aberto (vencidas + a vencer)
+  const anValue = sumUnpaid(aNegativar);
+  const negValue = sumOverdue(negativado);
+  const solicCancValue = sumUnpaid(solicitacaoCancelamento);
+
+  // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
+  const tagKpis = computeTagKpis(kpiStudentsScoped, studentTags, _instInRange);
+
+  const kpiModalConfig: { title: string; students: Student[]; valueMode: KpiValueMode } | null = (() => {
+    switch (kpiModalKey) {
+      case 'total':
+        return { title: 'Carteira Total', students: kpiStudentsScoped, valueMode: 'unpaid' };
+      case 'emdia_novos':
+        return { title: 'Em Dia + Novos', students: [...emDia, ...alunosNovos], valueMode: 'unpaid' };
+      case 'emdia':
+        return { title: 'Em Dia', students: emDia, valueMode: 'unpaid' };
+      case 'novos':
+        return { title: 'Alunos Novos', students: alunosNovos, valueMode: 'unpaid' };
+      case 'v1':
+        return { title: 'Vencido 1', students: vencido1, valueMode: 'overdue' };
+      case 'v2':
+        return { title: 'Vencido 2', students: vencido2, valueMode: 'overdue' };
+      case 'an':
+        return { title: 'À Negativar', students: aNegativar, valueMode: 'unpaid' };
+      case 'neg':
+        return { title: 'Negativado', students: negativado, valueMode: 'overdue' };
+      case 'solic':
+        return { title: 'Solicitação Cancelamento', students: solicitacaoCancelamento, valueMode: 'unpaid' };
+      case 'tag':
+        return tagKpis[0]
+          ? { title: tagKpis[0].label, students: tagKpis[0].students, valueMode: 'unpaid' as KpiValueMode }
+          : null;
+      default:
+        return null;
+    }
+  })();
+
+  const pct = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
+  // Taxa Em Dia (regra item 9): considera SOMENTE alunos "Em Dia",
+  // exclui "Aluno Novo" do numerador E do denominador.
+  const denominadorEmDia = total - alunosNovos.length;
+  const pctEmDia = denominadorEmDia > 0
+    ? ((emDia.length / denominadorEmDia) * 100).toFixed(1)
+    : '0.0';
+
+  // ── Forecast (filtro isolado: só afeta este card) ─────────────────────────
+  // Índices: 0=Todos, 1=Hoje, 2=Amanhã, 3=2Dias, 4=3Dias, 5=7Dias, 6=Personalizado
+  // Regras — cada botão mostra APENAS o dia exato:
+  //   Todos      → toda a carteira de parcelas não pagas
+  //   Hoje       → parcelas com dueDate = hoje (Brasília)
+  //   Amanhã     → parcelas com dueDate = amanhã (dia único)
+  //   2 Dias     → parcelas com dueDate = daqui 2 dias (dia único)
+  //   3 Dias     → parcelas com dueDate = daqui 3 dias (dia único)
+  //   7 Dias     → parcelas com dueDate = daqui 7 dias (dia único)
+  //   Personal.  → intervalo entre as datas escolhidas
+  const getForecastRange = (): { start: Date; end: Date } | null => {
+    const today = getTodayBrasilia();
+    // Todos
+    if (forecastIndex === 0) return null;
+    // Personalizado
+    if (forecastIndex === 6) {
+      if (!forecastCustomStart || !forecastCustomEnd) return null;
+      return {
+        start: new Date(forecastCustomStart + 'T00:00:00'),
+        end: new Date(forecastCustomEnd + 'T23:59:59'),
+      };
+    }
+    // Hoje / Amanhã / 2 Dias / 3 Dias / 7 Dias → dia único
+    const offsetMap: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 5 };
+    const offset = offsetMap[forecastIndex] ?? 0;
+    const target = new Date(today);
+    target.setDate(target.getDate() + offset);
+    const end = new Date(target);
+    end.setHours(23, 59, 59, 999);
+    return { start: target, end };
+  };
+
+  // Exclui Renda Extra (saída de Conciliar Exclusão) e Cancelados conciliados
+  // do bloco "Data de Vencimento" — devem sair da carteira financeira.
+  const forecastBase = baseStudents.filter(
+    (s) =>
+      s.statusCancelamento !== 'cancelado' &&
+      !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
+  );
+
+  // Retorna 3 totais: Total (todas), A Vencer/Vencido (não pagas), Pago (pagas).
+  // "Todos" → toda a carteira; demais → filtrado por dueDate dentro do range.
+  const getForecastTotals = () => {
+    const range = forecastIndex === 0 ? null : getForecastRange();
+    let total = 0, aVencer = 0, pago = 0;
+    let totalReal = 0, pagoReal = 0;
+    let qtd = 0;
+    const qtdAlunosSet = new Set<string>();
+    // Breakdown por Assessor (usado no modo Pagamento)
+    const perAc: Record<string, { pago: number; pagoReal: number; qtd: number; alunos: Set<string> }> = {};
+    const bumpAc = (acName: string, valor: number, real: number, studentId: string) => {
+      const key = acName || 'Sem Assessor';
+      const b = perAc[key] ?? (perAc[key] = { pago: 0, pagoReal: 0, qtd: 0, alunos: new Set() });
+      b.pago += valor;
+      b.pagoReal += real;
+      b.qtd += 1;
+      b.alunos.add(studentId);
+    };
+    // Detalhes por parcela (para popup de valores pagos/recebidos)
+    const details: Array<{ studentId: string; studentName: string; ac: string; installmentNumber: number; dueDate: string; value: number; paidValue: number; paidDate?: string }> = [];
+    forecastBase.forEach((st) => {
+      st.installments.forEach((i) => {
+        if (dateBasis === 'pagamento') {
+          if (!i.paid || !i.paidDate) return;
+          if (range) {
+            const pd = new Date(i.paidDate + 'T00:00:00');
+            if (pd < range.start || pd > range.end) return;
+          }
+          const realValue = typeof i.paidValue === 'number' ? i.paidValue : i.value;
+          total += i.value;
+          totalReal += realValue;
+          pago += i.value;
+          pagoReal += realValue;
+          qtd += 1;
+          qtdAlunosSet.add(st.id);
+          bumpAc(st.ac, i.value, realValue, st.id);
+          details.push({ studentId: st.id, studentName: st.name, ac: st.ac || 'Sem Assessor', installmentNumber: i.number, dueDate: i.dueDate, value: i.value, paidValue: realValue, paidDate: i.paidDate });
+          return;
+        }
+        // Vencimento
+        if (range) {
+          const due = new Date(i.dueDate + 'T00:00:00');
+          if (due < range.start || due > range.end) return;
+        }
+        const realValue = i.paid ? (typeof i.paidValue === 'number' ? i.paidValue : i.value) : i.value;
+        total += i.value;
+        totalReal += realValue;
+        if (i.paid) {
+          pago += i.value;
+          pagoReal += realValue;
+        } else {
+          aVencer += i.value;
+        }
+        qtd += 1;
+        qtdAlunosSet.add(st.id);
+      });
+    });
+    const perAcList = Object.entries(perAc)
+      .map(([name, b]) => ({ name, pago: b.pago, pagoReal: b.pagoReal, qtd: b.qtd, qtdAlunos: b.alunos.size }))
+      .sort((a, b) => b.pagoReal - a.pagoReal);
+    return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, perAcList, details };
+  };
+
+
+  // ── Score distribution ────────────────────────────────────────────────────
+  // Calculado sobre o MESMO universo que os KPIs/tabela exibem por padrão
+  // (exclui Pago, Cancelado e Renda Extra já conciliada quando não há
+  // statusFilter ativo). Sem isso, o % mostrava 5★ mas, ao clicar, a carteira
+  // ficava vazia porque os 5★ eram todos Pagos.
+  const scoreBaseDistribution = (() => {
+    if (statusFilter) return acProductFiltered;
+    return acProductFiltered.filter((s) => {
+      if (s.statusCancelamento === 'cancelado') return false;
+      const autoSt = (s.status === 'Negativado' || s.status === 'Solicitação Cancelamento') ? s.status : (s.statusMode === 'Automático' ? calculateAutoStatus(s.installments) : s.status);
+      if (autoSt === 'Pago') return false;
+      if (isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão') return false;
+      return true;
+    });
+  })();
+  const scoreDistribution = (() => {
+    const counts: Record<string, number> = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+    scoreBaseDistribution.forEach((s) => {
+      const sc = calcularScoreComportamento(s.installments);
+      counts[String(sc)] = (counts[String(sc)] || 0) + 1;
+    });
+    const t = scoreBaseDistribution.length;
+    return (v: number) => t > 0 ? Math.round((counts[String(v)] / t) * 100) : 0;
+  })();
+
+  // ── Renda Extra metrics ───────────────────────────────────────────────────
+  const reStudents = kpiStudents.filter((s) => isRendaExtraAtivo(s));
+  const reAcordo = reStudents.filter((s) => s.rendaExtraStatus === 'Acordo Feito');
+  const rePct = reStudents.length > 0 ? Math.round((reAcordo.length / reStudents.length) * 100) : 0;
+
+  // ── Revertidos ────────────────────────────────────────────────────────────
+  // Aplica os mesmos filtros do KPI: AC + Produto + Score (via student)
+  const acCases = cancellationCases.filter((c) => {
+    if (acFilter && c.ac !== acFilter) return false;
+    if (!productFilter && scoreFilter === null) return true;
+    const st = c.studentId ? students.find((s) => s.id === c.studentId) : undefined;
+    if (!st) return false;
+    if (productFilter && st.product !== productFilter) return false;
+    if (scoreFilter !== null && calcularScoreComportamento(st.installments) !== scoreFilter) return false;
+    return true;
+  });
+  const revertidos = acCases.filter((c) => c.stage === 'Recuperado' || c.stage === 'Negativação Retirada');
+  const revertPct = acCases.length > 0 ? Math.round((revertidos.length / acCases.length) * 100) : 0;
+
+  // ── Pie chart ─────────────────────────────────────────────────────────────
+  const pago = kpiStudents.filter((s) => s.status === 'Pago');
+  const pagoValue = sumUnpaid(pago);
+  const pieRaw = [
+    { name: 'Em Dia', value: emDia.length, valor: emDiaValue },
+    { name: 'Vencido 1', value: vencido1.length, valor: v1Value },
+    { name: 'Vencido 2', value: vencido2.length, valor: v2Value },
+    { name: 'À Negativar', value: aNegativar.length, valor: anValue },
+    { name: 'Negativado', value: negativado.length, valor: negValue },
+    { name: 'Pago', value: pago.length, valor: pagoValue },
+  ].filter((d) => d.value > 0);
+  const pieTotal = pieRaw.reduce((a, b) => a + b.value, 0);
+  const pieData = pieRaw.map((d) => ({
+    ...d,
+    percent: pieTotal > 0 ? (d.value / pieTotal) * 100 : 0,
+  }));
+
+  // ── Cartesian chart (evolution) ───────────────────────────────────────────
+  const [cartesianData, setCartesianData] = useState<any[]>([]);
+  useEffect(() => {
+    // Determina range de meses (start..end inclusivos) com base no filtro do bloco
+    const today = getTodayBrasilia();
+    let startDate: Date;
+    let endDate: Date;
+    if (evolPreset === 'custom' && evolCustomStart && evolCustomEnd) {
+      const [sy, sm] = evolCustomStart.split('-').map(Number);
+      const [ey, em] = evolCustomEnd.split('-').map(Number);
+      startDate = new Date(sy, sm - 1, 1);
+      endDate = new Date(ey, em - 1, 1);
+      if (endDate < startDate) endDate = startDate;
+    } else {
+      const monthsBack = evolPreset === '3m' ? 3 : evolPreset === '12m' ? 12 : 6;
+      endDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      startDate = new Date(today.getFullYear(), today.getMonth() - (monthsBack - 1), 1);
+    }
+    const months: any[] = [];
+    const cursor = new Date(startDate);
+    while (cursor <= endDate) {
+      const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      const label = cursor.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      const entry: any = { month: label, 'Em Dia': 0, 'Vencido 1': 0, 'Vencido 2': 0, 'À Negativar': 0, 'Negativado': 0 };
+      baseStudents.forEach((s) => {
+        s.installments.forEach((inst) => {
+          if (inst.dueDate.startsWith(monthKey)) {
+            const finVal = getInstallmentFinancialValueExport(inst);
+            if (inst.paid) entry['Em Dia'] += finVal;
+            else entry[s.status] = (entry[s.status] || 0) + finVal;
+          }
+        });
+      });
+      months.push(entry);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    setCartesianData(months);
+  }, [baseStudents.length, acFilter, productFilter, scoreFilter, tagFilters, students, evolPreset, evolCustomStart, evolCustomEnd]);
+
+
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── 1. Modo de Análise ──────────────────────────────────────────────── */}
+      {/* Filtro Vencimento removido do topo: a Previsão de Recebimento (card) */}
+      {/* já possui seu próprio filtro de data e atua apenas sobre si mesma. */}
+      <DashDateFilter
+        mode={mode} setMode={setMode}
+        perfPreset={perfPreset} setPerfPreset={setPerfPreset}
+        perfCustomStart={perfCustomStart} setPerfCustomStart={setPerfCustomStart}
+        perfCustomEnd={perfCustomEnd} setPerfCustomEnd={setPerfCustomEnd}
+        historicoStart={historicoStart} setHistoricoStart={setHistoricoStart}
+        historicoEnd={historicoEnd} setHistoricoEnd={setHistoricoEnd}
+        variant="ac"
+        hidePerformancePresets
+      />
+
+      {/* ── 2. Previsão de Recebimento + Filtros (Performance) ──────────────── */}
+      {mode === 'performance' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Previsão de Recebimento */}
+          <div className="bg-card border border-border rounded-2xl p-6 saas-shadow">
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2">
+                <Wallet size={15} className="text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">
+                  {dateBasis === 'vencimento' ? 'Data de Vencimento' : 'Data de Pagamento'}
+                </h3>
+              </div>
+              <div className="inline-flex rounded-lg bg-muted p-0.5">
+                <button
+                  onClick={() => { setDateBasis('vencimento'); setForecastIndex(0); }}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
+                    dateBasis === 'vencimento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Vencimento
+                </button>
+                <button
+                  onClick={() => { setDateBasis('pagamento'); setForecastIndex(6); }}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
+                    dateBasis === 'pagamento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  DATA DE PAGAMENTO
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              {dateBasis === 'vencimento'
+                ? `Projeção financeira por período ${acFilter ? `(${acFilter})` : '(todas as carteiras)'}`
+                : `Títulos pagos no período ${acFilter ? `(${acFilter})` : '(todas as carteiras)'}`}
+            </p>
+            <div className="flex gap-1 mb-4 flex-wrap items-center">
+              {dateBasis === 'vencimento' &&
+                ['Todos', 'Hoje', 'Amanhã', '2 Dias', '3 Dias', '5 Dias', 'Personalizado'].map((p, i) => (
+                  <button
+                    key={p}
+                    onClick={() => setForecastIndex(i)}
+                    className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                      forecastIndex === i
+                        ? 'iam-gradient text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              {(forecastIndex === 6 || dateBasis === 'pagamento') && (
+                <div className="flex items-center gap-1.5 ml-2">
+                  <span className="text-[10px] text-muted-foreground">Início:</span>
+                  <input type="date" value={forecastCustomStart} onChange={(e) => setForecastCustomStart(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
+                  <span className="text-[10px] text-muted-foreground ml-1">Fim:</span>
+                  <input type="date" value={forecastCustomEnd} onChange={(e) => setForecastCustomEnd(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
+                </div>
+              )}
+            </div>
+            {(() => {
+              const { total, aVencer, pago, pagoReal, qtd, qtdAlunos, perAcList, details } = getForecastTotals();
+              if (dateBasis === 'pagamento') {
+                return (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentDetailModal('pago')}
+                        className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0 text-left hover:bg-emerald-100/60 hover:border-emerald-300 transition-all cursor-pointer"
+                      >
+                        <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Total Pago</p>
+                        <p className="kpi-value-fit text-emerald-700 mt-0.5" title={formatCurrency(pago)}>
+                          {formatCurrency(pago)}
+                        </p>
+                        <p className="text-[10px] text-emerald-700/80 mt-0">valor original · clique p/ detalhes</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentDetailModal('recebido')}
+                        className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0 text-left hover:bg-emerald-100/60 hover:border-emerald-300 transition-all cursor-pointer"
+                      >
+                        <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Valor Recebido</p>
+                        <p className="kpi-value-fit text-emerald-700 mt-0.5" title={formatCurrency(pagoReal)}>
+                          {formatCurrency(pagoReal)}
+                        </p>
+                        <p className="text-[10px] text-emerald-700/80 mt-0">valor efetivamente pago · clique p/ detalhes</p>
+                      </button>
+                      <div className="kpi-fit rounded-xl border border-border bg-muted/30 p-2 min-w-0">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Qtd Títulos</p>
+                        <p className="kpi-value-fit text-foreground mt-0.5">{qtd}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0">
+                          {qtdAlunos} {qtdAlunos === 1 ? 'aluno' : 'alunos'} · {qtd} parcelas
+                        </p>
+                      </div>
+                    </div>
+                    {paymentDetailModal && (
+                      <PaymentDetailsModal
+                        mode={paymentDetailModal}
+                        details={details}
+                        totalPago={pago}
+                        totalRecebido={pagoReal}
+                        onClose={() => setPaymentDetailModal(null)}
+                      />
+                    )}
+                    {perAcList.length > 0 && (
+                      <div className="mt-3 rounded-xl border border-border bg-muted/20 overflow-hidden">
+                        <div className="px-3 py-2 border-b border-border bg-muted/40">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            Por Assessor
+                          </p>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                <th className="text-left font-semibold px-3 py-1.5">Assessor</th>
+                                <th className="text-right font-semibold px-3 py-1.5">Total Pago</th>
+                                <th className="text-right font-semibold px-3 py-1.5">Valor Recebido</th>
+                                <th className="text-right font-semibold px-3 py-1.5">Alunos</th>
+                                <th className="text-right font-semibold px-3 py-1.5">Parcelas</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {perAcList.map((row) => (
+                                <tr key={row.name} className="border-t border-border/60">
+                                  <td className="px-3 py-1.5 font-medium text-foreground">{row.name}</td>
+                                  <td className="px-3 py-1.5 text-right text-emerald-700 font-semibold tabular-nums">{formatCurrency(row.pago)}</td>
+                                  <td className="px-3 py-1.5 text-right text-emerald-700 font-semibold tabular-nums">{formatCurrency(row.pagoReal)}</td>
+                                  <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">{row.qtdAlunos}</td>
+                                  <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">{row.qtd}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              }
+
+              const pctAV = total > 0 ? ((aVencer / total) * 100).toFixed(1) : '0.0';
+              const pctPg = total > 0 ? ((pago / total) * 100).toFixed(1) : '0.0';
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="kpi-fit rounded-xl border border-border bg-muted/30 p-2 min-w-0">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total</p>
+                    <p className="kpi-value-fit text-foreground mt-0.5" title={formatCurrency(total)}>
+                      {formatCurrency(total)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0">inclui pagas</p>
+                  </div>
+                  <div className="kpi-fit rounded-xl border border-amber-200/60 bg-amber-50/60 p-2 min-w-0">
+                    <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">A Vencer / Vencido</p>
+                    <p className="kpi-value-fit text-amber-700 mt-0.5" title={formatCurrency(aVencer)}>
+                      {formatCurrency(aVencer)}
+                    </p>
+                    <p className="text-[10px] font-semibold text-amber-700 mt-0">{pctAV}%</p>
+                  </div>
+                  <div className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0">
+                    <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Pago</p>
+                    <p className="kpi-value-fit text-emerald-700 mt-0.5" title={formatCurrency(pago)}>
+                      {formatCurrency(pago)}
+                    </p>
+                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">{pctPg}%</p>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Filtros: AC, Produto, Status, Score */}
+          <div className="bg-card border border-border rounded-2xl p-6 saas-shadow flex flex-col gap-3">
+            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Filtros</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-muted-foreground">Assessor:</span>
+              <select className="input-field text-xs py-1.5" value={acFilter} onChange={(e) => setAcFilter(e.target.value)}>
+                <option value="">Todos</option>
+                {acs.filter((g) => g.active).map((g) => (
+                  <option key={g.id} value={g.name}>{g.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-muted-foreground">Produto:</span>
+              <select className="input-field text-xs py-1.5" value={productFilter} onChange={(e) => setProductFilter(e.target.value)}>
+                <option value="">Todos</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-muted-foreground">Status:</span>
+              <select className="input-field text-xs py-1.5" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StudentStatus | 'cancelamento_solicitado' | '')}>
+                <option value="">Todos</option>
+                <option value="Aluno Novo">Aluno Novo</option>
+                <option value="Em Dia">Em Dia</option>
+                <option value="Vencido 1">Vencido 1</option>
+                <option value="Vencido 2">Vencido 2</option>
+                <option value="À Negativar">À Negativar</option>
+                <option value="Negativado">Negativado</option>
+                <option value="Em Negociação">Em Negociação</option>
+                <option value="cancelamento_solicitado">Cancelamento solicitado</option>
+                <option value="Pago">Pago</option>
+                <option value="Excluído">Excluído</option>
+                <option value="Pendente">Pendente</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
+              <Star size={11} className="text-amber-400 fill-amber-400" />
+              <span className="text-[10px] text-muted-foreground mr-1">Score:</span>
+              {[null, 0, 1, 2, 3, 4, 5].map((v) => (
+                <button
+                  key={String(v)}
+                  onClick={() => setScoreFilter(v)}
+                  className={`text-[10px] px-2 py-0.5 rounded transition-all ${
+                    scoreFilter === v ? 'bg-amber-400 text-white font-semibold' : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {v === null ? 'Todos' : v === 0 ? `N ${scoreDistribution(0)}%` : `${v}★ ${scoreDistribution(v)}%`}
+                </button>
+              ))}
+            </div>
+            <TagMultiSelect studentTags={studentTags} tagFilters={tagFilters} setTagFilters={setTagFilters} />
+          </div>
+        </div>
+      )}
+
+      {/* Histórico banner */}
+      {mode === 'historico' && !historicoEnd && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+          <Clock size={14} className="text-amber-600 shrink-0" />
+          <span>Selecione um período de referência para reconstruir a carteira.</span>
+        </div>
+      )}
+
+      {/* Filtros no modo Histórico */}
+      {mode === 'historico' && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase">Assessor:</span>
+            <select className="input-field text-xs py-1.5" value={acFilter} onChange={(e) => setAcFilter(e.target.value)}>
+              <option value="">Todos</option>
+              {acs.filter((g) => g.active).map((g) => (
+                <option key={g.id} value={g.name}>{g.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase">Produto:</span>
+            <select className="input-field text-xs py-1.5" value={productFilter} onChange={(e) => setProductFilter(e.target.value)}>
+              <option value="">Todos</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase">Status:</span>
+            <select className="input-field text-xs py-1.5" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StudentStatus | 'cancelamento_solicitado' | '')}>
+              <option value="">Todos</option>
+              <option value="Aluno Novo">Aluno Novo</option>
+              <option value="Em Dia">Em Dia</option>
+              <option value="Vencido 1">Vencido 1</option>
+              <option value="Vencido 2">Vencido 2</option>
+              <option value="À Negativar">À Negativar</option>
+              <option value="Negativado">Negativado</option>
+              <option value="Em Negociação">Em Negociação</option>
+              <option value="cancelamento_solicitado">Cancelamento solicitado</option>
+              <option value="Pago">Pago</option>
+              <option value="Excluído">Excluído</option>
+              <option value="Pendente">Pendente</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1 bg-card border border-border rounded-xl px-3 py-2 saas-shadow">
+            <Star size={11} className="text-amber-400 fill-amber-400" />
+            <span className="text-[10px] text-muted-foreground mr-1">Score:</span>
+            {[null, 0, 1, 2, 3, 4, 5].map((v) => (
+              <button
+                key={String(v)}
+                onClick={() => setScoreFilter(v)}
+                className={`text-[10px] px-2 py-0.5 rounded transition-all ${
+                  scoreFilter === v ? 'bg-amber-400 text-white font-semibold' : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {v === null ? 'Todos' : v === 0 ? `N ${scoreDistribution(0)}%` : `${v}★ ${scoreDistribution(v)}%`}
+              </button>
+            ))}
+          </div>
+          <TagMultiSelect studentTags={studentTags} tagFilters={tagFilters} setTagFilters={setTagFilters} />
+        </div>
+      )}
+
+      {/* ── 3. Indicadores (KPIs Row 1) ──────────────────────────────────────── */}
+      {/* Cards clicáveis: abrem a lista detalhada de alunos/parcelas em popup */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+        <div
+          onClick={() => setKpiModalKey('total')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-primary transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 ${statusFilter === '' ? 'ring-2 ring-primary/40' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase">Carteira Total</p>
+            <Users size={16} className="text-primary/50 shrink-0" />
+          </div>
+          <p className="kpi-value text-primary" title={formatCurrency(totalValue)}>
+            <span className="hidden sm:inline">{formatCurrency(totalValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(totalValue)}</span>
+          </p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className="text-[11px] text-muted-foreground truncate">{total} alunos</p>
+            <p className="text-[11px] font-semibold text-primary shrink-0">100%</p>
+          </div>
+        </div>
+
+        {/* Em Dia + Novos — soma agregada */}
+        <div
+          onClick={() => setKpiModalKey('emdia_novos')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 ${statusFilter === 'Em Dia' ? 'ring-2 ring-teal-500/40' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Em Dia + Novos</p>
+            <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos' ? null : 'emdia_novos'); }} className="text-muted-foreground/50 hover:text-muted-foreground shrink-0">
+              <Info size={14} />
+            </button>
+          </div>
+          <p className="kpi-value text-teal-600" title={formatCurrency(emDiaValue + alunosNovosValue)}>
+            <span className="hidden sm:inline">{formatCurrency(emDiaValue + alunosNovosValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(emDiaValue + alunosNovosValue)}</span>
+          </p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className="text-[11px] text-muted-foreground truncate">{emDia.length + alunosNovos.length} alunos</p>
+            <p className="text-[11px] font-semibold text-teal-600 shrink-0">{pct(emDia.length + alunosNovos.length)}%</p>
+          </div>
+          {infoStatus === 'emdia_novos' && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+              <p>Soma de "Em Dia" + "Alunos Novos": alunos adimplentes da carteira (sem parcelas vencidas).</p>
+            </div>
+          )}
+        </div>
+
+        <div
+          onClick={() => setKpiModalKey('emdia')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${statusFilter === 'Em Dia' ? 'ring-2 ring-emerald-500/40' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Em Dia</p>
+            <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia' ? null : 'emdia'); }} className="text-muted-foreground/50 hover:text-muted-foreground shrink-0">
+              <Info size={14} />
+            </button>
+          </div>
+          <p className="kpi-value text-emerald-600" title={formatCurrency(emDiaValue)}>
+            <span className="hidden sm:inline">{formatCurrency(emDiaValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(emDiaValue)}</span>
+          </p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className="text-[11px] text-muted-foreground truncate">{emDia.length} alunos</p>
+            <p className="text-[11px] font-semibold text-emerald-600 shrink-0">{pctEmDia}%</p>
+          </div>
+          {infoStatus === 'emdia' && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+              <p>Alunos com todas as parcelas em dia, sem nenhum vencimento pendente.</p>
+            </div>
+          )}
+        </div>
+
+        <div
+          onClick={() => setKpiModalKey('novos')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-sky-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-sky-500/30 ${statusFilter === 'Aluno Novo' ? 'ring-2 ring-sky-500/40' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Alunos Novos</p>
+            <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'novos' ? null : 'novos'); }} className="text-muted-foreground/50 hover:text-muted-foreground shrink-0">
+              <Info size={14} />
+            </button>
+          </div>
+          <p className="kpi-value text-sky-600" title={formatCurrency(alunosNovosValue)}>
+            <span className="hidden sm:inline">{formatCurrency(alunosNovosValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(alunosNovosValue)}</span>
+          </p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className="text-[11px] text-muted-foreground truncate">{alunosNovos.length} alunos</p>
+            <p className="text-[11px] font-semibold text-sky-600 shrink-0">{pct(alunosNovos.length)}%</p>
+          </div>
+          {infoStatus === 'novos' && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+              <p>Alunos recém cadastrados que ainda não possuem parcelas vencidas.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 rounded-2xl p-4 sm:p-5 saas-shadow-md bg-emerald-500 border border-emerald-600 transition-transform hover:-translate-y-0.5">
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Em Dia</p>
+            <TrendingUp size={16} className="text-white/50 shrink-0" />
+          </div>
+          <p className="kpi-value text-white">{pctEmDia}%</p>
+          <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {denominadorEmDia} (excl. novos)</p>
+        </div>
+      </div>
+
+      {/* ── Indicadores Row 2 ────────────────────────────────────────────────── */}
+      {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado → Taxa Inadimplente */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+        {[
+          { key: 'v1', label: 'Vencido 1', value: v1Value, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos com parcelas vencidas entre 1 e 30 dias.', filter: 'Vencido 1' as StudentStatus },
+          { key: 'v2', label: 'Vencido 2', value: v2Value, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos com parcelas vencidas entre 31 e 60 dias.', filter: 'Vencido 2' as StudentStatus },
+          { key: 'an', label: 'À Negativar', value: anValue, count: aNegativar.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos que precisam ser negativados manualmente nos órgãos de crédito. Após realizar a negativação manual, mude o status do aluno manualmente para "Negativado".', filter: 'À Negativar' as StudentStatus },
+          { key: 'neg', label: 'Negativado', value: negValue, count: negativado.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos já negativados nos órgãos de crédito.', filter: 'Negativado' as StudentStatus },
+        ].map(({ key, label, value, count, color, text, desc, filter }) => {
+          const isStaleAN = key === 'an' && aNegativarStale;
+          const cardCls = isStaleAN
+            ? `min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-red-500 border border-red-600 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-red-400/40 ${statusFilter === filter ? 'ring-2 ring-white/50' : ''}`
+            : `min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-${color} transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-foreground/20 ${statusFilter === filter ? 'ring-2 ring-foreground/40' : ''}`;
+          const labelCls = isStaleAN ? 'text-[10px] font-semibold text-white/80 uppercase truncate' : 'text-[10px] font-semibold text-muted-foreground uppercase truncate';
+          const valueCls = isStaleAN ? 'kpi-value text-white' : `kpi-value ${text}`;
+          const subCls = isStaleAN ? 'text-[11px] text-white/80 truncate' : 'text-[11px] text-muted-foreground truncate';
+          const pctCls = isStaleAN ? 'text-[11px] font-semibold text-white shrink-0' : `text-[11px] font-semibold ${text} shrink-0`;
+          return (
+            <div
+              key={key}
+              onClick={() => setKpiModalKey(key as KpiModalKey)}
+              className={cardCls}
+            >
+              <div className="flex items-start justify-between mb-2 gap-2">
+                <p className={labelCls}>{label}{isStaleAN ? ' • +5d' : ''}</p>
+                <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === key ? null : key); }} className={isStaleAN ? 'text-white/70 hover:text-white shrink-0' : 'text-muted-foreground/50 hover:text-muted-foreground shrink-0'}>
+                  <Info size={14} />
+                </button>
+              </div>
+              <p className={valueCls} title={formatCurrency(value)}>
+                <span className="hidden sm:inline">{formatCurrency(value)}</span>
+                <span className="sm:hidden">{formatCurrencyCompact(value)}</span>
+              </p>
+              <div className="flex items-center justify-between mt-1 gap-2">
+                <p className={subCls}>{count} alunos</p>
+                <p className={pctCls}>{pct(count)}%</p>
+              </div>
+              {infoStatus === key && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+                  <p>{desc}</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Taxa Inadimplente — mesmo tamanho do Taxa Em Dia (full red) */}
+        <div className="min-w-0 rounded-2xl p-4 sm:p-5 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
+            <TrendingDown size={16} className="text-white/50 shrink-0" />
+          </div>
+          <p className="kpi-value text-white">{pct(inadimplentes)}%</p>
+          <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {total}</p>
+        </div>
+      </div>
+
+      {/* ── KPIs: Solicitação Cancelamento + Fundo / TMF / Antecipação ───────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div
+          onClick={() => setKpiModalKey('solic')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-fuchsia-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-fuchsia-500/30 ${statusFilter === 'Solicitação Cancelamento' ? 'ring-2 ring-fuchsia-500/40' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Solicitação Cancelamento</p>
+            <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'solic' ? null : 'solic'); }} className="text-muted-foreground/50 hover:text-muted-foreground shrink-0">
+              <Info size={14} />
+            </button>
+          </div>
+          <p className="kpi-value text-fuchsia-600" title={formatCurrency(solicCancValue)}>
+            <span className="hidden sm:inline">{formatCurrency(solicCancValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(solicCancValue)}</span>
+          </p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className="text-[11px] text-muted-foreground truncate">{solicitacaoCancelamento.length} alunos</p>
+            <p className="text-[11px] font-semibold text-fuchsia-600 shrink-0">{pct(solicitacaoCancelamento.length)}%</p>
+          </div>
+          {infoStatus === 'solic' && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+              <p>Alunos que solicitaram cancelamento e estão em tratativa no funil. O valor sai do status anterior (Em Dia/Vencido/etc.) e passa a compor este indicador até reversão ou cancelamento definitivo.</p>
+            </div>
+          )}
+        </div>
+
+        {tagKpis[0] && (
+          <div
+            onClick={() => setKpiModalKey('tag')}
+            className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 ${tagKpis[0].color} transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-500/30`}
+          >
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate mb-2">{tagKpis[0].label}</p>
+            <p className={`kpi-value ${tagKpis[0].text}`} title={formatCurrency(tagKpis[0].value)}>
+              <span className="hidden sm:inline">{formatCurrency(tagKpis[0].value)}</span>
+              <span className="sm:hidden">{formatCurrencyCompact(tagKpis[0].value)}</span>
+            </p>
+            <div className="flex items-center justify-between mt-1 gap-2">
+              <p className="text-[11px] text-muted-foreground truncate">{tagKpis[0].count} alunos</p>
+              {tagKpis[0].overdueValue > 0 && (
+                <p className="text-[11px] font-semibold text-red-600 shrink-0">Vencido: {formatCurrency(tagKpis[0].overdueValue)}</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+
+
+
+
+
+
+      {/* ── 4. Indicadores Menores: Média pgto, Renda Extra, Revertidos ───────── */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2 saas-shadow">
+          <Clock size={13} className="text-muted-foreground" />
+          <span className="text-[11px] text-muted-foreground">Média pgto:</span>
+          <MediaDiasTag media={mediaCarteira} />
+          {mediaCarteira !== null && (
+            <span className="text-[10px] text-muted-foreground ml-1">
+              {mediaCarteira < 0 ? 'antecipado' : mediaCarteira === 0 ? 'no prazo' : 'de atraso'}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2 saas-shadow">
+          <Coins size={13} className="text-purple-500" />
+          <span className="text-[11px] text-muted-foreground">Renda Extra:</span>
+          <span className="text-[11px] font-semibold text-purple-600">{reAcordo.length}/{reStudents.length} | {rePct}%</span>
+        </div>
+
+        <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2 saas-shadow">
+          <TrendingUp size={13} className="text-emerald-500" />
+          <span className="text-[11px] text-muted-foreground">Revertidos:</span>
+          <span className="text-[11px] font-semibold text-emerald-600">{revertidos.length}/{acCases.length} | {revertPct}%</span>
+        </div>
+
+        {/* Tag quantity indicators */}
+        {tagFilters.length > 0 && tagFilters.map((tid) => {
+          const tag = studentTags.find((t) => t.id === tid);
+          if (!tag) return null;
+          const count = kpiStudents.filter((s) => (s.tags || []).includes(tid)).length;
+          return (
+            <div key={tid} className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2 saas-shadow">
+              <span
+                className="text-[9px] font-semibold px-1.5 py-0.5 rounded border"
+                style={getTagStyle(tag.color)}
+              >
+                {tag.name}
+              </span>
+              <span className="text-[11px] font-semibold text-foreground">{count}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── 5. Distribuição de Status (Pizza) + Evolução Mensal ────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Pie Chart */}
+        <div className="bg-card border border-border rounded-2xl p-6 saas-shadow">
+          <h3 className="text-sm font-semibold text-foreground mb-1">Distribuição de Status</h3>
+          <p className="text-xs text-muted-foreground mb-4">
+            {mode === 'historico' && historicoEnd
+              ? `Carteira reconstruída em ${new Date(historicoEnd + 'T12:00:00').toLocaleDateString('pt-BR')}`
+              : 'Volume da Carteira (estado atual)'}
+          </p>
+          {pieData.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-12">Sem dados para exibir.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" stroke="none">
+                  {pieData.map((entry) => (
+                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ borderRadius: 12, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '8px 10px' }}
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null;
+                    const p = payload[0].payload;
+                    return (
+                      <div style={{ background: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: 12, padding: '8px 10px', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                        <div style={{ fontWeight: 600, marginBottom: 4, color: STATUS_COLORS[p.name] }}>{p.name}</div>
+                        <div style={{ display: 'grid', gap: 2, color: 'hsl(var(--foreground))' }}>
+                          <div>Quantidade: <strong>{p.value} aluno(s)</strong></div>
+                          <div>Valor: <strong>{formatCurrency(p.valor)}</strong></div>
+                          <div>Percentual: <strong>{p.percent.toFixed(1)}%</strong></div>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Evolução Mensal */}
+        <div className="bg-card border border-border rounded-2xl p-6 saas-shadow">
+          <h3 className="text-sm font-semibold text-foreground mb-1">Evolução Mensal por Status</h3>
+          <p className="text-xs text-muted-foreground mb-3">Valor (R$) mês a mês {acFilter ? `— ${acFilter}` : '— carteira completa'}</p>
+
+          {/* Filtro exclusivo do bloco — período em meses */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-4">
+            {([
+              { key: '3m', label: '3 Meses' },
+              { key: '6m', label: '6 Meses' },
+              { key: '12m', label: '12 Meses' },
+              { key: 'custom', label: 'Personalizado' },
+            ] as { key: EvolPreset; label: string }[]).map((p) => (
+              <button
+                key={p.key}
+                onClick={() => setEvolPreset(p.key)}
+                className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                  evolPreset === p.key
+                    ? 'iam-gradient text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+            {evolPreset === 'custom' && (() => {
+              const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+              const currentYear = new Date().getFullYear();
+              const ANOS = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
+              const [sy, sm] = evolCustomStart.split('-').map(Number);
+              const [ey, em] = evolCustomEnd.split('-').map(Number);
+              return (
+                <div className="flex items-center gap-2 ml-2 flex-wrap">
+                  <span className="text-[10px] text-muted-foreground">Início:</span>
+                  <select
+                    value={sm}
+                    onChange={(e) => setEvolCustomStart(`${sy}-${String(Number(e.target.value)).padStart(2, '0')}`)}
+                    className="input-field text-xs py-1 px-2"
+                  >
+                    {MESES.map((m, i) => (
+                      <option key={m} value={i + 1}>{m}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={sy}
+                    onChange={(e) => setEvolCustomStart(`${e.target.value}-${String(sm).padStart(2, '0')}`)}
+                    className="input-field text-xs py-1 px-2"
+                  >
+                    {ANOS.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+
+                  <span className="text-[10px] text-muted-foreground ml-1">Fim:</span>
+                  <select
+                    value={em}
+                    onChange={(e) => setEvolCustomEnd(`${ey}-${String(Number(e.target.value)).padStart(2, '0')}`)}
+                    className="input-field text-xs py-1 px-2"
+                  >
+                    {MESES.map((m, i) => (
+                      <option key={m} value={i + 1}>{m}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={ey}
+                    onChange={(e) => setEvolCustomEnd(`${e.target.value}-${String(em).padStart(2, '0')}`)}
+                    className="input-field text-xs py-1 px-2"
+                  >
+                    {ANOS.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })()}
+          </div>
+
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={cartesianData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+              <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+              <Tooltip
+                contentStyle={{ borderRadius: 12, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                formatter={(value: number) => [formatCurrency(value)]}
+              />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+              {Object.entries(STATUS_COLORS).map(([status, color]) => (
+                <Line key={status} type="monotone" dataKey={status} stroke={color} strokeWidth={2} dot={{ r: 3 }} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Popup: Lista de Alunos + Parcelas ao clicar num indicador ───────── */}
+      {kpiModalConfig && (
+        <KpiStudentsModal
+          title={`Alunos — ${kpiModalConfig.title}`}
+          students={kpiModalConfig.students}
+          instInRange={_instInRange}
+          valueMode={kpiModalConfig.valueMode}
+          todayMs={_todayMs}
+          onClose={() => setKpiModalKey(null)}
+        />
+      )}
+
+      {/* ── 6. Ranking AC ────────────────────────────────────────────────────── */}
+      <ACRankingCard
+        acs={acs}
+        students={kpiStudents}
+        renegByAc={renegByAc}
+        referenceDate={mode === 'historico' && historicoEnd ? new Date(historicoEnd + 'T23:59:59') : undefined}
+      />
+
+      {/* ── 7. Espelho: Ranking de Reversões (aba Comissões) ─────────────────── */}
+      <ReversalRankingMirror />
+    </div>
+  );
+}
+
+interface PaymentDetail {
+  studentId: string;
+  studentName: string;
+  ac: string;
+  installmentNumber: number;
+  dueDate: string;
+  value: number;
+  paidValue: number;
+  paidDate?: string;
+}
+
+function PaymentDetailsModal({
+  mode,
+  details,
+  totalPago,
+  totalRecebido,
+  onClose,
+}: {
+  mode: 'pago' | 'recebido';
+  details: PaymentDetail[];
+  totalPago: number;
+  totalRecebido: number;
+  onClose: () => void;
+}) {
+  const isRecebido = mode === 'recebido';
+  const title = isRecebido ? 'Valor Recebido — Detalhes' : 'Total Pago — Detalhes';
+  const totalLabel = isRecebido ? 'Total Recebido' : 'Total Pago';
+  const totalValue = isRecebido ? totalRecebido : totalPago;
+  const sorted = [...details].sort((a, b) => a.studentName.localeCompare(b.studentName));
+  const fmtDate = (iso?: string) => {
+    if (!iso) return '—';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-50 fade-in p-4" onClick={onClose}>
+      <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden shadow-2xl border border-border flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {sorted.length} {sorted.length === 1 ? 'parcela' : 'parcelas'} · {totalLabel}: <span className="font-semibold text-emerald-700">{formatCurrency(totalValue)}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground" aria-label="Fechar">✕</button>
+        </div>
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-muted/60 backdrop-blur">
+              <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                <th className="text-left font-semibold px-4 py-2">Cliente</th>
+                <th className="text-center font-semibold px-4 py-2">Parc.</th>
+                <th className="text-left font-semibold px-4 py-2">Vencimento</th>
+                <th className="text-left font-semibold px-4 py-2">Pagamento</th>
+                <th className="text-right font-semibold px-4 py-2">{isRecebido ? 'Valor Recebido' : 'Valor Parcela'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-xs text-muted-foreground">Nenhum registro no período.</td>
+                </tr>
+              ) : (
+                sorted.map((d, idx) => (
+                  <tr key={`${d.studentId}-${d.installmentNumber}-${idx}`} className="border-t border-border/60">
+                    <td className="px-4 py-2 text-foreground">{d.studentName}</td>
+                    <td className="px-4 py-2 text-center text-xs text-muted-foreground tabular-nums">{d.installmentNumber}</td>
+                    <td className="px-4 py-2 text-xs text-foreground tabular-nums">{fmtDate(d.dueDate)}</td>
+                    <td className="px-4 py-2 text-xs text-foreground tabular-nums">{fmtDate(d.paidDate)}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-emerald-700 tabular-nums">
+                      {formatCurrency(isRecebido ? d.paidValue : d.value)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
