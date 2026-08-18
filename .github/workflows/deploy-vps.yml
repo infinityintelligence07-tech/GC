@@ -1,0 +1,76 @@
+name: Deploy GC na VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-gc-main
+  cancel-in-progress: false
+
+# Secrets iguais aos do IAM-Control-Frontend / IAM-Control-Backend:
+#   VPS_HOST, VPS_USER, VPS_SSH_KEY, VPS_PORT, VPS_SSH_KEY_PASSPHRASE
+# Secrets deste app (mesmos valores do .env.production):
+#   VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, VITE_SUPABASE_PROJECT_ID
+
+jobs:
+  deploy:
+    name: Build e publicar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --legacy-peer-deps
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+
+      - name: Empacotar dist
+        run: tar -C dist -czf gc-dist.tar.gz .
+
+      - name: Enviar pacote
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          passphrase: ${{ secrets.VPS_SSH_KEY_PASSPHRASE }}
+          source: gc-dist.tar.gz
+          target: /tmp
+
+      - name: Publicar no Nginx
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          passphrase: ${{ secrets.VPS_SSH_KEY_PASSPHRASE }}
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -e
+            WEBROOT=/var/www/gc.iamcontrol.com.br
+            test -f /tmp/gc-dist.tar.gz
+            mkdir -p "$WEBROOT"
+            find "$WEBROOT" -mindepth 1 -maxdepth 1 ! -name '.well-known' -exec rm -rf {} +
+            tar -xzf /tmp/gc-dist.tar.gz -C "$WEBROOT"
+            chown -R www-data:www-data "$WEBROOT"
+            rm -f /tmp/gc-dist.tar.gz
+            test -f "$WEBROOT/index.html"
+            echo "[deploy] GC publicado em $WEBROOT"
