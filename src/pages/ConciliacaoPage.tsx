@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useConciliacaoStore, notifyConciliacaoGrupo } from '@/store/useConciliacaoStore';
 
 import { toast } from 'sonner';
+import { isDoubleCheckItem } from '@/lib/doubleCheckRejection';
 import { useAppStore } from '@/store/useAppStore';
 import type { ConciliacaoItem, ConciliacaoTipo, ConciliacaoImportError, ConciliacaoImportErrorMotivo, Student, Installment, FunnelStage } from '@/types';
 import ImportConciliacaoModal from '@/components/modals/ImportConciliacaoModal';
@@ -1443,8 +1444,19 @@ export default function ConciliacaoPage() {
       const affectedCaseIds = new Set<string>();
       for (const it of reprovarGroup.items) {
         reprovar(it.id, motivo, { silent: true });
-        if (it.relatedCaseId) affectedCaseIds.add(it.relatedCaseId);
+        if (it.relatedCaseId) {
+          affectedCaseIds.add(it.relatedCaseId);
+        } else if (isDoubleCheckItem(it) && it.studentId) {
+          // Ajuste pré-cancelamento: o item nasce ANTES do caso existir, então
+          // não tem relatedCaseId. Localizamos o caso aberto do aluno para
+          // devolvê-lo a "Em Tratativas" com pedido de correção.
+          const openCase = cancellationCases.find(
+            (x) => x.studentId === it.studentId && x.funnelStage !== 'Finalizado',
+          );
+          if (openCase) affectedCaseIds.add(openCase.id);
+        }
       }
+
       const nowIso = new Date().toISOString();
       const revisor = currentUser?.name ?? 'Conciliação';
       for (const caseId of affectedCaseIds) {

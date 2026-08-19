@@ -180,10 +180,14 @@ export default function ACPortfolioPage() {
       const revertidas = c.inscricoesRevertidas ?? 0;
       const reversaoParcialPendente = total > 1 && revertidas > 0 && revertidas < total;
       const st = c.studentId ? students.find((s) => s.id === c.studentId) : students.find((s) => s.cancellationCaseId === c.id);
+      // Casos REVERTIDOS voltam para a carteira do assessor, mesmo finalizados.
+      const isRevertido = c.acao === 'Revertido' || st?.statusCancelamento === 'revertido' || (total > 0 && revertidas >= total);
+      if (isRevertido) return;
       const aguardando = !reversaoParcialPendente && (pendingCaseIds.has(c.id) || st?.statusCancelamento === 'aguardando_conciliacao');
       const conciliado = !reversaoParcialPendente && conciliadoCaseIds.has(c.id) && !pendingCaseIds.has(c.id);
       const isFinalizado = c.funnelStage === 'Finalizado' || aguardando || conciliado;
       if (!isJudicial && !isFinalizado) return;
+
       if (c.studentId) ids.add(c.studentId);
       if (c.studentName) names.add(c.studentName.trim().toLowerCase());
     });

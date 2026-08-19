@@ -25,15 +25,25 @@ import { registrarConciliacao } from '@/store/useConciliacaoStore';
 import { useNotificationsStore } from '@/store/useNotificationsStore';
 import { PencilLine, ShieldAlert } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
+import { AJUSTE_TAG, FIELD_LABELS, type DivergenceField } from '@/lib/doubleCheckRejection';
+
 
 
 interface Props {
   student: Student;
   onClose: () => void;
   onSaved: (info: { summary: string; ajusteTag: string }) => void;
+  /**
+   * Quando informado, SOMENTE estes campos ficam editáveis. Usado na correção
+   * pós-reprovação da Conciliação (double-check): o AC só pode mexer no que
+   * ele mesmo alterou e foi reprovado.
+   */
+  allowedFields?: DivergenceField[];
+  /** Motivo da reprovação da Conciliação (exibido em destaque no topo). */
+  rejectionMotivo?: string;
+  rejectionBy?: string;
 }
 
-const AJUSTE_TAG = 'Ajuste financeiro AC (pré-cancelamento)';
 
 // Máscara de moeda BRL: usuário digita e o valor vai formatando (R$ 1.000,00)
 function brlMask(raw: string): string {
@@ -56,10 +66,13 @@ function brlFromNumber(v: string): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-export default function CancelDivergenceEditModal({ student, onClose, onSaved }: Props) {
+export default function CancelDivergenceEditModal({ student, onClose, onSaved, allowedFields, rejectionMotivo, rejectionBy }: Props) {
   const { acs, products, rules, updateStudent, appUsers, currentUser } = useAppStore();
   const notify = useNotificationsStore((s) => s.notify);
   const confirm = useConfirm();
+  // Campos bloqueados na correção pós-reprovação
+  const locked = (k: DivergenceField) => !!allowedFields && !allowedFields.includes(k);
+
 
 
   const firstDue = student.installments?.[0]?.dueDate || student.enrollmentDate;
@@ -267,7 +280,9 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
       antes,
       depois,
       autorObservacao:
-        'Ajuste realizado pelo AC durante o fluxo de cancelamento (divergência de valores com o Kamino). Requer double-check.',
+        allowedFields
+          ? 'Correção enviada pelo AC após reprovação da Conciliação (double-check). Somente os campos reprovados foram liberados para edição.'
+          : 'Ajuste realizado pelo AC durante o fluxo de cancelamento (divergência de valores com o Kamino). Requer double-check.',
     });
 
     // Notifica Conciliação e Admins
@@ -294,12 +309,27 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
             <PencilLine size={20} className="text-primary" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Ajustar dados do contrato</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              {allowedFields ? 'Corrigir dados reprovados na Conciliação' : 'Ajustar dados do contrato'}
+            </h3>
             <p className="text-[11px] text-muted-foreground">
-              Autonomia liberada <strong>apenas neste fluxo</strong> de cancelamento. As alterações serão enviadas para <strong>double-check da Conciliação</strong>.
+              {allowedFields
+                ? 'Somente os campos apontados na reprovação estão liberados para edição.'
+                : (<>Autonomia liberada <strong>apenas neste fluxo</strong> de cancelamento. As alterações serão enviadas para <strong>double-check da Conciliação</strong>.</>)}
             </p>
           </div>
         </div>
+
+        {allowedFields && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800 space-y-1">
+            <p className="font-semibold uppercase tracking-wider text-[10px]">Conciliação reprovada — ajuste necessário</p>
+            {rejectionMotivo && <p className="whitespace-pre-wrap">{rejectionMotivo}</p>}
+            <p className="text-rose-700/80">
+              {rejectionBy ? `Reprovado por ${rejectionBy}. ` : ''}
+              Campos liberados: {allowedFields.map((f) => FIELD_LABELS[f]).join(', ') || '—'}.
+            </p>
+          </div>
+        )}
 
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-800 flex gap-2 items-start">
           <ShieldAlert size={14} className="mt-0.5 shrink-0 text-blue-600" />
@@ -307,6 +337,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
             Observe atentamente para preencher todos os campos. Confira campo a campo para ver se bate com os dados da kamino e dados do contrato do aluno.
           </span>
         </div>
+
 
         <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground pt-1">
           Financeiro
@@ -319,6 +350,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               className="input-field w-full text-xs"
               value={form.statusMode}
               onChange={(e) => set('statusMode', e.target.value as StatusMode)}
+              disabled={locked('statusMode')}
             >
               <option value="Automático">Automático</option>
               <option value="Manual">Manual</option>
@@ -330,6 +362,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               className={'input-field w-full text-xs' + errCls(missing.ac)}
               value={form.ac}
               onChange={(e) => set('ac', e.target.value)}
+              disabled={locked('ac')}
             >
               {acs.map((a) => (
                 <option key={a.id} value={a.name}>{a.name}</option>
@@ -343,6 +376,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               className={'input-field w-full text-xs' + errCls(missing.product)}
               value={form.product}
               onChange={(e) => set('product', e.target.value)}
+              disabled={locked('product')}
             >
               {products.map((p) => (
                 <option key={p.id} value={p.name}>{p.name}</option>
@@ -359,6 +393,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               placeholder="Ex.: 2026"
               value={form.ciclo}
               onChange={(e) => set('ciclo', e.target.value)}
+              disabled={locked('ciclo')}
             />
           </div>
 
@@ -369,6 +404,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               className={'input-field w-full text-xs' + errCls(missing.enrollmentDate)}
               value={form.enrollmentDate}
               onChange={(e) => set('enrollmentDate', e.target.value)}
+              disabled={locked('enrollmentDate')}
             />
           </div>
           <div>
@@ -378,6 +414,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               className={'input-field w-full text-xs' + errCls(missing.data_treinamento_origem)}
               value={form.data_treinamento_origem}
               onChange={(e) => set('data_treinamento_origem', e.target.value)}
+              disabled={locked('data_treinamento_origem')}
             />
           </div>
 
@@ -388,6 +425,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               className={'input-field w-full text-xs' + errCls(missing.dueDate)}
               value={form.dueDate}
               onChange={(e) => set('dueDate', e.target.value)}
+              disabled={locked('dueDate')}
             />
           </div>
           <div>
@@ -399,6 +437,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               className={'input-field w-full text-xs' + errCls(missing.saleValue)}
               value={form.saleValue}
               onChange={(e) => set('saleValue', brlMask(e.target.value))}
+              disabled={locked('saleValue')}
             />
           </div>
 
@@ -411,6 +450,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               className={'input-field w-full text-xs' + errCls(missing.downPayment)}
               value={form.downPayment}
               onChange={(e) => set('downPayment', brlMask(e.target.value))}
+              disabled={locked('downPayment')}
             />
           </div>
           <div>
@@ -422,6 +462,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               className={'input-field w-full text-xs' + errCls(missing.totalInstallments)}
               value={form.totalInstallments}
               onChange={(e) => set('totalInstallments', e.target.value)}
+              disabled={locked('totalInstallments')}
             />
             <p className="text-[10px] text-muted-foreground mt-1">Máx: {rules.maxParcelasCadastro}</p>
           </div>
@@ -436,6 +477,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
               className={'input-field w-full text-xs' + errCls(missing.paidInstallments)}
               value={form.paidInstallments}
               onChange={(e) => set('paidInstallments', e.target.value)}
+              disabled={locked('paidInstallments')}
             />
           </div>
 
@@ -470,7 +512,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved }:
             disabled={!canSave}
             className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
-            Salvar e enviar para Conciliação
+            {allowedFields ? 'Salvar correção e reenviar para Conciliação' : 'Salvar e enviar para Conciliação'}
           </button>
         </div>
       </div>

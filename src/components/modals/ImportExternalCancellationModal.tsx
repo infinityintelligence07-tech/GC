@@ -37,6 +37,8 @@ export default function ImportExternalCancellationModal({ onClose }: Props) {
   const sortedProducts = [...products].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
   const [treinamento, setTreinamento] = useState<string>('');
+  const [usarOutroTreinamento, setUsarOutroTreinamento] = useState(false);
+
 
   // Assessor responsável (obrigatório)
   const [acId, setAcId] = useState<string>('');
@@ -95,7 +97,7 @@ export default function ImportExternalCancellationModal({ onClose }: Props) {
     !!acId &&
     !!nome.trim() &&
     !!treinamento.trim() &&
-    treinamento !== '__other__' &&
+
     !!whatsapp.trim() &&
     !!pagamento &&
     !!motivoCancelamento &&
@@ -239,20 +241,33 @@ export default function ImportExternalCancellationModal({ onClose }: Props) {
                   Treinamento <span className="text-destructive">*</span>
                 </label>
                 {sortedProducts.length > 0 ? (
-                  <select className="input-field w-full" value={treinamento} onChange={(e) => setTreinamento(e.target.value)}>
+                  <select
+                    className="input-field w-full"
+                    value={usarOutroTreinamento ? '__other__' : treinamento}
+                    onChange={(e) => {
+                      if (e.target.value === '__other__') {
+                        setUsarOutroTreinamento(true);
+                        setTreinamento('');
+                      } else {
+                        setUsarOutroTreinamento(false);
+                        setTreinamento(e.target.value);
+                      }
+                    }}
+                  >
                     <option value="">— Selecione um treinamento —</option>
                     {sortedProducts.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
                     <option value="__other__">Outro (digitar)…</option>
                   </select>
                 ) : null}
-                {(sortedProducts.length === 0 || treinamento === '__other__') && (
+                {(sortedProducts.length === 0 || usarOutroTreinamento) && (
                   <input
                     className="input-field w-full mt-2"
-                    value={treinamento === '__other__' ? '' : treinamento}
+                    value={treinamento}
                     onChange={(e) => setTreinamento(e.target.value)}
                     placeholder="Nome do treinamento"
                   />
                 )}
+
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase mb-1.5">Telefone / WhatsApp <span className="text-destructive">*</span></label>

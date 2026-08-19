@@ -1910,6 +1910,18 @@ export function calculateProcessingSpeed(cancellationCases: CancellationCase[]) 
     });
     segments.push({ stage, start, end: now });
 
+    // A medição de "Entrada" deve começar na DATA DA SOLICITAÇÃO do aluno
+    // (createdAt do caso), mesmo que o card só tenha sido colocado na coluna
+    // Entrada dias depois. Ex.: solicitou 01/08, entrou na coluna 06/08 e saiu
+    // 10/08 → contabiliza de 01/08 até 10/08.
+    const firstEntradaIdx = segments.findIndex((s) => s.stage === 'Entrada');
+    if (firstEntradaIdx >= 0) {
+      segments[firstEntradaIdx] = {
+        ...segments[firstEntradaIdx],
+        start: Math.min(segments[firstEntradaIdx].start, createdAt),
+      };
+    }
+
     segments.forEach((seg) => {
       if (!(TRACKED as readonly string[]).includes(seg.stage)) return;
       const dur = Math.max(0, seg.end - seg.start);
@@ -1917,11 +1929,11 @@ export function calculateProcessingSpeed(cancellationCases: CancellationCase[]) 
       acc[seg.stage].count += 1;
     });
 
-    // Ciclo completo: da entrada na coluna "Entrada" até a saída de
+    // Ciclo completo: da solicitação/entrada na coluna "Entrada" até a saída de
     // "Distrato do Contrato" (ou até agora, se ainda estiver no fluxo).
     const trackedSegs = segments.filter((s) => (TRACKED as readonly string[]).includes(s.stage));
     if (trackedSegs.length > 0) {
-      const ini = trackedSegs[0].start;
+      const ini = Math.min(trackedSegs[0].start, createdAt);
       const lastFormalizacao = [...segments].reverse().find((s) => s.stage === 'Formalização');
       const fim = lastFormalizacao ? lastFormalizacao.end : trackedSegs[trackedSegs.length - 1].end;
       cycleMs += Math.max(0, fim - ini);

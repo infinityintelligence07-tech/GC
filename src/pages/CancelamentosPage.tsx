@@ -29,7 +29,7 @@ import {
   Clock,
   CheckCircle2, AlertTriangle, Ban, LayoutGrid, List,
   Users, History, X, RotateCcw, Award, Eye, Phone, FileEdit, Trash2, Bell, UserPlus, User,
-  DollarSign, Gavel, Info, Upload, FileText, Download as DownloadIcon,
+  DollarSign, Gavel, Info, Upload, FileText, Download as DownloadIcon, ArrowRight, PencilLine,
 } from 'lucide-react';
 import { formatCurrency, formatCurrencyCompact } from '@/store/useAppStore';
 import { DatePreset, AnalysisMode, getPresetRange, getCurrentMonthDates } from '@/lib/periodFilter';
@@ -42,6 +42,8 @@ import { openCancellationPdf, downloadCancellationPdf } from '@/lib/openCancella
 import { toShortName, shortNameFontClass } from '@/lib/utils';
 import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
 import ExternalCancellationViewModal from '@/components/modals/ExternalCancellationViewModal';
+import CancelDivergenceEditModal from '@/components/modals/CancelDivergenceEditModal';
+import { pendingDoubleCheckCorrection } from '@/lib/doubleCheckRejection';
 
 // ─── Novo Funil (5 colunas fixas) ─────────────────────────────────────────────
 
@@ -60,6 +62,44 @@ const FUNNEL_STAGES: FunnelConfig[] = [
   { label: 'Pendente',     displayLabel: 'JUDICIAL / PROCON',    color: 'bg-rose-600',    borderColor: 'border-l-rose-500',    icon: <AlertTriangle size={13} /> },
   { label: 'Finalizado',   displayLabel: 'Finalizado',           color: 'bg-emerald-600', borderColor: 'border-l-emerald-500', icon: <Ban size={13} /> },
 ];
+
+// Marcador de métrica: reversão acionada com o card na coluna Distrato do Contrato
+const DISTRATO_REVERT_MARKER = '[Métrica Distrato]';
+function hasDistratoRevertMarker(c: CancellationCase): boolean {
+  return (c.history ?? []).some((h) => (h.note ?? '').includes(DISTRATO_REVERT_MARKER));
+}
+
+// Card esteve em "Distrato do Contrato" e foi arrastado manualmente para "Em Tratativas"
+function movedDistratoToTratativa(c: CancellationCase): boolean {
+  return (c.history ?? []).some((h) => {
+    const n = (h.note ?? '').toLowerCase();
+    return n.includes('movido no funil') && n.includes('formalização') && n.includes('em execução')
+      && n.indexOf('formalização') < n.indexOf('em execução');
+  });
+}
+
+// Conciliação recusada/reprovada → sai do KPI
+function hasConciliacaoReprovada(c: CancellationCase): boolean {
+  return (c.history ?? []).some((h) => {
+    const n = (h.note ?? '').toLowerCase();
+    return (n.includes('reprovad') || n.includes('recusad')) && n.includes('concilia');
+  });
+}
+
+
+// Valor de multa efetivamente QUITADO pelo aluno além do que já havia pago —
+// registrado pelo botão "Aluno pagou a multa" (modal MultaPagaModal).
+export function getMultaQuitadaValor(c: CancellationCase): number {
+  const re = /Aluno pagou a multa negativada:\s*R\$\s*([\d.]+,\d{2})/i;
+  let total = 0;
+  (c.history ?? []).forEach((h) => {
+    const m = re.exec(h.note ?? '');
+    if (m) total += Number(m[1].replace(/\./g, '').replace(',', '.')) || 0;
+  });
+  return Math.round(total * 100) / 100;
+}
+
+
 
 // Rótulo visível da coluna a partir da chave interna do funil
 export function funnelDisplayLabel(stage: string): string {
@@ -214,6 +254,7 @@ interface CardProps {
   onRevert: (c: CancellationCase) => void;
   onCancel: (c: CancellationCase) => void;
   onSendToLegal?: (c: CancellationCase) => void;
+  onMoveToTratativas?: (c: CancellationCase) => void;
   onView: (c: CancellationCase) => void;
   onDelete: (c: CancellationCase) => void;
   onChangeAcao: (c: CancellationCase, acao: CancellationAction) => void;
@@ -232,7 +273,7 @@ interface CardProps {
 
 function CancellationCard({
   c, student, funnelStage,
-  onRevert, onCancel, onSendToLegal, onView, onDelete,
+  onRevert, onCancel, onSendToLegal, onMoveToTratativas, onView, onDelete,
   onChangeAcao, onChangeResponsavel,
   onConciliar, podeConciliar,
   onRenegotiate, onFollowCancellation, onMultaPaga,
@@ -240,8 +281,18 @@ function CancellationCard({
 }: CardProps) {
   const cfg = FUNNEL_STAGES.find((f) => f.label === funnelStage)!;
   const borderColor = cfg.borderColor;
-  const dias = daysSince(c.createdAt);
   const isFinal = funnelStage === 'Finalizado';
+  // Nos cards Finalizados exibimos o tempo TOTAL do cancelamento:
+  // da data da solicitação até o dia em que o card foi movido para Finalizado.
+  const diasCorridos = daysSince(c.createdAt);
+  const diasTotalFinalizado = (() => {
+    const start = new Date(c.createdAt).getTime();
+    const end = new Date(c.movedToCurrentStageAt || c.createdAt).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return diasCorridos;
+    return Math.max(0, Math.floor((end - start) / (1000 * 60 * 60 * 24)));
+  })();
+  const dias = isFinal ? diasTotalFinalizado : diasCorridos;
+
   const whatsapp = c.studentWhatsapp || student?.whatsapp || '';
   const allowedAcoes = ACTIONS_BY_FUNNEL[funnelStage];
   const isFixedAction = FIXED_ACTION_STAGES.includes(funnelStage);
@@ -304,6 +355,15 @@ function CancellationCard({
   const podeInformarMultaPaga =
     isFinal && negativarInfo.valor > 0.0049 && !negativarInfo.jaPago;
 
+  // ── Double-check reprovado: libera correção só dos campos apontados ──────
+  const correcaoPendente = useMemo(
+    () => pendingDoubleCheckCorrection(conciliacaoItems, c.studentId),
+    [conciliacaoItems, c.studentId],
+  );
+  const [showCorrigir, setShowCorrigir] = useState(false);
+
+
+
   return (
     <div
       draggable={draggable && !readOnly && !lockedForConciliation}
@@ -353,12 +413,15 @@ function CancellationCard({
           )}
         </div>
         <span
-          className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${
+          className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 leading-[1.1] ${
             dias >= 15 ? 'bg-rose-100 text-rose-700' : dias >= 7 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
           }`}
-          title="Dias desde a solicitação"
+          title={isFinal ? 'Tempo total: da solicitação até a finalização' : 'Dias desde a solicitação'}
         >
-          Há {dias} {dias === 1 ? 'dia' : 'dias'}
+          {isFinal
+            ? <>Levou {dias} {dias === 1 ? 'dia' : 'dias'}<br />&nbsp;p/ finalizar</>
+            : `Há ${dias} ${dias === 1 ? 'dia' : 'dias'}`}
+
         </span>
       </div>
 
@@ -372,6 +435,36 @@ function CancellationCard({
         >
           <Ban size={10} /> Ver erro
         </button>
+      )}
+      {correcaoPendente && student && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setShowCorrigir(true); }}
+          className="w-full flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition-colors"
+          title="Conciliação reprovada — corrigir os campos apontados"
+        >
+          <PencilLine size={10} /> Corrigir dados reprovados
+        </button>
+      )}
+      {showCorrigir && correcaoPendente && student && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <CancelDivergenceEditModal
+            student={student}
+            allowedFields={correcaoPendente.fields}
+            rejectionMotivo={correcaoPendente.item.reprovadoMotivo || c.conciliacaoReprovadaMotivo}
+            rejectionBy={correcaoPendente.item.reprovadoPorNome || c.conciliacaoReprovadaPorNome}
+            onClose={() => setShowCorrigir(false)}
+            onSaved={() => {
+              setShowCorrigir(false);
+              useAppStore.getState().updateCancellationCase(c.id, {
+                conciliacaoReprovadaMotivo: undefined,
+                conciliacaoReprovadaAt: undefined,
+                conciliacaoReprovadaPorNome: undefined,
+                acao: undefined,
+              });
+            }}
+          />
+        </div>
       )}
       {showErro && c.conciliacaoReprovadaMotivo && (
         <div
@@ -604,6 +697,15 @@ function CancellationCard({
       {/* Ações do card */}
       {!readOnly && (
         <div className="flex items-center gap-1 pt-1 mt-auto border-t border-border/50 flex-wrap">
+          {funnelStage === 'Entrada' && !lockedForConciliation && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onMoveToTratativas?.(c); }}
+              className="flex items-center gap-1 px-1.5 py-1 rounded text-[9px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all"
+              title="Mover card para Em Tratativas"
+            >
+              <ArrowRight size={10} /> Mover para Em Tratativas
+            </button>
+          )}
           {!isFinal && !lockedForConciliation && funnelStage !== 'Entrada' && !isRenegociacaoJuridica && (
             <>
               <button
@@ -619,7 +721,7 @@ function CancellationCard({
                   className="flex items-center gap-1 px-1.5 py-1 rounded text-[9px] font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition-all"
                   title="Enviar para o Jurídico (Distrato do Contrato)"
                 >
-                  <Gavel size={10} /> Enviar para Jurídico
+                  <Gavel size={10} /> Enviar p/ Jurídico
                 </button>
               ) : (
                 <button
@@ -1480,6 +1582,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
 
         <div className="p-5 space-y-4">
           {simplified && (
+
             <>
               <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
                 <p className="text-[11px] font-semibold uppercase text-sky-800 tracking-wider">
@@ -2344,6 +2447,22 @@ export default function CancelamentosPage() {
     const reverted = c.inscricoesRevertidas ?? 0;
     const remaining = Math.max(1, total - reverted);
     const isEmTratativas = getFunnelStage(c) === 'Em Execução';
+    // Métrica: registra que a reversão foi acionada com o card no Distrato do Contrato
+    if (getFunnelStage(c) === 'Formalização' && !hasDistratoRevertMarker(c)) {
+      const now = new Date().toISOString();
+      updateCancellationCase(c.id, {
+        history: [
+          ...c.history,
+          {
+            date: now,
+            from: c.stage,
+            to: c.stage,
+            operationalStatus: c.operationalStatus,
+            note: `${DISTRATO_REVERT_MARKER} Reverter acionado com o card em Distrato do Contrato.`,
+          },
+        ],
+      });
+    }
     if (isEmTratativas && remaining >= 2) {
       setRevertQtyPrompt(c);
       return;
@@ -2352,6 +2471,7 @@ export default function CancelamentosPage() {
     setPendingPartialRevert(null);
     setClassChangePrompt(c);
   };
+
   const handleRevert = (c: CancellationCase) => openRevertFlow(c);
   const handleFinalize = (c: CancellationCase) => setFinalizeAction({ caseRef: c, type: 'cancelar' });
 
@@ -2450,6 +2570,14 @@ export default function CancelamentosPage() {
     }
   };
 
+  const handleMoveToTratativas = (caseRef: CancellationCase) => {
+    if (!caseRef.motivoCancelamento) {
+      setPendingMotivoCase({ caseRef, targetFunnel: 'Em Execução' });
+      return;
+    }
+    moveCaseToFunnel(caseRef, 'Em Execução');
+  };
+
   const handleDrop = (e: React.DragEvent, targetFunnel: FunnelStage) => {
     e.preventDefault();
     setDragOverFunnel(null);
@@ -2500,6 +2628,33 @@ export default function CancelamentosPage() {
   const displayCases = useMemo(() => {
     return cancellationCases.filter((c) => caseExistedAt(c, period.end));
   }, [cancellationCases, period]);
+
+  // ── Indicadores da coluna Distrato do Contrato ──────────────────────────
+  const [distratoMetricsOpen, setDistratoMetricsOpen] = useState(false);
+  const distratoMetrics = useMemo(() => {
+    const revertidosNoDistrato = displayCases.filter(
+      (c) =>
+        !hasConciliacaoReprovada(c) &&
+        (hasDistratoRevertMarker(c) ||
+          (movedDistratoToTratativa(c) && c.acao === 'Revertido' && getFunnelStage(c) === 'Finalizado')),
+    );
+    const revertidosFinalizados = revertidosNoDistrato.filter(
+      (c) => getFunnelStage(c) === 'Finalizado' && c.acao === 'Revertido',
+    );
+
+    const canceladosComMulta = displayCases.filter((c) => getMultaQuitadaValor(c) > 0.0049);
+    const canceladosComAbatimento = displayCases.filter((c) => (c.abatimento?.valor ?? 0) > 0.0049);
+    return {
+      revertidosNoDistrato,
+      revertidosFinalizados,
+      canceladosComMulta,
+      canceladosComAbatimento,
+      totalMulta: canceladosComMulta.reduce((s, c) => s + getMultaQuitadaValor(c), 0),
+      totalAbatimento: canceladosComAbatimento.reduce((s, c) => s + (c.abatimento?.valor ?? 0), 0),
+    };
+  }, [displayCases]);
+
+
 
   // ── Casos criados dentro do período de referência (guia os indicadores) ──
   const periodCases = useMemo(() => {
@@ -3104,12 +3259,24 @@ export default function CancelamentosPage() {
                     <div className={`flex items-center justify-between gap-2 px-3 py-2 h-11 rounded-t-xl ${f.color} text-white`}>
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <span className="shrink-0">{f.icon}</span>
-                        <span className="text-[11px] font-bold uppercase tracking-wide whitespace-nowrap truncate" title={f.displayLabel}>
-                          {f.displayLabel}
-                        </span>
+                        {f.label === 'Formalização' ? (
+                          <button
+                            type="button"
+                            onClick={() => setDistratoMetricsOpen(true)}
+                            className="text-[11px] font-bold uppercase tracking-wide whitespace-nowrap truncate underline decoration-white/50 underline-offset-2 hover:decoration-white transition-colors text-left"
+                            title="Ver indicadores do Distrato do Contrato"
+                          >
+                            {f.displayLabel}
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-bold uppercase tracking-wide whitespace-nowrap truncate" title={f.displayLabel}>
+                            {f.displayLabel}
+                          </span>
+                        )}
                       </div>
+
                       <span className="shrink-0 text-[10px] bg-white/20 px-2 py-0.5 rounded-full">
-                        {isFinalizado ? `${cards.length}/${totalFinalizadoRecente}` : cards.length}
+                        {isFinalizado ? totalFinalizadoRecente : cards.length}
                       </span>
                     </div>
                     {/* Faixa de responsável — altura fixa em todas as colunas */}
@@ -3134,7 +3301,15 @@ export default function CancelamentosPage() {
                         Jurídico
                       </div>
                     ) : (
-                      <div className="h-6 border-b border-border/40 bg-muted/40" aria-hidden />
+                      isFinalizado ? (
+                        <div className="h-6 border-b border-border/40 bg-muted/40 flex items-center justify-center px-2 overflow-hidden">
+                          <p className="text-[9px] text-muted-foreground leading-none text-center">
+                            A coluna exibe apenas os 10 últimos finalizados.&nbsp;
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="h-6 border-b border-border/40 bg-muted/40" aria-hidden />
+                      )
                     )}
                     {/* Faixa de filtro — altura fixa; placeholder nas colunas sem filtro */}
                     {(f.label === 'Em Execução' || f.label === 'Formalização' || f.label === 'Pendente') ? (() => {
@@ -3167,35 +3342,29 @@ export default function CancelamentosPage() {
                         </div>
                       );
                     })() : (
-                      <div className={`bg-card border border-t-0 border-border ${isFinalizado ? 'px-2 py-2 flex flex-col gap-1.5' : 'h-8'}`} aria-hidden={!isFinalizado}>
+                      <div className={`bg-card border border-t-0 border-border ${isFinalizado ? 'h-8 px-2 flex items-center gap-1.5' : 'h-8'}`} aria-hidden={!isFinalizado}>
                         {isFinalizado && (
                           <>
-                            <p className="text-[9px] text-muted-foreground leading-tight text-center">
-                              A coluna exibe apenas os 10 últimos finalizados. Para pesquisar outro nome, utilize a barra de pesquisa abaixo.
-                            </p>
-                            <div className="flex items-center gap-1.5">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground shrink-0"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input
-                                type="text"
-                                value={finalizadoSearch}
-                                onChange={(e) => { setFinalizadoSearch(e.target.value); setFinalizadoLimit(10); }}
-                                placeholder="Pesquisar em Finalizado..."
-                                className="flex-1 bg-transparent outline-none text-[10px] text-foreground placeholder:text-muted-foreground"
-                              />
-                              {finalizadoSearch && (
-                                <button
-                                  onClick={() => { setFinalizadoSearch(''); setFinalizadoLimit(10); }}
-                                  className="text-[10px] text-muted-foreground hover:text-foreground px-1 rounded hover:bg-muted"
-                                  title="Limpar"
-                                >
-                                  ×
-                                </button>
-                              )}
-                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground shrink-0"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            <input
+                              type="text"
+                              value={finalizadoSearch}
+                              onChange={(e) => { setFinalizadoSearch(e.target.value); setFinalizadoLimit(10); }}
+                              placeholder="Pesquisar em Finalizado..."
+                              className="flex-1 bg-transparent outline-none text-[10px] text-foreground placeholder:text-muted-foreground"
+                            />
+                            {finalizadoSearch && (
+                              <button
+                                onClick={() => { setFinalizadoSearch(''); setFinalizadoLimit(10); }}
+                                className="text-[10px] text-muted-foreground hover:text-foreground px-1 rounded hover:bg-muted"
+                                title="Limpar"
+                              >
+                                ×
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
-
                     )}
                   </div>
 
@@ -3224,6 +3393,7 @@ export default function CancelamentosPage() {
                             onRevert={handleRevert}
                             onCancel={handleFinalize}
                             onSendToLegal={(c) => setSendToLegalCase(c)}
+                            onMoveToTratativas={handleMoveToTratativas}
                             onView={handleView}
                             onDelete={(c) => setDeleteId(c.id)}
                             onChangeAcao={handleChangeAcao}
@@ -4073,6 +4243,10 @@ export default function CancelamentosPage() {
           }}
         />
       )}
+      {distratoMetricsOpen && (
+        <DistratoMetricsModal metrics={distratoMetrics} onClose={() => setDistratoMetricsOpen(false)} />
+      )}
+
       {multaPagaCase && (
         <MultaPagaModal
           caseRef={multaPagaCase.caseRef}
@@ -4782,3 +4956,204 @@ function PartialRevertAdjustModal({
 }
 
 
+
+// ─── Modal: Indicadores da coluna Distrato do Contrato ───────────────────────
+interface DistratoMetricsModalProps {
+  metrics: {
+    revertidosNoDistrato: CancellationCase[];
+    revertidosFinalizados: CancellationCase[];
+    canceladosComMulta: CancellationCase[];
+    canceladosComAbatimento: CancellationCase[];
+    totalMulta: number;
+    totalAbatimento: number;
+  };
+  onClose: () => void;
+}
+
+function caseRefDate(c: CancellationCase): Date {
+  const last = (c.history ?? []).reduce<string | null>((acc, h) => {
+    if (!h?.date) return acc;
+    return !acc || new Date(h.date) > new Date(acc) ? h.date : acc;
+  }, null);
+  return new Date(last ?? c.movedToCurrentStageAt ?? c.createdAt);
+}
+
+type DistratoPreset = 'mes' | 'mes_passado' | 'trimestre' | 'trimestre_passado' | 'ano' | 'custom';
+
+function presetRange(p: DistratoPreset): { start: Date; end: Date } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const q = Math.floor(m / 3) * 3;
+  switch (p) {
+    case 'mes_passado':
+      return { start: new Date(y, m - 1, 1), end: new Date(y, m, 0, 23, 59, 59) };
+    case 'trimestre':
+      return { start: new Date(y, q, 1), end: new Date(y, q + 3, 0, 23, 59, 59) };
+    case 'trimestre_passado':
+      return { start: new Date(y, q - 3, 1), end: new Date(y, q, 0, 23, 59, 59) };
+    case 'ano':
+      return { start: new Date(y, 0, 1), end: new Date(y, 11, 31, 23, 59, 59) };
+    default:
+      return { start: new Date(y, m, 1), end: new Date(y, m + 1, 0, 23, 59, 59) };
+  }
+}
+
+const toInput = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function DistratoMetricsModal({ metrics, onClose }: DistratoMetricsModalProps) {
+  const [preset, setPreset] = useState<DistratoPreset>('mes');
+  const initial = presetRange('mes');
+  const [startStr, setStartStr] = useState(toInput(initial.start));
+  const [endStr, setEndStr] = useState(toInput(initial.end));
+
+  const applyPreset = (p: DistratoPreset) => {
+    setPreset(p);
+    const r = presetRange(p);
+    setStartStr(toInput(r.start));
+    setEndStr(toInput(r.end));
+  };
+
+  const inRange = (c: CancellationCase) => {
+    const t = caseRefDate(c).getTime();
+    const s = new Date(`${startStr}T00:00:00`).getTime();
+    const e = new Date(`${endStr}T23:59:59`).getTime();
+    if (Number.isNaN(t) || Number.isNaN(s) || Number.isNaN(e)) return true;
+    return t >= s && t <= e;
+  };
+
+  const fRevertidos = metrics.revertidosNoDistrato.filter(inRange);
+  const fRevertidosFin = metrics.revertidosFinalizados.filter(inRange);
+  const fMulta = metrics.canceladosComMulta.filter(inRange);
+  const fAbatimento = metrics.canceladosComAbatimento.filter(inRange);
+
+  const PRESETS: Array<{ key: DistratoPreset; label: string }> = [
+    { key: 'mes', label: 'Este mês' },
+    { key: 'mes_passado', label: 'Mês passado' },
+    { key: 'trimestre', label: 'Trimestre atual' },
+    { key: 'trimestre_passado', label: 'Trimestre passado' },
+    { key: 'ano', label: 'Este ano' },
+  ];
+
+  const blocks: Array<{ title: string; hint: string; cases: CancellationCase[]; total?: number; tone: string; value: (c: CancellationCase) => string }> = [
+
+    {
+      title: 'Reversões acionadas no Distrato',
+      hint: 'Casos em que o botão "Reverter" foi acionado com o card na coluna Distrato do Contrato.',
+      cases: fRevertidos,
+      tone: 'bg-violet-50 border-violet-200 text-violet-800',
+      value: (c) => funnelDisplayLabel(getFunnelStage(c)),
+    },
+    {
+      title: 'Revertidos → Finalizado',
+      hint: 'Dos casos acima, os que concluíram a reversão e foram enviados para Finalizado.',
+      cases: fRevertidosFin,
+      tone: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+      value: () => 'Revertido',
+    },
+    {
+      title: 'Multa quitada pelo aluno',
+      hint: 'Casos em que o aluno complementou e pagou a multa (botão "Aluno pagou a multa") — valor pago além do que já havia sido pago no contrato.',
+      cases: fMulta,
+      total: fMulta.reduce((acc, c) => acc + getMultaQuitadaValor(c), 0),
+      tone: 'bg-amber-50 border-amber-200 text-amber-800',
+      value: (c) => formatCurrency(getMultaQuitadaValor(c)),
+    },
+    {
+      title: 'Cancelados com abatimento em outro treinamento',
+      hint: 'Casos em que o saldo a devolver foi abatido no contrato de outro treinamento.',
+      cases: fAbatimento,
+      total: fAbatimento.reduce((acc, c) => acc + (c.abatimento?.valor ?? 0), 0),
+      tone: 'bg-blue-50 border-blue-200 text-blue-800',
+      value: (c) => `${formatCurrency(c.abatimento?.valor ?? 0)} · ${c.abatimento?.studentName ?? '—'}`,
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-card border border-border rounded-2xl w-full max-w-3xl max-h-[88vh] overflow-y-auto saas-shadow-md" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={15} className="text-violet-600" />
+            <h2 className="text-sm font-bold text-foreground">Indicadores — Distrato do Contrato</h2>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="rounded-xl border border-border bg-muted/30 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Período de referência</p>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => applyPreset(p.key)}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors ${
+                    preset === p.key ? 'bg-primary text-primary-foreground' : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                Início:
+                <input
+                  type="date"
+                  value={startStr}
+                  onChange={(e) => { setStartStr(e.target.value); setPreset('custom'); }}
+                  className="rounded-lg border border-border bg-card px-2 py-1 text-[11px] text-foreground"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                Fim:
+                <input
+                  type="date"
+                  value={endStr}
+                  onChange={(e) => { setEndStr(e.target.value); setPreset('custom'); }}
+                  className="rounded-lg border border-border bg-card px-2 py-1 text-[11px] text-foreground"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {blocks.map((b) => (
+              <div key={b.title} className={`rounded-xl border p-3 ${b.tone}`}>
+                <p className="text-[10px] font-semibold uppercase leading-tight">{b.title}</p>
+                <p className="text-2xl font-bold mt-1">{b.cases.length}</p>
+                {b.total != null && b.total > 0 && (
+                  <p className="text-[10px] mt-0.5 opacity-80">{formatCurrency(b.total)}</p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {blocks.map((b) => (
+            <div key={`list-${b.title}`} className="border border-border rounded-xl overflow-hidden">
+              <div className="px-3 py-2 bg-muted/40 border-b border-border">
+                <p className="text-[11px] font-bold text-foreground">{b.title} · {b.cases.length}</p>
+                <p className="text-[10px] text-muted-foreground">{b.hint}</p>
+              </div>
+              {b.cases.length === 0 ? (
+                <p className="px-3 py-3 text-[11px] text-muted-foreground">Nenhum caso registrado.</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {b.cases.map((c) => (
+                    <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                      <span className="text-[11px] font-medium text-foreground truncate">{c.studentName}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">{b.value(c)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
