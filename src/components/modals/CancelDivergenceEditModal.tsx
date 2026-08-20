@@ -14,6 +14,7 @@
 //  4. Retorna as tags/notas necessárias para marcar o card do cancelamento
 //     com um destaque específico (ver `CancelStudentFlowModal`).
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Student, StatusMode } from '@/types';
 import {
   useAppStore,
@@ -301,7 +302,9 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved, a
     onSaved({ summary: resumo, ajusteTag: AJUSTE_TAG });
   };
 
-  return (
+  // Portal no body + z abaixo do confirm (z-[100]): evita o diálogo
+  // de confirmação abrir atrás deste modal e “travar” a tela.
+  return createPortal(
     <div className="fixed inset-0 bg-foreground/40 backdrop-blur-sm flex items-center justify-center z-[70] fade-in p-4">
       <div className="bg-card rounded-2xl w-full max-w-2xl p-6 shadow-2xl border border-border space-y-4 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center gap-3">
@@ -516,6 +519,7 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved, a
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
