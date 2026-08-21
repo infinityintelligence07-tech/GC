@@ -2093,6 +2093,8 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
         // Remove campos extras antes de enviar ao banco
         const { installments: _omit1, mirrorCancellation: _omit2, kaminoTagNames: _omit3, acCandidate: _omit4, pendingTagNames: _omit5, firstDueDate: _omit6, attachToStudentId: _omit7, ...studentData } = data;
         // Resolve AC final: se o aluno foi importado sem AC (acCandidate), aplica decisão.
+        // Se continuar vazio, o trigger da esteira atribui o próximo AC ativo no INSERT.
+        // Se attachToStudentId (ficha existente), o AC da ficha é preservado (não há INSERT).
         const finalAc = (data.ac && data.ac.trim())
           ? data.ac
           : (data.acCandidate ? (acCandidateToFinal.get(data.acCandidate.toLowerCase()) ?? '') : '');

@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      ac_esteira_state: {
+        Row: {
+          company_id: string
+          last_assigned_ac_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          last_assigned_ac_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          last_assigned_ac_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ac_esteira_state_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ac_esteira_state_last_assigned_ac_id_fkey"
+            columns: ["last_assigned_ac_id"]
+            isOneToOne: false
+            referencedRelation: "acs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       acs: {
         Row: {
           active: boolean

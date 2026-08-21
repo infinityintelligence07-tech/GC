@@ -2,6 +2,7 @@ import { AC, Student } from '@/types';
 import { Trophy, TrendingUp } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import MetaGauge from './MetaGauge';
+import { isSolicitacaoCancelamento } from '@/lib/acPortfolioVisibility';
 
 interface ACRankingCardProps {
   acs: AC[];
@@ -13,8 +14,7 @@ interface ACRankingCardProps {
   referenceDate?: Date;
   /**
    * Quantidade de alunos transferidos por Renegociação por AC (nome → qtd).
-   * Soma de eventos `tipo='parcela_quantidade'` na conciliação,
-   * já filtrada pelo período correspondente (alunos distintos).
+   * Só informativo no rodapé — NÃO entra no % (mesma Taxa Em Dia da carteira).
    */
   renegByAc?: Record<string, number>;
 }
@@ -22,14 +22,13 @@ interface ACRankingCardProps {
 /**
  * Pódio de Ranking dos Assessores.
  *
- * Regra (Liquidez %, por QUANTIDADE de alunos):
- *   alunos "Em Dia" (Pagantes) / (carteira atual + alunos renegociados) × 100
+ * Regra alinhada à Taxa Em Dia da carteira do assessor:
+ *   alunos "Em Dia" / (carteira − alunos novos) × 100
  *
- *   - numerador          = quantidade de alunos do AC com status "Em Dia"
- *   - carteira atual     = quantidade de alunos ativos do AC
- *                          (exclui Pagos/Cancelados/RE — já filtrados pelo chamador)
- *   - alunos renegociados = quantidade de alunos distintos transferidos via
- *                          Renegociação (eventos de conciliação `parcela_quantidade`).
+ *   - numerador   = "Em Dia" (exclui solicitação de cancelamento)
+ *   - carteira    = alunos ativos do AC (Pagos / cancelados / RE / judicial
+ *                   / finalizado já filtrados pelo chamador)
+ *   - alunos novos = "Aluno Novo" (exclui solicitação de cancelamento)
  */
 export default function ACRankingCard({ acs, students, referenceDate: _referenceDate, renegByAc }: ACRankingCardProps) {
   const rules = useAppStore((s) => s.rules);
@@ -39,20 +38,23 @@ export default function ACRankingCard({ acs, students, referenceDate: _reference
     .map((ac) => {
       const acStudents = students.filter((s) => s.ac === ac.name);
       const carteiraTotal = acStudents.length;
-      const alunosNovos = acStudents.filter((s) => s.status === 'Aluno Novo').length;
-      // Carteira para o cálculo: exclui "Aluno Novo".
-      const carteira = carteiraTotal - alunosNovos;
-      const emDia = acStudents.filter((s) => s.status === 'Em Dia').length;
+      const alunosNovos = acStudents.filter(
+        (s) => s.status === 'Aluno Novo' && !isSolicitacaoCancelamento(s),
+      ).length;
+      const emDia = acStudents.filter(
+        (s) => s.status === 'Em Dia' && !isSolicitacaoCancelamento(s),
+      ).length;
+      // Igual à Taxa Em Dia da carteira: total − novos (solicitações ficam no denom).
+      const denominador = carteiraTotal - alunosNovos;
       const renegociado = renegByAc?.[ac.name] ?? 0;
-      const denominador = carteira + renegociado;
       const liquidezRateExact = denominador > 0 ? (emDia / denominador) * 100 : 0;
       const liquidezRate = Math.round(liquidezRateExact * 10) / 10;
 
       return {
         ...ac,
-        totalStudents: carteira,
+        totalStudents: denominador,
         emDia,
-        carteira,
+        carteira: denominador,
         renegociado,
         denominador,
         liquidezRate,
@@ -152,7 +154,7 @@ export default function ACRankingCard({ acs, students, referenceDate: _reference
 
       {/* Rodapé — fórmula */}
       <p className="mt-5 text-[10px] text-muted-foreground text-center">
-        Liquidez % = Alunos "Em Dia" ÷ (Carteira atual + Alunos renegociados)
+        Taxa Em Dia % = Alunos &quot;Em Dia&quot; ÷ (Carteira − Alunos Novos) — mesma regra da carteira do assessor
       </p>
     </div>
   );
@@ -166,7 +168,7 @@ function Header() {
       </div>
       <div>
         <h3 className="text-base font-semibold text-foreground tracking-tight">Ranking</h3>
-        <p className="text-[10px] text-muted-foreground">Por Liquidez % (alunos)</p>
+        <p className="text-[10px] text-muted-foreground">Por Taxa Em Dia % (igual à carteira)</p>
       </div>
     </div>
   );

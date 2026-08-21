@@ -69,6 +69,7 @@ async function fetchAll(activeCompanyId?: string | null) {
 
   const acs: AC[] = (acsRes.data ?? []).map((r: any) => ({
     id: r.id, name: r.name, active: r.active, photo: r.photo ?? undefined,
+    createdAt: r.created_at ?? undefined,
     meta1: r.meta_1 != null ? Number(r.meta_1) : undefined,
     meta2: r.meta_2 != null ? Number(r.meta_2) : undefined,
     meta3: r.meta_3 != null ? Number(r.meta_3) : undefined,

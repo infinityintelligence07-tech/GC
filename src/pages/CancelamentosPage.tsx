@@ -230,6 +230,42 @@ function recoveredInPeriod(c: CancellationCase, start: Date, end: Date): boolean
   });
 }
 
+/** Caso chegou (ou passou) pelo Jurídico / Distrato do Contrato. */
+function reachedJuridico(c: CancellationCase): boolean {
+  const fs = getFunnelStage(c);
+  if (fs === 'Formalização' || fs === 'Pendente') return true;
+  if (hasDistratoRevertMarker(c) || movedDistratoToTratativa(c)) return true;
+  if (c.responsavel === 'Jurídico') return true;
+  return (c.history ?? []).some((h) => {
+    const n = (h.note ?? '').toLowerCase();
+    return (
+      n.includes('enviado ao jurídico') ||
+      n.includes('distrato do contrato') ||
+      (n.includes('movido no funil') && n.includes('formalização')) ||
+      n.includes(DISTRATO_REVERT_MARKER.toLowerCase())
+    );
+  });
+}
+
+/** Reversão atribuída ao Jurídico (acionada no Distrato ou fluxo equivalente). */
+function isReversaoJuridico(c: CancellationCase): boolean {
+  if (hasDistratoRevertMarker(c)) return true;
+  if (movedDistratoToTratativa(c) && c.acao === 'Revertido') return true;
+  if (c.acao === 'Revertido' && reachedJuridico(c) && getFunnelStage(c) === 'Finalizado') {
+    // Revertido após passar pelo Distrato, sem necessariamente ter o marcador antigo
+    return true;
+  }
+  return false;
+}
+
+/** Caso revertido (geral — financeiro ou jurídico). */
+function isCaseRevertidoGeral(c: CancellationCase): boolean {
+  if (c.acao === 'Revertido') return true;
+  if (RECOVERED_STAGES.includes(c.stage)) return true;
+  if (hasDistratoRevertMarker(c)) return true;
+  return false;
+}
+
 // ─── Helper: compute vencido + a vencer for a linked student ─────────────────
 
 function computeOpenValue(student: Student | undefined): { vencido: number; aVencer: number; total: number } {
@@ -2715,14 +2751,22 @@ export default function CancelamentosPage() {
 
   const totalMotivoCount = motivoStats.reduce((s, m) => s + m.count, 0);
 
-  // ── Reversão KPIs ──
+  // ── Reversão KPIs (geral + jurídico), no período selecionado ───────────────
   const reversaoKpis = useMemo(() => {
-    const mirrorCases = cancellationCases.filter((c) => c.isMirror);
-    const total = mirrorCases.length;
-    const revertidos = mirrorCases.filter((c) => c.stage === 'Recuperado').length;
-    const pct = total > 0 ? Math.round((revertidos / total) * 100) : 0;
-    return { total, revertidos, pct };
-  }, [cancellationCases]);
+    const total = periodCases.length;
+    const revertidos = periodCases.filter(isCaseRevertidoGeral);
+    const pct = total > 0 ? Math.round((revertidos.length / total) * 100) : 0;
+    const valueRecovered = revertidos.reduce((s, c) => s + (c.value ?? 0), 0);
+    return { total, revertidos: revertidos.length, pct, valueRecovered };
+  }, [periodCases]);
+
+  const juridicoReversaoKpis = useMemo(() => {
+    const base = periodCases.filter(reachedJuridico);
+    const revertidos = base.filter(isReversaoJuridico);
+    const pct = base.length > 0 ? Math.round((revertidos.length / base.length) * 100) : 0;
+    const valueRecovered = revertidos.reduce((s, c) => s + (c.value ?? 0), 0);
+    return { total: base.length, revertidos: revertidos.length, pct, valueRecovered };
+  }, [periodCases]);
 
   // Set com todos caseIds que possuem item pendente na aba Conciliação —
   // usado para forçar o card na coluna Finalizado enquanto aguarda baixa.
@@ -3074,7 +3118,7 @@ export default function CancelamentosPage() {
       </div>
 
       {/* ── Dashboard KPIs ──────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="min-w-0 bg-card border border-border rounded-xl p-4 saas-shadow">
           <div className="flex items-center gap-2 mb-1">
             <Users size={14} className="text-primary shrink-0" />
@@ -3098,12 +3142,37 @@ export default function CancelamentosPage() {
             <span className="text-[11px] text-emerald-700 uppercase font-semibold tracking-wide truncate">Revertido</span>
           </div>
           <p className="text-[11px] text-emerald-700 truncate">
-            <span className="font-semibold">{reversaoKpis.revertidos}</span> de {reversaoKpis.total} <span className="text-emerald-600">({reversaoKpis.pct}%)</span>
+            <span className="font-semibold">{reversaoKpis.revertidos}</span> de {reversaoKpis.total}{' '}
+            <span className="text-emerald-600">({reversaoKpis.pct}%)</span>
           </p>
           <p className="text-[10px] text-emerald-700 uppercase font-semibold tracking-wide mt-1 truncate">Valor futuro recuperado</p>
-          <p className="kpi-value text-emerald-700" title={formatCurrency(kpis.valueRecovered)}>
-            <span className="hidden sm:inline">{formatCurrency(kpis.valueRecovered)}</span>
-            <span className="sm:hidden">{formatCurrencyCompact(kpis.valueRecovered)}</span>
+          <p className="kpi-value text-emerald-700" title={formatCurrency(reversaoKpis.valueRecovered)}>
+            <span className="hidden sm:inline">{formatCurrency(reversaoKpis.valueRecovered)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(reversaoKpis.valueRecovered)}</span>
+          </p>
+        </div>
+
+        <div
+          className="min-w-0 bg-violet-50 border border-violet-200 rounded-xl p-4 saas-shadow cursor-pointer hover:ring-2 hover:ring-violet-300/50 transition-all"
+          onClick={() => setDistratoMetricsOpen(true)}
+          title="Abrir indicadores do Distrato / Jurídico"
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <Gavel size={14} className="text-violet-600 shrink-0" />
+            <span className="text-[11px] text-violet-700 uppercase font-semibold tracking-wide truncate">
+              Reversão Jurídico
+            </span>
+          </div>
+          <p className="kpi-value text-violet-700">{juridicoReversaoKpis.pct}%</p>
+          <p className="text-[11px] text-violet-700 truncate mt-1">
+            <span className="font-semibold">{juridicoReversaoKpis.revertidos}</span> de {juridicoReversaoKpis.total} no Distrato
+          </p>
+          <p className="text-[10px] text-violet-600/80 mt-0.5 truncate" title={formatCurrency(juridicoReversaoKpis.valueRecovered)}>
+            Recuperados:{' '}
+            <span className="font-semibold">
+              <span className="hidden sm:inline">{formatCurrency(juridicoReversaoKpis.valueRecovered)}</span>
+              <span className="sm:hidden">{formatCurrencyCompact(juridicoReversaoKpis.valueRecovered)}</span>
+            </span>
           </p>
         </div>
 
@@ -3294,11 +3363,20 @@ export default function CancelamentosPage() {
                       </div>
                     ) : (f.label === 'Formalização' || f.label === 'Pendente') ? (
                       <div
-                        className="flex items-center justify-center gap-1 h-6 px-2 text-[10px] font-medium border-b border-border/40 bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
-                        title="Responsável: Jurídico"
+                        className="flex items-center justify-center gap-1.5 h-6 px-2 text-[10px] font-medium border-b border-border/40 bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+                        title={
+                          f.label === 'Formalização'
+                            ? `Responsável: Jurídico · Reversão ${juridicoReversaoKpis.pct}% (${juridicoReversaoKpis.revertidos}/${juridicoReversaoKpis.total})`
+                            : 'Responsável: Jurídico'
+                        }
                       >
                         <Gavel size={10} strokeWidth={2.5} />
                         Jurídico
+                        {f.label === 'Formalização' && (
+                          <span className="ml-0.5 px-1.5 py-0 rounded-full bg-violet-600/15 text-violet-700 font-bold tabular-nums">
+                            {juridicoReversaoKpis.pct}%
+                          </span>
+                        )}
                       </div>
                     ) : (
                       isFinalizado ? (
@@ -5083,6 +5161,20 @@ function DistratoMetricsModal({ metrics, onClose }: DistratoMetricsModalProps) {
         </div>
 
         <div className="p-5 space-y-4">
+          <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-700">Taxa de reversão no Distrato</p>
+              <p className="text-[11px] text-violet-800/80 mt-0.5">
+                {fRevertidos.length} reversão(ões) acionada(s) · {fRevertidosFin.length} concluída(s) no período
+              </p>
+            </div>
+            <p className="text-2xl font-bold text-violet-700 tabular-nums">
+              {fRevertidos.length > 0
+                ? `${Math.round((fRevertidosFin.length / fRevertidos.length) * 100)}%`
+                : '0%'}
+            </p>
+          </div>
+
           <div className="rounded-xl border border-border bg-muted/30 p-3">
             <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Período de referência</p>
             <div className="flex flex-wrap gap-1.5 mb-2">

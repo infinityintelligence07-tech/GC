@@ -80,7 +80,8 @@ export default function StudentModal({ student, onClose }: Props) {
     name: '', whatsapp: '', email: '', cpf: '', address: '', numero: '', cidade: '', estado: '', cep: '',
     statusMode: 'Automático' as StatusMode,
     status: 'Em Dia' as StudentStatus,
-    ac: acs[0]?.name || '',
+    // Vazio = esteira automática no INSERT (banco atribui o próximo AC ativo)
+    ac: '',
     product: products[0]?.name || '',
     enrollmentDate: new Date().toISOString().split('T')[0],
     data_treinamento_origem: new Date().toISOString().split('T')[0],
@@ -525,8 +526,18 @@ export default function StudentModal({ student, onClose }: Props) {
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Assessor de Conta</label>
                 <select className="input-field w-full" value={form.ac} onChange={(e) => set('ac', e.target.value)}>
-                  {acs.filter((g) => g.active).map((g) => <option key={g.id}>{g.name}</option>)}
+                  {!student && (
+                    <option value="">— Automático (esteira) —</option>
+                  )}
+                  {acs.filter((g) => g.active).map((g) => (
+                    <option key={g.id} value={g.name}>{g.name}</option>
+                  ))}
                 </select>
+                {!student && !form.ac && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Sem assessor escolhido, o próximo da esteira recebe o aluno automaticamente.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">

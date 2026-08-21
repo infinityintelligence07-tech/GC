@@ -363,7 +363,13 @@ export const useAppStore = create<AppState>()(
   acs: [],
   addAC: (ac) => {
     createAC({ name: ac.name, active: ac.active, photo: ac.photo }).then((row) => {
-      const created: AC = { id: row.id, name: row.name, active: row.active, photo: row.photo ?? undefined };
+      const created: AC = {
+        id: row.id,
+        name: row.name,
+        active: row.active,
+        photo: row.photo ?? undefined,
+        createdAt: (row as { created_at?: string }).created_at,
+      };
       set((s) => ({ acs: [...s.acs, created] }));
       logActivity({ action: 'ac.create', entity: 'ac', entityId: created.id, entityLabel: created.name, summary: `Criou o assessor de conta ${created.name}` });
     }).catch((e) =>

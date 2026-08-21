@@ -16,6 +16,7 @@ import DivisaoCarteiraModal from '@/components/modals/DivisaoCarteiraModal';
 import { Plus, Trash2, Edit2, Check, X, Upload, SplitSquareHorizontal, ShieldCheck, User, Lock, Eye, EyeOff, Tag, Save, Info, AlertTriangle, Building2, Target } from 'lucide-react';
 import { AC, AppUser, UserRole, UserPermissions, PermissionLevel, PERMISSION_TABS, getEffectivePermissions, canConfirmarPagamento } from '@/types';
 import { getTagCSSColor } from '@/lib/tagColors';
+import EsteiraAssessoresBlock from '@/components/ui/EsteiraAssessoresBlock';
 
 export default function ConfigPage() {
   const { rules, setRules, acs, addAC, updateAC, deleteAC, students, products, addProduct, updateProduct, deleteProduct,
@@ -455,6 +456,8 @@ export default function ConfigPage() {
       <div className="bg-card border border-border rounded-2xl p-6 saas-shadow">
         <h3 className="text-sm font-semibold text-foreground mb-1">Assessores de Conta</h3>
         <p className="text-xs text-muted-foreground mb-4">Criação, edição e exclusão de assessores.</p>
+
+        <EsteiraAssessoresBlock acs={acs} />
 
         <div className="space-y-2 mb-4">
           {acs.map((ac) => (

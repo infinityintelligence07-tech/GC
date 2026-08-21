@@ -1,9 +1,16 @@
 import { useMemo, useState } from 'react';
+import { Activity, History, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useAppStore, calculateAutoStatus, calculateAutoStatusAt } from '@/store/useAppStore';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 import ACRankingCard from '@/components/ui/ACRankingCard';
-import { Student, ConciliacaoItem } from '@/types';
-import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { getHiddenFromAcPortfolioKeys, studentsForAcRanking } from '@/lib/acPortfolioVisibility';
+import type { Student, ConciliacaoItem } from '@/types';
 
 /**
  * Quantidade de alunos distintos transferidos por Renegociação por AC,
@@ -31,13 +38,6 @@ function computeRenegByAc(
   Object.entries(sets).forEach(([k, v]) => (map[k] = v.size));
   return map;
 }
-import { Activity, History, CalendarIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 type RankingMode = 'performance' | 'historico';
 
@@ -55,37 +55,37 @@ function endOfDay(d: Date): Date {
 }
 
 export default function RankingPage() {
-  const { acs, students } = useAppStore();
+  const { acs, students, cancellationCases } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
 
   const [mode, setMode] = useState<RankingMode>('performance');
   const [startDate, setStartDate] = useState<Date | undefined>(firstDayOfMonth());
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
 
-  const stripFromCarteira = (arr: Student[]) =>
-    arr.filter(
-      (s) =>
-        s.status !== 'Pago' &&
-        s.statusCancelamento !== 'cancelado' &&
-        !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
-    );
+  const hiddenKeys = useMemo(
+    () => getHiddenFromAcPortfolioKeys(cancellationCases, conciliacaoItems, students),
+    [cancellationCases, conciliacaoItems, students],
+  );
 
   const performanceStudents: Student[] = useMemo(
     () =>
-      stripFromCarteira(
+      studentsForAcRanking(
         students.map((s) =>
-          s.statusMode === 'Automático'
+          s.statusMode === 'Automático' &&
+          s.status !== 'Negativado' &&
+          s.status !== 'Solicitação Cancelamento'
             ? { ...s, status: calculateAutoStatus(s.installments) }
-            : s
-        )
+            : s,
+        ),
+        hiddenKeys,
       ),
-    [students]
+    [students, hiddenKeys],
   );
 
   const historicoStudents: Student[] = useMemo(() => {
     if (!endDate) return [];
     const ref = endOfDay(endDate);
-    return stripFromCarteira(
+    return studentsForAcRanking(
       students
         .filter((s) => {
           if (!s.enrollmentDate) return true;
@@ -94,10 +94,14 @@ export default function RankingPage() {
         })
         .map((s) => ({
           ...s,
-          status: calculateAutoStatusAt(s.installments, ref),
-        }))
+          status:
+            s.status === 'Negativado' || s.status === 'Solicitação Cancelamento'
+              ? s.status
+              : calculateAutoStatusAt(s.installments, ref),
+        })),
+      hiddenKeys,
     );
-  }, [students, endDate]);
+  }, [students, endDate, hiddenKeys]);
 
   const dataset = mode === 'performance' ? performanceStudents : historicoStudents;
   const referenceDate = mode === 'historico' && endDate ? endOfDay(endDate) : undefined;

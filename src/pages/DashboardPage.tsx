@@ -4,7 +4,7 @@ import ReversalRankingMirror from '@/components/ui/ReversalRankingMirror';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 import DashDateFilter, { DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
-import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity, FileText, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -16,8 +16,15 @@ import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
+import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento } from '@/lib/acPortfolioVisibility';
+import {
+  isCancellationCaseInRange,
+  isCancellationCaseRevertido,
+} from '@/lib/cancellationIndicators';
+import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
+import DashboardReportModal, { type DashboardReportSection } from '@/components/ui/DashboardReportModal';
 
-type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'tag';
+type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'pendente' | 'tag' | 'revertidos';
 
 function MediaDiasTag({ media }: { media: number | null }) {
   if (media === null) return <span className="text-[10px] text-muted-foreground">—</span>;
@@ -48,6 +55,7 @@ export default function DashboardPage() {
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [paymentDetailModal, setPaymentDetailModal] = useState<null | 'pago' | 'recebido'>(null);
   const [kpiModalKey, setKpiModalKey] = useState<KpiModalKey | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   // ── Evolução Mensal (filtro exclusivo do bloco) ───────────────────────────
   // Presets: 3m, 6m (default), 12m, custom (datepickers de mês)
@@ -287,7 +295,15 @@ export default function DashboardPage() {
         : baseStudents.filter((s) => new Date(s.enrollmentDate) <= refDate);
       const remapped = base.map((s) => {
         // "Negativado" é preservado sempre — nunca rebaixado por auto-cálculo.
-        if (s.status === 'Negativado' || s.status === 'Solicitação Cancelamento') return s;
+        if (
+          s.status === 'Negativado' ||
+          s.status === 'Solicitação Cancelamento' ||
+          s.statusCancelamento === 'solicitado'
+        ) {
+          return s.statusCancelamento === 'solicitado' && s.status !== 'Solicitação Cancelamento'
+            ? { ...s, status: 'Solicitação Cancelamento' as StudentStatus }
+            : s;
+        }
         if (s.statusMode === 'Automático') {
           const st = isTodaySnapshot
             ? calculateAutoStatus(s.installments)
@@ -311,7 +327,15 @@ export default function DashboardPage() {
       setKpiStudents(filtered);
     } else {
       const mapped = baseStudents.map((s) => {
-        if (s.status === 'Negativado' || s.status === 'Solicitação Cancelamento') return s;
+        if (
+          s.status === 'Negativado' ||
+          s.status === 'Solicitação Cancelamento' ||
+          s.statusCancelamento === 'solicitado'
+        ) {
+          return s.statusCancelamento === 'solicitado' && s.status !== 'Solicitação Cancelamento'
+            ? ({ ...s, status: 'Solicitação Cancelamento' } as Student)
+            : s;
+        }
         if (s.statusMode === 'Automático') {
           return { ...s, status: calculateAutoStatus(s.installments) } as Student;
         }
@@ -369,13 +393,19 @@ export default function DashboardPage() {
     ? kpiStudents.filter((s) => s.installments.some((i) => !i.paid && _instInRange(i)))
     : kpiStudents;
   const total = kpiStudentsScoped.length;
-  const emDia = kpiStudentsScoped.filter((s) => s.status === 'Em Dia');
-  const alunosNovos = kpiStudentsScoped.filter((s) => s.status === 'Aluno Novo');
-  const vencido1 = kpiStudentsScoped.filter((s) => s.status === 'Vencido 1');
-  const vencido2 = kpiStudentsScoped.filter((s) => s.status === 'Vencido 2');
-  const aNegativar = kpiStudentsScoped.filter((s) => s.status === 'À Negativar');
-  const negativado = kpiStudentsScoped.filter((s) => s.status === 'Negativado');
-  const solicitacaoCancelamento = kpiStudentsScoped.filter((s) => s.status === 'Solicitação Cancelamento');
+  const _isSolic = isSolicitacaoCancelamento;
+  const emDia = kpiStudentsScoped.filter((s) => s.status === 'Em Dia' && !_isSolic(s));
+  const alunosNovos = kpiStudentsScoped.filter((s) => s.status === 'Aluno Novo' && !_isSolic(s));
+  const vencido1 = kpiStudentsScoped.filter((s) => s.status === 'Vencido 1' && !_isSolic(s));
+  const vencido2 = kpiStudentsScoped.filter((s) => s.status === 'Vencido 2' && !_isSolic(s));
+  const aNegativar = kpiStudentsScoped.filter((s) => s.status === 'À Negativar' && !_isSolic(s));
+  const negativado = kpiStudentsScoped.filter((s) => s.status === 'Negativado' && !_isSolic(s));
+  // Pedido de cancelamento: critério unificado (status OU statusCancelamento).
+  // Não depende do filtro de vencimento — o pedido existe independente da parcela.
+  const solicitacaoCancelamento = kpiStudents.filter(_isSolic);
+  // Pendência = pagamento aguardando fora de boleto (PIX, link, cartão, etc.).
+  // Boleto NÃO entra neste status — segue Em Dia / Vencido / etc.
+  const pendentes = kpiStudentsScoped.filter((s) => s.status === 'Pendente' && !_isSolic(s));
   const inadimplentes = vencido1.length + vencido2.length + aNegativar.length + negativado.length;
 
   // Dia de referência dos KPIs: no Histórico é o "fim" escolhido; senão, hoje.
@@ -430,6 +460,7 @@ export default function DashboardPage() {
   const anValue = sumUnpaid(aNegativar);
   const negValue = sumOverdue(negativado);
   const solicCancValue = sumUnpaid(solicitacaoCancelamento);
+  const pendenteValue = sumUnpaid(pendentes);
 
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
   const tagKpis = computeTagKpis(kpiStudentsScoped, studentTags, _instInRange);
@@ -454,12 +485,20 @@ export default function DashboardPage() {
         return { title: 'Negativado', students: negativado, valueMode: 'overdue' };
       case 'solic':
         return { title: 'Solicitação Cancelamento', students: solicitacaoCancelamento, valueMode: 'unpaid' };
+      case 'pendente':
+        return { title: 'Pendências', students: pendentes, valueMode: 'unpaid' };
       case 'tag':
         return tagKpis[0]
           ? { title: tagKpis[0].label, students: tagKpis[0].students, valueMode: 'unpaid' as KpiValueMode }
           : null;
-      default:
+      case 'revertidos':
+      case null:
         return null;
+      default: {
+        const _exhaustive: never = kpiModalKey;
+        void _exhaustive;
+        return null;
+      }
     }
   })();
 
@@ -550,20 +589,34 @@ export default function DashboardPage() {
           details.push({ studentId: st.id, studentName: st.name, ac: st.ac || 'Sem Assessor', installmentNumber: i.number, dueDate: i.dueDate, value: i.value, paidValue: realValue, paidDate: i.paidDate });
           return;
         }
-        // Vencimento
+
+        // Vencimento: em aberto pelo dueDate; pago somente se paidDate estiver no período.
+        if (i.paid) {
+          if (!i.paidDate) {
+            if (range) return;
+          } else if (range) {
+            const pd = new Date(i.paidDate + 'T00:00:00');
+            if (pd < range.start || pd > range.end) return;
+          }
+          const realValue = typeof i.paidValue === 'number' ? i.paidValue : i.value;
+          total += i.value;
+          totalReal += realValue;
+          pago += i.value;
+          pagoReal += realValue;
+          qtd += 1;
+          qtdAlunosSet.add(st.id);
+          bumpAc(st.ac, i.value, realValue, st.id);
+          details.push({ studentId: st.id, studentName: st.name, ac: st.ac || 'Sem Assessor', installmentNumber: i.number, dueDate: i.dueDate, value: i.value, paidValue: realValue, paidDate: i.paidDate });
+          return;
+        }
+
         if (range) {
           const due = new Date(i.dueDate + 'T00:00:00');
           if (due < range.start || due > range.end) return;
         }
-        const realValue = i.paid ? (typeof i.paidValue === 'number' ? i.paidValue : i.value) : i.value;
         total += i.value;
-        totalReal += realValue;
-        if (i.paid) {
-          pago += i.value;
-          pagoReal += realValue;
-        } else {
-          aVencer += i.value;
-        }
+        totalReal += i.value;
+        aVencer += i.value;
         qtd += 1;
         qtdAlunosSet.add(st.id);
       });
@@ -605,10 +658,23 @@ export default function DashboardPage() {
   const reAcordo = reStudents.filter((s) => s.rendaExtraStatus === 'Acordo Feito');
   const rePct = reStudents.length > 0 ? Math.round((reAcordo.length / reStudents.length) * 100) : 0;
 
-  // ── Revertidos ────────────────────────────────────────────────────────────
-  // Aplica os mesmos filtros do KPI: AC + Produto + Score (via student)
+  // ── Revertidos (respeita datas do DashDateFilter) ─────────────────────────
+  const cancellationDateRange = (() => {
+    if (mode === 'historico') {
+      if (!historicoEnd) return null;
+      const start = historicoStart
+        ? new Date(historicoStart + 'T00:00:00')
+        : new Date(historicoEnd + 'T00:00:00');
+      const end = new Date(historicoEnd + 'T23:59:59');
+      return { start, end };
+    }
+    if (perfPreset === 'todos') return null;
+    return getPerfRange(perfPreset, perfCustomStart, perfCustomEnd);
+  })();
+
   const acCases = cancellationCases.filter((c) => {
     if (acFilter && c.ac !== acFilter) return false;
+    if (!isCancellationCaseInRange(c, cancellationDateRange)) return false;
     if (!productFilter && scoreFilter === null) return true;
     const st = c.studentId ? students.find((s) => s.id === c.studentId) : undefined;
     if (!st) return false;
@@ -616,8 +682,10 @@ export default function DashboardPage() {
     if (scoreFilter !== null && calcularScoreComportamento(st.installments) !== scoreFilter) return false;
     return true;
   });
-  const revertidos = acCases.filter((c) => c.stage === 'Recuperado' || c.stage === 'Negativação Retirada');
+  // Pedidos do período × revertidos entre eles (mesma lógica da aba Cancelamentos).
+  const revertidos = acCases.filter(isCancellationCaseRevertido);
   const revertPct = acCases.length > 0 ? Math.round((revertidos.length / acCases.length) * 100) : 0;
+  const revertidosValue = revertidos.reduce((acc, c) => acc + (c.value ?? 0), 0);
 
   // ── Pie chart ─────────────────────────────────────────────────────────────
   const pago = kpiStudents.filter((s) => s.status === 'Pago');
@@ -675,25 +743,219 @@ export default function DashboardPage() {
     setCartesianData(months);
   }, [baseStudents.length, acFilter, productFilter, scoreFilter, tagFilters, students, evolPreset, evolCustomStart, evolCustomEnd]);
 
+  // ── Relatório (snapshot dos KPIs importantes) ─────────────────────────────
+  const reportContextLines = (() => {
+    const lines: string[] = [];
+    lines.push(`Modo: ${mode === 'historico' ? 'Histórico' : 'Performance'}`);
+    if (mode === 'historico') {
+      lines.push(`Período: ${historicoStart || '—'} → ${historicoEnd || '—'}`);
+    } else if (perfPreset !== 'todos') {
+      const r = getPerfRange(perfPreset, perfCustomStart, perfCustomEnd);
+      lines.push(
+        `Filtro Performance: ${perfPreset} (${r.start.toLocaleDateString('pt-BR')} – ${r.end.toLocaleDateString('pt-BR')})`,
+      );
+    } else {
+      lines.push('Período: todos (carteira ao vivo)');
+    }
+    if (acFilter) lines.push(`Assessor: ${acFilter}`);
+    if (productFilter) lines.push(`Produto: ${productFilter}`);
+    if (scoreFilter !== null) lines.push(`Score: ${scoreFilter === 0 ? 'Novo' : `${scoreFilter}★`}`);
+    if (tagFilters.length > 0) {
+      const names = tagFilters
+        .map((id) => studentTags.find((t) => t.id === id)?.name ?? id)
+        .join(', ');
+      lines.push(`Tags: ${names}`);
+    }
+    return lines;
+  })();
 
+  const reportSections: DashboardReportSection[] = [
+    {
+      title: 'Carteira',
+      kpis: [
+        {
+          label: 'Carteira Total',
+          value: formatCurrency(totalValue),
+          detail: `${total} alunos`,
+          tone: 'default',
+        },
+        {
+          label: 'Em Dia + Novos',
+          value: formatCurrency(emDiaValue + alunosNovosValue),
+          detail: `${emDia.length + alunosNovos.length} alunos · ${pct(emDia.length + alunosNovos.length)}%`,
+          tone: 'good',
+        },
+        {
+          label: 'Em Dia',
+          value: formatCurrency(emDiaValue),
+          detail: `${emDia.length} alunos · Taxa ${pctEmDia}%`,
+          tone: 'good',
+        },
+        {
+          label: 'Alunos Novos',
+          value: formatCurrency(alunosNovosValue),
+          detail: `${alunosNovos.length} alunos · ${pct(alunosNovos.length)}%`,
+        },
+        {
+          label: 'Taxa Em Dia',
+          value: `${pctEmDia}%`,
+          detail: `${emDia.length} de ${denominadorEmDia} (excl. novos)`,
+          tone: 'good',
+        },
+        {
+          label: 'Taxa Inadimplente',
+          value: `${pct(inadimplentes)}%`,
+          detail: `${inadimplentes} de ${total}`,
+          tone: 'bad',
+        },
+      ],
+    },
+    {
+      title: 'Inadimplência',
+      kpis: [
+        {
+          label: 'Vencido 1',
+          value: formatCurrency(v1Value),
+          detail: `${vencido1.length} alunos · ${pct(vencido1.length)}%`,
+          tone: 'warn',
+        },
+        {
+          label: 'Vencido 2',
+          value: formatCurrency(v2Value),
+          detail: `${vencido2.length} alunos · ${pct(vencido2.length)}%`,
+          tone: 'warn',
+        },
+        {
+          label: 'À Negativar',
+          value: formatCurrency(anValue),
+          detail: `${aNegativar.length} alunos · ${pct(aNegativar.length)}%`,
+          tone: 'bad',
+        },
+        {
+          label: 'Negativado',
+          value: formatCurrency(negValue),
+          detail: `${negativado.length} alunos · ${pct(negativado.length)}%`,
+          tone: 'bad',
+        },
+      ],
+    },
+    {
+      title: 'Cancelamentos & Extra',
+      kpis: [
+        {
+          label: 'Solicitação Cancelamento',
+          value: formatCurrency(solicCancValue),
+          detail: `${solicitacaoCancelamento.length} alunos · ${
+            kpiStudents.length > 0
+              ? ((solicitacaoCancelamento.length / kpiStudents.length) * 100).toFixed(1)
+              : '0.0'
+          }%`,
+          tone: 'accent',
+        },
+        {
+          label: 'Revertidos',
+          value: `${revertPct}%`,
+          detail: `${revertidos.length}/${acCases.length} pedidos · ${formatCurrency(revertidosValue)}`,
+          tone: 'good',
+        },
+        {
+          label: 'Pendências',
+          value: formatCurrency(pendenteValue),
+          detail: `${pendentes.length} alunos · pagamento fora boleto`,
+          tone: 'warn',
+        },
+        {
+          label: 'Renda Extra',
+          value: `${rePct}%`,
+          detail: `${reAcordo.length}/${reStudents.length} com acordo`,
+          tone: 'accent',
+        },
+        {
+          label: 'Média pagamento',
+          value: mediaCarteira === null ? '—' : `${mediaCarteira < 0 ? '' : '+'}${mediaCarteira}d`,
+          detail:
+            mediaCarteira === null
+              ? 'Sem dados'
+              : mediaCarteira < 0
+                ? 'antecipado'
+                : mediaCarteira === 0
+                  ? 'no prazo'
+                  : 'de atraso',
+        },
+      ],
+    },
+  ];
+
+  if (tagKpis.length > 0) {
+    reportSections.push({
+      title: 'Tags (parcelas)',
+      kpis: tagKpis.map((t) => ({
+        label: t.label,
+        value: formatCurrency(t.value),
+        detail: `${t.count} alunos${t.overdueValue > 0 ? ` · Vencido ${formatCurrency(t.overdueValue)}` : ''}`,
+      })),
+    });
+  }
+
+  // Ranking liquidez (top 5) — mesmo universo do card
+  const rankingStudents = studentsForAcRanking(
+    kpiStudents,
+    getHiddenFromAcPortfolioKeys(cancellationCases, conciliacaoItems, students),
+  );
+  const rankingRows = acs
+    .filter((ac) => ac.active)
+    .map((ac) => {
+      const list = rankingStudents.filter((s) => s.ac === ac.name);
+      const novos = list.filter((s) => s.status === 'Aluno Novo' && !isSolicitacaoCancelamento(s)).length;
+      const emDiaAc = list.filter((s) => s.status === 'Em Dia' && !isSolicitacaoCancelamento(s)).length;
+      const denom = list.length - novos;
+      const rate = denom > 0 ? (emDiaAc / denom) * 100 : 0;
+      return { name: ac.name, emDia: emDiaAc, denom, rate };
+    })
+    .filter((r) => r.denom > 0)
+    .sort((a, b) => b.rate - a.rate)
+    .slice(0, 5);
+
+  if (rankingRows.length > 0) {
+    reportSections.push({
+      title: 'Ranking Taxa Em Dia (Top 5)',
+      kpis: rankingRows.map((r, i) => ({
+        label: `${i + 1}º ${r.name}`,
+        value: `${r.rate.toFixed(1).replace('.', ',')}%`,
+        detail: `${r.emDia} / ${r.denom} alunos`,
+        tone: i === 0 ? 'good' : 'default',
+      })),
+    });
+  }
+
+  const reportGeneratedAt = new Date().toLocaleString('pt-BR');
 
   return (
     <div className="space-y-6">
 
-      {/* ── 1. Modo de Análise ──────────────────────────────────────────────── */}
-      {/* Filtro Vencimento removido do topo: a Previsão de Recebimento (card) */}
-      {/* já possui seu próprio filtro de data e atua apenas sobre si mesma. */}
-      <DashDateFilter
-        mode={mode} setMode={setMode}
-        perfPreset={perfPreset} setPerfPreset={setPerfPreset}
-        perfCustomStart={perfCustomStart} setPerfCustomStart={setPerfCustomStart}
-        perfCustomEnd={perfCustomEnd} setPerfCustomEnd={setPerfCustomEnd}
-        historicoStart={historicoStart} setHistoricoStart={setHistoricoStart}
-        historicoEnd={historicoEnd} setHistoricoEnd={setHistoricoEnd}
-        variant="ac"
-        hidePerformancePresets
-      />
-
+      {/* ── 1. Modo de Análise + Relatório ──────────────────────────────────── */}
+      <div className="flex flex-col gap-3">
+        <DashDateFilter
+          mode={mode} setMode={setMode}
+          perfPreset={perfPreset} setPerfPreset={setPerfPreset}
+          perfCustomStart={perfCustomStart} setPerfCustomStart={setPerfCustomStart}
+          perfCustomEnd={perfCustomEnd} setPerfCustomEnd={setPerfCustomEnd}
+          historicoStart={historicoStart} setHistoricoStart={setHistoricoStart}
+          historicoEnd={historicoEnd} setHistoricoEnd={setHistoricoEnd}
+          variant="ac"
+          hidePerformancePresets
+        />
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setReportOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border border-border bg-card hover:bg-muted saas-shadow transition-colors"
+          >
+            <FileText size={14} className="text-primary" />
+            Relatório
+          </button>
+        </div>
+      </div>
       {/* ── 2. Previsão de Recebimento + Filtros (Performance) ──────────────── */}
       {mode === 'performance' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -845,7 +1107,7 @@ export default function DashboardPage() {
                     <p className="kpi-value-fit text-foreground mt-0.5" title={formatCurrency(total)}>
                       {formatCurrency(total)}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-0">inclui pagas</p>
+                    <p className="text-[10px] text-muted-foreground mt-0">a vencer + pago no período</p>
                   </div>
                   <div className="kpi-fit rounded-xl border border-amber-200/60 bg-amber-50/60 p-2 min-w-0">
                     <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">A Vencer / Vencido</p>
@@ -1181,11 +1443,11 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── KPIs: Solicitação Cancelamento + Fundo / TMF / Antecipação ───────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* ── KPIs: Solicitação + Pendências + Revertidos + Fundo/TMF ─────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
         <div
           onClick={() => setKpiModalKey('solic')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-fuchsia-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-fuchsia-500/30 ${statusFilter === 'Solicitação Cancelamento' ? 'ring-2 ring-fuchsia-500/40' : ''}`}
+          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-fuchsia-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-fuchsia-500/30 ${kpiModalKey === 'solic' || statusFilter === 'cancelamento_solicitado' ? 'ring-2 ring-fuchsia-500/40' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Solicitação Cancelamento</p>
@@ -1199,11 +1461,76 @@ export default function DashboardPage() {
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
             <p className="text-[11px] text-muted-foreground truncate">{solicitacaoCancelamento.length} alunos</p>
-            <p className="text-[11px] font-semibold text-fuchsia-600 shrink-0">{pct(solicitacaoCancelamento.length)}%</p>
+            <p className="text-[11px] font-semibold text-fuchsia-600 shrink-0">
+              {kpiStudents.length > 0
+                ? ((solicitacaoCancelamento.length / kpiStudents.length) * 100).toFixed(1)
+                : '0.0'}%
+            </p>
           </div>
           {infoStatus === 'solic' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
               <p>Alunos que solicitaram cancelamento e estão em tratativa no funil. O valor sai do status anterior (Em Dia/Vencido/etc.) e passa a compor este indicador até reversão ou cancelamento definitivo.</p>
+            </div>
+          )}
+        </div>
+
+        <div
+          onClick={() => setKpiModalKey('pendente')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-yellow-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-yellow-500/30 ${kpiModalKey === 'pendente' || statusFilter === 'Pendente' ? 'ring-2 ring-yellow-500/40' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Pendências</p>
+            <div className="flex items-center gap-1 shrink-0">
+              <AlertTriangle size={14} className="text-yellow-600/70" />
+              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'pendente' ? null : 'pendente'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
+                <Info size={14} />
+              </button>
+            </div>
+          </div>
+          <p className="kpi-value text-yellow-700" title={formatCurrency(pendenteValue)}>
+            <span className="hidden sm:inline">{formatCurrency(pendenteValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(pendenteValue)}</span>
+          </p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className="text-[11px] text-muted-foreground truncate">{pendentes.length} alunos</p>
+            <p className="text-[11px] font-semibold text-yellow-700 shrink-0">{pct(pendentes.length)}%</p>
+          </div>
+          {infoStatus === 'pendente' && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+              <p>
+                Pendência de pagamento fora de boleto (PIX, link, cartão, etc.).
+                Pagamentos de boleto não entram neste indicador — permanecem em Em Dia / Vencido / À Negativar.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div
+          onClick={() => setKpiModalKey(kpiModalKey === 'revertidos' ? null : 'revertidos')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${kpiModalKey === 'revertidos' ? 'ring-2 ring-emerald-500/40' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Revertidos</p>
+            <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'revertidos' ? null : 'revertidos'); }} className="text-muted-foreground/50 hover:text-muted-foreground shrink-0">
+              <Info size={14} />
+            </button>
+          </div>
+          <p className="kpi-value text-emerald-600" title={formatCurrency(revertidosValue)}>
+            <span className="hidden sm:inline">{formatCurrency(revertidosValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(revertidosValue)}</span>
+          </p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className="text-[11px] text-muted-foreground truncate">
+              {revertidos.length}/{acCases.length} pedidos
+            </p>
+            <p className="text-[11px] font-semibold text-emerald-600 shrink-0">{revertPct}%</p>
+          </div>
+          {infoStatus === 'revertidos' && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+              <p>
+                Pedidos de cancelamento revertidos no período selecionado (Performance / Histórico).
+                Taxa = revertidos ÷ pedidos criados no período.
+              </p>
             </div>
           )}
         </div>
@@ -1251,12 +1578,6 @@ export default function DashboardPage() {
           <Coins size={13} className="text-purple-500" />
           <span className="text-[11px] text-muted-foreground">Renda Extra:</span>
           <span className="text-[11px] font-semibold text-purple-600">{reAcordo.length}/{reStudents.length} | {rePct}%</span>
-        </div>
-
-        <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2 saas-shadow">
-          <TrendingUp size={13} className="text-emerald-500" />
-          <span className="text-[11px] text-muted-foreground">Revertidos:</span>
-          <span className="text-[11px] font-semibold text-emerald-600">{revertidos.length}/{acCases.length} | {revertPct}%</span>
         </div>
 
         {/* Tag quantity indicators */}
@@ -1425,15 +1746,35 @@ export default function DashboardPage() {
           students={kpiModalConfig.students}
           instInRange={_instInRange}
           valueMode={kpiModalConfig.valueMode}
-          todayMs={_todayMs}
+          todayMs={_refDayMs}
           onClose={() => setKpiModalKey(null)}
         />
       )}
 
+      {kpiModalKey === 'revertidos' && (
+        <CancellationCasesModal
+          title="Casos revertidos"
+          subtitle={`${revertidos.length} de ${acCases.length} pedidos${cancellationDateRange ? ' no período' : ''} · ${revertPct}%`}
+          cases={revertidos}
+          onClose={() => setKpiModalKey(null)}
+        />
+      )}
+
+      {reportOpen && (
+        <DashboardReportModal
+          generatedAt={reportGeneratedAt}
+          contextLines={reportContextLines}
+          sections={reportSections}
+          onClose={() => setReportOpen(false)}
+        />
+      )}
       {/* ── 6. Ranking AC ────────────────────────────────────────────────────── */}
       <ACRankingCard
         acs={acs}
-        students={kpiStudents}
+        students={studentsForAcRanking(
+          kpiStudents,
+          getHiddenFromAcPortfolioKeys(cancellationCases, conciliacaoItems, students),
+        )}
         renegByAc={renegByAc}
         referenceDate={mode === 'historico' && historicoEnd ? new Date(historicoEnd + 'T23:59:59') : undefined}
       />

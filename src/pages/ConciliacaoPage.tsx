@@ -1120,7 +1120,7 @@ export default function ConciliacaoPage() {
   const confirm = useConfirm();
 
   const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'kamino-gc'>('menu');
-  const [tab, setTab] = useState<'pendentes' | 'aprovados' | 'renda_extra' | 'historico' | 'erros'>('pendentes');
+  const [tab, setTab] = useState<'pendentes' | 'aprovados' | 'renda_extra' | 'cancelamentos' | 'historico' | 'erros'>('pendentes');
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<ConciliacaoTipo | 'todos'>('todos');
   const [erroStatusFilter, setErroStatusFilter] = useState<'pendente' | 'resolvido' | 'ignorado' | 'todos'>('pendente');
@@ -1139,19 +1139,25 @@ export default function ConciliacaoPage() {
   // Tipos relacionados à Renda Extra (vão para a aba dedicada)
   const RE_TIPOS: ConciliacaoTipo[] = ['renda_extra_exclusao', 'renda_extra_acordo'];
   const isReTipo = (t: ConciliacaoTipo) => RE_TIPOS.includes(t);
+  // Cancelamento / reversão — aba dedicada (fora de Pendentes/Aprovados)
+  const CANCEL_TIPOS: ConciliacaoTipo[] = ['cancelamento', 'reversao'];
+  const isCancelTipo = (t: ConciliacaoTipo) => CANCEL_TIPOS.includes(t);
 
   const filtered = useMemo(() => {
     return items
       .filter((i) => {
         if (tab === 'pendentes') {
-          return i.status === 'pendente' && i.tipo !== 'baixa_kamino' && !isReTipo(i.tipo);
+          return i.status === 'pendente' && i.tipo !== 'baixa_kamino' && !isReTipo(i.tipo) && !isCancelTipo(i.tipo);
         }
         if (tab === 'aprovados') {
-          return i.status === 'aprovado' && i.tipo !== 'baixa_kamino' && !isReTipo(i.tipo);
+          return i.status === 'aprovado' && i.tipo !== 'baixa_kamino' && !isReTipo(i.tipo) && !isCancelTipo(i.tipo);
         }
         if (tab === 'renda_extra') {
           // Inclui pendentes E aprovados de Renda Extra na mesma aba
           return (i.status === 'pendente' || i.status === 'aprovado') && isReTipo(i.tipo);
+        }
+        if (tab === 'cancelamentos') {
+          return (i.status === 'pendente' || i.status === 'aprovado') && isCancelTipo(i.tipo);
         }
         if (tab === 'historico') {
           // Histórico inclui CONCILIADOS e REPROVADOS (mantemos reprovados para auditoria)
@@ -1188,17 +1194,22 @@ export default function ConciliacaoPage() {
   // agrupadas exibidas como cards — alinhado com o badge da sidebar.
   const pendentesCount = new Set(
     items
-      .filter((i) => i.status === 'pendente' && i.tipo !== 'baixa_kamino' && !isReTipo(i.tipo))
+      .filter((i) => i.status === 'pendente' && i.tipo !== 'baixa_kamino' && !isReTipo(i.tipo) && !isCancelTipo(i.tipo))
       .map((i) => i.studentId ?? i.studentName),
   ).size;
   const aprovadosCount = new Set(
     items
-      .filter((i) => i.status === 'aprovado' && i.tipo !== 'baixa_kamino' && !isReTipo(i.tipo))
+      .filter((i) => i.status === 'aprovado' && i.tipo !== 'baixa_kamino' && !isReTipo(i.tipo) && !isCancelTipo(i.tipo))
       .map((i) => i.studentId ?? i.studentName),
   ).size;
   const rendaExtraCount = new Set(
     items
       .filter((i) => (i.status === 'pendente' || i.status === 'aprovado') && isReTipo(i.tipo))
+      .map((i) => i.studentId ?? i.studentName),
+  ).size;
+  const cancelamentosCount = new Set(
+    items
+      .filter((i) => (i.status === 'pendente' || i.status === 'aprovado') && isCancelTipo(i.tipo))
       .map((i) => i.studentId ?? i.studentName),
   ).size;
   const historicoCount = flow === 'kamino-gc'
@@ -1214,7 +1225,7 @@ export default function ConciliacaoPage() {
   // num único card, com botão "Conciliar" que concilia todos de uma vez.
   const SESSION_WINDOW_MS = 30 * 60 * 1000;
   const groupedPending = useMemo<Group[]>(() => {
-    if (tab !== 'pendentes' && tab !== 'aprovados' && tab !== 'renda_extra') return [];
+    if (tab !== 'pendentes' && tab !== 'aprovados' && tab !== 'renda_extra' && tab !== 'cancelamentos') return [];
     // Ordena por aluno → autor → tempo crescente para agrupar sessões corretamente
     const sorted = [...filtered].sort((a, b) => {
       const k1 = (a.studentId ?? a.studentName) + '|' + (a.autorId ?? '');
@@ -1640,6 +1651,17 @@ export default function ConciliacaoPage() {
               Renda Extra ({rendaExtraCount})
             </button>
             <button
+              onClick={() => { setTab('cancelamentos'); setTipoFilter('todos'); }}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border transition-all whitespace-nowrap ${
+                tab === 'cancelamentos'
+                  ? 'bg-rose-100 text-rose-700 border-rose-300 shadow-sm'
+                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+              }`}
+            >
+              <Ban size={14} />
+              Cancelamentos ({cancelamentosCount})
+            </button>
+            <button
               onClick={() => setTab('historico')}
               className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap ${
                 tab === 'historico'
@@ -1698,7 +1720,13 @@ export default function ConciliacaoPage() {
             className="input-field text-xs py-2"
           >
             <option value="todos">Todos os tipos</option>
-            {(Object.keys(TIPO_LABEL) as ConciliacaoTipo[]).map((t) => (
+            {(
+              tab === 'cancelamentos'
+                ? (CANCEL_TIPOS as ConciliacaoTipo[])
+                : tab === 'renda_extra'
+                  ? (RE_TIPOS as ConciliacaoTipo[])
+                  : (Object.keys(TIPO_LABEL) as ConciliacaoTipo[])
+            ).map((t) => (
               <option key={t} value={t}>{TIPO_LABEL[t]}</option>
             ))}
           </select>
@@ -1720,17 +1748,18 @@ export default function ConciliacaoPage() {
       {/* Listas */}
       {tab !== 'erros' ? (
         <div className="space-y-3">
-          {((tab === 'pendentes' || tab === 'aprovados' || tab === 'renda_extra') ? groupedPending.length === 0 : filtered.length === 0) ? (
+          {((tab === 'pendentes' || tab === 'aprovados' || tab === 'renda_extra' || tab === 'cancelamentos') ? groupedPending.length === 0 : filtered.length === 0) ? (
             <div className="text-center py-12 border border-dashed border-border rounded-2xl">
               <FileSpreadsheet size={28} className="mx-auto text-muted-foreground mb-2 opacity-50" />
               <p className="text-sm text-muted-foreground">
                 {tab === 'pendentes' ? 'Nenhuma pendência de conciliação.'
                   : tab === 'aprovados' ? 'Nenhuma alteração aprovada aguardando conciliação.'
                   : tab === 'renda_extra' ? 'Nenhuma pendência de Renda Extra.'
+                  : tab === 'cancelamentos' ? 'Nenhuma pendência de cancelamento ou reversão.'
                   : 'Nenhum item conciliado ainda.'}
               </p>
             </div>
-          ) : (tab === 'pendentes' || tab === 'aprovados' || tab === 'renda_extra') ? (
+          ) : (tab === 'pendentes' || tab === 'aprovados' || tab === 'renda_extra' || tab === 'cancelamentos') ? (
             groupedPending.map((group) => {
               // Subtipos consolidados de TODAS as alterações do grupo
               const allChangedKeys = new Set<string>();

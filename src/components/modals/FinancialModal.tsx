@@ -202,7 +202,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const [applyJurosReneg, setApplyJurosReneg] = useState(true);
   const [applyMultaReneg, setApplyMultaReneg] = useState(true);
   const [newInstallments, setNewInstallments] = useState(
-    Math.min(unpaidInstallments.length || 1, rules.maxParcelasRenegociacao)
+    Math.max(1, unpaidInstallments.length || 1)
   );
   const [novaEntrada, setNovaEntrada] = useState(0);
   // Data do 1º vencimento das novas parcelas (editável pelo assessor)
@@ -2207,19 +2207,21 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       <input
                         type="number"
                         min="1"
-                        max={rules.maxParcelasRenegociacao}
-                        value={newInstallments}
+                        inputMode="numeric"
+                        value={newInstallments || ''}
                         onChange={(e) => {
-                          const v = Number(e.target.value);
-                          if (v > rules.maxParcelasRenegociacao) {
-                            setNewInstallments(rules.maxParcelasRenegociacao);
-                          } else {
-                            setNewInstallments(v);
+                          const raw = e.target.value;
+                          if (raw === '') {
+                            setNewInstallments(0);
+                            return;
                           }
+                          const v = parseInt(raw, 10);
+                          if (!Number.isFinite(v) || v < 0) return;
+                          setNewInstallments(v);
                         }}
                         className="input-field mt-1 w-full text-xs py-1"
                       />
-                      <p className="text-[9px] text-muted-foreground mt-1">Máx: {rules.maxParcelasRenegociacao}</p>
+                      <p className="text-[9px] text-muted-foreground mt-1">Digite a quantidade desejada</p>
                     </div>
                     <div className="col-span-2">
                       <label className="text-[10px] text-muted-foreground font-medium">Data de Vencimento</label>

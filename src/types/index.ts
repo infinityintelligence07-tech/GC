@@ -135,6 +135,8 @@ export interface AC {
   name: string;
   active: boolean;
   photo?: string;
+  /** Usado na ordenação da esteira de distribuição automática. */
+  createdAt?: string;
   /** Metas de reversão individualizadas (% sobre inscrições p/ cancelamento).
    *  Se ausentes, o app usa `rules.meta1/meta2/meta3` (global). */
   meta1?: number;

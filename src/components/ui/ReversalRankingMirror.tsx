@@ -6,17 +6,32 @@ import { computeAcReversalMetrics } from '@/lib/acReversalMetrics';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import MetaGauge from '@/components/ui/MetaGauge';
 
+type DatePreset = 'este-mes' | 'mes-passado';
+
+function fmtISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Intervalo do mês corrente (1º dia → hoje, Brasília). */
+function currentMonthRange(): { start: string; end: string } {
+  const today = getTodayBrasilia();
+  const start = new Date(today.getFullYear(), today.getMonth(), 1);
+  return { start: fmtISO(start), end: fmtISO(today) };
+}
+
 /**
  * Espelho em tempo real do ranking de reversões da aba Comissões.
  * Lê as mesmas stores, então qualquer atualização lá reflete aqui.
  * Layout idêntico ao Ranking Por Liquidez % (alunos) do Dashboard.
+ * Abre filtrado no mês atual; dá para mudar o período pelos presets ou datas.
  */
 export default function ReversalRankingMirror() {
   const { acs, cancellationCases, rules } = useAppStore();
   const { commissions, loaded, loadAll } = useCommissionsStore();
-  const [dateStart, setDateStart] = useState('');
-  const [dateEnd, setDateEnd] = useState('');
-  const [activePreset, setActivePreset] = useState<'este-mes' | 'mes-passado' | null>(null);
+  const initial = currentMonthRange();
+  const [dateStart, setDateStart] = useState(initial.start);
+  const [dateEnd, setDateEnd] = useState(initial.end);
+  const [activePreset, setActivePreset] = useState<DatePreset | null>('este-mes');
 
   useEffect(() => {
     if (!loaded) loadAll();
@@ -45,7 +60,7 @@ export default function ReversalRankingMirror() {
           setActivePreset={setActivePreset}
         />
         <p className="text-xs text-muted-foreground text-center py-10">
-          Sem dados suficientes para gerar o ranking. Reverta alunos em <b>Em Tratativas</b> para gerar comissões.
+          Sem dados suficientes para gerar o ranking neste período. Ajuste as datas ou reverta alunos em <b>Em Tratativas</b>.
         </p>
       </div>
     );
@@ -154,24 +169,22 @@ interface HeaderProps {
   dateEnd: string;
   setDateStart: (v: string) => void;
   setDateEnd: (v: string) => void;
-  activePreset: 'este-mes' | 'mes-passado' | null;
-  setActivePreset: (p: 'este-mes' | 'mes-passado' | null) => void;
+  activePreset: DatePreset | null;
+  setActivePreset: (p: DatePreset | null) => void;
 }
 
 function Header({ dateStart, dateEnd, setDateStart, setDateEnd, activePreset, setActivePreset }: HeaderProps) {
-  const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-  const applyPreset = (preset: 'este-mes' | 'mes-passado') => {
+  const applyPreset = (preset: DatePreset) => {
     const today = getTodayBrasilia();
     if (preset === 'este-mes') {
       const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      setDateStart(fmt(start));
-      setDateEnd(fmt(today));
+      setDateStart(fmtISO(start));
+      setDateEnd(fmtISO(today));
     } else {
       const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
       const end = new Date(today.getFullYear(), today.getMonth(), 0);
-      setDateStart(fmt(start));
-      setDateEnd(fmt(end));
+      setDateStart(fmtISO(start));
+      setDateEnd(fmtISO(end));
     }
     setActivePreset(preset);
   };
@@ -192,13 +205,23 @@ function Header({ dateStart, dateEnd, setDateStart, setDateEnd, activePreset, se
         </div>
         <div>
           <h3 className="text-base font-semibold text-foreground tracking-tight">Ranking</h3>
-          <p className="text-[10px] text-muted-foreground">de reversões</p>
+          <p className="text-[10px] text-muted-foreground">
+            de reversões
+            {activePreset === 'este-mes'
+              ? ' · este mês'
+              : activePreset === 'mes-passado'
+                ? ' · mês passado'
+                : hasFilter
+                  ? ' · período filtrado'
+                  : ''}
+          </p>
         </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5">
           <button
+            type="button"
             onClick={() => applyPreset('este-mes')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               activePreset === 'este-mes'
@@ -209,6 +232,7 @@ function Header({ dateStart, dateEnd, setDateStart, setDateEnd, activePreset, se
             Este mês
           </button>
           <button
+            type="button"
             onClick={() => applyPreset('mes-passado')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               activePreset === 'mes-passado'
@@ -239,9 +263,11 @@ function Header({ dateStart, dateEnd, setDateStart, setDateEnd, activePreset, se
 
         {hasFilter && (
           <button
+            type="button"
             onClick={clearDates}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            aria-label="Limpar filtro de data"
+            aria-label="Limpar filtro de data (mostrar todos)"
+            title="Limpar filtro (todos os períodos)"
           >
             <X size={14} />
           </button>
