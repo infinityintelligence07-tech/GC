@@ -104,15 +104,24 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    let snapshotDate = todayBrasiliaISO();
+    // Padrão: foto do DIA ANTERIOR (Brasília). O cron roda ~00:05 e precisa
+    // congelar o dia que acabou de fechar — não o dia que acabou de começar.
+    let snapshotDate = (() => {
+      const today = todayBrasiliaISO();
+      const d = new Date(today + "T12:00:00Z");
+      d.setUTCDate(d.getUTCDate() - 1);
+      return d.toISOString().slice(0, 10);
+    })();
     if (req.method === "POST") {
       try {
         const body = await req.json();
         if (body?.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
           snapshotDate = body.date;
+        } else if (body?.today === true) {
+          snapshotDate = todayBrasiliaISO();
         }
       } catch (_) {
-        // ignore body parse errors, use today
+        // ignore body parse errors, use yesterday
       }
     }
 

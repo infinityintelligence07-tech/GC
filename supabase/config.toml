@@ -6,3 +6,6 @@ verify_jwt = false
 [functions.auto-renda-extra]
 verify_jwt = false
 
+[functions.snapshot-daily]
+verify_jwt = false
+

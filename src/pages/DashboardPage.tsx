@@ -4,11 +4,11 @@ import ReversalRankingMirror from '@/components/ui/ReversalRankingMirror';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 import DashDateFilter, { DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
-import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { getTodayBrasilia, calcularDiasVencido } from '@/lib/brasiliaDate';
+import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import { getTagStyle } from '@/lib/tagColors';
 import { computeTagKpis } from '@/lib/tagKpis';
 import { studentMatchesTagFilter, applyTagFilterToStudent } from '@/lib/tagFilter';
@@ -66,8 +66,14 @@ export default function DashboardPage() {
   const [perfPreset, setPerfPreset] = useState<PerfPreset>('todos');
   const [perfCustomStart, setPerfCustomStart] = useState(currentMonthStart);
   const [perfCustomEnd, setPerfCustomEnd] = useState(currentMonthEnd);
+  // Histórico: por padrão o "fim" é ontem — dia já fechado com foto congelada.
+  const yesterdayISO = (() => {
+    const d = getTodayBrasilia();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  })();
   const [historicoStart, setHistoricoStart] = useState(currentMonthStart);
-  const [historicoEnd, setHistoricoEnd] = useState(currentMonthEnd);
+  const [historicoEnd, setHistoricoEnd] = useState(yesterdayISO);
 
   // Quantidade de alunos distintos transferidos via Renegociação por AC.
   const renegByAc = (() => {
@@ -125,14 +131,35 @@ export default function DashboardPage() {
   const [snapshotStudents, setSnapshotStudents] = useState<Student[] | null>(null);
   const [snapshotDate, setSnapshotDate] = useState<string | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
+  /** frozen = foto do dia; missing = dia passado sem foto; live = hoje / performance */
+  const [snapshotKind, setSnapshotKind] = useState<'frozen' | 'missing' | 'live'>('live');
+
+  // Garante a foto de ontem (se o cron não rodou): gera uma vez por sessão.
+  useEffect(() => {
+    const key = `gc_snap_ensure_${yesterdayISO}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+    void supabase.functions
+      .invoke('snapshot-daily', { body: { date: yesterdayISO } })
+      .then(({ error }) => {
+        if (error) console.warn('[dashboard] snapshot-daily ontem:', error);
+      })
+      .catch((err) => console.warn('[dashboard] snapshot-daily ontem:', err));
+  }, [yesterdayISO]);
 
   useEffect(() => {
     if (mode !== 'historico' || !historicoEnd) {
-      setSnapshotStudents(null); setSnapshotDate(null); return;
+      setSnapshotStudents(null);
+      setSnapshotDate(null);
+      setSnapshotKind('live');
+      return;
     }
-    const todayISO = (() => { const d = getTodayBrasilia(); return d.toISOString().slice(0,10); })();
+    const todayISO = getTodayBrasilia().toISOString().slice(0, 10);
     if (historicoEnd >= todayISO) {
-      setSnapshotStudents(null); setSnapshotDate(null); return;
+      setSnapshotStudents(null);
+      setSnapshotDate(null);
+      setSnapshotKind('live');
+      return;
     }
     let cancelled = false;
     setSnapshotLoading(true);
@@ -143,7 +170,14 @@ export default function DashboardPage() {
           .select('company_id')
           .maybeSingle();
         const companyId = activeCompany?.company_id;
-        if (!companyId) { if (!cancelled) { setSnapshotStudents(null); setSnapshotDate(null); } return; }
+        if (!companyId) {
+          if (!cancelled) {
+            setSnapshotStudents(null);
+            setSnapshotDate(null);
+            setSnapshotKind('missing');
+          }
+          return;
+        }
         const { data: snap } = await supabase
           .from('dashboard_snapshots')
           .select('snapshot_date, payload')
@@ -151,36 +185,57 @@ export default function DashboardPage() {
           .eq('snapshot_date', historicoEnd)
           .maybeSingle();
         if (cancelled) return;
-        if (!snap) { setSnapshotStudents(null); setSnapshotDate(null); return; }
+        if (!snap) {
+          setSnapshotStudents(null);
+          setSnapshotDate(null);
+          setSnapshotKind('missing');
+          return;
+        }
+        // Monta o aluno 100% a partir da foto — não misturar cadastro ao vivo
+        // (AC/produto/tags mudam depois e quebrariam o número do dia).
         const byId = new Map(students.map((s) => [s.id, s]));
         const arr = (snap.payload as any[]).map((p) => {
           const cur = byId.get(p.id);
-          const base: Student = cur ? { ...cur } : ({
-            id: p.id, name: p.name, whatsapp: '', cpf: '', address: '', numero: '',
-            cidade: '', estado: '', cep: '', status: p.status as StudentStatus,
-            statusMode: p.status_mode ?? 'Automático', ac: p.ac_id ?? '',
-            product: p.product ?? '', enrollmentDate: p.enrollment_date ?? '',
-            dueDay: 1, saleValue: 0, downPayment: 0, totalInstallments: 0,
-            paidInstallments: 0, installmentValue: 0, installments: [], history: [],
-          } as unknown as Student);
+          const frozenInst = Array.isArray(p.installments) ? p.installments : [];
           return {
-            ...base,
+            id: p.id,
+            name: p.name ?? cur?.name ?? '',
+            whatsapp: cur?.whatsapp ?? '',
+            cpf: cur?.cpf ?? '',
+            address: cur?.address ?? '',
+            numero: cur?.numero ?? '',
+            cidade: cur?.cidade ?? '',
+            estado: cur?.estado ?? '',
+            cep: cur?.cep ?? '',
             status: p.status as StudentStatus,
-            statusMode: p.status_mode ?? base.statusMode,
-            isRendaExtra: p.is_renda_extra ?? base.isRendaExtra,
-            rendaExtraStatus: p.renda_extra_status ?? base.rendaExtraStatus,
-            statusCancelamento: p.status_cancelamento ?? base.statusCancelamento,
-            tags: p.tags ?? base.tags,
-            installments: Array.isArray(p.installments) ? p.installments : base.installments,
+            statusMode: (p.status_mode ?? cur?.statusMode ?? 'Automático') as Student['statusMode'],
+            ac: p.ac_id ?? cur?.ac ?? '',
+            product: p.product ?? cur?.product ?? '',
+            enrollmentDate: p.enrollment_date ?? cur?.enrollmentDate ?? '',
+            dueDay: cur?.dueDay ?? 1,
+            saleValue: Number(p.total_open ?? 0) + Number(p.total_paid ?? 0) || cur?.saleValue || 0,
+            downPayment: cur?.downPayment ?? 0,
+            totalInstallments: frozenInst.length || cur?.totalInstallments || 0,
+            paidInstallments: frozenInst.filter((i: { paid?: boolean }) => i.paid).length,
+            installmentValue: cur?.installmentValue ?? 0,
+            installments: frozenInst,
+            history: cur?.history ?? [],
+            tags: p.tags ?? cur?.tags ?? [],
+            isRendaExtra: p.is_renda_extra ?? cur?.isRendaExtra,
+            rendaExtraStatus: p.renda_extra_status ?? cur?.rendaExtraStatus,
+            statusCancelamento: p.status_cancelamento ?? cur?.statusCancelamento,
           } as Student;
         });
         setSnapshotStudents(arr);
         setSnapshotDate(snap.snapshot_date);
+        setSnapshotKind('frozen');
       } finally {
         if (!cancelled) setSnapshotLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [mode, historicoEnd, students]);
 
   useEffect(() => {
@@ -322,10 +377,28 @@ export default function DashboardPage() {
   const negativado = kpiStudentsScoped.filter((s) => s.status === 'Negativado');
   const solicitacaoCancelamento = kpiStudentsScoped.filter((s) => s.status === 'Solicitação Cancelamento');
   const inadimplentes = vencido1.length + vencido2.length + aNegativar.length + negativado.length;
-  // À Negativar "estagnado" = oldestOverdue > 65 dias (mais de 5 dias no status À Negativar).
+
+  // Dia de referência dos KPIs: no Histórico é o "fim" escolhido; senão, hoje.
+  const _refDayMs = (() => {
+    if (mode === 'historico' && historicoEnd) {
+      return new Date(historicoEnd + 'T00:00:00').getTime();
+    }
+    const d = getTodayBrasilia();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  })();
+
+  // À Negativar "estagnado" = oldestOverdue > 65 dias (na data de referência do modo).
   const aNegativarStale = aNegativar.some((s) => {
-    const dias = calcularDiasVencido(s.installments);
-    return dias !== null && dias > 65;
+    let oldest: number | null = null;
+    for (const inst of s.installments) {
+      if (inst.paid) continue;
+      const due = new Date(inst.dueDate + 'T00:00:00').getTime();
+      if (due >= _refDayMs) continue;
+      const diffDays = Math.floor((_refDayMs - due) / 86400000);
+      if (oldest === null || diffDays > oldest) oldest = diffDays;
+    }
+    return oldest !== null && oldest > 65;
   });
 
   const sumUnpaid = (arr: Student[]) =>
@@ -339,13 +412,12 @@ export default function DashboardPage() {
       return acc + s.installments.filter((i) => !i.paid && _instInRange(i)).reduce((a, i) => a + i.value, 0);
     }, 0);
 
-  const _todayMs = (() => { const d = getTodayBrasilia(); d.setHours(0,0,0,0); return d.getTime(); })();
   const sumOverdue = (arr: Student[]) =>
     arr.reduce((acc, s) => {
       if (s.statusCancelamento === 'cancelado') return acc;
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
       return acc + s.installments
-        .filter((i) => !i.paid && _instInRange(i) && new Date(i.dueDate + 'T00:00:00').getTime() < _todayMs)
+        .filter((i) => !i.paid && _instInRange(i) && new Date(i.dueDate + 'T00:00:00').getTime() < _refDayMs)
         .reduce((a, i) => a + i.value, 0);
     }, 0);
 
@@ -859,6 +931,34 @@ export default function DashboardPage() {
           <span>Selecione um período de referência para reconstruir a carteira.</span>
         </div>
       )}
+      {mode === 'historico' && historicoEnd && snapshotKind === 'frozen' && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800">
+          <Camera size={14} className="text-emerald-600 shrink-0" />
+          <span>
+            Foto congelada de{' '}
+            <strong>{new Date(historicoEnd + 'T12:00:00').toLocaleDateString('pt-BR')}</strong>
+            {snapshotLoading ? ' (carregando…)' : ' — os números deste dia não mudam ao reabrir.'}
+          </span>
+        </div>
+      )}
+      {mode === 'historico' && historicoEnd && snapshotKind === 'missing' && !snapshotLoading && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+          <Clock size={14} className="text-amber-600 shrink-0" />
+          <span>
+            Sem foto salva para{' '}
+            <strong>{new Date(historicoEnd + 'T12:00:00').toLocaleDateString('pt-BR')}</strong>
+            . Exibindo estimativa a partir dos dados atuais — pode diferir do que apareceu naquele dia.
+          </span>
+        </div>
+      )}
+      {mode === 'historico' && historicoEnd && snapshotKind === 'live' && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-sky-50 border border-sky-200 rounded-xl text-xs text-sky-800">
+          <Activity size={14} className="text-sky-600 shrink-0" />
+          <span>
+            Dia em aberto (hoje ou futuro): números ao vivo. A foto deste dia só fecha após a meia-noite.
+          </span>
+        </div>
+      )}
 
       {/* Filtros no modo Histórico */}
       {mode === 'historico' && (
@@ -1185,7 +1285,9 @@ export default function DashboardPage() {
           <h3 className="text-sm font-semibold text-foreground mb-1">Distribuição de Status</h3>
           <p className="text-xs text-muted-foreground mb-4">
             {mode === 'historico' && historicoEnd
-              ? `Carteira reconstruída em ${new Date(historicoEnd + 'T12:00:00').toLocaleDateString('pt-BR')}`
+              ? snapshotKind === 'frozen'
+                ? `Foto congelada em ${new Date(historicoEnd + 'T12:00:00').toLocaleDateString('pt-BR')}`
+                : `Carteira na data ${new Date(historicoEnd + 'T12:00:00').toLocaleDateString('pt-BR')}${snapshotKind === 'missing' ? ' (estimativa)' : ''}`
               : 'Volume da Carteira (estado atual)'}
           </p>
           {pieData.length === 0 ? (

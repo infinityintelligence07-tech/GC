@@ -246,7 +246,10 @@ export default function DashDateFilter({
           </div>
           {historicoStart && historicoEnd && (
             <span className="text-[10px] text-amber-600 font-medium">
-              Carteira reconstruída entre {new Date(historicoStart + 'T12:00:00').toLocaleDateString('pt-BR')} e {new Date(historicoEnd + 'T12:00:00').toLocaleDateString('pt-BR')}
+              Foto do dia {new Date(historicoEnd + 'T12:00:00').toLocaleDateString('pt-BR')}
+              {historicoStart !== historicoEnd
+                ? ` (período desde ${new Date(historicoStart + 'T12:00:00').toLocaleDateString('pt-BR')})`
+                : ''}
             </span>
           )}
         </div>
