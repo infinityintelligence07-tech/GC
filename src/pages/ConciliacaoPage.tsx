@@ -3,7 +3,7 @@
 // Importação de pagamentos do Kamino (Erros para revisar).
 
 import { useMemo, useState, useEffect } from 'react';
-import { CheckCircle2, Search, FileSpreadsheet, ScrollText, User as UserIcon, Calendar, ArrowRight, ArrowLeft, Upload, AlertTriangle, XCircle, Trash2, Loader2, Wallet, History as HistoryIcon, Ban, ThumbsUp, Pencil, Check, X as XIcon, Settings2, FileText, Eye } from 'lucide-react';
+import { CheckCircle2, Search, FileSpreadsheet, ScrollText, User as UserIcon, Calendar, ArrowRight, ArrowLeft, Upload, AlertTriangle, XCircle, Trash2, Loader2, Wallet, History as HistoryIcon, Ban, ThumbsUp, Pencil, Check, X as XIcon, Settings2, FileText, Eye, DollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useConciliacaoStore, notifyConciliacaoGrupo } from '@/store/useConciliacaoStore';
 
@@ -94,18 +94,20 @@ const TIPO_COLOR: Record<ConciliacaoTipo, string> = {
   correcao_contrato: 'bg-orange-100 text-orange-800',
 };
 
-/** Filtro simplificado da Conciliação: só estes dois grupos. */
-type ConciliacaoGrupoFilter = 'todos' | 'cancelamentos' | 'ajuste_financeiro';
+/** Filtro simplificado da Conciliação por grupo de aba. */
+type ConciliacaoGrupoFilter = 'todos' | 'cancelamentos' | 'ajuste_financeiro' | 'renda_extra';
 
 const CANCEL_TIPOS: ConciliacaoTipo[] = ['cancelamento', 'reversao'];
 const isCancelTipo = (t: ConciliacaoTipo) => CANCEL_TIPOS.includes(t);
+const isRendaExtraTipo = (t: ConciliacaoTipo) => t === 'renda_extra_exclusao' || t === 'renda_extra_acordo';
 
-/** Tudo que não é cancelamento/reversão entra como ajuste financeiro. */
-const isAjusteFinanceiroTipo = (t: ConciliacaoTipo) => !isCancelTipo(t);
+/** Parcelas, quitação, encargos etc. — sem cancelamento/reversão nem renda extra. */
+const isAjusteFinanceiroTipo = (t: ConciliacaoTipo) => !isCancelTipo(t) && !isRendaExtraTipo(t);
 
 function matchesGrupoFilter(tipo: ConciliacaoTipo, grupo: ConciliacaoGrupoFilter): boolean {
   if (grupo === 'todos') return true;
   if (grupo === 'cancelamentos') return isCancelTipo(tipo);
+  if (grupo === 'renda_extra') return isRendaExtraTipo(tipo);
   return isAjusteFinanceiroTipo(tipo);
 }
 
@@ -1158,7 +1160,7 @@ export default function ConciliacaoPage() {
   const confirm = useConfirm();
 
   const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'kamino-gc'>('menu');
-  const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'historico' | 'erros'>('ajuste_financeiro');
+  const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'renda_extra' | 'historico' | 'erros'>('ajuste_financeiro');
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<ConciliacaoGrupoFilter>('todos');
   const [erroStatusFilter, setErroStatusFilter] = useState<'pendente' | 'resolvido' | 'ignorado' | 'todos'>('pendente');
@@ -1187,6 +1189,9 @@ export default function ConciliacaoPage() {
         }
         if (tab === 'cancelamentos') {
           return (i.status === 'pendente' || i.status === 'aprovado') && isCancelTipo(i.tipo);
+        }
+        if (tab === 'renda_extra') {
+          return (i.status === 'pendente' || i.status === 'aprovado') && isRendaExtraTipo(i.tipo);
         }
         if (tab === 'historico') {
           if (i.status !== 'conciliado' && i.status !== 'reprovado') return false;
@@ -1233,6 +1238,11 @@ export default function ConciliacaoPage() {
       .filter((i) => (i.status === 'pendente' || i.status === 'aprovado') && isCancelTipo(i.tipo))
       .map((i) => i.studentId ?? i.studentName),
   ).size;
+  const rendaExtraCount = new Set(
+    items
+      .filter((i) => (i.status === 'pendente' || i.status === 'aprovado') && isRendaExtraTipo(i.tipo))
+      .map((i) => i.studentId ?? i.studentName),
+  ).size;
   const historicoCount = flow === 'kamino-gc'
     ? items.filter((i) => i.status === 'conciliado' && i.tipo === 'baixa_kamino').length
     : items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo !== 'baixa_kamino').length;
@@ -1246,7 +1256,7 @@ export default function ConciliacaoPage() {
   // num único card, com botão "Conciliar" que concilia todos de uma vez.
   const SESSION_WINDOW_MS = 30 * 60 * 1000;
   const groupedPending = useMemo<Group[]>(() => {
-    if (tab !== 'ajuste_financeiro' && tab !== 'cancelamentos') return [];
+    if (tab !== 'ajuste_financeiro' && tab !== 'cancelamentos' && tab !== 'renda_extra') return [];
     // Ordena por aluno → autor → tempo crescente para agrupar sessões corretamente
     const sorted = [...filtered].sort((a, b) => {
       const k1 = (a.studentId ?? a.studentName) + '|' + (a.autorId ?? '');
@@ -1584,9 +1594,9 @@ export default function ConciliacaoPage() {
             <p className="text-xs text-muted-foreground leading-relaxed">
               Alterações feitas neste sistema (vencimento, parcelas, juros, etc.) que precisam ser refletidas no Kamino.
             </p>
-            {(ajusteFinanceiroCount + cancelamentosCount) > 0 && (
+            {(ajusteFinanceiroCount + cancelamentosCount + rendaExtraCount) > 0 && (
               <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-red-600 text-[11px] font-bold border border-amber-300">
-                {ajusteFinanceiroCount + cancelamentosCount} pendente{(ajusteFinanceiroCount + cancelamentosCount) !== 1 ? 's' : ''}
+                {ajusteFinanceiroCount + cancelamentosCount + rendaExtraCount} pendente{(ajusteFinanceiroCount + cancelamentosCount + rendaExtraCount) !== 1 ? 's' : ''}
               </span>
             )}
           </button>
@@ -1681,6 +1691,17 @@ export default function ConciliacaoPage() {
               Cancelamentos ({cancelamentosCount})
             </button>
             <button
+              onClick={() => { setTab('renda_extra'); setTipoFilter('todos'); }}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border transition-all whitespace-nowrap ${
+                tab === 'renda_extra'
+                  ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm'
+                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+              }`}
+            >
+              <DollarSign size={14} />
+              Renda Extra ({rendaExtraCount})
+            </button>
+            <button
               onClick={() => setTab('historico')}
               className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap ${
                 tab === 'historico'
@@ -1740,6 +1761,7 @@ export default function ConciliacaoPage() {
           >
             <option value="todos">Todos os tipos</option>
             <option value="cancelamentos">Cancelamentos</option>
+            <option value="renda_extra">Renda Extra</option>
             <option value="ajuste_financeiro">Ajuste financeiro</option>
           </select>
         )}
@@ -1760,16 +1782,17 @@ export default function ConciliacaoPage() {
       {/* Listas */}
       {tab !== 'erros' ? (
         <div className="space-y-3">
-          {((tab === 'ajuste_financeiro' || tab === 'cancelamentos') ? groupedPending.length === 0 : filtered.length === 0) ? (
+          {((tab === 'ajuste_financeiro' || tab === 'cancelamentos' || tab === 'renda_extra') ? groupedPending.length === 0 : filtered.length === 0) ? (
             <div className="text-center py-12 border border-dashed border-border rounded-2xl">
               <FileSpreadsheet size={28} className="mx-auto text-muted-foreground mb-2 opacity-50" />
               <p className="text-sm text-muted-foreground">
                 {tab === 'ajuste_financeiro' ? 'Nenhum ajuste financeiro pendente.'
                   : tab === 'cancelamentos' ? 'Nenhuma pendência de cancelamento ou reversão.'
+                  : tab === 'renda_extra' ? 'Nenhuma pendência de Renda Extra.'
                   : 'Nenhum item conciliado ainda.'}
               </p>
             </div>
-          ) : (tab === 'ajuste_financeiro' || tab === 'cancelamentos') ? (
+          ) : (tab === 'ajuste_financeiro' || tab === 'cancelamentos' || tab === 'renda_extra') ? (
             groupedPending.map((group) => {
               // Subtipos consolidados de TODAS as alterações do grupo
               const allChangedKeys = new Set<string>();
