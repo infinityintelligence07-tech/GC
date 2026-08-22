@@ -35,6 +35,19 @@ export function isDraftItem(item: ConciliacaoItem): boolean {
 }
 
 /**
+ * Rascunhos com efeito imediato (double-check): o `_after` já foi aplicado no
+ * aluno no momento do envio. Reaplicar ao conciliar sobrescreve o estado atual
+ * (pagamentos posteriores, etc.) e "desconcilia" tudo.
+ */
+export function isDraftAlreadyApplied(item: ConciliacaoItem): boolean {
+  if (!isDraftItem(item)) return false;
+  const depois = item.depois as Record<string, unknown>;
+  // Flag explícita (itens novos) OU presença de `_after` sob a regra atual
+  // de efeito imediato — nunca reaplicar no "Conciliar".
+  return depois._appliedUpfront === true || !!depois._after;
+}
+
+/**
  * Reordena as parcelas por data de vencimento e renumera 1..N.
  * Quando o novo número difere do anterior, preenche `numeroOriginal` e
  * grava uma observação (ex.: "Antes era Parcela 2 — vencimento alterado").

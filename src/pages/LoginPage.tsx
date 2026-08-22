@@ -17,18 +17,21 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { error: err } = await signIn(email.trim(), password);
-    if (err) {
-      // Mensagens amigáveis
-      const msg = /invalid login/i.test(err)
-        ? 'E-mail ou senha incorretos.'
-        : /email not confirmed/i.test(err)
-          ? 'E-mail ainda não confirmado.'
-          : err;
-      setError(msg);
+    try {
+      const { error: err } = await signIn(email.trim(), password);
+      if (err) {
+        const msg = /invalid login/i.test(err)
+          ? 'E-mail ou senha incorretos.'
+          : /email not confirmed/i.test(err)
+            ? 'E-mail ainda não confirmado.'
+            : err;
+        setError(msg);
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Falha ao entrar. Tente novamente.');
+    } finally {
       setLoading(false);
     }
-    // Em caso de sucesso, o AuthProvider redireciona automaticamente
   };
 
   return (

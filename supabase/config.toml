@@ -9,3 +9,6 @@ verify_jwt = false
 [functions.snapshot-daily]
 verify_jwt = false
 
+[functions.iam-control-receive-aluno]
+verify_jwt = false
+

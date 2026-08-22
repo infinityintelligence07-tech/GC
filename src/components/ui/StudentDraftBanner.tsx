@@ -39,7 +39,7 @@ const CURRENCY_KEYS = new Set([
   'value', 'valor', 'juros', 'multa', 'desconto', 'encargo', 'paidValue', 'acordoValue',
 ]);
 const DATE_KEYS = new Set(['vencimento', 'dueDate', 'dataPagamento', 'paidDate']);
-const SKIP_KEYS = new Set(['_snapshot', '_after', '_before', 'parcela', 'parcelaExcluida']);
+const SKIP_KEYS = new Set(['_snapshot', '_after', '_before', '_appliedUpfront', 'parcela', 'parcelaExcluida']);
 
 function labelFor(k: string): string {
   if (FIELD_LABELS[k]) return FIELD_LABELS[k];

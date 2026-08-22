@@ -20,6 +20,28 @@ export function cpfCicloKey(cpf?: string | null, ciclo?: string | null): string 
   return `${normalizeCpfDigits(cpf)}|${normalizeCiclo(ciclo)}`;
 }
 
+/** Normaliza nome de produto para comparação (minúsculas, sem acento). */
+export function normalizeProductName(product?: string | null): string {
+  return (product ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Produtos que NÃO entram na esteira automática (IPR / Imersão Prosperar /
+ * Imersão de Negócios). Ficam sem AC até atribuição manual (ou AC já informado).
+ */
+export function isProductExcludedFromEsteira(product?: string | null): boolean {
+  const p = normalizeProductName(product);
+  if (!p) return false;
+  if (p === 'ipr' || p.startsWith('ipr ') || p.endsWith(' ipr') || p.includes(' ipr ')) return true;
+  if (p.includes('imersao prosperar')) return true;
+  if (p.includes('imersao de negocios')) return true;
+  return false;
+}
+
 /** Ordem estável dos ACs ativos (created_at, depois name) — igual ao SQL. */
 export function orderActiveAcs(acs: AC[]): AC[] {
   return acs

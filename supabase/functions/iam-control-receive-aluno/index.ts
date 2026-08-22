@@ -8,6 +8,14 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+/** Tokens conhecidos do IAM Control (espelho dos guards no backend). */
+const TOKENS_CONHECIDOS = [
+  // Token dedicado Gestão de Contas (preferencial)
+  'iamctrl_gc_1aa30225c9cd186138cb0a3a967d921a285455dc79afec835fd2b69a6a01dfff',
+  // Token mestre de webhooks (legado / debug)
+  'iamctrl_whk_20ce9fca6b56a9ae32162eb6c4087da2d9116f6234aeb9aec050bcbe371daa5d',
+];
+
 function json(status: number, corpo: unknown): Response {
   return new Response(JSON.stringify(corpo), {
     status,
@@ -15,18 +23,20 @@ function json(status: number, corpo: unknown): Response {
   });
 }
 
-function tokenOk(req: Request, esperado: string): boolean {
+function tokenOk(req: Request, esperados: string[]): boolean {
   const enviado =
     req.headers.get('x-webhook-token') ??
     req.headers.get('X-Webhook-Token') ??
     '';
-  if (!esperado || !enviado) return false;
-  if (enviado.length !== esperado.length) return false;
-  let diff = 0;
-  for (let i = 0; i < esperado.length; i++) {
-    diff |= enviado.charCodeAt(i) ^ esperado.charCodeAt(i);
-  }
-  return diff === 0;
+  if (!enviado || esperados.length === 0) return false;
+  return esperados.some((esperado) => {
+    if (!esperado || enviado.length !== esperado.length) return false;
+    let diff = 0;
+    for (let i = 0; i < esperado.length; i++) {
+      diff |= enviado.charCodeAt(i) ^ esperado.charCodeAt(i);
+    }
+    return diff === 0;
+  });
 }
 
 function extrairClientes(corpo: unknown): unknown[] {
@@ -44,8 +54,16 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json(405, { ok: false, error: 'Use POST' });
 
-  const token = Deno.env.get('IAM_CONTROL_WEBHOOK_TOKEN') ?? '';
-  if (!tokenOk(req, token)) {
+  const tokens = Array.from(
+    new Set(
+      [
+        Deno.env.get('IAM_CONTROL_WEBHOOK_TOKEN') ?? '',
+        Deno.env.get('IAM_CONTROL_WEBHOOK_TOKEN_ALT') ?? '',
+        ...TOKENS_CONHECIDOS,
+      ].filter(Boolean),
+    ),
+  );
+  if (!tokenOk(req, tokens)) {
     return json(401, { ok: false, error: 'Token do webhook inválido' });
   }
 

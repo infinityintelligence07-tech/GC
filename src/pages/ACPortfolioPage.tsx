@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, calculateChurnRisk, calculateRendaExtraMetrics } from '@/store/useAppStore';
+import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, calculateChurnRisk, calculateRendaExtraMetrics, isRecompraOuFundoParcela } from '@/store/useAppStore';
 import { Student, StudentStatus, MOTIVOS_CANCELAMENTO, Notification } from '@/types';
 import StudentModal from '@/components/modals/StudentModal';
 import StudentViewModal from '@/components/modals/StudentViewModal';
@@ -489,7 +489,12 @@ export default function ACPortfolioPage() {
       if (s.statusCancelamento === 'cancelado') return acc;
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
       return acc + s.installments
-        .filter((i) => !i.paid && _instInRange(i) && new Date(i.dueDate + 'T00:00:00').getTime() < _todayMs)
+        .filter((i) =>
+          !i.paid &&
+          !isRecompraOuFundoParcela(i, studentTags) &&
+          _instInRange(i) &&
+          new Date(i.dueDate + 'T00:00:00').getTime() < _todayMs,
+        )
         .reduce((a, i) => a + i.value, 0);
     }, 0);
 

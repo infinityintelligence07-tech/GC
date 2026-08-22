@@ -469,6 +469,9 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
   const [cckDecisions, setCckDecisions] = useState<Record<string, TagDecision>>({});
   // Decisão por Classificação de Recompra (ex: "Fundo - Receita (Recompra)").
   const [recompraDecisions, setRecompraDecisions] = useState<Record<string, TagDecision>>({});
+  // Treinamento (produto) ao qual cada Classificação de Recompra deve ser vinculada.
+  // Usado para anexar as parcelas na ficha correta quando o aluno tem vários contratos.
+  const [recompraProductLink, setRecompraProductLink] = useState<Record<string, string>>({});
   // Decisão por Forma de Recebimento (coluna I) — virar tag aplicada nas parcelas correspondentes.
   const [formaDecisions, setFormaDecisions] = useState<Record<string, TagDecision>>({});
   // Decisão por candidato a Assessor extraído do Centro de Custo:
@@ -1178,6 +1181,122 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
     }
   };
 
+  /**
+   * Vincula uma Classificação de Recompra a um treinamento (produto).
+   * Remarca attachToStudentId nas linhas afetadas para a ficha com esse produto.
+   */
+  const applyRecompraTrainingLink = (classification: string, productName: string) => {
+    const linked = productName.trim();
+    setRecompraProductLink((prev) => {
+      const next = { ...prev };
+      if (!linked) delete next[classification];
+      else next[classification] = linked;
+      return next;
+    });
+
+    if (!linked) return;
+
+    setRows((curr) =>
+      curr.map((r) => {
+        if (!r.data) return r;
+        const instTags = (r.data.installments ?? []).flatMap((i) => i.tags ?? []);
+        const hasTagForClass = instTags.some(
+          (t) => typeof t === 'string' && t === `__recompra__:${classification}`,
+        );
+        const productMatchesClass =
+          isRecompraClassificacao(r.data.product || '') &&
+          (r.data.product || '').trim().toLowerCase() === classification.trim().toLowerCase();
+        // Linha só-recompra anexada: aplica se não houver outra classificação de recompra distinta
+        const recompraTagsOnRow = instTags.filter(
+          (t): t is string => typeof t === 'string' && t.startsWith('__recompra__:'),
+        );
+        const anexadaGenerica =
+          (r.errors ?? []).some((e) => /recompra anexada/i.test(e)) &&
+          (recompraTagsOnRow.length === 0 ||
+            recompraTagsOnRow.every((t) => t === `__recompra__:${classification}`));
+
+        if (!hasTagForClass && !productMatchesClass && !anexadaGenerica) return r;
+
+        const nameKey = r.data.name.trim().toLowerCase();
+        const match = students.find(
+          (s) =>
+            s.name.trim().toLowerCase() === nameKey &&
+            !isRecompraClassificacao(s.product || '') &&
+            s.product.trim().toLowerCase() === linked.toLowerCase(),
+        );
+
+        const cleanedErrors = (r.errors ?? []).filter((e) => !/recompra anexada/i.test(e));
+        if (match) {
+          return {
+            ...r,
+            data: {
+              ...r.data,
+              product: match.product,
+              attachToStudentId: match.id,
+            },
+            errors: [
+              ...cleanedErrors,
+              `Recompra anexada à ficha existente (${match.product})`,
+            ],
+          };
+        }
+
+        // Sem ficha com esse treinamento: só registra o vínculo no produto;
+        // a anexação automática some até existir contrato correspondente.
+        return {
+          ...r,
+          data: {
+            ...r.data,
+            product: linked,
+            attachToStudentId: undefined,
+          },
+          errors: [
+            ...cleanedErrors,
+            `Recompra vinculada a "${linked}" — nenhuma ficha deste aluno com esse treinamento`,
+          ],
+        };
+      }),
+    );
+  };
+
+  /** Troca o contrato destino de uma recompra já anexada (por id de aluno). */
+  const handleRecompraAttachToStudent = (anchorRowIndex: number, studentId: string) => {
+    const target = students.find((s) => s.id === studentId);
+    if (!target) return;
+    setRows((curr) => {
+      const anchor = curr.find((r) => r.rowIndex === anchorRowIndex);
+      if (!anchor?.data) return curr;
+      const nameKey = anchor.data.name.trim().toLowerCase();
+      return curr.map((r) => {
+        if (!r.data) return r;
+        if (r.data.name.trim().toLowerCase() !== nameKey) return r;
+        const isRecompraRow =
+          Boolean(r.data.attachToStudentId) ||
+          (r.errors ?? []).some((e) => /recompra/i.test(e)) ||
+          (r.data.installments ?? []).some((i) =>
+            (i.tags ?? []).some(
+              (t) => typeof t === 'string' && t.startsWith('__recompra__:'),
+            ),
+          );
+        if (!isRecompraRow && r.rowIndex !== anchorRowIndex) return r;
+        const cleanedErrors = (r.errors ?? []).filter((e) => !/recompra anexada/i.test(e));
+        return {
+          ...r,
+          data: {
+            ...r.data,
+            product: target.product,
+            attachToStudentId: target.id,
+          },
+          errors: [
+            ...cleanedErrors,
+            `Recompra anexada à ficha existente (${target.product})`,
+          ],
+        };
+      });
+    });
+    toast.success(`Recompra vinculada a ${target.product}`);
+  };
+
   const handleDownloadTemplate = async () => {
     let XLSX: XLSXModule;
     try { XLSX = await loadXLSX(); } catch (err) { alert((err as Error).message); return; }
@@ -1234,14 +1353,15 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
 
   // ─── Parse Padrão ───────────────────────────────────────────────────────────
   const parsePadrao = (json: Record<string, unknown>[], XLSX: XLSXModule) => {
-    // Chave de duplicidade: CPF + Ciclo (normalizado). Permite o mesmo CPF
-    // em múltiplos ciclos (ex.: renovação anual Liberty 2026, 2027...).
-    const cpfCicloKey = (cpf: string, ciclo: string) =>
-      `${cpf.replace(/\D/g, '')}||${ciclo.trim().toLowerCase()}`;
-    const existingCpfCiclo = new Set(
+    // Chave de duplicidade: CPF + Produto + Ciclo.
+    // Mesmo CPF em treinamentos diferentes = OK (contratos distintos).
+    // Ciclo só entra na chave na Liberty (renovação anual).
+    const cpfProductCicloKey = (cpf: string, produto: string, ciclo: string) =>
+      `${cpf.replace(/\D/g, '')}||${produto.trim().toLowerCase()}||${ciclo.trim().toLowerCase()}`;
+    const existingKeys = new Set(
       students
-        .filter((s) => s.cpf)
-        .map((s) => cpfCicloKey(s.cpf, s.ciclo ?? ''))
+        .filter((s) => s.cpf && s.product)
+        .map((s) => cpfProductCicloKey(s.cpf, s.product, isLibertyCompany ? (s.ciclo ?? '') : '')),
     );
     const seenInSheet = new Set<string>();
     const acNames = new Set(acs.filter((g) => g.active).map((g) => g.name.toLowerCase()));
@@ -1278,12 +1398,16 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
       if (!nome) blocking.push('Nome vazio');
       if (!whatsapp) blocking.push('WhatsApp vazio');
       if (!cpf) warnings.push('CPF vazio (opcional)');
-      else {
-        const key = cpfCicloKey(cpf, ciclo);
-        const cicloLabel = ciclo ? ` (Ciclo "${ciclo}")` : '';
-        if (existingCpfCiclo.has(key)) blocking.push(`CPF já cadastrado${cicloLabel}`);
-        else if (seenInSheet.has(key)) blocking.push(`Linha duplicada na planilha${cicloLabel}`);
-        else seenInSheet.add(key);
+      else if (produto) {
+        const key = cpfProductCicloKey(cpf, produto, ciclo);
+        const cicloLabel = ciclo ? ` · ciclo "${ciclo}"` : '';
+        if (existingKeys.has(key)) {
+          blocking.push(`CPF já cadastrado neste treinamento (${produto})${cicloLabel}`);
+        } else if (seenInSheet.has(key)) {
+          blocking.push(`Linha duplicada na planilha (mesmo CPF + treinamento)${cicloLabel}`);
+        } else {
+          seenInSheet.add(key);
+        }
       }
       if (!ac) blocking.push('AC vazio');
       else if (!acNames.has(ac.toLowerCase())) blocking.push(`AC "${ac}" não cadastrado`);
@@ -1769,6 +1893,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
     setCckTagNames({}); setRecompraTagNames({});
     setContaTagAssign({}); setCcTagAssign({}); setCckTagAssign({});
     setRecompraTagAssign({}); setFormaTagAssign({});
+    setRecompraProductLink({});
     setAutoDecisionPromptKey('');
     parseWorkbook(file);
   };
@@ -2028,9 +2153,38 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
         // vira tag aplicada a todas as parcelas e o produto fica consolidado em "Sem Treinamento".
         const productIsUnknown = mode === 'kamino' && !!data.product && unknownClassSet.has(data.product.toLowerCase());
         const mappedProduct = mode === 'kamino' && data.product ? classToProduct.get(data.product.toLowerCase()) : undefined;
-        const finalProduct = productIsUnknown ? KAMINO_TAG_ONLY_PRODUCT : (mappedProduct ?? data.product);
+        let finalProduct = productIsUnknown ? KAMINO_TAG_ONLY_PRODUCT : (mappedProduct ?? data.product);
         // Usa o nome final (editado) caso o usuário tenha renomeado.
         const extraTagFromClass = productIsUnknown ? resolveClassName(data.product) : null;
+
+        // Vínculo manual Recompra → treinamento (sobrescreve detecção automática)
+        let attachToStudentId = data.attachToStudentId;
+        if (mode === 'kamino' && Object.keys(recompraProductLink).length > 0) {
+          const recompraClsFromTags = (data.installments ?? [])
+            .flatMap((i) => i.tags ?? [])
+            .filter((t): t is string => typeof t === 'string' && t.startsWith('__recompra__:'))
+            .map((t) => t.slice('__recompra__:'.length));
+          const candidates = [
+            ...recompraClsFromTags,
+            ...(isRecompraClassificacao(data.product || '') ? [data.product] : []),
+          ];
+          let linked: string | undefined;
+          for (const cls of candidates) {
+            const hit = recompraProductLink[cls]?.trim();
+            if (hit) { linked = hit; break; }
+          }
+          if (linked) {
+            finalProduct = linked;
+            const nameKey = data.name.trim().toLowerCase();
+            const match = students.find(
+              (s) =>
+                s.name.trim().toLowerCase() === nameKey &&
+                !isRecompraClassificacao(s.product || '') &&
+                s.product.trim().toLowerCase() === linked!.toLowerCase(),
+            );
+            attachToStudentId = match?.id;
+          }
+        }
 
         // Kamino: já temos parcelas reais (com datas). Padrão: gera por dueDay.
         let installments: Installment[];
@@ -2122,7 +2276,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
                   : 'Importado via planilha Kamino')
               : 'Importado via planilha Excel',
           }],
-          attachToStudentId: data.attachToStudentId,
+          attachToStudentId,
         } as Student & { attachToStudentId?: string };
       });
 
@@ -2448,6 +2602,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
     setCckTagNames({}); setRecompraTagNames({});
     setContaTagAssign({}); setCcTagAssign({}); setCckTagAssign({});
     setRecompraTagAssign({}); setFormaTagAssign({});
+    setRecompraProductLink({});
   };
 
   const handleClose = () => {
@@ -2606,19 +2761,41 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
    * QuickFixBar: detecta nos erros do grupo quais campos faltam (AC, Produto)
    * e mostra apenas seletores rápidos com os dados já cadastrados, sem precisar
    * abrir o editor completo. Aplica em todas as linhas do mesmo aluno.
+   * Também permite vincular Recompra ao treinamento (ficha) correto.
    */
   const QuickFixBar = ({ group }: { group: { name: string; rows: ParsedRow[]; errors: string[] } }) => {
     const errorsText = group.errors.join(' • ').toLowerCase();
     const needsAc = /ac vazio|ac ".*?" não cadastrado|assessor vazio/i.test(errorsText);
     const needsProduct = /produto vazio|produto ".*?" não cadastrado/i.test(errorsText);
-
-    if (!needsAc && !needsProduct) return null;
+    const isRecompraGroup =
+      /recompra/i.test(errorsText) ||
+      group.rows.some(
+        (r) =>
+          Boolean(r.data?.attachToStudentId) ||
+          (r.data?.installments ?? []).some((i) =>
+            (i.tags ?? []).some(
+              (t) => typeof t === 'string' && t.startsWith('__recompra__:'),
+            ),
+          ),
+      );
 
     const anchor = group.rows[0];
+    const nameKey = (anchor?.data?.name || group.name).trim().toLowerCase();
+    const studentContracts = students.filter(
+      (s) =>
+        s.name.trim().toLowerCase() === nameKey &&
+        !isRecompraClassificacao(s.product || ''),
+    );
+
+    if (!needsAc && !needsProduct && !(isRecompraGroup && (studentContracts.length > 0 || products.length > 0))) {
+      return null;
+    }
+
     const acKey = mode === 'padrao' ? 'AC' : 'Assessor';
     const productKey = mode === 'padrao' ? 'Produto' : 'Classificação';
-    const currentAc = String(anchor.raw[acKey] ?? '');
-    const currentProduct = String(anchor.raw[productKey] ?? '');
+    const currentAc = String(anchor?.raw[acKey] ?? '');
+    const currentProduct = String(anchor?.raw[productKey] ?? '');
+    const currentAttachId = anchor?.data?.attachToStudentId ?? '';
 
     return (
       <div className="px-3 py-2 bg-blue-50/60 border-t border-blue-200 flex flex-wrap items-end gap-2">
@@ -2657,6 +2834,53 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
                 <option key={p.id} value={p.name}>{p.name}</option>
               ))}
             </select>
+          </div>
+        )}
+        {isRecompraGroup && (
+          <div className="flex flex-col gap-0.5">
+            <label className="text-[9px] font-semibold text-blue-900/70 uppercase">
+              Vincular treinamento (recompra)
+            </label>
+            {studentContracts.length > 0 ? (
+              <select
+                value={currentAttachId}
+                onChange={(e) => {
+                  if (e.target.value) handleRecompraAttachToStudent(anchor.rowIndex, e.target.value);
+                }}
+                className="px-2 py-1.5 text-[11px] border border-amber-400 rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-amber-500/40 min-w-[220px]"
+              >
+                <option value="">— Escolha o contrato / treinamento —</option>
+                {studentContracts.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.product}{s.ciclo ? ` · ciclo ${s.ciclo}` : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select
+                value={
+                  products.some((p) => p.name === (anchor?.data?.product || ''))
+                    ? (anchor?.data?.product || '')
+                    : ''
+                }
+                onChange={(e) => {
+                  if (e.target.value) applyRecompraTrainingLink(
+                    (() => {
+                      const tags = (anchor?.data?.installments ?? []).flatMap((i) => i.tags ?? []);
+                      const hit = tags.find((t) => typeof t === 'string' && t.startsWith('__recompra__:'));
+                      return hit ? hit.slice('__recompra__:'.length) : (anchor?.data?.product || 'Recompra');
+                    })(),
+                    e.target.value,
+                  );
+                }}
+                className="px-2 py-1.5 text-[11px] border border-amber-400 rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-amber-500/40 min-w-[220px]"
+              >
+                <option value="">— Selecione o treinamento —</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
         <span className="text-[9px] text-blue-700/70 ml-auto self-center">
@@ -3545,25 +3769,52 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
                     <h3 className="text-xs font-bold text-foreground">Classificação de Recompra</h3>
                     <p className="text-[11px] text-muted-foreground">
                       Linhas com Classificação contendo "Recompra" foram detectadas. Decida se cada nome vira uma <strong className="text-foreground">Tag</strong> aplicada às parcelas dessa recompra ou se é <strong className="text-foreground">Ignorada</strong>.
+                      Use <strong className="text-foreground">Vincular treinamento</strong> para anexar a recompra na ficha do contrato certo (quando o aluno tem mais de um treinamento).
                     </p>
                   </div>
                   {recompraClassificacoes.map((c) => {
                     const decision = recompraDecisions[c] ?? 'ignorar';
                     const editedName = recompraTagNames[c] ?? c;
                     const willReuse = decision === 'tag' && studentTags.some((t) => t.name.toLowerCase() === editedName.trim().toLowerCase());
+                    const linkedProduct = recompraProductLink[c] ?? '';
                     return (
-                      <TagDecisionRow
-                        key={c}
-                        candidate={c}
-                        decision={decision}
-                        setDecision={(d) => setRecompraDecisions((prev) => ({ ...prev, [c]: d }))}
-                        editedName={editedName}
-                        setEditedName={(name) => setRecompraTagNames((prev) => ({ ...prev, [c]: name }))}
-                        assignedTagId={recompraTagAssign[c] ?? ''}
-                        setAssignedTagId={(id) => setRecompraTagAssign((prev) => ({ ...prev, [c]: id }))}
-                        studentTags={studentTags}
-                        willReuse={willReuse}
-                      />
+                      <div key={c} className="space-y-2">
+                        <TagDecisionRow
+                          candidate={c}
+                          decision={decision}
+                          setDecision={(d) => setRecompraDecisions((prev) => ({ ...prev, [c]: d }))}
+                          editedName={editedName}
+                          setEditedName={(name) => setRecompraTagNames((prev) => ({ ...prev, [c]: name }))}
+                          assignedTagId={recompraTagAssign[c] ?? ''}
+                          setAssignedTagId={(id) => setRecompraTagAssign((prev) => ({ ...prev, [c]: id }))}
+                          studentTags={studentTags}
+                          willReuse={willReuse}
+                        />
+                        <div className="ml-1 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+                          <label className="text-[10px] font-semibold text-amber-900 block mb-1">
+                            Vincular treinamento desta recompra
+                          </label>
+                          <select
+                            value={linkedProduct}
+                            onChange={(e) => applyRecompraTrainingLink(c, e.target.value)}
+                            className="w-full text-[11px] px-2.5 py-1.5 rounded-lg border border-amber-300 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                          >
+                            <option value="">— Sem vínculo (mantém detecção automática) —</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.name}>{p.name}</option>
+                            ))}
+                          </select>
+                          {linkedProduct ? (
+                            <p className="text-[10px] text-amber-800 mt-1.5">
+                              Parcelas desta recompra serão anexadas à ficha com treinamento <strong>{linkedProduct}</strong> (quando existir para o aluno).
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-muted-foreground mt-1.5">
+                              Sem vínculo, o sistema tenta casar por valor da parcela e dia de vencimento.
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

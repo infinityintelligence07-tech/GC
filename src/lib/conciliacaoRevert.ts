@@ -32,17 +32,24 @@ export function revertConciliacaoItem(item: ConciliacaoItem): string {
   const student = store.students.find((s) => s.id === studentId);
   if (!student) return 'aluno não encontrado';
 
-  // ─── RASCUNHO REPROVADO ────────────────────────────────────────────────
-  // Item nunca foi aplicado (tinha `depois._after`). Apenas descarta.
-  const after = (depois as Record<string, unknown>)?._after;
+  // ─── RASCUNHO COM EFEITO IMEDIATO ────────────────────────────────────────
+  // Double-check: o ajuste já vale no aluno desde o envio. Em reprovação
+  // antiga este ramo dizia "nada aplicado" — agora, se `_appliedUpfront`,
+  // restauramos via `_snapshot` (quando existir) em vez de descartar.
+  const depoisRec = (depois as Record<string, unknown>) ?? {};
+  const after = depoisRec._after;
   if (after && typeof after === 'object') {
-    const historyEntry: HistoryEntry = {
-      date: new Date().toISOString(),
-      type: 'Sistema',
-      text: `Rascunho REPROVADO — ${item.resumo}. Nenhuma alteração havia sido aplicada.`,
-    };
-    store.updateStudent(student.id, { history: [...student.history, historyEntry] });
-    return 'rascunho descartado (nada havia sido aplicado)';
+    const appliedUpfront = depoisRec._appliedUpfront === true;
+    if (!appliedUpfront) {
+      const historyEntry: HistoryEntry = {
+        date: new Date().toISOString(),
+        type: 'Sistema',
+        text: `Rascunho REPROVADO — ${item.resumo}. Nenhuma alteração havia sido aplicada.`,
+      };
+      store.updateStudent(student.id, { history: [...student.history, historyEntry] });
+      return 'rascunho descartado (nada havia sido aplicado)';
+    }
+    // Applied upfront: cair no fluxo de snapshot / por-tipo abaixo.
   }
 
 

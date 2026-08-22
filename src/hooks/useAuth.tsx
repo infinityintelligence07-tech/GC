@@ -62,8 +62,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (login: string, password: string) => {
     const email = loginToEmail(login);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
+    const uid = data.user?.id;
+    if (!uid) return { error: 'Falha ao autenticar.' };
+    // Garante que existe perfil em app_users — senão a tela fica presa em "Entrando..."
+    const appUser = await hydrateAppUser(uid);
+    if (!appUser) {
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      return {
+        error:
+          'Login autenticado, mas sem perfil no sistema (app_users). Peça a um admin para vincular sua conta.',
+      };
+    }
+    setCurrentUser(appUser);
+    try {
+      await useCompanyStore.getState().loadForUser(uid);
+    } catch (e) {
+      console.error(e);
+    }
     return { error: null };
   };
 

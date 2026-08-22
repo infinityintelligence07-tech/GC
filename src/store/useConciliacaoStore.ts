@@ -84,11 +84,15 @@ export const useConciliacaoStore = create<ConciliacaoState>()((set, get) => ({
     const now = new Date().toISOString();
     const item = get().items.find((i) => i.id === id);
     // ─── RASCUNHO → EFETIVAÇÃO ─────────────────────────────────────────────
-    // Se o item carrega `depois._after`, as alterações ainda não foram
-    // aplicadas no aluno. Conciliar agora é o momento de efetivá-las.
+    // Double-check: rascunhos com `_after` já foram aplicados no envio
+    // (`_appliedUpfront`). Reaplicar aqui sobrescreve o aluno e desfaz
+    // pagamentos/ajustes posteriores. Só efetivar se ainda não aplicado.
     if (item) {
       import('@/lib/conciliacaoApply')
-        .then(({ applyConciliacaoEfetivacao }) => applyConciliacaoEfetivacao(item))
+        .then(({ applyConciliacaoEfetivacao, isDraftAlreadyApplied }) => {
+          if (isDraftAlreadyApplied(item)) return;
+          applyConciliacaoEfetivacao(item);
+        })
         .catch((e) => console.error('Falha ao efetivar rascunho:', e));
     }
     set((state) => ({
@@ -375,9 +379,18 @@ export function registrarConciliacao(input: {
   if (input.studentSnapshot) {
     input = { ...input, antes: { ...input.antes, _snapshot: input.studentSnapshot } };
   }
-  // Embute rascunho dentro do depois (chave reservada `_after`)
+  // Embute rascunho dentro do depois (chave reservada `_after`).
+  // `_appliedUpfront` marca que o efeito imediato será (e é) aplicado abaixo —
+  // o Conciliar só confirma, sem reaplicar o snapshot.
   if (input.draftAfter) {
-    input = { ...input, depois: { ...input.depois, _after: input.draftAfter } };
+    input = {
+      ...input,
+      depois: {
+        ...input.depois,
+        _after: input.draftAfter,
+        _appliedUpfront: true,
+      },
+    };
   }
 
   const tempId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')

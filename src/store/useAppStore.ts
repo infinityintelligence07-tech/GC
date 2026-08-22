@@ -1638,19 +1638,44 @@ export function generateInstallments(dueDay: number, totalInstallments: number, 
   return installments;
 }
 
+/**
+ * Recompra/Fundo = cobrança direta de parcela antiga reaberta.
+ * Não entra no cálculo de "Vencido" (status/KPI): a data antiga interferia
+ * e mantinha o aluno vencido mesmo após regularizar o fluxo normal.
+ * Quando a recompra é paga, deixa de afetar qualquer indicador.
+ */
+export function isRecompraOuFundoParcela(
+  installment: Installment,
+  tagsCatalog?: { id: string; name: string }[],
+): boolean {
+  const tags = installment.tags ?? [];
+  if (tags.length === 0) return false;
+  const catalog = tagsCatalog ?? useAppStore.getState().studentTags;
+  const byId = new Map(catalog.map((t) => [t.id, t.name]));
+  return tags.some((t) => {
+    const name = byId.get(t) ?? String(t);
+    return /recompra|fundo/i.test(name);
+  });
+}
+
 export function calculateAutoStatus(installments: Installment[]): StudentStatus {
   const today = getTodayBrasilia();
+  const tagsCatalog = useAppStore.getState().studentTags;
   const paid = installments.filter((i) => i.paid);
   const unpaid = installments.filter((i) => !i.paid);
-  // Pago: todas pagas
+  // Pago: todas pagas (inclui recompra quitada)
   if (unpaid.length === 0 && installments.length > 0 && paid.length === installments.length) return 'Pago';
-  // Vencido = vencimento efetivo (rolado p/ próximo dia útil) ESTRITAMENTE menor que hoje.
-  const overdueInstallments = unpaid.filter((i) => effectiveDueDate(i.dueDate).getTime() < today.getTime());
+  // Vencido = só parcelas do fluxo normal (recompra/fundo ficam de fora)
+  const overdueInstallments = unpaid.filter(
+    (i) =>
+      !isRecompraOuFundoParcela(i, tagsCatalog) &&
+      effectiveDueDate(i.dueDate).getTime() < today.getTime(),
+  );
   // Aluno Novo (regra item 4): 0 pagamentos de parcelas E nenhuma vencida ainda.
   // Pessoas que ainda não pagaram nenhuma parcela das que vão vencer.
   // Exceção: alunos com apenas 1 parcela cadastrada NÃO são "Aluno Novo".
   if (paid.length === 0 && overdueInstallments.length === 0 && installments.length > 1) return 'Aluno Novo';
-  // Em Dia: já pagou pelo menos uma parcela e não tem nenhuma vencida.
+  // Em Dia: já pagou pelo menos uma parcela e não tem nenhuma vencida (fluxo normal).
   if (overdueInstallments.length === 0) return 'Em Dia';
   const oldestOverdue = overdueInstallments.reduce((oldest, curr) =>
     effectiveDueDate(curr.dueDate).getTime() < effectiveDueDate(oldest.dueDate).getTime() ? curr : oldest
@@ -1693,6 +1718,7 @@ export function calculateAutoStatusAt(installments: Installment[], referenceDate
   const ref = new Date(referenceDate);
   ref.setHours(23, 59, 59, 999);
   const refDayStart = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const tagsCatalog = useAppStore.getState().studentTags;
 
   // "Pagas até a data de referência": precisa estar paga E a data de pagamento <= ref.
   const paidAtRef = installments.filter((i) => {
@@ -1706,9 +1732,11 @@ export function calculateAutoStatusAt(installments: Installment[], referenceDate
     return 'Pago';
   }
 
-  // Vencido = vencimento efetivo (rolado p/ próximo dia útil) estritamente antes de refDayStart.
+  // Vencido = fluxo normal apenas (recompra/fundo não interferem).
   const overdueAtRef = unpaidAtRef.filter(
-    (i) => effectiveDueDate(i.dueDate).getTime() < refDayStart.getTime()
+    (i) =>
+      !isRecompraOuFundoParcela(i, tagsCatalog) &&
+      effectiveDueDate(i.dueDate).getTime() < refDayStart.getTime()
   );
 
   // Aluno Novo (mesma regra do modo atual): 0 pagamentos até a ref E nenhuma vencida ainda,

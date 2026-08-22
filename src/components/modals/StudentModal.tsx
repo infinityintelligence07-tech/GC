@@ -6,6 +6,8 @@ import { X, FileText, Tag, Plus, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import CurrencyInput from '@/components/ui/CurrencyInput';
 import { getTagStyle } from '@/lib/tagColors';
+import { isProductExcludedFromEsteira } from '@/lib/acEsteira';
+import { findDuplicateStudent } from '@/lib/studentIdentity';
 
 interface Props {
   student?: Student | null;
@@ -48,7 +50,7 @@ function maskCEP(v: string) {
 
 
 export default function StudentModal({ student, onClose }: Props) {
-  const { acs, products, addStudent, updateStudent, rules, studentTags, currentUser } = useAppStore();
+  const { acs, products, addStudent, updateStudent, rules, studentTags, currentUser, students } = useAppStore();
   const canManageTags = canEditTab(currentUser, 'alunos');
   const assignableTags = studentTags.filter((t) => (t.scope || 'student') === 'student');
   const canChooseMode = !!student && (currentUser?.role === 'admin' || currentUser?.role === 'conciliacao');
@@ -126,6 +128,29 @@ export default function StudentModal({ student, onClose }: Props) {
     }
     if (form.totalInstallments > rules.maxParcelasCadastro) {
       alert(`Máximo de ${rules.maxParcelasCadastro} parcelas permitido.`);
+      return;
+    }
+
+    const dup = findDuplicateStudent(
+      students,
+      {
+        cpf: form.cpf,
+        product: form.product,
+        ciclo: form.ciclo,
+        whatsapp: form.whatsapp,
+        email: form.email,
+        address: form.address,
+        numero: form.numero,
+        cidade: form.cidade,
+        estado: form.estado,
+        cep: form.cep,
+      },
+      student?.id,
+    );
+    if (dup) {
+      toast.error('Cadastro duplicado', {
+        description: `${dup.detail}. Mesmo CPF em outro treinamento é permitido; no mesmo treinamento deve existir só uma ficha.`,
+      });
       return;
     }
 
@@ -527,7 +552,11 @@ export default function StudentModal({ student, onClose }: Props) {
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Assessor de Conta</label>
                 <select className="input-field w-full" value={form.ac} onChange={(e) => set('ac', e.target.value)}>
                   {!student && (
-                    <option value="">— Automático (esteira) —</option>
+                    <option value="">
+                      {isProductExcludedFromEsteira(form.product)
+                        ? '— Sem assessor (fora da esteira) —'
+                        : '— Automático (esteira) —'}
+                    </option>
                   )}
                   {acs.filter((g) => g.active).map((g) => (
                     <option key={g.id} value={g.name}>{g.name}</option>
@@ -535,7 +564,9 @@ export default function StudentModal({ student, onClose }: Props) {
                 </select>
                 {!student && !form.ac && (
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Sem assessor escolhido, o próximo da esteira recebe o aluno automaticamente.
+                    {isProductExcludedFromEsteira(form.product)
+                      ? 'IPR e Imersão de Negócios não entram na esteira — escolha o assessor manualmente se quiser.'
+                      : 'Sem assessor escolhido, o próximo da esteira recebe o aluno automaticamente.'}
                   </p>
                 )}
               </div>
@@ -550,7 +581,7 @@ export default function StudentModal({ student, onClose }: Props) {
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-muted-foreground mb-1 block" title="Ex.: 2026, 2027, Ano 1. Permite múltiplos contratos do mesmo aluno (renovação anual).">
+                <label className="text-[11px] font-medium text-muted-foreground mb-1 block" title="Ex.: 2026, 2027. Mesmo CPF + mesmo treinamento + ciclos diferentes = fichas separadas (renovação).">
                   Ciclo do contrato <span className="text-muted-foreground/60 font-normal">(opcional)</span>
                 </label>
                 <input

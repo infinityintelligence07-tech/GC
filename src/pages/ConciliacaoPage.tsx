@@ -19,7 +19,30 @@ import CurrencyInput from '@/components/ui/CurrencyInput';
 import { useConfirm } from '@/hooks/useConfirm';
 import { openCancellationPdf, downloadCancellationPdf, isViewableInBrowser } from '@/lib/openCancellationPdf';
 import type { CaseNoteAttachment } from '@/types';
+import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
 
+/** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
+const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
+  'pagamento_parcela',
+  'quitacao',
+  'renegociacao',
+]);
+
+/** Grupo em que as alterações de rascunho já estão no aluno — só falta confirmar. */
+function groupJaAplicadoNoSistema(items: ConciliacaoItem[]): boolean {
+  if (!items.length) return false;
+  return items.every((it) => {
+    if (TIPOS_EFETIVAM_NO_CONCILIAR.has(it.tipo)) return false;
+    if (it.tipo === 'cancelamento' || it.tipo === 'renda_extra_exclusao') return false;
+    if (isDraftItem(it)) return isDraftAlreadyApplied(it);
+    // Sem draft e sem efetivação no conciliar → só auditoria / observação
+    return true;
+  });
+}
+
+function groupTemObservacao(items: ConciliacaoItem[]): boolean {
+  return items.some((i) => !!i.autorObservacao?.trim());
+}
 function formatAttachBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -282,7 +305,7 @@ function formatValue(key: string, v: unknown, parent?: Record<string, unknown>):
 // Extrai TODAS as alterações entre antes/depois para resumo compacto no topo
 function getAllChanges(antes: Record<string, unknown>, depois: Record<string, unknown>):
   Array<{ key: string; label: string; antes: string; depois: string }> {
-  const SKIP = (k: string) => k === '_snapshot' || k === '_after' || k === '_before' || k === '_caseSnapshot' || k === '_attachments';
+  const SKIP = (k: string) => k === '_snapshot' || k === '_after' || k === '_before' || k === '_caseSnapshot' || k === '_attachments' || k === '_appliedUpfront';
   const keys: string[] = [];
   Object.keys(antes ?? {}).forEach((k) => { if (!SKIP(k) && !keys.includes(k)) keys.push(k); });
   Object.keys(depois ?? {}).forEach((k) => { if (!SKIP(k) && !keys.includes(k)) keys.push(k); });
@@ -325,7 +348,7 @@ function ContractValueRow({ changed, antes, depois, explanation }: { changed: bo
 
 function renderDiff(antes: Record<string, unknown>, depois: Record<string, unknown>, student?: Student | null) {
   // Une as chaves preservando ordem (antes primeiro, depois extras)
-  const SKIP = (k: string) => k === '_snapshot' || k === '_after' || k === '_before' || k === '_caseSnapshot' || k === '_attachments';
+  const SKIP = (k: string) => k === '_snapshot' || k === '_after' || k === '_before' || k === '_caseSnapshot' || k === '_attachments' || k === '_appliedUpfront';
   const keys: string[] = [];
   Object.keys(antes ?? {}).forEach((k) => { if (!SKIP(k) && !keys.includes(k)) keys.push(k); });
   Object.keys(depois ?? {}).forEach((k) => { if (!SKIP(k) && !keys.includes(k)) keys.push(k); });
@@ -411,7 +434,7 @@ function renderGroupDiff(items: ConciliacaoItem[], student?: Student, cases?: Ar
     // Sem data conhecida → empurra para o fim ('9999...').
     const sortKey = dueDate ?? '9999-12-31';
 
-    const SKIP_KEYS = new Set(['_snapshot', '_after', '_before', '_caseSnapshot', '_attachments', 'multaPercent', 'dentro7DiasCDC', 'totalNegativar', 'totalNegativarBase', 'estornoAlunoDetalhe', 'totalPagoEfetivo', 'abatimentoValor', 'abatimentoContratoDestino', 'abatimentoSaldoAntes', 'abatimentoSaldoDepois', 'abatimentoSaldoOrigem', 'abatimentoEstornoRestante', 'abatimentoResumo']);
+    const SKIP_KEYS = new Set(['_snapshot', '_after', '_before', '_caseSnapshot', '_attachments', '_appliedUpfront', 'multaPercent', 'dentro7DiasCDC', 'totalNegativar', 'totalNegativarBase', 'estornoAlunoDetalhe', 'totalPagoEfetivo', 'abatimentoValor', 'abatimentoContratoDestino', 'abatimentoSaldoAntes', 'abatimentoSaldoDepois', 'abatimentoSaldoOrigem', 'abatimentoEstornoRestante', 'abatimentoResumo']);
     // No fluxo de cancelamento o "Valor na carteira" não é exibido — o que
     // interessa ao revisor é o "Impacto na carteira".
     if (item.tipo === 'cancelamento') SKIP_KEYS.add('valorCarteira');
@@ -1274,13 +1297,30 @@ export default function ConciliacaoPage() {
         return;
       }
     }
+    const jaSistema = groupJaAplicadoNoSistema(group.items);
+    const soObs = jaSistema && groupTemObservacao(group.items);
     const ok = await confirm({
-      title: group.items.length > 1 ? `Conciliar ${group.items.length} alterações` : 'Marcar como conciliado',
-      description: `${group.studentName}\n${group.items.map((i) => `• ${i.resumo}`).join('\n')}`,
-      confirmText: 'Conciliar',
+      title: soObs
+        ? 'Aprovar observação'
+        : jaSistema
+          ? 'Confirmar conciliação'
+          : group.items.length > 1
+            ? `Conciliar ${group.items.length} alterações`
+            : 'Marcar como conciliado',
+      description: soObs
+        ? `${group.studentName}\n\nAs alterações já estão no sistema. Isto só aprova a observação — nada será reaplicado nem desfeito.\n\n${group.items.map((i) => `• ${i.resumo}`).join('\n')}`
+        : jaSistema
+          ? `${group.studentName}\n\nAs alterações já estão aplicadas. Confirmar move para o histórico sem reaplicar.\n\n${group.items.map((i) => `• ${i.resumo}`).join('\n')}`
+          : `${group.studentName}\n${group.items.map((i) => `• ${i.resumo}`).join('\n')}`,
+      confirmText: soObs ? 'Aprovar observação' : jaSistema ? 'Confirmar' : 'Conciliar',
     });
     if (!ok) return;
     await executeConciliarGrupo(group);
+    if (soObs) {
+      toast.success('Observação aprovada. Nada foi desconciliado.');
+    } else if (jaSistema) {
+      toast.success('Conciliação confirmada. Alterações já estavam no sistema.');
+    }
   };
 
   // Executa efetivamente a conciliação (extraído para permitir chamada após confirmação do cancelamento)
@@ -1777,6 +1817,9 @@ export default function ConciliacaoPage() {
               if (allChangedKeys.has('downPayment') || allChangedKeys.has('entrada')) subTipos.push('Entrada');
               const tituloAlteracao = subTipos.length > 0 ? subTipos.join(' + ') : TIPO_LABEL[group.items[0].tipo];
               const st = group.studentId ? students.find((s) => s.id === group.studentId) : null;
+              const jaConciliadoSistema = groupJaAplicadoNoSistema(group.items);
+              const temObservacao = groupTemObservacao(group.items);
+              const aprovarSoObs = jaConciliadoSistema && temObservacao;
               return (
                 <div key={group.key} className="bg-card border border-border rounded-2xl p-4 hover:shadow-sm transition-shadow">
                   <div className="flex items-start justify-between gap-4">
@@ -1791,6 +1834,14 @@ export default function ConciliacaoPage() {
                             {group.items.length} alterações
                           </span>
                         )}
+                        {jaConciliadoSistema && (
+                          <span
+                            className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            title="As alterações já estão aplicadas no aluno. Conciliar só confirma o double-check (não reaplica nem desfaz nada)."
+                          >
+                            Já conciliado
+                          </span>
+                        )}
                       </div>
 
                       {/* Badge consolidada das alterações da sessão */}
@@ -1798,6 +1849,11 @@ export default function ConciliacaoPage() {
                         <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
                           {tituloAlteracao}
                         </span>
+                        {temObservacao && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            Com observação
+                          </span>
+                        )}
                       </div>
 
                       {/* Resumo do contrato (Total Contratado / Pago / Saldo / Parcelas em aberto) */}
@@ -1894,11 +1950,24 @@ export default function ConciliacaoPage() {
                             <button
                               onClick={() => handleConciliarGrupo(group)}
                               className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm"
-                              title={isAprovado ? 'Executar as alterações no sistema e mover para o histórico' : 'Executar e mover para o histórico'}
+                              title={
+                                aprovarSoObs
+                                  ? 'Aprovar a observação sem reaplicar ou desfazer alterações (já estão no sistema)'
+                                  : jaConciliadoSistema
+                                    ? 'Confirmar conciliação — alterações já estão no sistema; nada será reaplicado'
+                                    : isAprovado
+                                      ? 'Executar as alterações no sistema e mover para o histórico'
+                                      : 'Executar e mover para o histórico'
+                              }
                             >
-                              <CheckCircle2 size={14} /> Conciliar{group.items.length > 1 ? ` (${group.items.length})` : ''}
+                              <CheckCircle2 size={14} />
+                              {aprovarSoObs
+                                ? 'Aprovar observação'
+                                : jaConciliadoSistema
+                                  ? `Confirmar${group.items.length > 1 ? ` (${group.items.length})` : ''}`
+                                  : `Conciliar${group.items.length > 1 ? ` (${group.items.length})` : ''}`}
                             </button>
-                            {!isAprovado && (
+                            {!isAprovado && !aprovarSoObs && (
                               <button
                                 onClick={() => handleAprovarGrupo(group)}
                                 className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-card border border-sky-200 text-sky-700 text-xs font-semibold hover:bg-sky-50 transition-colors"
@@ -1906,6 +1975,11 @@ export default function ConciliacaoPage() {
                               >
                                 <ThumbsUp size={14} /> Aprovar{group.items.length > 1 ? ` (${group.items.length})` : ''}
                               </button>
+                            )}
+                            {aprovarSoObs && !isAprovado && (
+                              <p className="text-[10px] text-emerald-800/90 text-center leading-tight px-0.5">
+                                Só confirma a obs. — não desfaz nada
+                              </p>
                             )}
                             <button
                               onClick={() => openReprovar(group)}

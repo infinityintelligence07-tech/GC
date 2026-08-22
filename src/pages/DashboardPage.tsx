@@ -1,4 +1,4 @@
-import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, getInstallmentFinancialValueExport } from '@/store/useAppStore';
+import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, getInstallmentFinancialValueExport, isRecompraOuFundoParcela } from '@/store/useAppStore';
 import ACRankingCard from '@/components/ui/ACRankingCard';
 import ReversalRankingMirror from '@/components/ui/ReversalRankingMirror';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
@@ -447,11 +447,15 @@ export default function DashboardPage() {
       if (s.statusCancelamento === 'cancelado') return acc;
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
       return acc + s.installments
-        .filter((i) => !i.paid && _instInRange(i) && new Date(i.dueDate + 'T00:00:00').getTime() < _refDayMs)
+        .filter((i) =>
+          !i.paid &&
+          !isRecompraOuFundoParcela(i, studentTags) &&
+          _instInRange(i) &&
+          new Date(i.dueDate + 'T00:00:00').getTime() < _refDayMs,
+        )
         .reduce((a, i) => a + i.value, 0);
     }, 0);
 
-  const totalValue = sumUnpaid(kpiStudentsScoped);
   const emDiaValue = sumUnpaid(emDia);
   const alunosNovosValue = sumUnpaid(alunosNovos);
   const v1Value = sumOverdue(vencido1);
@@ -627,6 +631,11 @@ export default function DashboardPage() {
     return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, perAcList, details };
   };
 
+  // Carteira Total (card azul) = TOTAL cinza da projeção (a vencer/vencido + pago no período).
+  const forecastTotais = getForecastTotals();
+  const carteiraTotalValue = forecastTotais.total;
+  const carteiraTotalAlunos = forecastTotais.qtdAlunos;
+
 
   // ── Score distribution ────────────────────────────────────────────────────
   // Calculado sobre o MESMO universo que os KPIs/tabela exibem por padrão
@@ -775,8 +784,8 @@ export default function DashboardPage() {
       kpis: [
         {
           label: 'Carteira Total',
-          value: formatCurrency(totalValue),
-          detail: `${total} alunos`,
+          value: formatCurrency(carteiraTotalValue),
+          detail: `${carteiraTotalAlunos} alunos · a vencer + pago no período`,
           tone: 'default',
         },
         {
@@ -1290,12 +1299,12 @@ export default function DashboardPage() {
             <p className="text-[10px] font-semibold text-muted-foreground uppercase">Carteira Total</p>
             <Users size={16} className="text-primary/50 shrink-0" />
           </div>
-          <p className="kpi-value text-primary" title={formatCurrency(totalValue)}>
-            <span className="hidden sm:inline">{formatCurrency(totalValue)}</span>
-            <span className="sm:hidden">{formatCurrencyCompact(totalValue)}</span>
+          <p className="kpi-value text-primary" title={formatCurrency(carteiraTotalValue)}>
+            <span className="hidden sm:inline">{formatCurrency(carteiraTotalValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(carteiraTotalValue)}</span>
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
-            <p className="text-[11px] text-muted-foreground truncate">{total} alunos</p>
+            <p className="text-[11px] text-muted-foreground truncate">{carteiraTotalAlunos} alunos</p>
             <p className="text-[11px] font-semibold text-primary shrink-0">100%</p>
           </div>
         </div>

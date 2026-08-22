@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Student, Installment, canConfirmarPagamento, canEditTab } from '@/types';
-import { useAppStore, formatCurrency, generateInstallments } from '@/store/useAppStore';
+import { useAppStore, formatCurrency, generateInstallments, isRecompraOuFundoParcela } from '@/store/useAppStore';
 import { registrarConciliacao, useConciliacaoStore, buildStudentSnapshot } from '@/store/useConciliacaoStore';
-import { X, ToggleLeft, ToggleRight, Edit2, Check, Zap, DollarSign, ArrowLeft, FileText, CheckCircle2, Lock, Copy, Trash2, AlertOctagon, BadgeCheck } from 'lucide-react';
+import { X, ToggleLeft, ToggleRight, Edit2, Check, Zap, DollarSign, ArrowLeft, FileText, CheckCircle2, Lock, Copy, Trash2, AlertOctagon, BadgeCheck, Clock } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
 import { toast } from 'sonner';
 import TermoAditivoModal from './TermoAditivoModal';
@@ -28,6 +28,58 @@ interface Props {
 }
 
 type RenegMode = 'none' | 'initial' | 'detailed' | 'confirm';
+
+/** Rascunho local da renegociação — permite retomar se fechar o modal no meio. */
+type RenegStandbyDraft = {
+  version: 1;
+  studentId: string;
+  mode: Exclude<RenegMode, 'none'>;
+  renegMultaPercent: number;
+  renegJurosPercent: number;
+  applyJurosReneg: boolean;
+  applyMultaReneg: boolean;
+  newInstallments: number;
+  novaEntrada: number;
+  renegFirstDueDate: string;
+  renegDueScope: 'primeira' | 'todas';
+  entradaMode: 'valor' | 'percent';
+  entradaPercent: number;
+  renegSelected: number[];
+  savedAt: string;
+};
+
+function renegStandbyKey(studentId: string) {
+  return `gc:reneg-standby:${studentId}`;
+}
+
+function loadRenegStandby(studentId: string): RenegStandbyDraft | null {
+  try {
+    const raw = localStorage.getItem(renegStandbyKey(studentId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RenegStandbyDraft;
+    if (!parsed || parsed.version !== 1 || parsed.studentId !== studentId) return null;
+    if (parsed.mode !== 'initial' && parsed.mode !== 'detailed' && parsed.mode !== 'confirm') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveRenegStandby(draft: RenegStandbyDraft) {
+  try {
+    localStorage.setItem(renegStandbyKey(draft.studentId), JSON.stringify(draft));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function clearRenegStandby(studentId: string) {
+  try {
+    localStorage.removeItem(renegStandbyKey(studentId));
+  } catch {
+    /* ignore */
+  }
+}
 
 // Parser de data local (evita o bug de UTC que mostra o dia anterior)
 function parseDateLocal(dateStr: string): Date {
@@ -74,7 +126,7 @@ class FinancialModalErrorBoundary extends Component<{ onClose: () => void; child
 }
 
 function FinancialModalInner({ student: studentProp, onClose, banner, immediateApply, suggestedPendingTotal }: Props) {
-  const { updateStudent, rules, currentUser } = useAppStore();
+  const { updateStudent, rules, currentUser, studentTags } = useAppStore();
   const confirm = useConfirm();
 
   // Tarja informativa (resumo da reversão / motivo de reprovação) — permanece
@@ -176,7 +228,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   );
 
   const unpaidInstallments = student.installments.filter((i) => !i.paid);
-  const hasOverdue = unpaidInstallments.some((i) => parseDateLocal(i.dueDate) < today);
+  // Recompra/Fundo não contam como "vencido" (data antiga da parcela reaberta).
+  const hasOverdue = unpaidInstallments.some(
+    (i) => !isRecompraOuFundoParcela(i, studentTags) && parseDateLocal(i.dueDate) < today,
+  );
 
   // Encargos: aplicados automaticamente se há vencidas; toggle "Excluir Encargos" desliga
   const [showCharges, setShowCharges] = useState<boolean>(hasOverdue);
@@ -224,6 +279,62 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     setRenegSelected((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
   const [termoModal, setTermoModal] = useState(false);
 
+  // Rascunho/stand-by da renegociação (localStorage) — retomar de onde parou
+  const [standbyDraft, setStandbyDraft] = useState<RenegStandbyDraft | null>(() =>
+    loadRenegStandby(studentProp.id),
+  );
+
+  const buildRenegStandby = (mode: Exclude<RenegMode, 'none'>): RenegStandbyDraft => ({
+    version: 1,
+    studentId: student.id,
+    mode,
+    renegMultaPercent,
+    renegJurosPercent,
+    applyJurosReneg,
+    applyMultaReneg,
+    newInstallments,
+    novaEntrada,
+    renegFirstDueDate,
+    renegDueScope,
+    entradaMode,
+    entradaPercent,
+    renegSelected,
+    savedAt: new Date().toISOString(),
+  });
+
+  const persistRenegStandby = (mode?: Exclude<RenegMode, 'none'>) => {
+    const m = mode ?? (renegMode !== 'none' ? renegMode : null);
+    if (!m) return;
+    const draft = buildRenegStandby(m);
+    saveRenegStandby(draft);
+    setStandbyDraft(draft);
+  };
+
+  const applyRenegStandby = (draft: RenegStandbyDraft) => {
+    setRenegMultaPercent(draft.renegMultaPercent);
+    setRenegJurosPercent(draft.renegJurosPercent);
+    setApplyJurosReneg(draft.applyJurosReneg);
+    setApplyMultaReneg(draft.applyMultaReneg);
+    setNewInstallments(Math.max(1, draft.newInstallments || 1));
+    setNovaEntrada(draft.novaEntrada || 0);
+    setRenegFirstDueDate(draft.renegFirstDueDate);
+    setRenegDueScope(draft.renegDueScope);
+    setEntradaMode(draft.entradaMode);
+    setEntradaPercent(draft.entradaPercent || 0);
+    setRenegSelected(Array.isArray(draft.renegSelected) ? draft.renegSelected : []);
+    setQuitacaoMode(false);
+    setQuitParcelasMode(false);
+    setRenegMode(draft.mode);
+    toast.success('Renegociação restaurada — continue de onde parou.');
+  };
+
+  const discardRenegStandby = () => {
+    clearRenegStandby(student.id);
+    setStandbyDraft(null);
+    setRenegMode('none');
+    toast.message('Rascunho de renegociação descartado.');
+  };
+
   // Quitação mode
   const [quitacaoMode, setQuitacaoMode] = useState(false);
   const [discountType, setDiscountType] = useState<'percent' | 'value'>('percent');
@@ -258,7 +369,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const [extraValues, setExtraValues] = useState<Record<number, number>>({});
   const getExtra = (num: number) => extraValues[num] || 0;
 
-  const _overdueList = unpaidInstallments.filter((i) => parseDateLocal(i.dueDate) < today);
+  const _overdueList = unpaidInstallments.filter(
+    (i) => !isRecompraOuFundoParcela(i, studentTags) && parseDateLocal(i.dueDate) < today,
+  );
   const _overdueBaseSum = _overdueList.reduce((a, i) => a + i.value, 0);
 
   const calculateCharges = (value: number, dueDate: string, instNumber?: number) => {
@@ -279,7 +392,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     return acc + (showCharges ? charges.total : i.value + extra);
   }, 0);
 
-  const overdueInstallments = unpaidInstallments.filter((i) => parseDateLocal(i.dueDate) < today);
+  const overdueInstallments = unpaidInstallments.filter(
+    (i) => !isRecompraOuFundoParcela(i, studentTags) && parseDateLocal(i.dueDate) < today,
+  );
   const totalOverdue = overdueInstallments.reduce((acc, i) => {
     const charges = calculateCharges(i.value, i.dueDate, i.number);
     const extra = !showCharges ? getExtra(i.number) : 0;
@@ -803,6 +918,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       autorObservacao: obsConciliacao.trim() || undefined,
     });
     toast.success('Renegociação enviada para Conciliação. As alterações só ficam efetivas após a aprovação.');
+    clearRenegStandby(student.id);
+    setStandbyDraft(null);
     setRenegMode('none');
     onClose();
   };
@@ -1055,6 +1172,26 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   };
 
   const handleAttemptClose = async () => {
+    // Renegociação em andamento → oferece rascunho (stand-by) em vez de perder o progresso
+    if (renegMode !== 'none') {
+      const ok = await confirm({
+        title: 'Sair da renegociação?',
+        description:
+          'Salvar como rascunho para continuar depois de onde parou, ou descartar o que foi configurado?',
+        confirmText: 'Salvar rascunho',
+        cancelText: 'Descartar e fechar',
+      });
+      if (ok) {
+        persistRenegStandby();
+        toast.success('Renegociação em rascunho. Abra de novo este aluno para continuar.');
+      } else {
+        clearRenegStandby(student.id);
+        setStandbyDraft(null);
+      }
+      onClose();
+      return;
+    }
+
     const pending = buildPendingSummary();
     if (pending.length === 0) {
       onClose();
@@ -1120,6 +1257,38 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             >
               <X size={14} />
             </button>
+          </div>
+        )}
+
+        {standbyDraft && renegMode === 'none' && (
+          <div className="mx-6 mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 flex items-start gap-2.5 fade-in shadow-sm">
+            <Clock size={16} className="text-sky-700 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-sky-800 leading-snug">Renegociação em rascunho</p>
+              <p className="text-[11px] text-sky-800/90 leading-snug mt-1">
+                Você saiu no meio do fluxo
+                {standbyDraft.savedAt
+                  ? ` (${new Date(standbyDraft.savedAt).toLocaleString('pt-BR')})`
+                  : ''}
+                . Pode continuar de onde parou.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => applyRenegStandby(standbyDraft)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-sky-600 text-white hover:bg-sky-700 transition-colors"
+                >
+                  Continuar de onde parei
+                </button>
+                <button
+                  type="button"
+                  onClick={discardRenegStandby}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
+                >
+                  Descartar rascunho
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1281,7 +1450,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             <div className="overflow-x-auto no-scrollbar">
               <div className="flex gap-1.5 min-w-max py-1">
                 {[...student.installments].sort((a, b) => parseDateLocal(a.dueDate).getTime() - parseDateLocal(b.dueDate).getTime() || a.number - b.number).map((inst) => {
-                  const isOverdue = !inst.paid && parseDateLocal(inst.dueDate) < today;
+                  const isRecompraFundo = isRecompraOuFundoParcela(inst, studentTags);
+                  const isOverdue = !inst.paid && !isRecompraFundo && parseDateLocal(inst.dueDate) < today;
                   return (
                     <div
                       key={inst.number}
@@ -1458,7 +1628,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             ) : (
               unpaidInstallments.map((inst) => {
                 const charges = calculateCharges(inst.value, inst.dueDate, inst.number);
-                const isOverdue = parseDateLocal(inst.dueDate) < today;
+                const isOverdue =
+                  !isRecompraOuFundoParcela(inst, studentTags) && parseDateLocal(inst.dueDate) < today;
                 const isEditing = editingInstallment === inst.number;
                 return (
                   <div
@@ -2055,7 +2226,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   {/* Seleção de parcelas a renegociar — inclui pagas conciliadas
                       (útil para alunos de antecipação Sicoob/TMF/Fundo) */}
                   {(() => {
-                    const overdue = student.installments.filter((i) => !i.paid && parseDateLocal(i.dueDate) < today);
+                    const overdue = student.installments.filter(
+                      (i) =>
+                        !i.paid &&
+                        !isRecompraOuFundoParcela(i, studentTags) &&
+                        parseDateLocal(i.dueDate) < today,
+                    );
                     const futuras = student.installments.filter((i) => !i.paid && parseDateLocal(i.dueDate) >= today);
                     const pagas = student.installments.filter((i) => i.paid);
                     const allUnpaidNums = [...overdue, ...futuras].map((i) => i.number);
@@ -2126,7 +2302,13 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   })()}
 
                   <button
-                    onClick={() => setRenegMode('detailed')}
+                    onClick={() => {
+                      setRenegMode('detailed');
+                      // Salva já no passo de cálculo para retomar no lugar certo
+                      const draft = buildRenegStandby('detailed');
+                      saveRenegStandby(draft);
+                      setStandbyDraft(draft);
+                    }}
                     disabled={renegSelected.length === 0}
                     className="w-full px-3 py-2 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
                   >
@@ -2144,6 +2326,62 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       {applyMultaReneg && <p>Multa ({renegMultaPercent}%): <span className="font-bold text-destructive">{formatCurrency(renegValues.multaValue)}</span></p>}
                       {applyJurosReneg && <p>Juros ({renegJurosPercent}% a.m.): <span className="font-bold text-destructive">{formatCurrency(renegValues.totalJuros)}</span></p>}
                       <p className="border-t pt-1">Total c/ Encargos: <span className="font-bold text-primary">{formatCurrency(renegValues.totalWithCharges)}</span></p>
+                    </div>
+
+                    {/* Ajuste de juros/multa no próprio passo — recalcula na hora */}
+                    <div className="mt-2 pt-2 border-t border-blue-100 space-y-2">
+                      <p className="text-[10px] font-semibold text-blue-800 uppercase tracking-wider">
+                        Testar juros / multa
+                      </p>
+                      <p className="text-[10px] text-muted-foreground leading-snug">
+                        Altere aqui e o valor da parcela recalcula na hora — sem voltar ao passo anterior.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-medium">Multa (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={renegMultaPercent}
+                            onChange={(e) => setRenegMultaPercent(Number(e.target.value))}
+                            disabled={!applyMultaReneg}
+                            className="input-field mt-1 w-full text-xs py-1 disabled:opacity-50"
+                          />
+                          <label className="mt-1 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={applyMultaReneg}
+                              onChange={(e) => setApplyMultaReneg(e.target.checked)}
+                              className="rounded"
+                            />
+                            <span className="text-[10px] text-foreground">Aplicar multa</span>
+                          </label>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-medium">Juros (% a.m.)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={renegJurosPercent}
+                            onChange={(e) => setRenegJurosPercent(Number(e.target.value))}
+                            disabled={!applyJurosReneg}
+                            className="input-field mt-1 w-full text-xs py-1 disabled:opacity-50"
+                          />
+                          <label className="mt-1 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={applyJurosReneg}
+                              onChange={(e) => setApplyJurosReneg(e.target.checked)}
+                              className="rounded"
+                            />
+                            <span className="text-[10px] text-foreground">Aplicar juros</span>
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -2274,27 +2512,43 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   {/* 3 Botões: Voltar / Confirmar / Gerar Termo */}
                   <div className="grid grid-cols-3 gap-2">
                     <button
-                      onClick={() => { setRenegMode('none'); onClose(); }}
+                      onClick={() => setRenegMode('initial')}
                       className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      title="Voltar para a lista de alunos"
+                      title="Voltar para configuração de parcelas e encargos"
                     >
                       <ArrowLeft size={12} /> Voltar
                     </button>
                     <button
-                      onClick={() => setRenegMode('confirm')}
+                      onClick={() => {
+                        const draft = buildRenegStandby('confirm');
+                        saveRenegStandby(draft);
+                        setStandbyDraft(draft);
+                        setRenegMode('confirm');
+                      }}
                       disabled={newInstallments < 1}
                       className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 transition-colors"
                     >
                       <CheckCircle2 size={12} /> Confirmar
                     </button>
                     <button
-                      onClick={() => alert('Geração do Termo Aditivo será integrada ao Zapsign em breve. Esta ação ainda não está disponível.')}
-                      className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-colors"
-                      title="Em breve: vínculo direto com aditivo no Zapsign"
+                      onClick={() => {
+                        persistRenegStandby('detailed');
+                        toast.success('Rascunho salvo. Você pode fechar e continuar depois.');
+                      }}
+                      className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
+                      title="Salva o progresso e permite retomar depois"
                     >
-                      <FileText size={12} /> Gerar Termo
+                      <Clock size={12} /> Rascunho
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => alert('Geração do Termo Aditivo será integrada ao Zapsign em breve. Esta ação ainda não está disponível.')}
+                    className="w-full flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-purple-700 hover:bg-purple-50 transition-colors"
+                    title="Em breve: vínculo direto com aditivo no Zapsign"
+                  >
+                    <FileText size={12} /> Gerar Termo Aditivo (em breve)
+                  </button>
                 </div>
               )}
 
@@ -2346,6 +2600,44 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         <span>Fluxo total do aluno:</span>
                         <span className="font-bold">{paidCountStudent + newInstallments} parcelas</span>
                       </div>
+                    </div>
+
+                    {/* Ajuste fino de juros na confirmação */}
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2.5 space-y-2">
+                      <p className="text-[10px] font-semibold text-emerald-900 uppercase tracking-wider">
+                        Ajustar juros / multa e recalcular
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-medium">Multa (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={renegMultaPercent}
+                            onChange={(e) => setRenegMultaPercent(Number(e.target.value))}
+                            disabled={!applyMultaReneg}
+                            className="input-field mt-0.5 w-full text-xs py-1 disabled:opacity-50"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-medium">Juros (% a.m.)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={renegJurosPercent}
+                            onChange={(e) => setRenegJurosPercent(Number(e.target.value))}
+                            disabled={!applyJurosReneg}
+                            className="input-field mt-0.5 w-full text-xs py-1 disabled:opacity-50"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-emerald-800/80">
+                        Novo valor da parcela atualiza automaticamente: <strong>{formatCurrency(renegValues.newValue)}</strong>
+                      </p>
                     </div>
                   </div>
 
