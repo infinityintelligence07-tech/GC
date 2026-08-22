@@ -13,6 +13,7 @@ import {
   createAppUserDb, updateAppUserDb, deleteAppUserDb,
 } from '@/lib/supabaseMutations';
 import { logActivity, formatBRL } from '@/lib/activityLog';
+import { resolveOriginalCancellationAc } from '@/lib/cancellationOriginalAc';
 
 
 interface AppState {
@@ -589,11 +590,25 @@ export const useAppStore = create<AppState>()(
     };
 
     if (existing) {
+      const wasRevertido = student.statusCancelamento === 'revertido';
+      const originalAc = wasRevertido ? resolveOriginalCancellationAc(existing) : '';
+      const restoreAc = Boolean(originalAc && student.ac !== originalAc);
+
       const reopenEntry = {
         date: now, from: existing.stage, to: 'Aguardando Contato' as CancellationStage,
         operationalStatus: 'Sem contato' as CancellationOperationalStatus,
-        note: 'Cancelamento reaberto via aba Alunos.',
+        note: restoreAc
+          ? `Cancelamento reaberto via aba Alunos. Assessor restaurado para ${originalAc}.`
+          : 'Cancelamento reaberto via aba Alunos.',
       };
+      const studentHistory: HistoryEntry[] = [...student.history, historyEntry];
+      if (restoreAc) {
+        studentHistory.push({
+          date: now,
+          type: 'Sistema',
+          text: `Assessor restaurado para ${originalAc} (carteira original do contrato).`,
+        });
+      }
       const updatedCase: Partial<CancellationCase> = {
         stage: 'Aguardando Contato',
         operationalStatus: 'Sem contato',
@@ -605,6 +620,7 @@ export const useAppStore = create<AppState>()(
         acao: 'Aguardando Contato',
         motivoCancelamento: (motivo as any) ?? existing.motivoCancelamento,
         descricaoCancelamento: motivo ?? existing.descricaoCancelamento,
+        ...(originalAc ? { ac: originalAc } : {}),
         ...(extras ?? {}),
       };
       const updatedStudent = {
@@ -613,7 +629,8 @@ export const useAppStore = create<AppState>()(
         statusCancelamento: 'solicitado' as StatusCancelamento,
         cancellationCaseId: existing.id,
         statusAntesCancelamento: student.status,
-        history: [...student.history, historyEntry],
+        ...(restoreAc ? { ac: originalAc } : {}),
+        history: studentHistory,
       };
       set((state) => ({
         students: state.students.map((st) => st.id === studentId ? { ...st, ...updatedStudent } : st),
@@ -719,14 +736,30 @@ export const useAppStore = create<AppState>()(
       funnelStage: 'Finalizado' as const,
     };
     const historyEntry: HistoryEntry = { date: now, type: 'Sistema', text: 'Cancelamento revertido. Aluno permanece na carteira e status financeiro normalizado.' };
+
+    const originalAc = resolveOriginalCancellationAc(cancCase);
+    const linkedStudentBefore =
+      (cancCase.studentId ? s.students.find((st) => st.id === cancCase.studentId) : undefined)
+      ?? s.students.find((st) => st.cancellationCaseId === caseId);
+    const restoreAc = Boolean(originalAc && linkedStudentBefore && linkedStudentBefore.ac !== originalAc);
+    const acHistoryEntry: HistoryEntry | null = restoreAc
+      ? { date: now, type: 'Sistema', text: `Assessor restaurado para ${originalAc} (carteira original do contrato).` }
+      : null;
     
     set((state) => ({
       cancellationCases: state.cancellationCases.map((c) => c.id === caseId ? { ...c, ...updatedCase } : c),
       students: state.students.map((st) => {
-        if (st.cancellationCaseId !== caseId) return st;
+        if (st.cancellationCaseId !== caseId && st.id !== cancCase.studentId) return st;
         // Revert: volta o status para Automático (auto-calc reprocessa Em Dia/Vencido/etc.)
         const autoStatus = calculateAutoStatus(st.installments);
-        return { ...st, status: autoStatus, statusMode: 'Automático' as const, statusCancelamento: 'revertido' as StatusCancelamento, history: [...st.history, historyEntry] };
+        return {
+          ...st,
+          status: autoStatus,
+          statusMode: 'Automático' as const,
+          statusCancelamento: 'revertido' as StatusCancelamento,
+          ...(restoreAc ? { ac: originalAc } : {}),
+          history: [...st.history, historyEntry, ...(acHistoryEntry ? [acHistoryEntry] : [])],
+        };
       }),
     }));
     updateCancellationCaseDb(caseId, updatedCase).catch(reportDbError("salvar alteração"));
@@ -738,7 +771,13 @@ export const useAppStore = create<AppState>()(
       ?? s.students.find((st) => st.cancellationCaseId === caseId);
     if (linkedStudent) {
       const autoStatus = calculateAutoStatus(linkedStudent.installments);
-      updateStudentDb(linkedStudent.id, { status: autoStatus, statusMode: 'Automático', statusCancelamento: 'revertido', history: [...linkedStudent.history, historyEntry] }).catch(reportDbError("salvar alteração"));
+      updateStudentDb(linkedStudent.id, {
+        status: autoStatus,
+        statusMode: 'Automático',
+        statusCancelamento: 'revertido',
+        ...(restoreAc ? { ac: originalAc } : {}),
+        history: [...linkedStudent.history, historyEntry, ...(acHistoryEntry ? [acHistoryEntry] : [])],
+      }).catch(reportDbError("salvar alteração"));
     }
     // Espelha a reversão para a aba de Conciliação (nova negociação no Kamino)
     import('@/store/useConciliacaoStore').then(({ registrarConciliacao, buildStudentSnapshot }) => {

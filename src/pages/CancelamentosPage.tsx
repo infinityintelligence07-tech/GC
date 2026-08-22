@@ -166,6 +166,22 @@ function getFunnelStage(c: CancellationCase): FunnelStage {
   return c.funnelStage ?? stageToFunnel(c.stage);
 }
 
+/**
+ * Caso ainda em fluxo ativo (Entrada, Tratativas ou Distrato em andamento).
+ * Nesses estágios não forçamos a coluna Finalizado por conciliações antigas.
+ */
+function isActiveCancellationWorkflow(c: CancellationCase): boolean {
+  const fs = getFunnelStage(c);
+  if (fs === 'Entrada' || fs === 'Em Execução' || fs === 'Pendente') return true;
+  if (fs === 'Formalização') {
+    const acao = (c.acao ?? '').trim();
+    const stage = c.stage ?? '';
+    if (acao === 'Assinar Termo' || stage === 'Assinar Termo') return false;
+    return true;
+  }
+  return false;
+}
+
 // ─── Constantes auxiliares (KPIs) ─────────────────────────────────────────────
 
 const FINAL_STAGES: CancellationStage[] = ['Recuperado', 'Cancelado', 'Negativação Retirada', 'Negativação Efetivada'];
@@ -2804,12 +2820,14 @@ export default function CancelamentosPage() {
   };
   const isAguardandoConciliacao = (c: CancellationCase): boolean => {
     if (hasReversaoParcialPendente(c)) return false;
+    if (isActiveCancellationWorkflow(c)) return false;
     if (pendingConciliacaoCaseIds.has(c.id)) return true;
     const st = students.find((s) => s.id === c.studentId) ?? (c.studentId ? undefined : students.find((s) => s.cancellationCaseId === c.id));
     return st?.statusCancelamento === 'aguardando_conciliacao';
   };
   const isCancelamentoConciliado = (c: CancellationCase): boolean =>
     !hasReversaoParcialPendente(c) &&
+    !isActiveCancellationWorkflow(c) &&
     conciliadoCancelCaseIds.has(c.id) &&
     !pendingConciliacaoCaseIds.has(c.id);
   const effectiveFunnel = (c: CancellationCase): FunnelStage =>
