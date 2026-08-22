@@ -30,16 +30,21 @@ export function normalizeProductName(product?: string | null): string {
 }
 
 /**
- * Produtos que NÃO entram na esteira automática (IPR / Imersão Prosperar /
- * Imersão de Negócios). Ficam sem AC até atribuição manual (ou AC já informado).
+ * IPR / Imersão Prosperar / Imersão de Negócios — fora do escopo do GC
+ * (sync IAM, esteira e carteira).
  */
-export function isProductExcludedFromEsteira(product?: string | null): boolean {
+export function isProductExcludedFromGc(product?: string | null): boolean {
   const p = normalizeProductName(product);
   if (!p) return false;
   if (p === 'ipr' || p.startsWith('ipr ') || p.endsWith(' ipr') || p.includes(' ipr ')) return true;
   if (p.includes('imersao prosperar')) return true;
   if (p.includes('imersao de negocios')) return true;
   return false;
+}
+
+/** @deprecated Use isProductExcludedFromGc — mesma regra da esteira. */
+export function isProductExcludedFromEsteira(product?: string | null): boolean {
+  return isProductExcludedFromGc(product);
 }
 
 /** Ordem estável dos ACs ativos (created_at, depois name) — igual ao SQL. */

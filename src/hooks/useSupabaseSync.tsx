@@ -10,8 +10,15 @@ import { useNotificationsStore } from '@/store/useNotificationsStore';
 import { useCommissionsStore } from '@/store/useCommissionsStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useCompanyStore } from '@/store/useCompanyStore';
-import type { AC, Product, StudentTag, FinancialRules } from '@/types';
+import type { AC, Product, Student, StudentTag, FinancialRules } from '@/types';
 import { rowToStudent, rowToCancellationCase, rowToAppUser, rowToAntecipacaoItem, rowToConciliacaoItem, rowToConciliacaoImportError } from '@/lib/supabaseMutations';
+import { isProductExcludedFromGc } from '@/lib/acEsteira';
+
+function isStudentHiddenFromGc(s: Student): boolean {
+  if (isProductExcludedFromGc(s.product)) return true;
+  // Sync IAM de IPR/Imersão costuma vir sem produto preenchido (só sigla no payload).
+  return Boolean(s.iamControlAlunoId) && !String(s.product ?? '').trim();
+}
 
 // Pagina resultados acima do limite default do Supabase (1000 linhas).
 // Sem isso, tabelas com 1001+ registros (ex.: students) chegavam truncadas
@@ -101,7 +108,7 @@ async function fetchAll(activeCompanyId?: string | null) {
       }
     : null;
 
-  const students = (studentsRes.data ?? []).map(rowToStudent);
+  const students = (studentsRes.data ?? []).map(rowToStudent).filter((s) => !isStudentHiddenFromGc(s));
   const cancellationCases = (casesRes.data ?? []).map(rowToCancellationCase);
   const ucRows = (userCompaniesRes.data ?? []) as Array<{ user_id: string; company_id: string }>;
   const ucByAuthId = new Map<string, string[]>();

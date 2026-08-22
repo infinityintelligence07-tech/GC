@@ -8,6 +8,7 @@ import CurrencyInput from '@/components/ui/CurrencyInput';
 import { getTagStyle } from '@/lib/tagColors';
 import { isProductExcludedFromEsteira } from '@/lib/acEsteira';
 import { findDuplicateStudent } from '@/lib/studentIdentity';
+import { openIamControlContrato } from '@/lib/iamControlContrato';
 
 interface Props {
   student?: Student | null;
@@ -58,6 +59,7 @@ export default function StudentModal({ student, onClose }: Props) {
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const tagPickerRef = useRef<HTMLDivElement>(null);
   const [studentTagIds, setStudentTagIds] = useState<string[]>([]);
+  const [contratoBusy, setContratoBusy] = useState(false);
   useEffect(() => {
     setStudentTagIds(student ? (student.tags || []).filter(Boolean) : []);
     // Depende apenas do id do aluno — evita reset a cada re-render do parent
@@ -119,6 +121,27 @@ export default function StudentModal({ student, onClose }: Props) {
   }, [student?.id]);
 
   const installmentValue = calculateInstallmentValue(form.saleValue, form.downPayment, form.totalInstallments);
+
+  const handleVisualizarContrato = async () => {
+    if (!student) return;
+    if (!student.iamControlAlunoId) {
+      toast.error('Aluno sem vínculo com o IAM Control — contrato indisponível.');
+      return;
+    }
+    setContratoBusy(true);
+    try {
+      const res = await openIamControlContrato(student);
+      toast.success(
+        res.treinamento
+          ? `Contrato aberto: ${res.treinamento}`
+          : 'Contrato aberto.',
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível abrir o contrato.');
+    } finally {
+      setContratoBusy(false);
+    }
+  };
 
   const handleSave = () => {
     if (!form.name.trim()) return;
@@ -683,11 +706,18 @@ export default function StudentModal({ student, onClose }: Props) {
         <div className="p-6 border-t border-border flex gap-3 justify-end flex-wrap">
           {student && (
             <button
-              onClick={() => alert('Sincronização Zapsign em breve. O contrato será carregado diretamente do Zapsign.')}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all flex items-center gap-1.5"
-              title="Visualizar contrato sincronizado do Zapsign (em breve)"
+              type="button"
+              onClick={() => void handleVisualizarContrato()}
+              disabled={contratoBusy || !student.iamControlAlunoId}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={
+                student.iamControlAlunoId
+                  ? 'Abre o contrato conciliado deste aluno no IAM Control (mesmo treinamento da ficha).'
+                  : 'Disponível apenas para alunos sincronizados com o IAM Control.'
+              }
             >
-              <FileText size={14} /> Visualizar Contrato
+              <FileText size={14} />
+              {contratoBusy ? 'Abrindo contrato...' : 'Visualizar Contrato'}
             </button>
           )}
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors">
