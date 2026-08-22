@@ -3328,20 +3328,9 @@ export default function CancelamentosPage() {
                     <div className={`flex items-center justify-between gap-2 px-3 py-2 h-11 rounded-t-xl ${f.color} text-white`}>
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <span className="shrink-0">{f.icon}</span>
-                        {f.label === 'Formalização' ? (
-                          <button
-                            type="button"
-                            onClick={() => setDistratoMetricsOpen(true)}
-                            className="text-[11px] font-bold uppercase tracking-wide whitespace-nowrap truncate underline decoration-white/50 underline-offset-2 hover:decoration-white transition-colors text-left"
-                            title="Ver indicadores do Distrato do Contrato"
-                          >
-                            {f.displayLabel}
-                          </button>
-                        ) : (
-                          <span className="text-[11px] font-bold uppercase tracking-wide whitespace-nowrap truncate" title={f.displayLabel}>
-                            {f.displayLabel}
-                          </span>
-                        )}
+                        <span className="text-[11px] font-bold uppercase tracking-wide whitespace-nowrap truncate" title={f.displayLabel}>
+                          {f.displayLabel}
+                        </span>
                       </div>
 
                       <span className="shrink-0 text-[10px] bg-white/20 px-2 py-0.5 rounded-full">
