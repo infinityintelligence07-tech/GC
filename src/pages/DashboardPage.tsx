@@ -910,6 +910,7 @@ export default function DashboardPage() {
   const rankingStudents = studentsForAcRanking(
     kpiStudents,
     getHiddenFromAcPortfolioKeys(cancellationCases, conciliacaoItems, students),
+    students,
   );
   const rankingRows = acs
     .filter((ac) => ac.active)
@@ -1783,6 +1784,7 @@ export default function DashboardPage() {
         students={studentsForAcRanking(
           kpiStudents,
           getHiddenFromAcPortfolioKeys(cancellationCases, conciliacaoItems, students),
+          students,
         )}
         renegByAc={renegByAc}
         referenceDate={mode === 'historico' && historicoEnd ? new Date(historicoEnd + 'T23:59:59') : undefined}

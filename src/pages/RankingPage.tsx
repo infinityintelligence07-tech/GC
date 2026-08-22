@@ -78,6 +78,7 @@ export default function RankingPage() {
             : s,
         ),
         hiddenKeys,
+        students,
       ),
     [students, hiddenKeys],
   );
@@ -100,6 +101,7 @@ export default function RankingPage() {
               : calculateAutoStatusAt(s.installments, ref),
         })),
       hiddenKeys,
+      students,
     );
   }, [students, endDate, hiddenKeys]);
 

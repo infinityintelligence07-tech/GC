@@ -20,6 +20,7 @@ import { useConfirm } from '@/hooks/useConfirm';
 import { openCancellationPdf, downloadCancellationPdf, isViewableInBrowser } from '@/lib/openCancellationPdf';
 import type { CaseNoteAttachment } from '@/types';
 import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
+import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
 
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
@@ -1339,8 +1340,7 @@ export default function ConciliacaoPage() {
     try {
       const { ensureReversalCommission } = await import('@/lib/ensureReversalCommission');
       for (const it of group.items) {
-        const isReversao = it.tipo === 'reversao' || (it.tipo === 'cancelamento' && /revers/i.test(it.resumo ?? ''));
-        if (isReversao && it.relatedCaseId) ensureReversalCommission(it.relatedCaseId);
+        if (isConciliacaoReversaoItem(it) && it.relatedCaseId) ensureReversalCommission(it.relatedCaseId);
       }
     } catch (e) {
       console.error('[conciliar] aprovar comissão falhou:', e);
@@ -1351,7 +1351,7 @@ export default function ConciliacaoPage() {
       if (it.tipo === 'renda_extra_exclusao' && it.studentId) {
         setRendaExtraStatus(it.studentId, 'Disponível Negociação');
       }
-      if (it.tipo === 'cancelamento' && it.relatedCaseId) {
+      if (it.tipo === 'cancelamento' && it.relatedCaseId && !isConciliacaoReversaoItem(it)) {
         concluirConciliacaoCancelamento(it.relatedCaseId);
       }
       // ─── Quitação: baixa ocorre APENAS na aprovação da conciliação ─────
@@ -1462,8 +1462,7 @@ export default function ConciliacaoPage() {
     try {
       const { ensureReversalCommission } = await import('@/lib/ensureReversalCommission');
       for (const it of group.items) {
-        const isReversao = it.tipo === 'reversao' || (it.tipo === 'cancelamento' && /revers/i.test(it.resumo ?? ''));
-        if (isReversao && it.relatedCaseId) ensureReversalCommission(it.relatedCaseId);
+        if (isConciliacaoReversaoItem(it) && it.relatedCaseId) ensureReversalCommission(it.relatedCaseId);
       }
     } catch (e) {
       console.error('[aprovar] aprovar comissão falhou:', e);

@@ -6,9 +6,34 @@ export function isSolicitacaoCancelamento(s: Student): boolean {
   return s.statusCancelamento === 'solicitado' || s.status === 'Solicitação Cancelamento';
 }
 
+function normalizeStudentName(name?: string | null): string {
+  return (name || '').trim().toLowerCase();
+}
+
+/** Nome único no cadastro — fallback seguro quando o caso não tem `studentId`. */
+function isUniqueStudentName(name: string, students: Student[]): boolean {
+  const norm = normalizeStudentName(name);
+  if (!norm) return false;
+  return students.filter((s) => normalizeStudentName(s.name) === norm).length === 1;
+}
+
+export function isStudentHiddenFromAcPortfolio(
+  student: Student,
+  hidden: { ids: Set<string>; names: Set<string> },
+  allStudents: Student[],
+): boolean {
+  if (hidden.ids.has(student.id)) return true;
+  const norm = normalizeStudentName(student.name);
+  if (hidden.names.has(norm) && isUniqueStudentName(student.name, allStudents)) return true;
+  return false;
+}
+
 /**
  * Alunos que saem da carteira do assessor (Kanban judicial / finalizado),
  * espelhando a regra de `ACPortfolioPage`.
+ *
+ * Ocultação por contrato (`studentId`). Nome só entra quando o caso legado
+ * não tem vínculo explícito — e na filtragem só afeta aluno com nome único.
  */
 export function getHiddenFromAcPortfolioKeys(
   cancellationCases: CancellationCase[],
@@ -51,8 +76,11 @@ export function getHiddenFromAcPortfolioKeys(
     const isFinalizado = c.funnelStage === 'Finalizado' || aguardando || conciliado;
     if (!isJudicial && !isFinalizado) return;
 
-    if (c.studentId) ids.add(c.studentId);
-    if (c.studentName) names.add(c.studentName.trim().toLowerCase());
+    if (c.studentId) {
+      ids.add(c.studentId);
+    } else if (c.studentName) {
+      names.add(normalizeStudentName(c.studentName));
+    }
   });
 
   return { ids, names };
@@ -62,10 +90,10 @@ export function getHiddenFromAcPortfolioKeys(
 export function studentsForAcRanking(
   students: Student[],
   hidden: { ids: Set<string>; names: Set<string> },
+  allStudents: Student[] = students,
 ): Student[] {
   return students.filter((s) => {
-    if (hidden.ids.has(s.id)) return false;
-    if (hidden.names.has((s.name || '').trim().toLowerCase())) return false;
+    if (isStudentHiddenFromAcPortfolio(s, hidden, allStudents)) return false;
     if (s.status === 'Pago') return false;
     if (s.statusCancelamento === 'cancelado') return false;
     if (isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão') {

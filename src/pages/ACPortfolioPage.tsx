@@ -15,7 +15,11 @@ import { getCurrentMonthDates } from '@/lib/periodFilter';
 import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, CalendarClock, AlertTriangle, Coins, Star, Wallet, X, Tag, ChevronUp, ChevronDown } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
-import { getHiddenFromAcPortfolioKeys, isSolicitacaoCancelamento } from '@/lib/acPortfolioVisibility';
+import {
+  getHiddenFromAcPortfolioKeys,
+  isSolicitacaoCancelamento,
+  isStudentHiddenFromAcPortfolio,
+} from '@/lib/acPortfolioVisibility';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -176,7 +180,7 @@ export default function ACPortfolioPage() {
     if (!ac) { setAcStudents([]); return; }
     const base = students
       .filter((s) => s.ac === ac.name)
-      .filter((s) => !(hiddenFromPortfolioKeys.ids.has(s.id) || hiddenFromPortfolioKeys.names.has((s.name || '').trim().toLowerCase())))
+      .filter((s) => !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students))
       .filter((s) => studentMatchesTagFilter(s, tagFilters))
       .map((s) => {
         const baseStatus = (s.status === 'Cancelado' || s.statusCancelamento === 'cancelado')
