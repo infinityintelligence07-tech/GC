@@ -72,8 +72,37 @@ function appendStudentHistoryConciliacao(
 // Encontra o acId pelo nome (string) usado em ConciliacaoItem.ac
 function findAcIdByName(name?: string): string | undefined {
   if (!name) return undefined;
+  const needle = name.trim().toLowerCase();
+  if (!needle) return undefined;
   const acs = useAppStore.getState().acs;
-  return acs.find((a) => a.name === name)?.id;
+  return acs.find((a) => a.name.trim().toLowerCase() === needle)?.id;
+}
+
+/** Resolve o AC destinatário da notificação (item → aluno → autor). */
+function resolveAcIdForConciliacao(item: ConciliacaoItem): string | undefined {
+  const byName = findAcIdByName(item.ac);
+  if (byName) return byName;
+  if (item.studentId) {
+    const st = useAppStore.getState().students.find((s) => s.id === item.studentId);
+    const fromStudent = findAcIdByName(st?.ac);
+    if (fromStudent) return fromStudent;
+  }
+  // Autor do ajuste pode estar vinculado a um AC
+  if (item.autorId) {
+    const users = useAppStore.getState().appUsers ?? [];
+    const autor = users.find((u) => u.id === item.autorId);
+    if (autor?.acId) return autor.acId;
+  }
+  return undefined;
+}
+
+function resolveAutorUserId(item: ConciliacaoItem): string | undefined {
+  if (!item.autorId) return undefined;
+  // app_users.id pode ser diferente de auth uid — a coluna notifications.user_id
+  // espera auth.users id. Preferimos o auth_user_id se existir no store.
+  const users = useAppStore.getState().appUsers ?? [];
+  const autor = users.find((u) => u.id === item.autorId);
+  return (autor as { authUserId?: string } | undefined)?.authUserId ?? undefined;
 }
 
 export const useConciliacaoStore = create<ConciliacaoState>()((set, get) => ({
@@ -123,10 +152,12 @@ export const useConciliacaoStore = create<ConciliacaoState>()((set, get) => ({
     // Em conciliações em lote (mesmo aluno) o chamador passa silent=true
     // e dispara UMA notificação consolidada via notifyConciliacaoGrupo.
     if (item && !opts?.silent) {
-      const acId = findAcIdByName(item.ac);
-      if (acId) {
+      const acId = resolveAcIdForConciliacao(item);
+      const userId = resolveAutorUserId(item);
+      if (acId || userId) {
         useNotificationsStore.getState().notify({
           acId,
+          userId,
           type: 'conciliacao_aprovada',
           title: 'Conciliação aprovada ✓',
           body: `${item.studentName} — ${item.resumo}`,
@@ -182,10 +213,12 @@ export const useConciliacaoStore = create<ConciliacaoState>()((set, get) => ({
     // Notifica o AC autor — sinaliza que o ajuste foi aprovado mas ainda
     // não foi efetivado no Kamino.
     if (item && !opts?.silent) {
-      const acId = findAcIdByName(item.ac);
-      if (acId) {
+      const acId = resolveAcIdForConciliacao(item);
+      const userId = resolveAutorUserId(item);
+      if (acId || userId) {
         useNotificationsStore.getState().notify({
           acId,
+          userId,
           type: 'conciliacao_pre_aprovada',
           title: 'Ajuste aprovado ✓ (aguardando conciliação)',
           body: `${item.studentName} — ${item.resumo}`,
@@ -224,15 +257,19 @@ export const useConciliacaoStore = create<ConciliacaoState>()((set, get) => ({
 
     // Notifica o AC autor (Item 3) — clique abre Gestão Financeira do aluno
     if (item && !opts?.silent) {
-      const acId = findAcIdByName(item.ac);
-      if (acId) {
+      const acId = resolveAcIdForConciliacao(item);
+      const userId = resolveAutorUserId(item);
+      if (acId || userId) {
         useNotificationsStore.getState().notify({
           acId,
+          userId,
           type: 'conciliacao_reprovada',
-          title: 'Ajuste reprovado ✗',
+          title: 'Conciliação recusada ✗ — resolver',
           body: `${item.studentName}: ${motivo}`,
           meta: { studentId: item.studentId, conciliacaoItemId: item.id, tipo: item.tipo, motivo },
         });
+      } else {
+        console.warn('[conciliacao.reprovar] Sem AC/autor para notificar', item.id, item.ac, item.studentName);
       }
     }
   },
@@ -523,8 +560,12 @@ export function notifyConciliacaoGrupo(
 ): void {
   if (!items.length) return;
   const first = items[0];
-  const acId = findAcIdByName(first.ac);
-  if (!acId) return;
+  const acId = resolveAcIdForConciliacao(first);
+  const userId = resolveAutorUserId(first);
+  if (!acId && !userId) {
+    console.warn('[notifyConciliacaoGrupo] Sem AC/autor para notificar', first.studentName, first.ac);
+    return;
+  }
   const studentName = first.studentName;
   const qtd = items.length;
   const resumos = items.map((i) => `• ${i.resumo}`).join('\n');
@@ -547,13 +588,16 @@ export function notifyConciliacaoGrupo(
       : `${studentName} — ${first.resumo}`;
   } else {
     type = 'conciliacao_reprovada';
-    title = qtd > 1 ? `${qtd} ajustes reprovados ✗` : 'Ajuste reprovado ✗';
+    title = qtd > 1
+      ? `${qtd} ajustes recusados ✗ — resolver`
+      : 'Conciliação recusada ✗ — resolver';
     body = qtd > 1
-      ? `${studentName} — ${qtd} alterações reprovadas:\n${resumos}${motivo ? `\nMotivo: ${motivo}` : ''}`
-      : `${studentName}${motivo ? `: ${motivo}` : ` — ${first.resumo}`}`;
+      ? `${studentName} — ${qtd} alterações recusadas:\n${resumos}${motivo ? `\nMotivo: ${motivo}` : ''}\n\nAbra a gestão financeira do aluno para corrigir.`
+      : `${studentName}${motivo ? `: ${motivo}` : ` — ${first.resumo}`}\n\nAbra a gestão financeira do aluno para corrigir.`;
   }
   useNotificationsStore.getState().notify({
     acId,
+    userId,
     type,
     title,
     body,

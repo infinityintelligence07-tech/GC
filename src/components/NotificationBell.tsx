@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Wallet, Check, X as XIcon, AlertCircle, ExternalLink } from 'lucide-react';
 import { useNotificationsStore, notificationsForAC, unreadCountForAC } from '@/store/useNotificationsStore';
+import { useAppStore } from '@/store/useAppStore';
 import type { Notification } from '@/types';
 
 interface Props {
@@ -35,20 +36,37 @@ function iconFor(type: Notification['type']) {
   switch (type) {
     case 'vencimento_hoje': return <Wallet size={14} className="text-amber-500" />;
     case 'conciliacao_aprovada': return <Check size={14} className="text-emerald-600" />;
+    case 'conciliacao_pre_aprovada': return <Check size={14} className="text-sky-600" />;
     case 'conciliacao_reprovada': return <XIcon size={14} className="text-rose-600" />;
     case 'renda_extra': return <AlertCircle size={14} className="text-blue-500" />;
-    default: return <AlertCircle size={14} className="text-muted-foreground" />;
+    case 'sistema': return <AlertCircle size={14} className="text-muted-foreground" />;
+    default: {
+      const _exhaustive: never = type;
+      void _exhaustive;
+      return <AlertCircle size={14} className="text-muted-foreground" />;
+    }
   }
 }
 
 export default function NotificationBell({ acId, onOpenStudent }: Props) {
   const notifications = useNotificationsStore((s) => s.notifications);
   const markAllReadForAC = useNotificationsStore((s) => s.markAllReadForAC);
+  const currentUser = useAppStore((s) => s.currentUser);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const myNotifs = useMemo(() => notificationsForAC(notifications, acId), [notifications, acId]);
-  const unread = useMemo(() => unreadCountForAC(notifications, acId), [notifications, acId]);
+  const filterOpts = useMemo(
+    () => ({ userId: currentUser?.authUserId ?? currentUser?.id ?? null }),
+    [currentUser?.authUserId, currentUser?.id],
+  );
+  const myNotifs = useMemo(
+    () => notificationsForAC(notifications, acId, filterOpts),
+    [notifications, acId, filterOpts],
+  );
+  const unread = useMemo(
+    () => unreadCountForAC(notifications, acId, filterOpts),
+    [notifications, acId, filterOpts],
+  );
 
   // Fecha ao clicar fora
   useEffect(() => {

@@ -74,10 +74,26 @@ export const useNotificationsStore = create<NotificationsState>()((set, get) => 
 }));
 
 // Helpers de filtragem usados pelos componentes
-export function notificationsForAC(notifs: Notification[], acId: string): Notification[] {
-  return notifs.filter((n) => n.acId === acId);
+export function notificationsForAC(
+  notifs: Notification[],
+  acId: string,
+  opts?: { userId?: string | null },
+): Notification[] {
+  return notifs.filter(
+    (n) =>
+      n.acId === acId ||
+      (!!opts?.userId && n.userId === opts.userId),
+  );
 }
 
-export function unreadCountForAC(notifs: Notification[], acId: string): number {
-  return notifs.filter((n) => n.acId === acId && !n.readAt).length;
+export function unreadCountForAC(
+  notifs: Notification[],
+  acId: string,
+  opts?: { userId?: string | null },
+): number {
+  return notifs.filter(
+    (n) =>
+      (n.acId === acId || (!!opts?.userId && n.userId === opts.userId)) &&
+      !n.readAt,
+  ).length;
 }
