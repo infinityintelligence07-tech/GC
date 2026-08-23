@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { aplicarResumoUpsertIam } from '../_shared/iamUpsertResumo.ts';
 
 const SYNC_STATE_ID = 'clientes';
 const TAMANHO_PAGINA = 200;
@@ -155,24 +156,7 @@ Deno.serve(async (req: Request) => {
           if (resumo.ocorrencias.length < 25) resumo.ocorrencias.push(error.message);
           continue;
         }
-        switch (data?.acao) {
-          case 'criado':
-            resumo.criados++;
-            break;
-          case 'atualizado':
-            resumo.atualizados++;
-            break;
-          case 'ambiguo':
-            resumo.ambiguos++;
-            if (resumo.ocorrencias.length < 25) {
-              resumo.ocorrencias.push(
-                `ambiguo aluno ${data?.iam_control_aluno_id}: ${data?.motivo ?? ''}`,
-              );
-            }
-            break;
-          default:
-            resumo.ignorados++;
-        }
+        aplicarResumoUpsertIam(data, resumo);
       }
 
       paginasProcessadas++;

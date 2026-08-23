@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { aplicarResumoUpsertIam } from '../_shared/iamUpsertResumo.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -93,19 +94,7 @@ Deno.serve(async (req: Request) => {
       if (resumo.ocorrencias.length < 25) resumo.ocorrencias.push(error.message);
       continue;
     }
-    switch (data?.acao) {
-      case 'criado':
-        resumo.criados++;
-        break;
-      case 'atualizado':
-        resumo.atualizados++;
-        break;
-      case 'ambiguo':
-        resumo.ambiguos++;
-        break;
-      default:
-        break;
-    }
+    aplicarResumoUpsertIam(data, resumo);
   }
 
   return json(200, { ok: resumo.erros === 0, resumo });
