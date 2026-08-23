@@ -1363,11 +1363,16 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 .map(([num, val]) => ({ num: Number(num), val: Number(val) || 0 }))
                 .filter((e) => e.val > 0.0049)
                 .sort((a, b) => a.num - b.num);
-              const cols = 4
+              const cols = 5
                 + ((student.downPayment ?? 0) > 0 ? 1 : 0)
                 + (encargosHistoricoTotal > 0.0049 ? 1 : 0)
                 + (hasAtribuidos ? 1 : 0);
-              const colsClass = cols >= 7 ? 'grid-cols-7' : cols === 6 ? 'grid-cols-6' : cols === 5 ? 'grid-cols-5' : 'grid-cols-4';
+              const colsClass =
+                cols >= 8 ? 'grid-cols-8'
+                : cols >= 7 ? 'grid-cols-7'
+                : cols === 6 ? 'grid-cols-6'
+                : cols === 5 ? 'grid-cols-5'
+                : 'grid-cols-4';
               return (
             <div className={`grid ${colsClass} gap-2 mb-3`}>
               <div className="p-2 bg-card border border-border rounded-lg">
@@ -1436,6 +1441,20 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 <p className="text-xs font-bold text-rose-700">
                   {formatCurrency(totalOverdueSemEncargos)}
                 </p>
+              </div>
+              <div
+                className="p-2 bg-violet-50 border border-violet-300 rounded-lg"
+                title="Entrada + parcelas já pagas — valor que já abateu do contrato"
+              >
+                <p className="text-[9px] text-violet-700 uppercase tracking-wide">Saldo p/ Abater</p>
+                <p className="text-xs font-bold text-violet-800">
+                  {formatCurrency(totalPagoContrato)}
+                </p>
+                {(student.downPayment ?? 0) > 0 && (
+                  <p className="text-[9px] text-violet-600/90 mt-0.5">
+                    entrada {formatCurrency(student.downPayment ?? 0)}
+                  </p>
+                )}
               </div>
               <div className="p-2 bg-slate-100 border border-slate-300 rounded-lg">
                 <p className="text-[9px] text-slate-700 uppercase tracking-wide">Total Aberto</p>
