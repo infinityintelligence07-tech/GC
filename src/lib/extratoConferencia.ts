@@ -13,10 +13,22 @@ export interface ExtratoLinha {
   tipoConciliacao?: string;
   credito: number;
   debito: number;
+  entradaConta?: number;
   saldoExtrato: number;
   saldoDashboard?: number;
   diferenca?: number;
   neutro?: boolean;
+}
+
+export interface EntradaConta {
+  id: string;
+  studentName: string;
+  ac: string;
+  valor: number;
+  parcela?: number;
+  paidDate: string;
+  descricao: string;
+  fonte: 'parcela' | 'kamino' | 'conciliacao';
 }
 
 export interface ExtratoDiaResumo {
@@ -79,6 +91,81 @@ function extractCarteiraValor(obj: Record<string, unknown>): number | null {
 }
 
 const TIPOS_NEUTROS = new Set(['pagamento_parcela', 'baixa_kamino']);
+const TIPOS_ENTRADA_CONTA = new Set(['pagamento_parcela', 'baixa_kamino', 'quitacao', 'renda_extra_acordo']);
+
+function extractValorEntrada(depois: Record<string, unknown>): number {
+  const valor = Number(depois.paidValue ?? depois.valor ?? depois.valorPago ?? 0);
+  return Number.isFinite(valor) && valor > 0 ? Math.round(valor * 100) / 100 : 0;
+}
+
+/** Quanto entrou na conta (pagamentos recebidos) em uma data específica. */
+export function computeEntradasNaData(
+  students: Student[],
+  conciliacaoItems: ConciliacaoItem[],
+  dateISO: string,
+  acFilter?: string,
+): { total: number; qtd: number; entradas: EntradaConta[] } {
+  const entradas: EntradaConta[] = [];
+  const seen = new Set<string>();
+
+  for (const st of students) {
+    if (acFilter && st.ac !== acFilter) continue;
+    for (const inst of st.installments) {
+      if (!inst.paid || !inst.paidDate || inst.paidDate !== dateISO) continue;
+      const valor = Math.round(Number(inst.paidValue ?? inst.value ?? 0) * 100) / 100;
+      if (valor <= 0) continue;
+      const key = `${st.id}-${inst.number}-${dateISO}`;
+      seen.add(key);
+      entradas.push({
+        id: key,
+        studentName: st.name,
+        ac: st.ac,
+        valor,
+        parcela: inst.number,
+        paidDate: dateISO,
+        descricao: `Parcela ${inst.number} recebida`,
+        fonte: 'parcela',
+      });
+    }
+  }
+
+  for (const it of conciliacaoItems) {
+    if (it.status !== 'conciliado' || !TIPOS_ENTRADA_CONTA.has(it.tipo)) continue;
+    if (acFilter && it.ac !== acFilter) continue;
+
+    const depois = it.depois ?? {};
+    const paidDate =
+      typeof depois.paidDate === 'string' && depois.paidDate
+        ? depois.paidDate
+        : it.conciliadoAt
+          ? toBrasiliaDate(it.conciliadoAt)
+          : '';
+    if (paidDate !== dateISO) continue;
+
+    const valor = extractValorEntrada(depois);
+    if (valor <= 0) continue;
+
+    const parcela = Number(depois.parcela ?? depois.numero ?? 0) || undefined;
+    const dedupeKey = `${it.studentId ?? it.studentName}-${parcela ?? 'x'}-${dateISO}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    entradas.push({
+      id: `conc-${it.id}`,
+      studentName: it.studentName,
+      ac: it.ac ?? '',
+      valor,
+      parcela,
+      paidDate: dateISO,
+      descricao: it.resumo || labelTipo(it.tipo),
+      fonte: it.tipo === 'baixa_kamino' ? 'kamino' : 'conciliacao',
+    });
+  }
+
+  entradas.sort((a, b) => b.valor - a.valor);
+  const total = Math.round(entradas.reduce((s, e) => s + e.valor, 0) * 100) / 100;
+  return { total, qtd: entradas.length, entradas };
+}
 
 /** Impacto na Carteira Total (positivo = entra, negativo = sai). */
 export function computeConciliacaoImpacto(item: ConciliacaoItem): number {
@@ -236,6 +323,9 @@ export function buildExtratoConferencia(input: {
       const date = toBrasiliaDate(it.conciliadoAt!);
       const impacto = computeConciliacaoImpacto(it);
       const neutro = TIPOS_NEUTROS.has(it.tipo);
+      const entradaConta = neutro || TIPOS_ENTRADA_CONTA.has(it.tipo)
+        ? extractValorEntrada(it.depois ?? {})
+        : 0;
       let credito = 0;
       let debito = 0;
       if (!neutro) {
@@ -253,6 +343,7 @@ export function buildExtratoConferencia(input: {
         tipoConciliacao: it.tipo,
         credito,
         debito,
+        entradaConta: entradaConta > 0 ? entradaConta : undefined,
         saldoExtrato: 0,
         neutro,
         impacto,
