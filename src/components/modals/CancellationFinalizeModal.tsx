@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { CancellationCase, Student } from '@/types';
 import { useAppStore, formatCurrency } from '@/store/useAppStore';
+import { createIamCancelamentoTermo } from '@/lib/iamControlTermo';
+import { toast } from 'sonner';
 import { X, FileText, Download, Send, Check } from 'lucide-react';
 
 interface Props {
@@ -18,11 +20,12 @@ interface Props {
  *  - cancelar: Termo de Cancelamento (encerra o vínculo)
  *
  * Permite preview, download (impressão) e envio do link ao aluno.
- * Sincroniza com o sistema Zapsign (placeholder — apenas UI).
+ * Sincroniza com ZapSign via IAM Control (termo de cancelamento).
  */
 export default function CancellationFinalizeModal({ caseRef, type, student, onClose, onConfirm, allowChooseOutcome = false }: Props) {
   const { updateCancellationCase } = useAppStore();
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<'reverter' | 'cancelar'>(type);
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -94,17 +97,56 @@ export default function CancellationFinalizeModal({ caseRef, type, student, onCl
     win.document.close();
   };
 
-  // Sincroniza com Zapsign (placeholder — aqui só salva referência)
-  const handleSendToZapsign = () => {
-    const fakeZapsignLink = `https://zapsign.com.br/sign/${caseRef.id}-${Date.now()}`;
-    updateCancellationCase(caseRef.id, {
-      termTemplate: documento,
-      termAttachments: [
-        ...(caseRef.termAttachments ?? []),
-        { name: `${titulo}.pdf`, url: fakeZapsignLink, uploadedAt: new Date().toISOString(), type: 'termo_assinado' },
-      ],
-    });
-    setSent(true);
+  const handleSendToZapsign = async () => {
+    if (isReverter) {
+      toast.error('Aditivo de contrato ainda não está integrado à ZapSign. Use Gerar PDF.');
+      return;
+    }
+    if (!student?.iamControlAlunoId) {
+      toast.error('Aluno sem vínculo com IAM Control.');
+      return;
+    }
+
+    const totalPaid = (student.installments ?? []).filter((i) => i.paid).reduce((s, i) => s + i.value, 0)
+      + (Number(student.downPayment) || 0);
+    const fineValue = caseRef.cancellationFineValue ?? caseRef.multaValue ?? 0;
+    const balance = Math.round((fineValue - totalPaid) * 100) / 100;
+
+    setSending(true);
+    try {
+      const result = await createIamCancelamentoTermo({
+        student,
+        caseRef,
+        fineValue,
+        totalPaid,
+        totalContract: student.saleValue ?? caseRef.value ?? 0,
+        balance,
+        semMultaCDC7: caseRef.dentro7Dias === true && (caseRef.multaPercent ?? -1) === 0,
+      });
+      if (!result.ok) throw new Error(result.error || 'Falha ao enviar para ZapSign.');
+
+      const signUrl = result.url_assinatura || result.file_url;
+      if (signUrl) window.open(signUrl, '_blank', 'noopener,noreferrer');
+
+      await updateCancellationCase(caseRef.id, {
+        termTemplate: documento,
+        termAttachments: [
+          ...(caseRef.termAttachments ?? []),
+          {
+            name: `ZapSign — ${result.nome_documento || titulo}`,
+            url: signUrl || `zapsign:${result.id}`,
+            uploadedAt: new Date().toISOString(),
+            type: 'outro',
+          },
+        ],
+      });
+      setSent(true);
+      toast.success('Termo enviado para assinatura na ZapSign.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao enviar para ZapSign.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleConfirm = () => {
@@ -137,16 +179,19 @@ export default function CancellationFinalizeModal({ caseRef, type, student, onCl
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 transition-all">
             <Download size={12} /> Gerar PDF
           </button>
-          <button onClick={handleSendToZapsign} disabled={sent}
+          <button onClick={handleSendToZapsign} disabled={sent || sending || isReverter || !student?.iamControlAlunoId}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all disabled:opacity-50">
-            {sent ? <><Check size={12} /> Enviado para Zapsign</> : <><Send size={12} /> Enviar via Zapsign</>}
+            {sent ? <><Check size={12} /> Enviado para ZapSign</> : <><Send size={12} /> {sending ? 'Enviando…' : 'Enviar via ZapSign'}</>}
           </button>
         </div>
 
         {sent && (
           <div className="mb-4 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700">
-            Link de assinatura enviado ao aluno e sincronizado com o sistema Zapsign.
+            Termo gerado na ZapSign. O link de assinatura foi aberto em nova aba.
           </div>
+        )}
+        {!isReverter && !student?.iamControlAlunoId && (
+          <p className="mb-4 text-[11px] text-amber-700">Vincule o aluno ao IAM Control para enviar via ZapSign.</p>
         )}
 
         {/* Escolher resultado e finalizar */}

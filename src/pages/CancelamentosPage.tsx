@@ -39,6 +39,8 @@ import { registrarConciliacao, useConciliacaoStore } from '@/store/useConciliaca
 import { useCommissionsStore, mapPagamentoTipoToPaymentType } from '@/store/useCommissionsStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { openCancellationPdf, downloadCancellationPdf } from '@/lib/openCancellationPdf';
+import { createIamCancelamentoTermo } from '@/lib/iamControlTermo';
+import { toast } from 'sonner';
 import { toShortName, shortNameFontClass } from '@/lib/utils';
 import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
 import ExternalCancellationViewModal from '@/components/modals/ExternalCancellationViewModal';
@@ -1374,6 +1376,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
   // Upload do termo assinado (PDF ou imagem)
   const termos = (caseRef.termAttachments ?? []).filter((t) => t.type === 'termo_assinado');
   const [uploading, setUploading] = useState(false);
+  const [zapsignLoading, setZapsignLoading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [legalNotes, setLegalNotes] = useState<string>(caseRef.legalNotes ?? '');
   const [legalNotesSaving, setLegalNotesSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -1445,6 +1448,63 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
       setUploadError(err?.message ?? 'Não foi possível abrir o PDF.');
     }
   };
+
+  const handleGerarZapSign = async () => {
+    if (!student) {
+      setUploadError('Vincule o caso a um aluno cadastrado para gerar o termo na ZapSign.');
+      return;
+    }
+    if (!student.iamControlAlunoId) {
+      setUploadError('Aluno sem vínculo com IAM Control. Sincronize o cadastro antes de gerar o termo.');
+      return;
+    }
+
+    const netBalance = balance < 0 ? -estornoTotal : balance;
+    setZapsignLoading(true);
+    setUploadError(null);
+    try {
+      const result = await createIamCancelamentoTermo({
+        student,
+        caseRef: { ...caseRef, legalNotes },
+        fineValue,
+        totalPaid: paidBase,
+        totalContract: simplified ? fineBase : totalContract,
+        balance: netBalance,
+        semMultaCDC7,
+      });
+
+      if (!result.ok) {
+        throw new Error(result.error || 'Não foi possível gerar o termo na ZapSign.');
+      }
+
+      const signUrl = result.url_assinatura || result.file_url;
+      if (signUrl) {
+        window.open(signUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      const nextAttachments = [
+        ...(caseRef.termAttachments ?? []),
+        {
+          name: `ZapSign — ${result.nome_documento || 'Termo de Cancelamento'}`,
+          url: signUrl || `zapsign:${result.id}`,
+          uploadedAt: new Date().toISOString(),
+          type: 'outro' as const,
+        },
+      ];
+      await updateCancellationCase(caseRef.id, { termAttachments: nextAttachments });
+      toast.success('Termo enviado para assinatura na ZapSign.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao gerar termo na ZapSign.';
+      setUploadError(msg);
+      toast.error(msg);
+    } finally {
+      setZapsignLoading(false);
+    }
+  };
+
+  const zapsignLinks = (caseRef.termAttachments ?? []).filter(
+    (t) => t.type === 'outro' && t.name.toLowerCase().includes('zapsign'),
+  );
 
   // Saldo: multa - pago
   //  > 0: aluno ainda deve
@@ -2081,19 +2141,51 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
               {/* Gerar termo no ZapSign */}
               <div className="rounded-lg border border-border bg-card p-3 space-y-2">
                 <p className="text-[11px] font-semibold text-foreground uppercase tracking-wide">Gerar termo no ZapSign</p>
-                <p className="text-[10px] text-muted-foreground">Abre o ZapSign para gerar e enviar o termo para assinatura.</p>
+                <p className="text-[10px] text-muted-foreground">
+                  Gera o PDF no IAM Control e envia para assinatura digital na ZapSign.
+                </p>
                 <button
                   type="button"
-                  onClick={() => window.open('https://app.zapsign.com.br/', '_blank', 'noopener,noreferrer')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  onClick={handleGerarZapSign}
+                  disabled={zapsignLoading || !student?.iamControlAlunoId}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <FileText size={12} />
-                  Gerar no ZapSign
+                  {zapsignLoading ? 'Gerando…' : 'Gerar no ZapSign'}
                 </button>
+                {!student?.iamControlAlunoId && (
+                  <p className="text-[10px] text-amber-700">
+                    Aluno precisa estar vinculado ao IAM Control.
+                  </p>
+                )}
               </div>
             </div>
 
             {uploadError && <p className="text-[10px] text-rose-600">{uploadError}</p>}
+            {zapsignLinks.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Links ZapSign</p>
+                {zapsignLinks.map((t) => (
+                  <div key={t.url} className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/50 px-3 py-2">
+                    <FileText size={14} className="text-blue-700 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">{t.name}</p>
+                      <p className="text-[10px] text-muted-foreground">Gerado em {new Date(t.uploadedAt).toLocaleString('pt-BR')}</p>
+                    </div>
+                    {t.url.startsWith('http') && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(t.url, '_blank', 'noopener,noreferrer')}
+                        className="p-1.5 rounded-md text-blue-700 hover:bg-blue-100 transition-colors"
+                        title="Abrir link de assinatura"
+                      >
+                        <DownloadIcon size={13} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {termos.length === 0 ? (
               <p className="text-[11px] text-muted-foreground">Nenhum termo anexado.</p>
             ) : (
