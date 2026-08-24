@@ -1,5 +1,5 @@
 import { calculateAutoStatusAt } from '@/store/useAppStore';
-import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
+import { isStudentInAcPortfolio } from '@/lib/acPortfolioVisibility';
 import type { ConciliacaoItem, Installment, Student } from '@/types';
 
 export interface ExtratoLinha {
@@ -48,12 +48,9 @@ export interface ExtratoResultado {
   dias: ExtratoDiaResumo[];
 }
 
-/** Mesmas regras do Dashboard (Carteira Total / forecastBase). */
+/** Mesmas regras da carteira do assessor (sem quitados). */
 export function isInCarteiraPortfolio(s: Student): boolean {
-  if (s.statusCancelamento === 'cancelado') return false;
-  if (isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão') return false;
-  if (s.status === 'Pago') return false;
-  return true;
+  return isStudentInAcPortfolio(s);
 }
 
 /** Soma nominal de todas as parcelas dos alunos na carteira (índice "Todos"). */

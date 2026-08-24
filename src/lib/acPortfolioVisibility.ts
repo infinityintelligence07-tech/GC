@@ -17,6 +17,51 @@ function isUniqueStudentName(name: string, students: Student[]): boolean {
   return students.filter((s) => normalizeStudentName(s.name) === norm).length === 1;
 }
 
+/** Contrato quitado: todas as parcelas marcadas como pagas. */
+export function isStudentFullyPaid(student: Student): boolean {
+  const inst = student.installments ?? [];
+  if (inst.length === 0) return false;
+  return inst.every((i) => i.paid);
+}
+
+/**
+ * Aluno compõe a carteira ativa do assessor (quem ainda exige cobrança/ação).
+ * Quitados (Pago / parcelas todas pagas) ficam só na aba Alunos.
+ */
+export function isStudentInAcPortfolio(student: Student): boolean {
+  if (isSolicitacaoCancelamento(student)) return true;
+  if (isStudentFullyPaid(student)) return false;
+  if (student.status === 'Pago') return false;
+  if (student.statusCancelamento === 'cancelado') return false;
+  if (
+    isRendaExtraAtivo(student) &&
+    student.rendaExtraStatus &&
+    student.rendaExtraStatus !== 'Conciliar Exclusão'
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/** Filtro de carteira: quitados saem, exceto consulta explícita por status Pago. */
+export function filterCarteiraActiveStudents(students: Student[], statusFilter: string): Student[] {
+  if (statusFilter === 'Pago') {
+    return students.filter((s) => s.status === 'Pago' || isStudentFullyPaid(s));
+  }
+  return students.filter(
+    (s) => isSolicitacaoCancelamento(s) || (s.status !== 'Pago' && !isStudentFullyPaid(s)),
+  );
+}
+
+export function isVisibleInAcPortfolio(
+  student: Student,
+  hidden: { ids: Set<string>; names: Set<string> },
+  allStudents: Student[],
+): boolean {
+  if (isStudentHiddenFromAcPortfolio(student, hidden, allStudents)) return false;
+  return isStudentInAcPortfolio(student);
+}
+
 export function isStudentHiddenFromAcPortfolio(
   student: Student,
   hidden: { ids: Set<string>; names: Set<string> },
@@ -92,13 +137,5 @@ export function studentsForAcRanking(
   hidden: { ids: Set<string>; names: Set<string> },
   allStudents: Student[] = students,
 ): Student[] {
-  return students.filter((s) => {
-    if (isStudentHiddenFromAcPortfolio(s, hidden, allStudents)) return false;
-    if (s.status === 'Pago') return false;
-    if (s.statusCancelamento === 'cancelado') return false;
-    if (isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão') {
-      return false;
-    }
-    return true;
-  });
+  return students.filter((s) => isVisibleInAcPortfolio(s, hidden, allStudents));
 }

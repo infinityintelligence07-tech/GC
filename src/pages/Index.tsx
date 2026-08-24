@@ -2,12 +2,13 @@ import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
 import { useAppStore } from '@/store/useAppStore';
-import { TabKey, PermissionTab, canViewTab } from '@/types';
+import { TabKey, PermissionTab, canViewTab, canManageUsers } from '@/types';
 import DashboardPage from '@/pages/DashboardPage';
 import StudentsPage from '@/pages/StudentsPage';
 import TeamPage from '@/pages/TeamPage';
 import RendaExtraPage from '@/pages/RendaExtraPage';
 import ConfigPage from '@/pages/ConfigPage';
+import ConfigUsuariosPage from '@/pages/ConfigUsuariosPage';
 import ACPortfolioPage from '@/pages/ACPortfolioPage';
 import PerfilPage from '@/pages/PerfilPage';
 import CancelamentosPage from '@/pages/CancelamentosPage';
@@ -28,6 +29,7 @@ const TAB_TO_PERMISSION: Record<TabKey, PermissionTab | 'always'> = {
   dashboard: 'dashboard',
   alunos: 'alunos',
   regua: 'config',
+  configUsuarios: 'admin',
   equipe: 'equipe',
   ac: 'equipe',
   ranking: 'always',
@@ -42,7 +44,7 @@ const TAB_TO_PERMISSION: Record<TabKey, PermissionTab | 'always'> = {
   registros: 'admin',
 };
 
-const TAB_ORDER: TabKey[] = ['dashboard', 'alunos', 'equipe', 'ac', 'ranking', 'rendaExtra', 'cancelamentos', 'comissoes', 'estornos', 'conciliacao', 'extrato', 'config', 'regua', 'perfil', 'registros'];
+const TAB_ORDER: TabKey[] = ['dashboard', 'alunos', 'equipe', 'ac', 'ranking', 'rendaExtra', 'cancelamentos', 'comissoes', 'estornos', 'conciliacao', 'extrato', 'config', 'configUsuarios', 'regua', 'perfil', 'registros'];
 
 
 const Index = () => {
@@ -52,6 +54,7 @@ const Index = () => {
   useSupabaseSync();
 
   const isAllowed = (tab: TabKey): boolean => {
+    if (tab === 'configUsuarios') return canManageUsers(currentUser);
     const p = TAB_TO_PERMISSION[tab];
     if (p === 'always') return true;
     return canViewTab(currentUser, p);
@@ -93,6 +96,7 @@ const Index = () => {
       case 'ranking': return <RankingPage />;
       case 'rendaExtra': return <RendaExtraPage />;
       case 'config': return <ConfigPage />;
+      case 'configUsuarios': return <ConfigUsuariosPage />;
       case 'perfil': return <PerfilPage />;
       case 'cancelamentos': return <CancelamentosPage />;
       case 'comissoes': return <ComissoesPage />;

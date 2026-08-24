@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '@/store/useAppStore';
+import { isStudentInAcPortfolio } from '@/lib/acPortfolioVisibility';
 import { AC, Student, StudentStatus } from '@/types';
 import { X, ChevronRight, Check, AlertTriangle, Users } from 'lucide-react';
 
@@ -53,8 +54,8 @@ export default function DivisaoCarteiraModal({ ac, onClose }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedACIds, setSelectedACIds] = useState<string[]>([]);
 
-  // Students from the leaving AC
-  const acStudents = students.filter((s) => s.ac === ac.name);
+  // Students from the leaving AC (somente carteira ativa — sem quitados)
+  const acStudents = students.filter((s) => s.ac === ac.name && isStudentInAcPortfolio(s));
 
   // Other active ACs (not the one being divided)
   const otherACs = acs.filter((g) => g.active && g.id !== ac.id);

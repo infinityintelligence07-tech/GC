@@ -16,7 +16,7 @@ import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
-import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento } from '@/lib/acPortfolioVisibility';
+import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents } from '@/lib/acPortfolioVisibility';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -275,7 +275,7 @@ export default function DashboardPage() {
           if (scoreFilter !== null && calcularScoreComportamento(s.installments) !== scoreFilter) return false;
           return true;
         });
-        const withoutPagos = statusFilter === 'Pago' ? filteredByFront : filteredByFront.filter((s) => s.status !== 'Pago');
+        const withoutPagos = filterCarteiraActiveStudents(filteredByFront, statusFilter);
         const withoutCancelados = stripCancelados(withoutPagos);
         const withoutREConciliada = stripRendaExtraConciliada(withoutCancelados);
         const filtered = statusFilter
@@ -312,9 +312,7 @@ export default function DashboardPage() {
         }
         return s;
       });
-      const withoutPagos = statusFilter === 'Pago'
-        ? remapped
-        : remapped.filter((s) => s.status !== 'Pago');
+      const withoutPagos = filterCarteiraActiveStudents(remapped, statusFilter);
       const withoutCancelados = stripCancelados(withoutPagos);
       const withoutREConciliada = stripRendaExtraConciliada(withoutCancelados);
       const filtered = statusFilter
@@ -341,9 +339,7 @@ export default function DashboardPage() {
         }
         return s;
       });
-      const withoutPagos = statusFilter === 'Pago'
-        ? mapped
-        : mapped.filter((s) => s.status !== 'Pago');
+      const withoutPagos = filterCarteiraActiveStudents(mapped, statusFilter);
       const withoutCancelados = stripCancelados(withoutPagos);
       const withoutREConciliada = stripRendaExtraConciliada(withoutCancelados);
       const filtered = statusFilter

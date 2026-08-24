@@ -19,6 +19,8 @@ import {
   getHiddenFromAcPortfolioKeys,
   isSolicitacaoCancelamento,
   isStudentHiddenFromAcPortfolio,
+  isStudentInAcPortfolio,
+  isVisibleInAcPortfolio,
 } from '@/lib/acPortfolioVisibility';
 import {
   isCancellationCaseInRange,
@@ -181,6 +183,7 @@ export default function ACPortfolioPage() {
     const base = students
       .filter((s) => s.ac === ac.name)
       .filter((s) => !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students))
+      .filter((s) => statusFilter === 'Pago' || isStudentInAcPortfolio(s))
       .filter((s) => studentMatchesTagFilter(s, tagFilters))
       .map((s) => {
         const baseStatus = (s.status === 'Cancelado' || s.statusCancelamento === 'cancelado')
@@ -193,7 +196,7 @@ export default function ACPortfolioPage() {
       });
     setAcStudents(base);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey]);
+  }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey, statusFilter]);
 
 
   // ── KPI students (mode-dependent) ─────────────────────────────────────────
@@ -301,6 +304,7 @@ export default function ACPortfolioPage() {
   // para que o card "Data de Vencimento" reflita só carteira ativa.
   const forecastBase = acStudents.filter(
     (s) =>
+      isStudentInAcPortfolio(s) &&
       s.statusCancelamento !== 'cancelado' &&
       !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
   );
@@ -560,13 +564,8 @@ export default function ACPortfolioPage() {
   // statusFilter ativo). Sem isso, o % mostrava 5★ mas, ao clicar, a tabela
   // ficava vazia porque os 5★ eram todos Pagos.
   const scoreBaseStudents = (() => {
-    if (statusFilter) return acStudents; // usuário escolheu um status: respeita-o
-    return acStudents.filter((s) => {
-      if (s.statusCancelamento === 'cancelado') return false;
-      if (s.status === 'Pago') return false;
-      if (isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão') return false;
-      return true;
-    });
+    if (statusFilter) return acStudents;
+    return acStudents.filter((s) => isStudentInAcPortfolio(s));
   })();
   const scoreDistribution = (() => {
     const counts: Record<string, number> = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };

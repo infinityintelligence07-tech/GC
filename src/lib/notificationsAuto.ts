@@ -4,6 +4,7 @@
 //
 // Roda 1x por dia (controle por localStorage no useSupabaseSync).
 
+import { isStudentInAcPortfolio } from '@/lib/acPortfolioVisibility';
 import { useAppStore } from '@/store/useAppStore';
 import { useNotificationsStore } from '@/store/useNotificationsStore';
 
@@ -26,12 +27,11 @@ export async function gerarNotificacoesVencimentoHoje(): Promise<void> {
 
   // Para cada AC ativo, soma valor que vence hoje na carteira dele
   for (const ac of acs.filter((a) => a.active)) {
-    const carteira = students.filter((s) => s.ac === ac.name);
+    const carteira = students.filter((s) => s.ac === ac.name && isStudentInAcPortfolio(s));
     let totalHoje = 0;
     let qtdParcelas = 0;
     for (const s of carteira) {
-      // Ignora alunos cancelados/excluídos da carteira
-      if (s.status === 'Excluído' || s.status === 'Pago' || s.status === 'Cancelado') continue;
+      if (s.status === 'Excluído' || s.status === 'Cancelado') continue;
       for (const inst of s.installments || []) {
         if (inst.paid) continue;
         const due = parseDateLocal(inst.dueDate);
@@ -43,7 +43,6 @@ export async function gerarNotificacoesVencimentoHoje(): Promise<void> {
       }
     }
     if (totalHoje <= 0) continue;
-    // dispara notificação (não bloqueia em erro de uma)
     try {
       await notify({
         acId: ac.id,
