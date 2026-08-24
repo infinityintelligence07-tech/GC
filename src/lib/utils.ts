@@ -1,8 +1,29 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import type { Installment } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+/** Crédito de abatimento entre contratos já aplicado na parcela. */
+export function getInstallmentCreditApplied(i: Installment): number {
+  return Math.max(0, Number(i.creditApplied) || 0);
+}
+
+/** Saldo em aberto da parcela (valor nominal − créditos de abatimento). */
+export function getInstallmentOutstanding(i: Installment): number {
+  if (i.paid) return 0;
+  if (i.tipoParcela === "antecipada") return i.valorContabil ?? 0;
+  const base = i.valorContabil ?? i.value ?? 0;
+  return Math.max(0, Math.round((base - getInstallmentCreditApplied(i)) * 100) / 100);
+}
+
+/** Soma dos créditos de abatimento recebidos em parcelas ainda em aberto. */
+export function getStudentCreditAppliedTotal(installments: Installment[] = []): number {
+  return installments
+    .filter((i) => !i.paid)
+    .reduce((sum, i) => sum + getInstallmentCreditApplied(i), 0);
 }
 
 /**

@@ -41,7 +41,7 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import { openCancellationPdf, downloadCancellationPdf } from '@/lib/openCancellationPdf';
 import { createIamCancelamentoTermo } from '@/lib/iamControlTermo';
 import { toast } from 'sonner';
-import { toShortName, shortNameFontClass } from '@/lib/utils';
+import { toShortName, shortNameFontClass, getInstallmentOutstanding } from '@/lib/utils';
 import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
 import ExternalCancellationViewModal from '@/components/modals/ExternalCancellationViewModal';
 import CancelDivergenceEditModal from '@/components/modals/CancelDivergenceEditModal';
@@ -1538,7 +1538,9 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
       s.name.toLowerCase().includes(abatimentoBusca.trim().toLowerCase()))
     .slice(0, 8);
   const saldoDevedorAluno = (s?: Student) =>
-    (s?.installments ?? []).filter((i) => !i.paid).reduce((acc, i) => acc + (i.value || 0), 0);
+    (s?.installments ?? [])
+      .filter((i) => !i.paid)
+      .reduce((acc, i) => acc + getInstallmentOutstanding(i), 0);
 
   const addDays = (dateStr: string, days: number) => {
     if (!dateStr) return '';
@@ -1622,8 +1624,8 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   const refundReady = refundMatches && refundDatesOk && refundPixOk && abatimentoOk;
 
   /** Aplica o crédito no contrato do aluno selecionado, abatendo as parcelas em aberto. */
-  const aplicarAbatimento = () => {
-    const alvo = abatimentoStudent;
+  const aplicarAbatimento = async () => {
+    const alvo = useAppStore.getState().students.find((s) => s.id === abatimentoStudentId);
     if (!alvo || abatimentoValor <= 0) return;
     let restante = abatimentoValor;
     const hoje = new Date().toISOString().slice(0, 10);
@@ -1631,22 +1633,23 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
       (a.dueDate || '').localeCompare(b.dueDate || ''));
     const novas = ordenadas.map((i) => {
       if (i.paid || restante <= 0.009) return i;
-      if (restante >= i.value - 0.009) {
-        restante = Math.round((restante - i.value) * 100) / 100;
+      if (restante >= getInstallmentOutstanding(i) - 0.009) {
+        const abatido = getInstallmentOutstanding(i);
+        restante = Math.round((restante - abatido) * 100) / 100;
         return {
           ...i,
           paid: true,
           paidDate: hoje,
           paidValue: i.value,
+          creditApplied: undefined,
           observacao: `Abatimento de crédito — cancelamento de ${caseRef.studentName}`,
         };
       }
-      const novoValor = Math.round((i.value - restante) * 100) / 100;
       const abatido = restante;
       restante = 0;
       return {
         ...i,
-        value: novoValor,
+        creditApplied: Math.round(((i.creditApplied ?? 0) + abatido) * 100) / 100,
         observacao: `Abatimento parcial de ${formatCurrency(abatido)} — cancelamento de ${caseRef.studentName}`,
       };
     });
@@ -1655,7 +1658,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
       type: 'Sistema' as const,
       text: `Recebeu abatimento de ${formatCurrency(abatimentoValor)} proveniente do saldo a devolver do cancelamento de ${caseRef.studentName}.`,
     };
-    updateStudent(alvo.id, {
+    await updateStudent(alvo.id, {
       installments: novas,
       paidInstallments: novas.filter((i) => i.paid).length,
       history: [...(alvo.history ?? []), historyEntry],
@@ -1669,13 +1672,13 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
     onConfirm(installments, fineValue, finePaymentDate, fineAlreadyPaid, simplified || undefined, abatimentoInfo);
   };
 
-  const persistRefundPlanAndConfirm = (fineAlreadyPaid: boolean) => {
+  const persistRefundPlanAndConfirm = async (fineAlreadyPaid: boolean) => {
     let abatimentoInfo: AbatimentoInfo | undefined;
     if (balance < 0) {
       if (!refundReady) return;
       if (abatimentoValor > 0 && abatimentoStudent) {
         const saldoAntes = saldoDevedorAluno(abatimentoStudent);
-        aplicarAbatimento();
+        await aplicarAbatimento();
         abatimentoInfo = {
           valor: abatimentoValor,
           studentId: abatimentoStudent.id,

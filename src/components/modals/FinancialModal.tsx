@@ -10,6 +10,7 @@ import CurrencyInput from '@/components/ui/CurrencyInput';
 import StudentDraftBanner from '@/components/ui/StudentDraftBanner';
 import { getTagStyle } from '@/lib/tagColors';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
+import { getInstallmentCreditApplied, getInstallmentOutstanding, getStudentCreditAppliedTotal } from '@/lib/utils';
 
 interface Props {
   student: Student;
@@ -387,28 +388,30 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
 
   const totalPending = unpaidInstallments.reduce((acc, i) => {
-    const charges = calculateCharges(i.value, i.dueDate, i.number);
+    const base = getInstallmentOutstanding(i);
+    const charges = calculateCharges(base, i.dueDate, i.number);
     const extra = !showCharges ? getExtra(i.number) : 0;
-    return acc + (showCharges ? charges.total : i.value + extra);
+    return acc + (showCharges ? charges.total : base + extra);
   }, 0);
 
   const overdueInstallments = unpaidInstallments.filter(
     (i) => !isRecompraOuFundoParcela(i, studentTags) && parseDateLocal(i.dueDate) < today,
   );
   const totalOverdue = overdueInstallments.reduce((acc, i) => {
-    const charges = calculateCharges(i.value, i.dueDate, i.number);
+    const base = getInstallmentOutstanding(i);
+    const charges = calculateCharges(base, i.dueDate, i.number);
     const extra = !showCharges ? getExtra(i.number) : 0;
-    return acc + (showCharges ? charges.total : i.value + extra);
+    return acc + (showCharges ? charges.total : base + extra);
   }, 0);
 
   const valorContrato = student.saleValue ?? 0;
 
   // Soma A Vencer + Vencido (sem encargos) — usada no novo KPI e no "Check de Valor"
-  const totalAberto = unpaidInstallments.reduce((acc, i) => acc + i.value, 0);
+  const totalAberto = unpaidInstallments.reduce((acc, i) => acc + getInstallmentOutstanding(i), 0);
   const totalAVencer = unpaidInstallments
     .filter((i) => parseDateLocal(i.dueDate) >= today)
-    .reduce((a, i) => a + i.value, 0);
-  const totalOverdueSemEncargos = overdueInstallments.reduce((a, i) => a + i.value, 0);
+    .reduce((a, i) => a + getInstallmentOutstanding(i), 0);
+  const totalOverdueSemEncargos = overdueInstallments.reduce((a, i) => a + getInstallmentOutstanding(i), 0);
   // Check de Valor: deve dar 0. Diferença entre saldo original e soma atual (sem encargos).
   const checkDiff = saldoOriginalRef - totalAberto;
   const checkOk = Math.abs(checkDiff) <= 0.01;
@@ -419,11 +422,17 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   // embutidos ou erros que o Check de Valor (intra-sessão) não pegou.
   // Inclui a entrada (down payment) como já paga do contrato — afinal, a
   // entrada faz parte do valor total da venda e foi quitada no ato.
+  const totalCreditoAbatimento = useMemo(
+    () => getStudentCreditAppliedTotal(student.installments),
+    [student.installments],
+  );
   const totalPagoContrato = useMemo(
-    () => (student.downPayment ?? 0) + student.installments
-      .filter((i) => i.paid)
-      .reduce((acc, i) => acc + ((i as { paidValue?: number }).paidValue ?? i.value), 0),
-    [student.installments, student.downPayment],
+    () => (student.downPayment ?? 0)
+      + student.installments
+        .filter((i) => i.paid)
+        .reduce((acc, i) => acc + ((i as { paidValue?: number }).paidValue ?? i.value), 0)
+      + totalCreditoAbatimento,
+    [student.installments, student.downPayment, totalCreditoAbatimento],
   );
   /** Parcelas quitadas — a entrada tem card próprio e não entra aqui. */
   const totalPagoParcelas = useMemo(
@@ -1457,12 +1466,17 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               </div>
               <div
                 className="p-2 bg-violet-50 border border-violet-300 rounded-lg"
-                title="Somente parcelas já pagas — a entrada não entra neste saldo"
+                title="Parcelas já pagas + créditos de abatimento recebidos de outros contratos (a entrada não entra neste saldo)"
               >
                 <p className="text-[9px] text-violet-700 uppercase tracking-wide">Saldo p/ Abater</p>
                 <p className="text-xs font-bold text-violet-800">
-                  {formatCurrency(totalPagoParcelas)}
+                  {formatCurrency(totalPagoParcelas + totalCreditoAbatimento)}
                 </p>
+                {totalCreditoAbatimento > 0.0049 && (
+                  <p className="text-[8px] text-violet-700/90 mt-0.5 leading-tight">
+                    incl. {formatCurrency(totalCreditoAbatimento)} de abatimento
+                  </p>
+                )}
               </div>
               <div className="p-2 bg-slate-100 border border-slate-300 rounded-lg">
                 <p className="text-[9px] text-slate-700 uppercase tracking-wide">Total Aberto</p>
@@ -1515,8 +1529,25 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         P{displayParcelLabel(inst.number)}
                       </span>
                       {(() => {
+                        const credit = getInstallmentCreditApplied(inst);
+                        const outstanding = getInstallmentOutstanding(inst);
                         const hasDiff = inst.paid && typeof inst.paidValue === 'number' && Math.abs((inst.paidValue ?? inst.value) - inst.value) > 0.01;
                         const isJuros = hasDiff && (inst.paidValue as number) > inst.value;
+                        if (!inst.paid && credit > 0.0049) {
+                          return (
+                            <div className="flex flex-col items-center mt-0.5 gap-0.5">
+                              <span className="text-[8px] font-medium text-muted-foreground line-through leading-tight">
+                                {formatCurrency(inst.value)}
+                              </span>
+                              <span className="text-[10px] font-bold leading-tight text-violet-700">
+                                {formatCurrency(outstanding)}
+                              </span>
+                              <span className="text-[7px] text-violet-600 leading-tight text-center">
+                                −{formatCurrency(credit)} abat.
+                              </span>
+                            </div>
+                          );
+                        }
                         if (hasDiff) {
                           return (
                             <div className="flex flex-col items-center mt-0.5 gap-0.5">

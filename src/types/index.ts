@@ -53,6 +53,8 @@ export interface Installment {
   numeroOriginal?: number;
   // Observação livre exibida na parcela (ex.: "Antes era Parcela 2").
   observacao?: string;
+  /** Crédito de abatimento de outro contrato já aplicado nesta parcela (reduz o saldo em aberto). */
+  creditApplied?: number;
 }
 
 export interface HistoryEntry {

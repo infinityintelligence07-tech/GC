@@ -3,6 +3,7 @@ import { reportDbError } from '@/lib/dbError';
 import { persist } from 'zustand/middleware';
 import { Student, AC, Product, FinancialRules, TabKey, StudentStatus, Installment, HistoryEntry, CancellationCase, CancellationStage, CancellationOperationalStatus, RendaExtraStatus, AppUser, StatusCancelamento, StudentTag, AbatimentoInfo } from '@/types';
 import { getTodayBrasilia, effectiveDueDate } from '@/lib/brasiliaDate';
+import { getInstallmentOutstanding } from '@/lib/utils';
 import {
   createAC, updateACDb, deleteACDb,
   createProduct, updateProductDb, deleteProductDb,
@@ -109,6 +110,7 @@ const generateId = () =>
 
 function getInstallmentFinancialValue(i: Installment): number {
   if (i.tipoParcela === 'antecipada') return i.valorContabil ?? 0;
+  if (!i.paid) return getInstallmentOutstanding(i);
   return i.valorContabil ?? i.value;
 }
 
@@ -1813,6 +1815,7 @@ export function calculateAutoStatusAt(installments: Installment[], referenceDate
 
 export function getInstallmentFinancialValueExport(i: Installment): number {
   if (i.tipoParcela === 'antecipada') return i.valorContabil ?? 0;
+  if (!i.paid) return getInstallmentOutstanding(i);
   return i.valorContabil ?? i.value;
 }
 
