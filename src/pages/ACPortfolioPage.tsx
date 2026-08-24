@@ -315,6 +315,7 @@ export default function ACPortfolioPage() {
     let totalReal = 0, pagoReal = 0;
     let qtd = 0;
     const qtdAlunosSet = new Set<string>();
+    const qtdAlunosAVencerSet = new Set<string>();
     forecastBase.forEach((st) => {
       st.installments.forEach((i) => {
         if (dateBasis === 'pagamento') {
@@ -361,15 +362,16 @@ export default function ACPortfolioPage() {
         aVencer += i.value;
         qtd += 1;
         qtdAlunosSet.add(st.id);
+        qtdAlunosAVencerSet.add(st.id);
       });
     });
-    return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size };
+    return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, qtdAlunosAVencer: qtdAlunosAVencerSet.size };
   };
   const getForecastValue = () => getForecastTotals().aVencer;
-  // Carteira Total = TOTAL cinza da projeção (a vencer/vencido + pago no período).
+  // Carteira Total = A Vencer / Vencido da projeção (mesmo valor do card laranja).
   const carteiraTotais = getForecastTotals();
-  const carteiraTotalValue = carteiraTotais.total;
-  const carteiraTotalAlunos = carteiraTotais.qtdAlunos;
+  const carteiraTotalValue = carteiraTotais.aVencer;
+  const carteiraTotalAlunos = carteiraTotais.qtdAlunosAVencer;
 
   const hasInstallmentInForecastRange = (student: Student): boolean => {
     if (forecastIndex === 0) return true;
@@ -731,17 +733,11 @@ export default function ACPortfolioPage() {
                   </div>
                 );
               }
-              const pctAV = total > 0 ? ((aVencer / total) * 100).toFixed(1) : '0.0';
-              const pctPg = total > 0 ? ((pago / total) * 100).toFixed(1) : '0.0';
+              const pctBase = aVencer + pago;
+              const pctAV = pctBase > 0 ? ((aVencer / pctBase) * 100).toFixed(1) : '0.0';
+              const pctPg = pctBase > 0 ? ((pago / pctBase) * 100).toFixed(1) : '0.0';
               return (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <div className="kpi-fit rounded-xl border border-border bg-muted/30 p-2 min-w-0">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total</p>
-                    <p className="kpi-value-fit text-foreground mt-0.5" title={formatCurrency(total)}>
-                      {formatCurrency(total)}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground mt-0">a vencer + pago no período</p>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="kpi-fit rounded-xl border border-amber-200/60 bg-amber-50/60 p-2 min-w-0">
                     <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">A Vencer / Vencido</p>
                     <p className="kpi-value-fit text-amber-700 mt-0.5" title={formatCurrency(aVencer)}>
@@ -881,8 +877,8 @@ export default function ACPortfolioPage() {
               <span className="text-amber-700 font-medium truncate">A vencer / vencido</span>
               <span className="tabular-nums font-semibold text-amber-700 shrink-0">
                 {formatCurrencyCompact(carteiraTotais.aVencer)}
-                {carteiraTotalValue > 0
-                  ? ` · ${((carteiraTotais.aVencer / carteiraTotalValue) * 100).toFixed(1)}%`
+                {carteiraTotais.aVencer + carteiraTotais.pago > 0
+                  ? ` · ${((carteiraTotais.aVencer / (carteiraTotais.aVencer + carteiraTotais.pago)) * 100).toFixed(1)}%`
                   : ''}
               </span>
             </div>
@@ -890,8 +886,8 @@ export default function ACPortfolioPage() {
               <span className="text-emerald-700 font-medium truncate">Pago no período</span>
               <span className="tabular-nums font-semibold text-emerald-700 shrink-0">
                 {formatCurrencyCompact(carteiraTotais.pago)}
-                {carteiraTotalValue > 0
-                  ? ` · ${((carteiraTotais.pago / carteiraTotalValue) * 100).toFixed(1)}%`
+                {carteiraTotais.aVencer + carteiraTotais.pago > 0
+                  ? ` · ${((carteiraTotais.pago / (carteiraTotais.aVencer + carteiraTotais.pago)) * 100).toFixed(1)}%`
                   : ''}
               </span>
             </div>

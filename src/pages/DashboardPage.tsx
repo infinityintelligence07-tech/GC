@@ -550,7 +550,7 @@ export default function DashboardPage() {
       !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
   );
 
-  // Retorna 3 totais: Total (todas), A Vencer/Vencido (não pagas), Pago (pagas).
+  // Retorna totais da projeção: A Vencer/Vencido (não pagas), Pago (pagas) e soma (total).
   // "Todos" → toda a carteira; demais → filtrado por dueDate dentro do range.
   const getForecastTotals = () => {
     const range = forecastIndex === 0 ? null : getForecastRange();
@@ -558,6 +558,7 @@ export default function DashboardPage() {
     let totalReal = 0, pagoReal = 0;
     let qtd = 0;
     const qtdAlunosSet = new Set<string>();
+    const qtdAlunosAVencerSet = new Set<string>();
     // Breakdown por Assessor (usado no modo Pagamento)
     const perAc: Record<string, { pago: number; pagoReal: number; qtd: number; alunos: Set<string> }> = {};
     const bumpAc = (acName: string, valor: number, real: number, studentId: string) => {
@@ -619,18 +620,19 @@ export default function DashboardPage() {
         aVencer += i.value;
         qtd += 1;
         qtdAlunosSet.add(st.id);
+        qtdAlunosAVencerSet.add(st.id);
       });
     });
     const perAcList = Object.entries(perAc)
       .map(([name, b]) => ({ name, pago: b.pago, pagoReal: b.pagoReal, qtd: b.qtd, qtdAlunos: b.alunos.size }))
       .sort((a, b) => b.pagoReal - a.pagoReal);
-    return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, perAcList, details };
+    return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, qtdAlunosAVencer: qtdAlunosAVencerSet.size, perAcList, details };
   };
 
-  // Carteira Total (card azul) = TOTAL cinza da projeção (a vencer/vencido + pago no período).
+  // Carteira Total (card azul) = A Vencer / Vencido da projeção (mesmo valor do card laranja).
   const forecastTotais = getForecastTotals();
-  const carteiraTotalValue = forecastTotais.total;
-  const carteiraTotalAlunos = forecastTotais.qtdAlunos;
+  const carteiraTotalValue = forecastTotais.aVencer;
+  const carteiraTotalAlunos = forecastTotais.qtdAlunosAVencer;
 
 
   // ── Score distribution ────────────────────────────────────────────────────
@@ -781,7 +783,7 @@ export default function DashboardPage() {
         {
           label: 'Carteira Total',
           value: formatCurrency(carteiraTotalValue),
-          detail: `${carteiraTotalAlunos} alunos · a vencer + pago no período`,
+          detail: `${carteiraTotalAlunos} alunos · a vencer / vencido no período`,
           tone: 'default',
         },
         {
@@ -1104,17 +1106,11 @@ export default function DashboardPage() {
                 );
               }
 
-              const pctAV = total > 0 ? ((aVencer / total) * 100).toFixed(1) : '0.0';
-              const pctPg = total > 0 ? ((pago / total) * 100).toFixed(1) : '0.0';
+              const pctBase = aVencer + pago;
+              const pctAV = pctBase > 0 ? ((aVencer / pctBase) * 100).toFixed(1) : '0.0';
+              const pctPg = pctBase > 0 ? ((pago / pctBase) * 100).toFixed(1) : '0.0';
               return (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <div className="kpi-fit rounded-xl border border-border bg-muted/30 p-2 min-w-0">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total</p>
-                    <p className="kpi-value-fit text-foreground mt-0.5" title={formatCurrency(total)}>
-                      {formatCurrency(total)}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground mt-0">a vencer + pago no período</p>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="kpi-fit rounded-xl border border-amber-200/60 bg-amber-50/60 p-2 min-w-0">
                     <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">A Vencer / Vencido</p>
                     <p className="kpi-value-fit text-amber-700 mt-0.5" title={formatCurrency(aVencer)}>
