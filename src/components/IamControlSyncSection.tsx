@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw, Upload, AlertTriangle, Link2 } from 'lucide-react';
-import { pullClientesCompleto, pushAllStatuses, type IamPullResumo } from '@/lib/iamControlSync';
+import { pullClientesCompleto, pushAllStatuses, diagnosticarIamControlApi, type IamPullResumo } from '@/lib/iamControlSync';
 import { toast } from 'sonner';
 
 const WEBHOOK_URL =
@@ -12,6 +12,24 @@ export default function IamControlSyncSection() {
   const [resumo, setResumo] = useState<IamPullResumo | null>(null);
   const [progresso, setProgresso] = useState('');
   const [pushResult, setPushResult] = useState('');
+  const [iamAviso, setIamAviso] = useState<string | null>(null);
+
+  useEffect(() => {
+    void diagnosticarIamControlApi()
+      .then((d) => {
+        if (d.ok && d.api_atualizada === false) {
+          setIamAviso(
+            d.aviso ??
+              'O backend IAM Control na VPS está desatualizado. Vendas marcadas como Pendente (link/PIX) não chegam ao GC até redeploy.',
+          );
+        } else if (d.aviso) {
+          setIamAviso(d.aviso);
+        }
+      })
+      .catch(() => {
+        /* diagnóstico opcional */
+      });
+  }, []);
 
   const handlePull = async () => {
     setPulling(true);
@@ -64,6 +82,21 @@ export default function IamControlSyncSection() {
         sistema automaticamente (webhook + sincronização a cada 5 minutos).
         Liberty e Liberty Begin vão para a aba <strong>Liberty</strong>; demais treinamentos ficam na aba <strong>IAM</strong>.
       </p>
+
+      {iamAviso && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 mb-4">
+          <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <AlertTriangle size={13} className="text-destructive shrink-0" />
+            Sync Pendente (link/PIX) indisponível
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">{iamAviso}</p>
+          <p className="text-[11px] text-foreground/80 mt-2 leading-relaxed">
+            Na VPS do IAM Control: faça deploy do backend (push na <strong>main</strong> ou{' '}
+            <span className="font-mono">pm2 restart all</span>) e confirme no <span className="font-mono">.env</span>:
+            {' '}<span className="font-mono">GESTAO_CONTAS_CLOUD_ANON_KEY</span> com a anon key do Supabase GC.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button

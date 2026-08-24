@@ -1,0 +1,1 @@
+SELECT public.run_kamino_sync_from_staging();

@@ -53,6 +53,20 @@ export async function pushAllStatuses(): Promise<Record<string, unknown>> {
   return (data ?? {}) as Record<string, unknown>;
 }
 
+export interface IamDiagnosticoResult {
+  ok?: boolean;
+  api_atualizada?: boolean;
+  aviso?: string | null;
+  treinamentos_pendentes?: number;
+  error?: string;
+}
+
+export async function diagnosticarIamControlApi(): Promise<IamDiagnosticoResult> {
+  const { data, error } = await supabase.functions.invoke<IamDiagnosticoResult>('iam-control-diagnostico');
+  if (error) throw error;
+  return data ?? { ok: false, error: 'Resposta vazia' };
+}
+
 export async function pullClientes(body?: Record<string, unknown>): Promise<IamPullResult> {
   const { data, error } = await supabase.functions.invoke('iam-control-pull-clientes', {
     body: body ?? {},

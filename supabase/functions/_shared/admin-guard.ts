@@ -37,10 +37,27 @@ export async function requireAdmin(req: Request): Promise<CallerContext | Respon
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
-  // Checa role admin
-  const { data: roleRow, error: roleErr } = await admin
+  const { data: roleRow } = await admin
     .from('user_roles').select('role').eq('user_id', callerUserId).eq('role', 'admin').maybeSingle();
-  if (roleErr || !roleRow) {
+  if (roleRow) {
+    return { url, serviceKey, callerUserId, admin };
+  }
+
+  const { data: appUser, error: appUserErr } = await admin
+    .from('app_users')
+    .select('role, permissions')
+    .eq('auth_user_id', callerUserId)
+    .maybeSingle();
+  const permissions = (appUser?.permissions ?? null) as Record<string, string> | null;
+  const canManageUsers =
+    !appUserErr
+    && appUser
+    && (
+      appUser.role === 'admin'
+      || permissions?.admin === 'edit'
+    );
+
+  if (!canManageUsers) {
     return new Response(JSON.stringify({ ok: false, error: 'Acesso restrito a administradores' }),
       { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
