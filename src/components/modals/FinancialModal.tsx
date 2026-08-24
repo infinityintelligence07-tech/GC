@@ -1433,7 +1433,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         return (
                           <div key={e.num} className="flex items-center justify-between text-[10px]">
                             <span className="text-foreground">
-                              Parcela {e.num}{inst ? ` • ${formatDateBR(inst.dueDate)}` : ''}
+                              Parcela {displayParcelLabel(e.num)}{inst ? ` • ${formatDateBR(inst.dueDate)}` : ''}
                             </span>
                             <span className="font-semibold text-amber-700">{formatCurrency(e.val)}</span>
                           </div>
@@ -1476,6 +1476,26 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
             <div className="overflow-x-auto no-scrollbar">
               <div className="flex gap-1.5 min-w-max py-1">
+                {hasEntrada && (
+                  <div
+                    className="flex flex-col items-center px-2 py-1.5 rounded-lg border min-w-[80px] border-emerald-300 bg-emerald-50"
+                    title={`Entrada — ${formatCurrency(entradaValor)} — quitada na matrícula`}
+                  >
+                    <span className="text-[9px] font-bold text-emerald-800">P1</span>
+                    <span className="text-[8px] font-semibold text-emerald-700 mt-0.5">Entrada</span>
+                    <span className="text-[10px] font-bold mt-0.5 text-emerald-700">
+                      {formatCurrency(entradaValor)}
+                    </span>
+                    <span className="text-[8px] text-muted-foreground mt-0.5 leading-tight text-center">
+                      {student.enrollmentDate
+                        ? `Matrícula: ${formatDateBR(student.enrollmentDate)}`
+                        : 'Na matrícula'}
+                    </span>
+                    <span className="mt-0.5 text-[8px] font-semibold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                      ✓ Pago
+                    </span>
+                  </div>
+                )}
                 {[...student.installments].sort((a, b) => parseDateLocal(a.dueDate).getTime() - parseDateLocal(b.dueDate).getTime() || a.number - b.number).map((inst) => {
                   const isRecompraFundo = isRecompraOuFundoParcela(inst, studentTags);
                   const isOverdue = !inst.paid && !isRecompraFundo && parseDateLocal(inst.dueDate) < today;
@@ -1489,10 +1509,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                             ? 'border-rose-300 bg-rose-50'
                             : 'border-border bg-card'
                       }`}
-                      title={`Parcela ${inst.number} — Venc. ${formatDateBR(inst.dueDate)}${inst.paid && inst.paidDate ? ` — Pago em ${formatDateBR(inst.paidDate)}` : ''}`}
+                      title={`Parcela ${displayParcelLabel(inst.number)} — Venc. ${formatDateBR(inst.dueDate)}${inst.paid && inst.paidDate ? ` — Pago em ${formatDateBR(inst.paidDate)}` : ''}`}
                     >
                       <span className="text-[9px] font-bold text-muted-foreground">
-                        P{inst.number}
+                        P{displayParcelLabel(inst.number)}
                       </span>
                       {(() => {
                         const hasDiff = inst.paid && typeof inst.paidValue === 'number' && Math.abs((inst.paidValue ?? inst.value) - inst.value) > 0.01;
@@ -1585,7 +1605,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     >
                       <span className="font-semibold text-foreground">{g.name}:</span>
                       <span className="text-muted-foreground">
-                        {g.parcels.map((n) => `P${n}`).join(', ')}
+                        {g.parcels.map((n) => `P${displayParcelLabel(n)}`).join(', ')}
                       </span>
                     </div>
                   ))}
@@ -1677,7 +1697,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       {selectedParcels.includes(inst.number) && <span className="text-primary-foreground text-[10px]">✓</span>}
                     </div>
                     <div className="flex-1" onClick={() => !isEditing && toggleParcel(inst.number)}>
-                      <span className="text-xs font-medium text-foreground cursor-pointer">Parcela {inst.number}</span>
+                      <span className="text-xs font-medium text-foreground cursor-pointer">Parcela {displayParcelLabel(inst.number)}</span>
                       <span className={`ml-2 text-[10px] ${isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                         {formatDateBR(inst.dueDate)}
                       </span>
@@ -1783,7 +1803,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 {student.installments.filter((i) => i.paid).map((inst) => (
                   <div key={inst.number} className="flex items-center gap-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50/50">
                     <div className="flex-1">
-                      <span className="text-xs font-medium text-foreground">Parcela {inst.number}</span>
+                      <span className="text-xs font-medium text-foreground">Parcela {displayParcelLabel(inst.number)}</span>
                       <span className="ml-2 text-[10px] text-emerald-700">
                         Pago em {inst.paidDate ? formatDateBR(inst.paidDate) : '—'} • Venc. {formatDateBR(inst.dueDate)}
                       </span>
