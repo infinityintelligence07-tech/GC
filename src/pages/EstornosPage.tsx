@@ -26,6 +26,7 @@ interface RefundRow {
   studentName: string;
   ac?: string;
   product?: string;
+  quantidadeInscricoes?: number;
   totalCase: number;
   installmentIndex: number;
   totalInstallments: number;
@@ -118,6 +119,7 @@ export default function EstornosPage() {
           studentName: c.studentName,
           ac: c.ac,
           product: st?.product ?? (c as any).treinamento ?? undefined,
+          quantidadeInscricoes: c.quantidadeInscricoes,
           totalCase: Number(plan.totalValue ?? 0),
           installmentIndex: idx + 1,
           totalInstallments: plan.installments.length,
@@ -283,10 +285,11 @@ export default function EstornosPage() {
 
       {/* Lista */}
       <div className="rounded-2xl border border-border bg-card overflow-x-auto saas-shadow-sm">
-        <div className="min-w-[1560px]">
-        <div className="grid grid-cols-[100px_minmax(220px,2fr)_minmax(140px,1.1fr)_minmax(160px,1.2fr)_80px_130px_minmax(200px,1.6fr)_minmax(220px,1.5fr)_140px_70px] gap-2 px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground bg-muted/40 border-b border-border">
+        <div className="min-w-[1640px]">
+        <div className="grid grid-cols-[100px_minmax(220px,2fr)_72px_minmax(140px,1.1fr)_minmax(160px,1.2fr)_80px_130px_minmax(200px,1.6fr)_minmax(220px,1.5fr)_140px_70px] gap-2 px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground bg-muted/40 border-b border-border">
           <span>Pagamento</span>
           <span>Aluno</span>
+          <span className="text-center">Inscrições</span>
           <span>Treinamento</span>
           <span>Assessor</span>
           <span className="text-center">Parcela</span>
@@ -299,7 +302,7 @@ export default function EstornosPage() {
         {filtered.length === 0 ? (
           <div className="p-6 text-center text-xs text-muted-foreground">Nenhum estorno registrado no filtro atual.</div>
         ) : paginated.map((r, idx) => (
-          <div key={`${r.caseId}-${r.installmentIndex}`} className={`grid grid-cols-[100px_minmax(220px,2fr)_minmax(140px,1.1fr)_minmax(160px,1.2fr)_80px_130px_minmax(200px,1.6fr)_minmax(220px,1.5fr)_140px_70px] gap-2 px-4 py-2.5 items-start border-b border-border last:border-0 text-xs transition-colors ${r.lancadoParaPagamento ? 'bg-emerald-50/70 hover:bg-emerald-100/60' : 'bg-rose-50/60 hover:bg-rose-100/50'}`}>
+          <div key={`${r.caseId}-${r.installmentIndex}`} className={`grid grid-cols-[100px_minmax(220px,2fr)_72px_minmax(140px,1.1fr)_minmax(160px,1.2fr)_80px_130px_minmax(200px,1.6fr)_minmax(220px,1.5fr)_140px_70px] gap-2 px-4 py-2.5 items-start border-b border-border last:border-0 text-xs transition-colors ${r.lancadoParaPagamento ? 'bg-emerald-50/70 hover:bg-emerald-100/60' : 'bg-rose-50/60 hover:bg-rose-100/50'}`}>
             <span className="font-semibold text-foreground py-1">{formatDateBR(r.date)}</span>
             <button
               type="button"
@@ -309,6 +312,10 @@ export default function EstornosPage() {
             >
               {r.studentName}
             </button>
+
+            <span className="text-center text-foreground font-semibold py-1">
+              {r.quantidadeInscricoes != null && r.quantidadeInscricoes > 0 ? r.quantidadeInscricoes : '—'}
+            </span>
 
             <span className="py-1">
               {r.product ? (

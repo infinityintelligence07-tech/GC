@@ -1528,6 +1528,9 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
     ? Math.min(Math.round((abatimentoValorInput || 0) * 100) / 100, estornoBruto)
     : 0;
   const estornoTotal = Math.round((estornoBruto - abatimentoValor) * 100) / 100;
+  const netBalance = balance < 0 ? -estornoTotal : balance;
+  const precisaEstorno = estornoTotal > 0.01;
+  const abatimentoCobreTudo = abatimentoValor > 0.01 && !precisaEstorno && balance < 0;
   const abatimentoStudent = allStudents.find((s) => s.id === abatimentoStudentId);
   const abatimentoCandidatos = allStudents
     .filter((s) =>
@@ -1610,7 +1613,6 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   };
 
   const refundSum = Math.round(refundInstallments.reduce((s, p) => s + (p.value || 0), 0) * 100) / 100;
-  const precisaEstorno = estornoTotal > 0.01;
   const refundMatches = !precisaEstorno || Math.abs(refundSum - estornoTotal) < 0.01;
   const refundDatesOk = !precisaEstorno || refundInstallments.every((p) => !!p.date);
   const refundPixOk = !precisaEstorno || pixKey.trim().length > 0;
@@ -2374,16 +2376,30 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                     </div>
                     <div className="flex items-center justify-between text-sm border-t border-border pt-2">
                       <span className="text-muted-foreground">
-                        {balance < 0 ? 'Estorno ao aluno' : 'Saldo pendente da multa'}
+                        {balance > 0
+                          ? 'Saldo pendente da multa'
+                          : abatimentoCobreTudo
+                            ? 'Abatimento em outro contrato'
+                            : precisaEstorno
+                              ? 'Estorno ao aluno'
+                              : 'Situação'}
                       </span>
-                      <span className={`font-semibold ${balance > 0 ? 'text-amber-700' : balance < 0 ? 'text-sky-700' : 'text-emerald-700'}`}>
+                      <span className={`font-semibold ${balance > 0 ? 'text-amber-700' : precisaEstorno ? 'text-sky-700' : abatimentoCobreTudo ? 'text-indigo-700' : 'text-emerald-700'}`}>
                         {balance > 0
                           ? formatCurrency(balance)
-                          : balance < 0
-                            ? formatCurrency(Math.abs(balance))
-                            : 'Quitada'}
+                          : abatimentoCobreTudo
+                            ? formatCurrency(abatimentoValor)
+                            : precisaEstorno
+                              ? formatCurrency(estornoTotal)
+                              : 'Quitada'}
                       </span>
                     </div>
+                    {abatimentoValor > 0.01 && balance < 0 && (
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Saldo bruto a devolver</span>
+                        <span>{formatCurrency(estornoBruto)}</span>
+                      </div>
+                    )}
                   </div>
 
                   {balance > 0 ? (
@@ -2416,13 +2432,24 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                     </div>
                   ) : (
                     <div className="space-y-2 pt-1">
-                      {balance < 0 && (
+                      {precisaEstorno && (
                         <div className="rounded-xl border border-sky-300 bg-sky-50 p-3 text-xs text-sky-900">
                           <p className="font-semibold">Estorno ao aluno</p>
                           <p className="mt-0.5">
-                            Será realizado o estorno de <strong>{formatCurrency(Math.abs(balance))}</strong> ao aluno,
+                            Será realizado o estorno de <strong>{formatCurrency(estornoTotal)}</strong> ao aluno,
                             em <strong>{refundInstallments.length}</strong> parcela(s) via PIX ({pixKeyType}).
                             O plano ficará registrado na aba <strong>Estornos</strong>.
+                          </p>
+                        </div>
+                      )}
+                      {abatimentoCobreTudo && abatimentoStudent && (
+                        <div className="rounded-xl border border-indigo-300 bg-indigo-50 p-3 text-xs text-indigo-900">
+                          <p className="font-semibold">Abatimento em outro contrato</p>
+                          <p className="mt-0.5">
+                            O saldo de <strong>{formatCurrency(abatimentoValor)}</strong> será abatido no contrato de{' '}
+                            <strong>{abatimentoStudent.name}</strong>
+                            {abatimentoStudent.product ? ` (${abatimentoStudent.product})` : ''}.
+                            Não haverá estorno via PIX — o registro ficará apenas no histórico do cancelamento.
                           </p>
                         </div>
                       )}
@@ -2432,7 +2459,11 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                           disabled={balance < 0 && !refundReady}
                           className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {balance < 0 ? 'Confirmar Cancelamento com Estorno' : 'Confirmar Cancelamento'}
+                          {precisaEstorno
+                            ? 'Confirmar Cancelamento com Estorno'
+                            : abatimentoCobreTudo
+                              ? 'Confirmar Cancelamento com Abatimento'
+                              : 'Confirmar Cancelamento'}
                         </button>
                         <button
                           onClick={() => setConfirmStep(false)}

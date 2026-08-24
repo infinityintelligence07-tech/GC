@@ -914,8 +914,11 @@ export const useAppStore = create<AppState>()(
     const totalPagoFinal = Math.round((totalPagoAluno + multaComplementarPaga) * 100) / 100;
     // Estorno ao aluno: quando o total já pago pelo aluno (entrada + parcelas)
     // é maior que a multa contratual, a multa é retida do valor pago e o
-    // excedente é devolvido ao aluno. A multa NÃO é tratada como parcela.
-    const estornoAluno = Math.max(0, Math.round((totalPagoAluno - fine) * 100) / 100);
+    // excedente é devolvido ao aluno. Abatimento em outro contrato reduz o
+    // estorno líquido (o que não for abatido segue para PIX / aba Estornos).
+    const estornoBruto = Math.max(0, Math.round((totalPagoAluno - fine) * 100) / 100);
+    const abatimentoValor = abatimento?.valor ?? 0;
+    const estornoAluno = Math.max(0, Math.round((estornoBruto - abatimentoValor) * 100) / 100);
     const hasEstorno = estornoAluno > 0.0049;
     // Detalhamento do estorno (plano de devolução preenchido pelo usuário):
     // ex.: "2 parcelas — 10/08/2026: R$ 1.000,00 • 10/09/2026: R$ 1.000,00".
@@ -986,7 +989,9 @@ export const useAppStore = create<AppState>()(
             ? `Cancelamento SEM MULTA — 7 dias CDC (Art. 49) — ${cancCase.studentName}. Aguardando conciliação da baixa das parcelas pendentes.`
             : hasEstorno
               ? `Cancelamento aguardando conciliação — ${cancCase.studentName}. Multa ${formatCurrency(fine)} retida do valor pago (${formatCurrency(totalPagoAluno)}) — estorno ao aluno ${formatCurrency(estornoAluno)}.`
-              : multaComplementarPaga > 0.0049
+              : abatimentoValor > 0.0049
+                ? `Cancelamento aguardando conciliação — ${cancCase.studentName}. Saldo a devolver ${formatCurrency(estornoBruto)} abatido em outro contrato (${formatCurrency(abatimentoValor)}).`
+                : multaComplementarPaga > 0.0049
                 ? `Cancelamento aguardando conciliação — ${cancCase.studentName}. Multa ${formatCurrency(fine)} quitada (entrada ${formatCurrency(entradaAluno)} + complemento ${formatCurrency(multaComplementarPaga)}).`
                 : `Cancelamento aguardando conciliação — ${cancCase.studentName} (multa ${formatCurrency(fine)}). A carteira só será atualizada após conciliar.`,
           antes: {
