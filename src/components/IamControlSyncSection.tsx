@@ -61,18 +61,18 @@ export default function IamControlSyncSection() {
       <p className="text-xs text-muted-foreground mb-4">
         Os cadastros de alunos ficam ligados nos dois sentidos: nome, e-mail, WhatsApp, CPF,
         endereço e status. Alteração aqui é enviada ao IAM Control; alteração lá entra neste
-        sistema. <strong>Entram alunos com contrato Conciliado ou Pendente (link/PIX)</strong> no IAM Control
-        (pull manual e push automático na conciliação).
+        sistema automaticamente (webhook + sincronização a cada 5 minutos).
+        Liberty e Liberty Begin vão para a aba <strong>Liberty</strong>; demais treinamentos ficam na aba <strong>IAM</strong>.
       </p>
 
       <div className="flex flex-wrap gap-2">
         <button
           onClick={handlePull}
           disabled={pulling}
-          className="px-4 py-2 rounded-lg text-xs font-medium iam-gradient text-primary-foreground shadow-md disabled:opacity-50 flex items-center gap-2"
+          className="px-4 py-2 rounded-lg text-xs font-medium bg-muted text-foreground hover:bg-muted/70 disabled:opacity-50 flex items-center gap-2"
         >
           <RefreshCw size={13} className={pulling ? 'animate-spin' : ''} />
-          {pulling ? 'Sincronizando…' : 'Trazer alunos do IAM Control (conciliados + pendentes)'}
+          {pulling ? 'Sincronizando…' : 'Forçar sincronização agora'}
         </button>
         <button
           onClick={handlePushAll}

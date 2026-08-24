@@ -12,3 +12,9 @@ verify_jwt = false
 [functions.iam-control-receive-aluno]
 verify_jwt = false
 
+[functions.iam-control-pull-clientes]
+verify_jwt = false
+
+[functions.iam-control-contrato]
+verify_jwt = false
+

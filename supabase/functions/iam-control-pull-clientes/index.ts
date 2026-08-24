@@ -7,6 +7,8 @@ const TAMANHO_PAGINA = 200;
 const MAX_PAGINAS_DEFAULT = 5;
 const MAX_PAGINAS_CAP = 20;
 const TIMEOUT_MS = 30_000;
+/** Sobrepõe janela incremental para não perder vendas entre ciclos do cron. */
+const OVERLAP_INCREMENTAL_MS = 6 * 60 * 60 * 1000;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -59,6 +61,13 @@ async function lerOpcoes(req: Request): Promise<Opcoes> {
   } catch {
     return { completo: false, desde: null, max_paginas: MAX_PAGINAS_DEFAULT, page_inicio: null };
   }
+}
+
+function aplicarOverlapIncremental(desde: string | null): string | null {
+  if (!desde) return null;
+  const d = new Date(desde);
+  if (Number.isNaN(d.getTime())) return desde;
+  return new Date(d.getTime() - OVERLAP_INCREMENTAL_MS).toISOString();
 }
 
 async function buscarPagina(
@@ -115,9 +124,12 @@ Deno.serve(async (req: Request) => {
     .eq('id', SYNC_STATE_ID)
     .maybeSingle();
 
-  const atualizadoDesde = opcoes.completo
+  const atualizadoDesdeRaw = opcoes.completo
     ? null
     : (opcoes.desde ?? estado?.last_synced_at ?? null);
+  const atualizadoDesde = opcoes.completo
+    ? null
+    : aplicarOverlapIncremental(atualizadoDesdeRaw);
   const pageCursorSalvo = Number(
     (estado?.last_result as { proxima_pagina?: number } | null)?.proxima_pagina,
   );
@@ -193,7 +205,8 @@ Deno.serve(async (req: Request) => {
   return json(200, {
     ok: true,
     modo: opcoes.completo ? 'completo' : 'incremental',
-    atualizado_desde: atualizadoDesde,
+    atualizado_desde: atualizadoDesdeRaw,
+    atualizado_desde_efetivo: atualizadoDesde,
     sincronizado_ate: cicloCompleto ? sincronizadoAte : (estado?.last_synced_at ?? null),
     page_proxima: continuar ? page : null,
     page_atual: page - 1,
