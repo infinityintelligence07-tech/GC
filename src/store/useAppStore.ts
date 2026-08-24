@@ -892,7 +892,16 @@ export const useAppStore = create<AppState>()(
     const totalPagasValor = pagasArr.reduce((s, i) => s + (i.value ?? 0), 0);
     const totalPendentesValor = pendentesArr.reduce((s, i) => s + (i.value ?? 0), 0);
     const entradaAluno = Number(linkedStudent?.downPayment) || 0;
-    const totalPagoAluno = Math.round((entradaAluno + totalPagasValor) * 100) / 100;
+    const totalInscricoesCase = Math.max(1, cancCase.quantidadeInscricoes ?? 1);
+    const inscRevertidasCase = Math.min(Math.max(0, cancCase.inscricoesRevertidas ?? 0), totalInscricoesCase);
+    const inscRestantesCase = Math.max(1, totalInscricoesCase - inscRevertidasCase);
+    const proporcionalCancel = inscRevertidasCase > 0 && inscRestantesCase < totalInscricoesCase;
+    const totalPagoBrutoAluno = linkedStudent
+      ? Math.round((entradaAluno + totalPagasValor) * 100) / 100
+      : Math.max(0, Number(cancCase.totalPagoAteMomento) || 0);
+    const totalPagoAluno = proporcionalCancel
+      ? Math.round(totalPagoBrutoAluno * inscRestantesCase / totalInscricoesCase * 100) / 100
+      : totalPagoBrutoAluno;
     
     const fine = finalFineValue;
     // Multa complementar paga pelo aluno: quando o total já pago (entrada +

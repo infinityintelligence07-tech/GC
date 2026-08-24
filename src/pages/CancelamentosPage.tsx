@@ -46,6 +46,7 @@ import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
 import ExternalCancellationViewModal from '@/components/modals/ExternalCancellationViewModal';
 import CancelDivergenceEditModal from '@/components/modals/CancelDivergenceEditModal';
 import { pendingDoubleCheckCorrection } from '@/lib/doubleCheckRejection';
+import { getTodayStringBrasilia } from '@/lib/brasiliaDate';
 
 // ─── Novo Funil (5 colunas fixas) ─────────────────────────────────────────────
 
@@ -1272,10 +1273,12 @@ interface CancellationReviewModalProps {
   student?: Student;
   onClose: () => void;
   onConfirm: (installments: Installment[], fineValue: number, fineDueDate: string, fineAlreadyPaid: boolean, skipConciliation?: boolean, abatimento?: AbatimentoInfo) => void;
+  /** Chamado antes do cancelamento quando o jurídico fraciona inscrições no próprio modal. */
+  onPartialRevertBeforeCancel?: (qty: number) => void;
   simplified?: boolean;
 }
 
-function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplified = false }: CancellationReviewModalProps) {
+function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onPartialRevertBeforeCancel, simplified = false }: CancellationReviewModalProps) {
   const installments = student?.installments ?? [];
   const pending = installments.filter((i) => !i.paid);
   const paid = installments.filter((i) => i.paid);
@@ -1293,23 +1296,31 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
     : Math.max(0, Math.round((totalContract - totalPaid) * 100) / 100);
 
   // ── Cancelamento parcial (assessor já reverteu parte das inscrições) ──────
-  // A base financeira passa a ser proporcional às inscrições remanescentes.
   const totalInscricoes = Math.max(1, caseRef.quantidadeInscricoes ?? 1);
-  const inscRevertidas = Math.min(Math.max(0, caseRef.inscricoesRevertidas ?? 0), totalInscricoes);
+  const inscRevertidasPersistidas = Math.min(Math.max(0, caseRef.inscricoesRevertidas ?? 0), totalInscricoes);
+  const [localRevertQty, setLocalRevertQty] = useState(0);
+  const effectiveInscRevertidas = inscRevertidasPersistidas + localRevertQty;
+  const effectiveSimplified = simplified || (localRevertQty > 0 && totalInscricoes > effectiveInscRevertidas);
+  const inscRevertidas = effectiveInscRevertidas;
   const inscRestantes = Math.max(1, totalInscricoes - inscRevertidas);
   const valorPorInscricao = Math.round((totalContract / totalInscricoes) * 100) / 100;
-  const fineBase = simplified
+  const fineBase = effectiveSimplified
     ? Math.round(valorPorInscricao * inscRestantes * 100) / 100
     : totalContract;
-  const paidBase = simplified
+  const paidBase = effectiveSimplified
     ? Math.round((totalPaid * inscRestantes / totalInscricoes) * 100) / 100
     : totalPaid;
-  const pendingBase = simplified
+  const pendingBase = effectiveSimplified
     ? Math.round((totalPending * inscRestantes / totalInscricoes) * 100) / 100
     : totalPending;
 
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayStringBrasilia();
+  const defaultRefundFirstDate = (() => {
+    const d = new Date(`${today}T12:00:00`);
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
 
   const { updateCancellationCase, students: allStudents, updateStudent } = useAppStore();
   const [semMultaCDC7, setSemMultaCDC7] = useState<boolean>(
@@ -1368,7 +1379,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
   const initialPlan = caseRef.refundPlan;
   const [refundQty, setRefundQty] = useState<number>(initialPlan?.installments?.length ?? 1);
   const [refundInstallments, setRefundInstallments] = useState<Array<{ date: string; value: number }>>(
-    initialPlan?.installments ?? [{ date: today, value: 0 }],
+    initialPlan?.installments ?? [{ date: defaultRefundFirstDate, value: 0 }],
   );
   const [pixKey, setPixKey] = useState<string>(initialPlan?.pixKey ?? '');
   const [pixKeyType, setPixKeyType] = useState<PixType>(initialPlan?.pixKeyType ?? 'CPF');
@@ -1468,7 +1479,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
         caseRef: { ...caseRef, legalNotes },
         fineValue,
         totalPaid: paidBase,
-        totalContract: simplified ? fineBase : totalContract,
+        totalContract: effectiveSimplified ? fineBase : totalContract,
         balance: netBalance,
         semMultaCDC7,
       });
@@ -1556,14 +1567,31 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
     const per = Math.floor((estornoTotal / safeQty) * 100) / 100;
     const rest = Math.round((estornoTotal - per * safeQty) * 100) / 100;
     setRefundInstallments((prev) => {
-      const first = prev[0]?.date || today;
+      const first = prev[0]?.date || defaultRefundFirstDate;
       const dates = buildRefundDates(first, safeQty);
       return Array.from({ length: safeQty }, (_, i) => ({
-        date: dates[i] || prev[i]?.date || today,
+        date: dates[i] || prev[i]?.date || defaultRefundFirstDate,
         value: i === safeQty - 1 ? Math.round((per + rest) * 100) / 100 : per,
       }));
     });
   };
+
+  useEffect(() => {
+    if (!semMultaCDC7) {
+      const v = Math.round(fineBase * (finePercent / 100) * 100) / 100;
+      setFineValue(v);
+    }
+  }, [fineBase, finePercent, semMultaCDC7]);
+
+  useEffect(() => {
+    if (estornoTotal > 0.01) {
+      applyRefundQty(refundQty);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estornoTotal, localRevertQty]);
+
+  const maxLocalRevert = Math.max(0, totalInscricoes - inscRevertidasPersistidas - 1);
+  const showFractionControls = totalInscricoes >= 2 && inscRevertidasPersistidas === 0 && !simplified;
 
   const setRefundDate = (idx: number, date: string) => {
     setRefundInstallments((prev) => {
@@ -1632,6 +1660,13 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
     });
   };
 
+  const handleConfirmCancellation = (fineAlreadyPaid: boolean, abatimentoInfo?: AbatimentoInfo) => {
+    if (localRevertQty > 0 && onPartialRevertBeforeCancel) {
+      onPartialRevertBeforeCancel(localRevertQty);
+    }
+    onConfirm(installments, fineValue, finePaymentDate, fineAlreadyPaid, simplified || undefined, abatimentoInfo);
+  };
+
   const persistRefundPlanAndConfirm = (fineAlreadyPaid: boolean) => {
     let abatimentoInfo: AbatimentoInfo | undefined;
     if (balance < 0) {
@@ -1674,7 +1709,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
       }
 
     }
-    onConfirm(installments, fineValue, finePaymentDate, fineAlreadyPaid, simplified || undefined, abatimentoInfo);
+    handleConfirmCancellation(fineAlreadyPaid, abatimentoInfo);
   };
 
 
@@ -1693,20 +1728,74 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
         </div>
 
         <div className="p-5 space-y-4">
-          {simplified && (
-
-            <>
-              <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
-                <p className="text-[11px] font-semibold uppercase text-sky-800 tracking-wider">
-                  Cancelamento pós-reversão parcial
+          {showFractionControls && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase text-indigo-800 tracking-wider">
+                  Fracionar contrato
                 </p>
-                <p className="text-xs text-sky-900 mt-1 leading-relaxed">
-                  O assessor já reverteu {inscRevertidas} inscrição(ões) e enviou esse ajuste à Conciliação.
-                  O cálculo abaixo considera apenas a(s) <strong>{inscRestantes} inscrição(ões) remanescente(s)</strong>
-                  {' '}— base de <strong>{formatCurrency(fineBase)}</strong> para multa e eventual estorno.
-                  <strong> Nenhuma nova pendência</strong> será enviada à Conciliação.
+                <p className="text-xs text-indigo-900/90 mt-1 leading-relaxed">
+                  Este contrato tem <strong>{totalInscricoes} inscrições</strong>. Escolha quantas reverter
+                  (sem cancelar) e quantas cancelar agora com multa e eventual estorno.
                 </p>
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="space-y-1">
+                  <span className="text-[10px] font-semibold uppercase text-muted-foreground">Reverter (sem cancelar)</span>
+                  <select
+                    value={localRevertQty}
+                    onChange={(e) => setLocalRevertQty(Number(e.target.value))}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                  >
+                    {Array.from({ length: maxLocalRevert + 1 }, (_, i) => (
+                      <option key={i} value={i}>
+                        {i === 0
+                          ? `0 — cancelar todas (${totalInscricoes})`
+                          : `${i} — cancelar ${totalInscricoes - i}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="rounded-lg border border-indigo-200 bg-white/70 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-indigo-700">Resumo</p>
+                  <p className="text-sm font-bold text-indigo-900 mt-1">
+                    Reverter {localRevertQty} · Cancelar {Math.max(1, totalInscricoes - localRevertQty)}
+                  </p>
+                  <p className="text-[10px] text-indigo-800/80 mt-0.5">
+                    {formatCurrency(valorPorInscricao)} por inscrição
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {effectiveSimplified && (
+            <>
+              {simplified ? (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase text-sky-800 tracking-wider">
+                    Cancelamento pós-reversão parcial
+                  </p>
+                  <p className="text-xs text-sky-900 mt-1 leading-relaxed">
+                    O assessor já reverteu {inscRevertidasPersistidas} inscrição(ões) e enviou esse ajuste à Conciliação.
+                    O cálculo abaixo considera apenas a(s) <strong>{inscRestantes} inscrição(ões) remanescente(s)</strong>
+                    {' '}— base de <strong>{formatCurrency(fineBase)}</strong> para multa e eventual estorno.
+                    <strong> Nenhuma nova pendência</strong> será enviada à Conciliação.
+                  </p>
+                </div>
+              ) : localRevertQty > 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase text-amber-800 tracking-wider">
+                    Cancelamento fracionado
+                  </p>
+                  <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                    Ao confirmar, <strong>{localRevertQty} inscrição(ões) será(ão) revertida(s)</strong> e{' '}
+                    <strong>{inscRestantes} cancelada(s)</strong> com multa e eventual estorno proporcional
+                    (base <strong>{formatCurrency(fineBase)}</strong>).
+                  </p>
+                </div>
+              ) : null}
+              {(simplified || localRevertQty > 0) && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="rounded-xl border border-border bg-muted/30 p-3">
                   <p className="text-[10px] font-semibold uppercase text-muted-foreground">Contrato</p>
@@ -1714,7 +1803,9 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
                   <p className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency(valorPorInscricao)} / inscrição</p>
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase text-emerald-700">Revertidas pelo assessor</p>
+                  <p className="text-[10px] font-semibold uppercase text-emerald-700">
+                    {simplified ? 'Revertidas pelo assessor' : 'A reverter agora'}
+                  </p>
                   <p className="text-base font-bold text-emerald-800">{inscRevertidas}</p>
                   <p className="text-[10px] text-emerald-700/80 mt-0.5">{formatCurrency(Math.round(valorPorInscricao * inscRevertidas * 100) / 100)}</p>
                 </div>
@@ -1729,16 +1820,17 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
                   <p className="text-[10px] text-muted-foreground mt-0.5">de {formatCurrency(totalPaid)} pagos</p>
                 </div>
               </div>
+              )}
             </>
           )}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
 
             <div className="rounded-xl border border-border bg-muted/30 p-3">
               <p className="text-[10px] font-semibold uppercase text-muted-foreground">
-                {simplified ? 'Valor da inscrição a cancelar' : 'Valor do contrato'}
+                {effectiveSimplified ? 'Valor da inscrição a cancelar' : 'Valor do contrato'}
               </p>
-              <p className="text-base font-bold text-foreground">{formatCurrency(simplified ? fineBase : totalContract)}</p>
-              {simplified && (
+              <p className="text-base font-bold text-foreground">{formatCurrency(effectiveSimplified ? fineBase : totalContract)}</p>
+              {effectiveSimplified && (
                 <p className="text-[10px] text-muted-foreground mt-0.5">
                   {inscRestantes} de {totalInscricoes} inscrições · contrato {formatCurrency(totalContract)}
                 </p>
@@ -1746,18 +1838,18 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
             </div>
             <div className="rounded-xl border border-border bg-muted/30 p-3">
               <p className="text-[10px] font-semibold uppercase text-muted-foreground">Pago até o momento</p>
-              <p className="text-base font-bold text-foreground">{formatCurrency(simplified ? paidBase : totalPaid)}</p>
+              <p className="text-base font-bold text-foreground">{formatCurrency(effectiveSimplified ? paidBase : totalPaid)}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                {simplified
+                {effectiveSimplified
                   ? `proporcional — de ${formatCurrency(totalPaid)} pagos`
                   : `${paid.length} parcela${paid.length !== 1 ? 's' : ''}${entrada > 0 ? ` + entrada ${formatCurrency(entrada)}` : ''}`}
               </p>
             </div>
             <div className="rounded-xl border border-border bg-muted/30 p-3">
               <p className="text-[10px] font-semibold uppercase text-muted-foreground">Pendente</p>
-              <p className="text-base font-bold text-foreground">{formatCurrency(simplified ? pendingBase : totalPending)}</p>
+              <p className="text-base font-bold text-foreground">{formatCurrency(effectiveSimplified ? pendingBase : totalPending)}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                {simplified ? 'proporcional à inscrição' : `${pending.length} parcela${pending.length !== 1 ? 's' : ''}`}
+                {effectiveSimplified ? 'proporcional à inscrição' : `${pending.length} parcela${pending.length !== 1 ? 's' : ''}`}
               </p>
             </div>
 
@@ -2277,7 +2369,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
                       <span className="font-semibold text-foreground">{formatCurrency(fineValue)}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{simplified ? 'Pago (proporcional às inscrições canceladas)' : 'Pago até o momento'}</span>
+                      <span className="text-muted-foreground">{effectiveSimplified ? 'Pago (proporcional às inscrições canceladas)' : 'Pago até o momento'}</span>
                       <span className="font-semibold text-foreground">{formatCurrency(paidBase)}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm border-t border-border pt-2">
@@ -2301,14 +2393,14 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
                       </p>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <button
-                          onClick={() => onConfirm(installments, fineValue, finePaymentDate, true, simplified || undefined)}
+                          onClick={() => handleConfirmCancellation(true)}
                           className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
                           title="O aluno já quitou a multa — encerra o caso imediatamente."
                         >
                           Multa Quitada
                         </button>
                         <button
-                          onClick={() => onConfirm(installments, fineValue, finePaymentDate, false, simplified || undefined)}
+                          onClick={() => handleConfirmCancellation(false)}
                           className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
                           title="Registra o saldo da multa como pendência a negativar."
                         >
@@ -2363,14 +2455,14 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, simplif
             {balance > 0 ? (
               <>
                 <button
-                  onClick={() => onConfirm(installments, fineValue, finePaymentDate, true, simplified || undefined)}
+                  onClick={() => handleConfirmCancellation(true)}
                   className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
                   title="O aluno já quitou a multa — encerra o caso imediatamente."
                 >
                   Multa Quitada
                 </button>
                 <button
-                  onClick={() => onConfirm(installments, fineValue, finePaymentDate, false, simplified || undefined)}
+                  onClick={() => handleConfirmCancellation(false)}
                   className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
                   title="Registra o saldo da multa como pendência a negativar."
                 >
@@ -2607,7 +2699,7 @@ export default function CancelamentosPage() {
         ],
       });
     }
-    if (isEmTratativas && remaining >= 2) {
+    if (remaining >= 2 && (isEmTratativas || getFunnelStage(c) === 'Formalização')) {
       setRevertQtyPrompt(c);
       return;
     }
@@ -3069,7 +3161,9 @@ export default function CancelamentosPage() {
   //  - 1 inscrição: comissão sobre o valor total do contrato.
   //  - N inscrições: valor por inscrição = total / N; comissão sobre (qtdRevertida × valor por inscrição).
   const registerCommissionIfEligible = (caseRef: CancellationCase, partialQty?: number) => {
-    if (getFunnelStage(caseRef) !== 'Em Execução') return;
+    const stage = getFunnelStage(caseRef);
+    const allowFormalizacaoImport = stage === 'Formalização' && caseRef.externalImport === true;
+    if (stage !== 'Em Execução' && !allowFormalizacaoImport) return;
     const st = getCaseStudent(caseRef);
     // Valor total do contrato: prioriza saleValue do aluno; fallback para o value do caso
     // (usado quando o caso foi criado via importação com contrato já quitado).
@@ -4389,6 +4483,9 @@ export default function CancelamentosPage() {
             caseRef={liveCase}
             student={getCaseStudent(liveCase)}
             simplified={simplified}
+            onPartialRevertBeforeCancel={(qty) => {
+              applyPartialRevert(liveCase, qty, 'Fracionamento definido no distrato — jurídico.');
+            }}
             onClose={() => setFinalizeAction(null)}
             onConfirm={(installments, fineValue, fineDueDate, fineAlreadyPaid, skipConciliation, abatimento) => {
               finalizeCancellation(liveCase.id, installments, fineValue, fineDueDate, fineAlreadyPaid, skipConciliation, abatimento);
