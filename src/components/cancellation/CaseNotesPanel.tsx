@@ -4,6 +4,7 @@ import { CancellationCase, CaseNote, CaseNoteAttachment } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { supabase } from '@/integrations/supabase/client';
+import { saveCancellationCaseNotesDb } from '@/lib/supabaseMutations';
 import { downloadCancellationPdf, openCancellationPdf, isViewableInBrowser } from '@/lib/openCancellationPdf';
 import { toast } from 'sonner';
 
@@ -93,7 +94,8 @@ export default function CaseNotesPanel({ caseRef }: Props) {
         attachments: attachments.length ? attachments : undefined,
       };
       const next = [note, ...notes];
-      await updateCancellationCase(caseRef.id, { caseNotes: next });
+      updateCancellationCase(caseRef.id, { caseNotes: next });
+      await saveCancellationCaseNotesDb(caseRef.id, next);
       setText('');
       setPending([]);
       toast.success('Observação registrada.');
@@ -115,7 +117,8 @@ export default function CaseNotesPanel({ caseRef }: Props) {
       } catch { /* ignore */ }
     }
     const next = notes.filter((n) => n.id !== id);
-    await updateCancellationCase(caseRef.id, { caseNotes: next });
+    updateCancellationCase(caseRef.id, { caseNotes: next });
+    await saveCancellationCaseNotesDb(caseRef.id, next);
   };
 
   const openAttachment = async (a: CaseNoteAttachment) => {

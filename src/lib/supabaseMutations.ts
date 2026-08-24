@@ -503,6 +503,18 @@ export async function updateCancellationCaseDb(id: string, data: Partial<Cancell
   }
 }
 
+/** Salva observações manuais (case_notes) via RPC com RLS dedicado. */
+export async function saveCancellationCaseNotesDb(
+  caseId: string,
+  notes: CancellationCase['caseNotes'],
+) {
+  const { error } = await supabase.rpc('save_cancellation_case_notes', {
+    p_case_id: caseId,
+    p_notes: notes ?? [],
+  });
+  if (error) throw error;
+}
+
 export async function deleteCancellationCaseDb(id: string) {
   const { error } = await supabase.from('cancellation_cases').delete().eq('id', id);
   if (error) throw error;
