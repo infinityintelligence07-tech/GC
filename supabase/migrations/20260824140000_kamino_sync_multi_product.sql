@@ -1,28 +1,5 @@
--- Kamino sync setup
-CREATE OR REPLACE FUNCTION public.gc_student_key(n text, p text)
-RETURNS text LANGUAGE sql IMMUTABLE AS $$
-  SELECT lower(trim(coalesce(n, ''))) || '||' || lower(trim(coalesce(p, '')))
-$$;
-
-CREATE TABLE IF NOT EXISTS public._kamino_sync_staging (
-  skey text PRIMARY KEY,
-  name text,
-  whatsapp text,
-  email text,
-  ac text,
-  product text,
-  enrollment_date date,
-  data_treinamento_origem date,
-  due_day int,
-  sale_value numeric,
-  down_payment numeric,
-  total_installments int,
-  paid_installments int,
-  installment_value numeric,
-  installments jsonb,
-  detalhes text,
-  status text
-);
+-- Kamino sync: uma ficha por nome+produto (paridade com Kamino).
+-- Remove o match fuzzy por nome único que bloqueava INSERT e sobrescrevia produto.
 
 CREATE OR REPLACE FUNCTION public.run_kamino_sync_from_staging()
 RETURNS jsonb
@@ -75,18 +52,60 @@ BEGIN
     installment_value, installments, history, tags, detalhes
   )
   SELECT
-    gen_random_uuid(), v_company, k.name,
-    coalesce(nullif(k.whatsapp, ''), (SELECT nullif(s2.whatsapp, '') FROM public.students s2 WHERE lower(trim(s2.name)) = lower(trim(k.name)) ORDER BY s2.updated_at DESC NULLS LAST LIMIT 1), ''),
-    coalesce(k.email, (SELECT s2.email FROM public.students s2 WHERE lower(trim(s2.name)) = lower(trim(k.name)) AND s2.email IS NOT NULL ORDER BY s2.updated_at DESC NULLS LAST LIMIT 1)),
-    coalesce((SELECT nullif(s2.cpf, '') FROM public.students s2 WHERE lower(trim(s2.name)) = lower(trim(k.name)) ORDER BY s2.updated_at DESC NULLS LAST LIMIT 1), ''),
+    gen_random_uuid(),
+    v_company,
+    k.name,
+    coalesce(
+      nullif(k.whatsapp, ''),
+      (SELECT nullif(s2.whatsapp, '') FROM public.students s2
+       WHERE lower(trim(s2.name)) = lower(trim(k.name))
+       ORDER BY s2.updated_at DESC NULLS LAST
+       LIMIT 1),
+      ''
+    ),
+    coalesce(
+      k.email,
+      (SELECT s2.email FROM public.students s2
+       WHERE lower(trim(s2.name)) = lower(trim(k.name)) AND s2.email IS NOT NULL
+       ORDER BY s2.updated_at DESC NULLS LAST
+       LIMIT 1)
+    ),
+    coalesce(
+      (SELECT nullif(s2.cpf, '') FROM public.students s2
+       WHERE lower(trim(s2.name)) = lower(trim(k.name))
+       ORDER BY s2.updated_at DESC NULLS LAST
+       LIMIT 1),
+      ''
+    ),
     '', '', '', '', '',
-    k.status, 'Automático',
-    coalesce(nullif(k.ac, ''), (SELECT nullif(trim(s2.ac), '') FROM public.students s2 WHERE lower(trim(s2.name)) = lower(trim(k.name)) ORDER BY s2.updated_at DESC NULLS LAST LIMIT 1), ''),
-    k.product, k.enrollment_date::text, coalesce(k.data_treinamento_origem::text, k.enrollment_date::text), k.due_day,
-    k.sale_value, k.down_payment, k.total_installments, k.paid_installments,
-    k.installment_value, k.installments, '[]'::jsonb, '[]'::jsonb, k.detalhes
+    k.status,
+    'Automático',
+    coalesce(
+      nullif(k.ac, ''),
+      (SELECT nullif(trim(s2.ac), '') FROM public.students s2
+       WHERE lower(trim(s2.name)) = lower(trim(k.name))
+       ORDER BY s2.updated_at DESC NULLS LAST
+       LIMIT 1),
+      ''
+    ),
+    k.product,
+    k.enrollment_date::text,
+    coalesce(k.data_treinamento_origem::text, k.enrollment_date::text),
+    k.due_day,
+    k.sale_value,
+    k.down_payment,
+    k.total_installments,
+    k.paid_installments,
+    k.installment_value,
+    k.installments,
+    '[]'::jsonb,
+    '[]'::jsonb,
+    k.detalhes
   FROM public._kamino_sync_staging k
-  WHERE NOT EXISTS (SELECT 1 FROM public.students s WHERE public.gc_student_key(s.name, s.product) = k.skey);
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.students s
+    WHERE public.gc_student_key(s.name, s.product) = k.skey
+  );
   GET DIAGNOSTICS v_inserted = ROW_COUNT;
 
   INSERT INTO matched_ids (id)
@@ -140,3 +159,6 @@ BEGIN
   );
 END;
 $$;
+
+COMMENT ON FUNCTION public.run_kamino_sync_from_staging() IS
+  'Sincroniza Kamino → GC por chave nome+produto. Permite múltiplos contratos por pessoa.';

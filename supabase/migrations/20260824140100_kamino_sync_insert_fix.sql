@@ -1,59 +1,4 @@
-/**
- * Gera setup SQL + batches para sync Kamino via Supabase MCP.
- */
-import fs from 'node:fs';
-import path from 'node:path';
-
-const kamino = JSON.parse(fs.readFileSync('scripts/.kamino-parsed.json', 'utf8'));
-const batchSize = 35;
-const outDir = path.resolve('scripts/kamino-sync-batches');
-const ts = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
-
-const payload = kamino.map((k) => ({
-  skey: k.key,
-  name: k.name,
-  whatsapp: k.whatsapp || '',
-  email: k.email || null,
-  ac: k.ac || '',
-  product: k.product || '',
-  enrollment_date: k.enrollmentDate || null,
-  data_treinamento_origem: k.data_treinamento_origem || k.enrollmentDate || null,
-  due_day: k.dueDay ?? 10,
-  sale_value: k.saleValue ?? 0,
-  down_payment: k.downPayment ?? 0,
-  total_installments: k.totalInstallments ?? 0,
-  paid_installments: k.paidInstallments ?? 0,
-  installment_value: k.installmentValue ?? 0,
-  installments: k.installments ?? [],
-  detalhes: k.detalhes || null,
-  status: k.status || 'Em Dia',
-}));
-
-const setupSql = `-- Kamino sync setup
-CREATE OR REPLACE FUNCTION public.gc_student_key(n text, p text)
-RETURNS text LANGUAGE sql IMMUTABLE AS $$
-  SELECT lower(trim(coalesce(n, ''))) || '||' || lower(trim(coalesce(p, '')))
-$$;
-
-CREATE TABLE IF NOT EXISTS public._kamino_sync_staging (
-  skey text PRIMARY KEY,
-  name text,
-  whatsapp text,
-  email text,
-  ac text,
-  product text,
-  enrollment_date date,
-  data_treinamento_origem date,
-  due_day int,
-  sale_value numeric,
-  down_payment numeric,
-  total_installments int,
-  paid_installments int,
-  installment_value numeric,
-  installments jsonb,
-  detalhes text,
-  status text
-);
+-- Fix INSERT column count in kamino sync (5 address fields, not 6)
 
 CREATE OR REPLACE FUNCTION public.run_kamino_sync_from_staging()
 RETURNS jsonb
@@ -162,66 +107,10 @@ BEGIN
   FROM public.students s WHERE cc.student_id = s.id;
 
   RETURN jsonb_build_object(
-    'updated', v_updated,
-    'inserted', v_inserted,
-    'deleted', v_deleted,
+    'updated', v_updated, 'inserted', v_inserted, 'deleted', v_deleted,
     'students_final', (SELECT count(*) FROM public.students),
     'cancel_cases', (SELECT count(*) FROM public.cancellation_cases),
     'staging', (SELECT count(*) FROM public._kamino_sync_staging)
   );
 END;
 $$;
-`;
-
-fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(path.join(outDir, '00-setup.sql'), setupSql, 'utf8');
-
-const batches = [];
-for (let i = 0; i < payload.length; i += batchSize) {
-  batches.push(payload.slice(i, i + batchSize));
-}
-
-batches.forEach((batch, idx) => {
-  const jsonLiteral = JSON.stringify(batch).replace(/'/g, "''");
-  const sql = idx === 0
-    ? `TRUNCATE public._kamino_sync_staging;\n\nINSERT INTO public._kamino_sync_staging\nSELECT * FROM jsonb_to_recordset('${jsonLiteral}'::jsonb) AS x(
-  skey text, name text, whatsapp text, email text, ac text, product text,
-  enrollment_date date, data_treinamento_origem date, due_day int,
-  sale_value numeric, down_payment numeric, total_installments int,
-  paid_installments int, installment_value numeric, installments jsonb,
-  detalhes text, status text
-)\nON CONFLICT (skey) DO UPDATE SET
-  name = EXCLUDED.name, whatsapp = EXCLUDED.whatsapp, email = EXCLUDED.email,
-  ac = EXCLUDED.ac, product = EXCLUDED.product, enrollment_date = EXCLUDED.enrollment_date,
-  data_treinamento_origem = EXCLUDED.data_treinamento_origem, due_day = EXCLUDED.due_day,
-  sale_value = EXCLUDED.sale_value, down_payment = EXCLUDED.down_payment,
-  total_installments = EXCLUDED.total_installments, paid_installments = EXCLUDED.paid_installments,
-  installment_value = EXCLUDED.installment_value, installments = EXCLUDED.installments,
-  detalhes = EXCLUDED.detalhes, status = EXCLUDED.status;`
-    : `INSERT INTO public._kamino_sync_staging\nSELECT * FROM jsonb_to_recordset('${jsonLiteral}'::jsonb) AS x(
-  skey text, name text, whatsapp text, email text, ac text, product text,
-  enrollment_date date, data_treinamento_origem date, due_day int,
-  sale_value numeric, down_payment numeric, total_installments int,
-  paid_installments int, installment_value numeric, installments jsonb,
-  detalhes text, status text
-)\nON CONFLICT (skey) DO UPDATE SET
-  name = EXCLUDED.name, whatsapp = EXCLUDED.whatsapp, email = EXCLUDED.email,
-  ac = EXCLUDED.ac, product = EXCLUDED.product, enrollment_date = EXCLUDED.enrollment_date,
-  data_treinamento_origem = EXCLUDED.data_treinamento_origem, due_day = EXCLUDED.due_day,
-  sale_value = EXCLUDED.sale_value, down_payment = EXCLUDED.down_payment,
-  total_installments = EXCLUDED.total_installments, paid_installments = EXCLUDED.paid_installments,
-  installment_value = EXCLUDED.installment_value, installments = EXCLUDED.installments,
-  detalhes = EXCLUDED.detalhes, status = EXCLUDED.status;`;
-
-  const file = path.join(outDir, `batch-${String(idx + 1).padStart(3, '0')}.sql`);
-  fs.writeFileSync(file, sql, 'utf8');
-});
-
-fs.writeFileSync(path.join(outDir, '99-run-sync.sql'), 'SELECT public.run_kamino_sync_from_staging();', 'utf8');
-
-console.log(JSON.stringify({
-  kaminoGroups: payload.length,
-  batches: batches.length,
-  batchSize,
-  outDir,
-}, null, 2));
