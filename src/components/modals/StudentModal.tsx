@@ -2,13 +2,18 @@ import { useState, useEffect, useRef } from 'react';
 import { Student, StudentStatus, StatusMode, canEditTab } from '@/types';
 import { useAppStore, calculateInstallmentValue, generateInstallments, formatCurrency } from '@/store/useAppStore';
 import { buildStudentSnapshot, registrarConciliacao } from '@/store/useConciliacaoStore';
-import { X, FileText, Tag, Plus, Check } from 'lucide-react';
+import { X, FileText, Tag, Plus, Check, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import CurrencyInput from '@/components/ui/CurrencyInput';
 import { getTagStyle } from '@/lib/tagColors';
 import { isProductExcludedFromEsteira } from '@/lib/acEsteira';
 import { findDuplicateStudent } from '@/lib/studentIdentity';
-import { openIamControlContrato } from '@/lib/iamControlContrato';
+import {
+  openIamControlContrato,
+  openIamControlPaymentLink,
+  isIamContratoPendenteLink,
+  isIamContratoPendentePix,
+} from '@/lib/iamControlContrato';
 
 interface Props {
   student?: Student | null;
@@ -60,6 +65,7 @@ export default function StudentModal({ student, onClose }: Props) {
   const tagPickerRef = useRef<HTMLDivElement>(null);
   const [studentTagIds, setStudentTagIds] = useState<string[]>([]);
   const [contratoBusy, setContratoBusy] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
   useEffect(() => {
     setStudentTagIds(student ? (student.tags || []).filter(Boolean) : []);
     // Depende apenas do id do aluno — evita reset a cada re-render do parent
@@ -131,17 +137,39 @@ export default function StudentModal({ student, onClose }: Props) {
     setContratoBusy(true);
     try {
       const res = await openIamControlContrato(student);
-      toast.success(
-        res.treinamento
-          ? `Contrato aberto: ${res.treinamento}`
-          : 'Contrato aberto.',
-      );
+      if (res.pdf_base64) {
+        toast.success(
+          res.treinamento
+            ? `Contrato aberto: ${res.treinamento}`
+            : 'Contrato aberto.',
+        );
+      } else if (String(res.status_conciliacao).toUpperCase() === 'PENDENTE') {
+        toast.info('Contrato pendente no IAM Control — aguardando confirmação de pagamento.');
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Não foi possível abrir o contrato.');
     } finally {
       setContratoBusy(false);
     }
   };
+
+  const handleVerLinkPagamento = async () => {
+    if (!student) return;
+    setLinkBusy(true);
+    try {
+      const link = await openIamControlPaymentLink(student);
+      toast.success('Link de pagamento aberto.');
+      void link;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível abrir o link de pagamento.');
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  const iamPendenteLink = student ? isIamContratoPendenteLink(student) : false;
+  const iamPendentePix = student ? isIamContratoPendentePix(student) : false;
+  const iamPendente = iamPendenteLink || iamPendentePix;
 
   const handleSave = () => {
     if (!form.name.trim()) return;
@@ -703,6 +731,33 @@ export default function StudentModal({ student, onClose }: Props) {
           </div>
         )}
 
+        {student && student.iamControlAlunoId && iamPendente && (
+          <div className="px-6 pb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-amber-200/80 bg-amber-50/50 px-4 py-3">
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                  <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
+                  Pendente {iamPendenteLink ? '(link)' : '(pix)'}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Aguardando confirmação do pagamento via {iamPendenteLink ? 'link' : 'PIX'} no IAM Control.
+                </p>
+              </div>
+              {iamPendenteLink && (
+                <button
+                  type="button"
+                  onClick={() => void handleVerLinkPagamento()}
+                  disabled={linkBusy}
+                  className="shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
+                >
+                  <ExternalLink size={14} />
+                  {linkBusy ? 'Abrindo link...' : 'Ver link de pagamento'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="p-6 border-t border-border flex gap-3 justify-end flex-wrap">
           {student && (
             <button
@@ -712,7 +767,7 @@ export default function StudentModal({ student, onClose }: Props) {
               className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               title={
                 student.iamControlAlunoId
-                  ? 'Abre o contrato conciliado deste aluno no IAM Control (mesmo treinamento da ficha).'
+                  ? 'Abre o contrato deste aluno no IAM Control (conciliado ou pendente).'
                   : 'Disponível apenas para alunos sincronizados com o IAM Control.'
               }
             >

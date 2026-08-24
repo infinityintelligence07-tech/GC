@@ -128,6 +128,10 @@ export interface Student {
   // Integração IAM Control (somente leitura — nunca editável pela interface)
   iamControlAlunoId?: number;
   iamControlSyncedAt?: string;
+  iamControlContratoId?: string;
+  iamControlContratoStatus?: string;
+  iamControlPendenteTipo?: 'LINK' | 'PIX';
+  iamControlPendenteLink?: string;
 }
 
 export interface AC {

@@ -1,6 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Student } from '@/types';
 
+export type IamContratoStatus = 'CONCILIADO' | 'PENDENTE' | string;
+export type IamPendenteTipo = 'LINK' | 'PIX';
+
 export interface IamContratoResolveResult {
   ok: boolean;
   contrato_id?: string;
@@ -8,6 +11,10 @@ export interface IamContratoResolveResult {
   signed_file_url?: string;
   pdf_base64?: string;
   filename?: string;
+  status_conciliacao?: IamContratoStatus;
+  pendente_tipo?: IamPendenteTipo | null;
+  pendente_link?: string | null;
+  aviso?: string;
   error?: string;
   detalhe?: string;
 }
@@ -58,9 +65,10 @@ async function extrairErroInvoke(error: unknown, data: IamContratoResolveResult 
 }
 
 export async function resolveIamControlContrato(
-  student: Pick<Student, 'iamControlAlunoId' | 'product'>,
+  student: Pick<Student, 'iamControlAlunoId' | 'product' | 'iamControlContratoId'>,
+  opts?: { somenteMeta?: boolean },
 ): Promise<IamContratoResolveResult> {
-  if (!student.iamControlAlunoId) {
+  if (!student.iamControlAlunoId && !student.iamControlContratoId) {
     return { ok: false, error: 'Aluno não está vinculado ao IAM Control.' };
   }
 
@@ -68,6 +76,8 @@ export async function resolveIamControlContrato(
     body: {
       iam_control_aluno_id: student.iamControlAlunoId,
       produto: student.product?.trim() || undefined,
+      contrato_id: student.iamControlContratoId,
+      somente_meta: opts?.somenteMeta ?? false,
     },
   });
 
@@ -78,7 +88,9 @@ export async function resolveIamControlContrato(
   return data;
 }
 
-export async function openIamControlContrato(student: Pick<Student, 'iamControlAlunoId' | 'product' | 'name'>) {
+export async function openIamControlContrato(
+  student: Pick<Student, 'iamControlAlunoId' | 'product' | 'name' | 'iamControlContratoId'>,
+) {
   const res = await resolveIamControlContrato(student);
   if (!res.ok) {
     throw new Error(res.error || 'Não foi possível abrir o contrato.');
@@ -90,5 +102,46 @@ export async function openIamControlContrato(student: Pick<Student, 'iamControlA
     return res;
   }
 
-  throw new Error('Contrato encontrado, mas sem PDF disponível.');
+  if (String(res.status_conciliacao).toUpperCase() === 'PENDENTE') {
+    return res;
+  }
+
+  throw new Error(res.aviso || 'Contrato encontrado, mas sem PDF disponível.');
+}
+
+export function isIamContratoPendenteLink(student: Pick<Student, 'iamControlContratoStatus' | 'iamControlPendenteTipo' | 'iamControlPendenteLink'>): boolean {
+  const status = String(student.iamControlContratoStatus ?? '').toUpperCase();
+  const tipo = String(student.iamControlPendenteTipo ?? '').toUpperCase();
+  return status === 'PENDENTE' && tipo === 'LINK' && Boolean(student.iamControlPendenteLink?.trim());
+}
+
+export function isIamContratoPendentePix(student: Pick<Student, 'iamControlContratoStatus' | 'iamControlPendenteTipo'>): boolean {
+  const status = String(student.iamControlContratoStatus ?? '').toUpperCase();
+  const tipo = String(student.iamControlPendenteTipo ?? '').toUpperCase();
+  return status === 'PENDENTE' && tipo === 'PIX';
+}
+
+export async function fetchIamControlPaymentLink(
+  student: Pick<Student, 'iamControlAlunoId' | 'product' | 'iamControlContratoId' | 'iamControlPendenteLink'>,
+): Promise<string> {
+  const cached = student.iamControlPendenteLink?.trim();
+  if (cached) return cached;
+
+  const res = await resolveIamControlContrato(student, { somenteMeta: true });
+  if (!res.ok) {
+    throw new Error(res.error || 'Não foi possível buscar o link de pagamento.');
+  }
+  const link = res.pendente_link?.trim();
+  if (!link) {
+    throw new Error('Este contrato pendente não possui link de pagamento cadastrado no IAM Control.');
+  }
+  return link;
+}
+
+export async function openIamControlPaymentLink(
+  student: Pick<Student, 'iamControlAlunoId' | 'product' | 'name' | 'iamControlContratoId' | 'iamControlPendenteLink'>,
+) {
+  const link = await fetchIamControlPaymentLink(student);
+  window.open(link, '_blank', 'noopener,noreferrer');
+  return link;
 }

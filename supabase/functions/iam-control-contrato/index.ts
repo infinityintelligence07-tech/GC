@@ -61,13 +61,16 @@ type ContratoMeta = {
   contrato_id?: string;
   treinamento?: string;
   signed_file_url?: string | null;
+  status_conciliacao?: string;
+  pendente_tipo?: 'LINK' | 'PIX' | null;
+  pendente_link?: string | null;
 };
 
 function extrairErroIam(meta: Record<string, unknown>, status: number): string {
   const msg = meta.message ?? meta.error ?? meta.detalhe;
   if (typeof msg === 'string' && msg.trim()) return msg.trim();
   if (status === 404) {
-    return 'Contrato conciliado não encontrado no IAM Control. Confirme se o endpoint /contrato está publicado e se o aluno tem contrato CONCILIADO.';
+    return 'Contrato não encontrado no IAM Control (conciliado ou pendente). Confirme se o endpoint /contrato está publicado.';
   }
   return `IAM Control respondeu ${status}.`;
 }
@@ -142,6 +145,7 @@ Deno.serve(async (req: Request) => {
   const iamIdRaw = body.iam_control_aluno_id;
   const iamId = typeof iamIdRaw === 'number' ? iamIdRaw : Number(iamIdRaw);
   const produto = typeof body.produto === 'string' ? body.produto.trim() : '';
+  const somenteMeta = body.somente_meta === true;
 
   try {
     let meta: ContratoMeta;
@@ -160,14 +164,39 @@ Deno.serve(async (req: Request) => {
       return apiResult({ ok: false, error: 'Contrato localizado sem identificador válido.' });
     }
 
-    const bytes = await carregarPdfContrato(id, meta.signed_file_url);
-    return apiResult({
+    const status = String(meta.status_conciliacao ?? '').toUpperCase();
+    const pendenteTipo = meta.pendente_tipo ?? null;
+    const pendenteLink = meta.pendente_link ?? null;
+
+    const basePayload: Record<string, unknown> = {
       ok: true,
       contrato_id: id,
       treinamento: meta.treinamento,
-      pdf_base64: arrayBufferToBase64(bytes),
-      filename: `contrato-${id}.pdf`,
-    });
+      status_conciliacao: status || undefined,
+      pendente_tipo: pendenteTipo,
+      pendente_link: pendenteLink,
+    };
+
+    if (somenteMeta || (status === 'PENDENTE' && pendenteTipo === 'LINK' && pendenteLink)) {
+      return apiResult(basePayload);
+    }
+
+    try {
+      const bytes = await carregarPdfContrato(id, meta.signed_file_url);
+      return apiResult({
+        ...basePayload,
+        pdf_base64: arrayBufferToBase64(bytes),
+        filename: `contrato-${id}.pdf`,
+      });
+    } catch (pdfErr) {
+      if (status === 'PENDENTE') {
+        return apiResult({
+          ...basePayload,
+          aviso: pdfErr instanceof Error ? pdfErr.message : 'PDF indisponível para contrato pendente.',
+        });
+      }
+      throw pdfErr;
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return apiResult({ ok: false, error: msg });

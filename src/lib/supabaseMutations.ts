@@ -108,6 +108,10 @@ export function rowToStudent(r: any): Student {
     // Somente leitura — vindo do IAM Control
     iamControlAlunoId: r.iam_control_aluno_id != null ? Number(r.iam_control_aluno_id) : undefined,
     iamControlSyncedAt: r.iam_control_synced_at ?? undefined,
+    iamControlContratoId: r.iam_control_contrato_id ?? undefined,
+    iamControlContratoStatus: r.iam_control_contrato_status ?? undefined,
+    iamControlPendenteTipo: (r.iam_control_pendente_tipo as 'LINK' | 'PIX' | null) ?? undefined,
+    iamControlPendenteLink: r.iam_control_pendente_link ?? undefined,
   };
 }
 
