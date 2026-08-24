@@ -425,6 +425,16 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       .reduce((acc, i) => acc + ((i as { paidValue?: number }).paidValue ?? i.value), 0),
     [student.installments, student.downPayment],
   );
+  /** Parcelas quitadas — a entrada tem card próprio e não entra aqui. */
+  const totalPagoParcelas = useMemo(
+    () => student.installments
+      .filter((i) => i.paid)
+      .reduce((acc, i) => acc + ((i as { paidValue?: number }).paidValue ?? i.value), 0),
+    [student.installments],
+  );
+  const entradaValor = student.downPayment ?? 0;
+  const hasEntrada = entradaValor > 0.0049;
+  const displayParcelLabel = (instNumber: number) => (hasEntrada ? instNumber + 1 : instNumber);
   const saldoContratoReal = (student.saleValue ?? 0) - totalPagoContrato;
   const deltaContrato = totalAberto - saldoContratoReal; // >0 sobra (encargo/erro), <0 falta
   const hasDelta = Math.abs(deltaContrato) > 0.01;
@@ -1354,7 +1364,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           <div className="border border-border rounded-xl p-4 bg-muted/20">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fluxo de Pagamento</h3>
-              <span className="text-[10px] text-muted-foreground">{student.installments.length} parcelas</span>
+              <span className="text-[10px] text-muted-foreground">
+                {student.installments.length + (hasEntrada ? 1 : 0)} parcelas
+                {hasEntrada ? ' (incl. entrada)' : ''}
+              </span>
             </div>
             {(() => {
               const encargosAtribuidosTotal = Object.values(extraValues).reduce((a, b) => a + (b || 0), 0);
@@ -1444,17 +1457,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               </div>
               <div
                 className="p-2 bg-violet-50 border border-violet-300 rounded-lg"
-                title="Entrada + parcelas já pagas — valor que já abateu do contrato"
+                title="Somente parcelas já pagas — a entrada não entra neste saldo"
               >
                 <p className="text-[9px] text-violet-700 uppercase tracking-wide">Saldo p/ Abater</p>
                 <p className="text-xs font-bold text-violet-800">
-                  {formatCurrency(totalPagoContrato)}
+                  {formatCurrency(totalPagoParcelas)}
                 </p>
-                {(student.downPayment ?? 0) > 0 && (
-                  <p className="text-[9px] text-violet-600/90 mt-0.5">
-                    entrada {formatCurrency(student.downPayment ?? 0)}
-                  </p>
-                )}
               </div>
               <div className="p-2 bg-slate-100 border border-slate-300 rounded-lg">
                 <p className="text-[9px] text-slate-700 uppercase tracking-wide">Total Aberto</p>

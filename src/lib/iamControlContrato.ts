@@ -1,5 +1,4 @@
 import { supabase } from '@/integrations/supabase/client';
-import { openCancellationPdf } from '@/lib/openCancellationPdf';
 import type { Student } from '@/types';
 
 export interface IamContratoResolveResult {
@@ -32,6 +31,32 @@ function openPdfBlob(blob: Blob) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
+async function extrairErroInvoke(error: unknown, data: IamContratoResolveResult | null): Promise<string> {
+  if (data?.error) return data.error;
+  if (data && 'message' in data && typeof (data as { message?: string }).message === 'string') {
+    return (data as { message: string }).message;
+  }
+
+  if (error && typeof error === 'object' && 'context' in error) {
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.json === 'function') {
+      try {
+        const body = await ctx.json() as IamContratoResolveResult & { message?: string };
+        if (body?.error) return body.error;
+        if (body?.message) return body.message;
+      } catch {
+        // ignora parse
+      }
+    }
+  }
+
+  if (error instanceof Error && error.message && !error.message.includes('non-2xx')) {
+    return error.message;
+  }
+
+  return 'Falha ao buscar contrato no IAM Control.';
+}
+
 export async function resolveIamControlContrato(
   student: Pick<Student, 'iamControlAlunoId' | 'product'>,
 ): Promise<IamContratoResolveResult> {
@@ -46,11 +71,9 @@ export async function resolveIamControlContrato(
     },
   });
 
-  if (error) {
-    return { ok: false, error: error.message || 'Falha ao buscar contrato no IAM Control.' };
-  }
-  if (!data?.ok) {
-    return { ok: false, error: data?.error || 'Contrato não encontrado no IAM Control.' };
+  if (error || !data?.ok) {
+    const msg = await extrairErroInvoke(error, data);
+    return { ok: false, error: msg, detalhe: data?.detalhe };
   }
   return data;
 }
@@ -59,11 +82,6 @@ export async function openIamControlContrato(student: Pick<Student, 'iamControlA
   const res = await resolveIamControlContrato(student);
   if (!res.ok) {
     throw new Error(res.error || 'Não foi possível abrir o contrato.');
-  }
-
-  if (res.signed_file_url) {
-    await openCancellationPdf(res.signed_file_url, res.filename || `contrato-${student.name}.pdf`);
-    return res;
   }
 
   if (res.pdf_base64) {

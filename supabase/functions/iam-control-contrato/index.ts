@@ -8,9 +8,10 @@ const corsHeaders = {
 
 const TIMEOUT_MS = 45_000;
 
-function json(status: number, body: unknown): Response {
+/** Resposta JSON sempre com HTTP 200 — evita toast genérico do cliente Supabase em erros de negócio. */
+function apiResult(body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
-    status,
+    status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
@@ -56,19 +57,85 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+type ContratoMeta = {
+  contrato_id?: string;
+  treinamento?: string;
+  signed_file_url?: string | null;
+};
+
+function extrairErroIam(meta: Record<string, unknown>, status: number): string {
+  const msg = meta.message ?? meta.error ?? meta.detalhe;
+  if (typeof msg === 'string' && msg.trim()) return msg.trim();
+  if (status === 404) {
+    return 'Contrato conciliado não encontrado no IAM Control. Confirme se o endpoint /contrato está publicado e se o aluno tem contrato CONCILIADO.';
+  }
+  return `IAM Control respondeu ${status}.`;
+}
+
+async function resolverContratoMeta(iamId: number, produto?: string): Promise<ContratoMeta> {
+  const tentativas: Array<string | undefined> = produto ? [produto, undefined] : [undefined];
+  let ultimoErro = 'Contrato não encontrado no IAM Control.';
+
+  for (const prod of tentativas) {
+    const params = new URLSearchParams({ iam_control_aluno_id: String(iamId) });
+    if (prod) params.set('produto', prod);
+
+    const metaRes = await fetchIam(`/webhooks/gestao-contas/contrato?${params.toString()}`);
+    const meta = await metaRes.json().catch(() => ({} as Record<string, unknown>));
+
+    if (metaRes.ok && meta?.contrato_id) {
+      return meta as ContratoMeta;
+    }
+
+    ultimoErro = extrairErroIam(meta, metaRes.status);
+    if (!prod) break;
+  }
+
+  throw new Error(ultimoErro);
+}
+
+async function carregarPdfContrato(contratoId: string, signedFileUrl?: string | null): Promise<ArrayBuffer> {
+  if (signedFileUrl) {
+    try {
+      const signedRes = await fetch(signedFileUrl);
+      if (signedRes.ok) {
+        return await signedRes.arrayBuffer();
+      }
+    } catch {
+      // segue para endpoint /pdf do IAM
+    }
+  }
+
+  const pdfRes = await fetchIam(
+    `/webhooks/gestao-contas/contrato/${encodeURIComponent(contratoId)}/pdf`,
+    { headers: { Accept: 'application/pdf' } },
+  );
+  if (!pdfRes.ok) {
+    const texto = await pdfRes.text().catch(() => '');
+    throw new Error(
+      texto.trim()
+        ? `PDF indisponível (${pdfRes.status}): ${texto.slice(0, 200)}`
+        : `PDF do contrato indisponível (${pdfRes.status}).`,
+    );
+  }
+  return await pdfRes.arrayBuffer();
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return json(405, { ok: false, error: 'Use POST' });
+  if (req.method !== 'POST') {
+    return apiResult({ ok: false, error: 'Use POST' });
+  }
 
   if (!lerIamConfig()) {
-    return json(500, { ok: false, error: 'Integração IAM Control não configurada no servidor.' });
+    return apiResult({ ok: false, error: 'Integração IAM Control não configurada no servidor (IAM_CONTROL_WEBHOOK_TOKEN).' });
   }
 
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
-    return json(400, { ok: false, error: 'JSON inválido' });
+    return apiResult({ ok: false, error: 'JSON inválido' });
   }
 
   const contratoId = typeof body.contrato_id === 'string' ? body.contrato_id.trim() : '';
@@ -77,76 +144,32 @@ Deno.serve(async (req: Request) => {
   const produto = typeof body.produto === 'string' ? body.produto.trim() : '';
 
   try {
+    let meta: ContratoMeta;
+
     if (contratoId) {
-      const pdfRes = await fetchIam(`/webhooks/gestao-contas/contrato/${encodeURIComponent(contratoId)}/pdf`, {
-        headers: { Accept: 'application/pdf' },
-      });
-      if (!pdfRes.ok) {
-        const texto = await pdfRes.text().catch(() => '');
-        return json(pdfRes.status, {
-          ok: false,
-          error: `Não foi possível carregar o PDF do contrato (${pdfRes.status}).`,
-          detalhe: texto.slice(0, 300),
-        });
+      meta = { contrato_id: contratoId };
+    } else {
+      if (!Number.isFinite(iamId) || iamId <= 0) {
+        return apiResult({ ok: false, error: 'Informe iam_control_aluno_id válido.' });
       }
-      const bytes = await pdfRes.arrayBuffer();
-      return json(200, {
-        ok: true,
-        contrato_id: contratoId,
-        pdf_base64: arrayBufferToBase64(bytes),
-        filename: `contrato-${contratoId}.pdf`,
-      });
+      meta = await resolverContratoMeta(iamId, produto || undefined);
     }
 
-    if (!Number.isFinite(iamId) || iamId <= 0) {
-      return json(400, { ok: false, error: 'Informe iam_control_aluno_id válido.' });
+    const id = meta.contrato_id?.trim();
+    if (!id) {
+      return apiResult({ ok: false, error: 'Contrato localizado sem identificador válido.' });
     }
 
-    const params = new URLSearchParams({
-      iam_control_aluno_id: String(iamId),
-    });
-    if (produto) params.set('produto', produto);
-
-    const metaRes = await fetchIam(`/webhooks/gestao-contas/contrato?${params.toString()}`);
-    const meta = await metaRes.json().catch(() => ({}));
-    if (!metaRes.ok) {
-      return json(metaRes.status, {
-        ok: false,
-        error: meta?.message ?? meta?.error ?? 'Contrato não encontrado no IAM Control.',
-      });
-    }
-
-    if (meta.signed_file_url) {
-      return json(200, {
-        ok: true,
-        contrato_id: meta.contrato_id,
-        treinamento: meta.treinamento,
-        signed_file_url: meta.signed_file_url,
-      });
-    }
-
-    const pdfRes = await fetchIam(
-      `/webhooks/gestao-contas/contrato/${encodeURIComponent(meta.contrato_id)}/pdf`,
-      { headers: { Accept: 'application/pdf' } },
-    );
-    if (!pdfRes.ok) {
-      const texto = await pdfRes.text().catch(() => '');
-      return json(pdfRes.status, {
-        ok: false,
-        error: 'Contrato localizado, mas o PDF não pôde ser gerado.',
-        detalhe: texto.slice(0, 300),
-      });
-    }
-    const bytes = await pdfRes.arrayBuffer();
-    return json(200, {
+    const bytes = await carregarPdfContrato(id, meta.signed_file_url);
+    return apiResult({
       ok: true,
-      contrato_id: meta.contrato_id,
+      contrato_id: id,
       treinamento: meta.treinamento,
       pdf_base64: arrayBufferToBase64(bytes),
-      filename: `contrato-${meta.contrato_id}.pdf`,
+      filename: `contrato-${id}.pdf`,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return json(500, { ok: false, error: msg });
+    return apiResult({ ok: false, error: msg });
   }
 });
