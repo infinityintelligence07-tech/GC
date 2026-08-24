@@ -3,9 +3,9 @@ import { useAppStore } from '@/store/useAppStore';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { useAuth } from '@/hooks/useAuth';
-import { TabKey, PermissionTab, canViewTab } from '@/types';
+import { TabKey, PermissionTab, canViewTab, canManageUsers } from '@/types';
 import logoIamWhite from '@/assets/logo-iam-white.png';
-import { BarChart3, GraduationCap, Users, DollarSign, Settings, User, ChevronDown, XCircle, LogOut, Trophy, ClipboardCheck, X, ScrollText, Award, Wallet, MessageSquareText, Landmark } from 'lucide-react';
+import { BarChart3, GraduationCap, Users, DollarSign, Settings, User, ChevronDown, XCircle, LogOut, Trophy, ClipboardCheck, X, ScrollText, Award, Wallet, MessageSquareText, Landmark, ShieldCheck } from 'lucide-react';
 
 interface SidebarProps {
   /** Quando true, mostra a sidebar em mobile (drawer). Em desktop é sempre visível. */
@@ -269,9 +269,26 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
                 )}
               </button>
 
-              {/* Configurações sub-items: Régua */}
+              {/* Configurações sub-items: Controle de Acesso + Régua */}
               {isConfig && configOpen && (
                 <div className="ml-4 mt-1 space-y-0.5 slide-in">
+                  {canManageUsers(currentUser) && (
+                    <button
+                      onClick={() => { setActiveTab('config'); onMobileClose?.(); }}
+                      className={`w-full flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-lg text-[12px] font-medium transition-all duration-200 ${
+                        activeTab === 'config'
+                          ? 'bg-sidebar-accent/70 text-sidebar-primary-foreground'
+                          : 'text-sidebar-foreground/40 hover:text-sidebar-foreground/70 hover:bg-sidebar-accent/25'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                        activeTab === 'config' ? 'bg-primary/25 text-primary-foreground' : 'bg-sidebar-accent/50 text-sidebar-foreground/50'
+                      }`}>
+                        <ShieldCheck size={11} strokeWidth={2} />
+                      </div>
+                      <span className="truncate">Controle de Acesso</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => { setActiveTab('regua'); onMobileClose?.(); }}
                     className={`w-full flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-lg text-[12px] font-medium transition-all duration-200 ${

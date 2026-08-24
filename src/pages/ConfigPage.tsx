@@ -14,7 +14,7 @@ import TransferModal from '@/components/modals/TransferModal';
 import DeleteModal from '@/components/modals/DeleteModal';
 import DivisaoCarteiraModal from '@/components/modals/DivisaoCarteiraModal';
 import { Plus, Trash2, Edit2, Check, X, Upload, SplitSquareHorizontal, ShieldCheck, User, Lock, Eye, EyeOff, Tag, Save, Info, AlertTriangle, Building2, Target } from 'lucide-react';
-import { AC, AppUser, UserRole, UserPermissions, PermissionLevel, PERMISSION_TABS, getEffectivePermissions, canConfirmarPagamento } from '@/types';
+import { AC, AppUser, UserRole, UserPermissions, PermissionLevel, PERMISSION_TABS, getEffectivePermissions, canConfirmarPagamento, canManageUsers } from '@/types';
 import { getTagCSSColor } from '@/lib/tagColors';
 import EsteiraAssessoresBlock from '@/components/ui/EsteiraAssessoresBlock';
 
@@ -452,6 +452,241 @@ export default function ConfigPage() {
   return (
     <div className="max-w-3xl space-y-6">
       <CompaniesSection />
+
+      {/* ── Controle de Acesso — Usuários ─────────────────────────────────────── */}
+      {canManageUsers(currentUser) && (
+        <div id="controle-acesso-usuarios" className="bg-card border border-border rounded-2xl p-6 saas-shadow">
+          <div className="flex items-center gap-2 mb-1">
+            <ShieldCheck size={16} className="text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">Controle de Acesso — Usuários</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">Gerencie quem pode acessar o sistema e com qual nível de permissão.</p>
+
+          {/* User list */}
+          <div className="space-y-2 mb-5">
+            {appUsers.map((u) => (
+              <div key={u.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                  {u.name.charAt(0)}
+                </div>
+                {editingUser?.id === u.id ? (
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    <input className="input-field text-xs py-1" placeholder="Nome" value={editUserName} onChange={(e) => setEditUserName(e.target.value)} />
+                    <input className="input-field text-xs py-1" placeholder="Login" value={editUserLogin} onChange={(e) => setEditUserLogin(e.target.value)} />
+                    <div className="col-span-2 relative">
+                      <input
+                        className="input-field text-xs py-1 pr-8 w-full"
+                        placeholder="Senha"
+                        type={showEditUserPwd ? 'text' : 'password'}
+                        value={editUserPassword}
+                        onChange={(e) => setEditUserPassword(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditUserPwd((v) => !v)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        tabIndex={-1}
+                        title={showEditUserPwd ? 'Ocultar senha' : 'Ver senha'}
+                      >
+                        {showEditUserPwd ? <EyeOff size={12} /> : <Eye size={12} />}
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-muted-foreground mb-1">Tipo</label>
+                      <select className="input-field w-full text-xs py-1" value={editUserRole} onChange={(e) => setEditUserRole(e.target.value as UserRole)}>
+                        {ROLE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-muted-foreground mb-1">Vincular a um AC (opcional)</label>
+                      <select className="input-field w-full text-xs py-1" value={editUserACId} onChange={(e) => setEditUserACId(e.target.value)}>
+                        <option value="">— Sem vínculo —</option>
+                        {acs.filter((g) => g.active).map((g) => (
+                          <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <PermissionGrid
+                      value={editUserPermissions}
+                      onChange={setEditUserPermissions}
+                      canToggleAdmin={canManageUsers(currentUser)}
+                    />
+
+                    <ConfirmarPagamentoToggle
+                      value={editUserCanConfirmar}
+                      onChange={setEditUserCanConfirmar}
+                    />
+
+                    <CompanyAccessGrid
+                      companies={companies}
+                      value={editUserCompanyIds}
+                      onChange={setEditUserCompanyIds}
+                    />
+
+                    <div className="col-span-2 flex gap-2 justify-end pt-1">
+                      <button
+                        onClick={() => setEditingUser(null)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border border-border bg-background hover:bg-muted text-muted-foreground transition-colors"
+                      >
+                        <X size={12} /> Cancelar
+                      </button>
+                      <button
+                        onClick={handleSaveUser}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold iam-gradient text-primary-foreground hover:opacity-90 transition-opacity"
+                      >
+                        <Save size={12} /> Salvar alterações
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">{u.name}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        @{u.login}{getUserACIdForActiveCompany(u) ? ` · ${acs.find((g) => g.id === getUserACIdForActiveCompany(u))?.name ?? getUserACIdForActiveCompany(u)}` : ''}
+                      </p>
+                      <PermissionsSummary user={u} />
+                    </div>
+                    <button onClick={() => startEditUser(u)} className="action-btn" title="Editar"><Edit2 size={12} /></button>
+                    {u.id !== 'admin-default' && u.id !== '00000000-0000-0000-0000-000000000001' && (
+                      <button onClick={() => setDeleteUserId(u.id)} className="action-btn text-destructive" title="Excluir"><Trash2 size={12} /></button>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Add new user form */}
+          <div className="border-t border-border pt-4">
+            {!showAddUserForm ? (
+              <button
+                onClick={() => setShowAddUserForm(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold iam-gradient text-primary-foreground hover:opacity-90 transition-opacity"
+              >
+                <Plus size={14} /> Adicionar Usuário
+              </button>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Adicionar Usuário</p>
+                  <button
+                    onClick={() => {
+                      setShowAddUserForm(false);
+                      setUserSaveError('');
+                      setNewUserName(''); setNewUserLogin(''); setNewUserPassword('');
+                      setNewUserACId(''); setNewUserRole(''); setNewUserPermissions(EMPTY_PERMS);
+                      setNewUserCanConfirmar(false);
+                    }}
+                    className="action-btn"
+                    title="Fechar"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1"><User size={11} className="inline mr-1" />Nome</label>
+                    <input className="input-field w-full text-xs" placeholder="Nome completo" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1"><User size={11} className="inline mr-1" />Login</label>
+                    <input className="input-field w-full text-xs" placeholder="Login de acesso" value={newUserLogin} onChange={(e) => setNewUserLogin(e.target.value)} />
+                  </div>
+                  <div className="relative">
+                    <label className="block text-[11px] text-muted-foreground mb-1"><Lock size={11} className="inline mr-1" />Senha</label>
+                    <input
+                      className="input-field w-full text-xs pr-8"
+                      type={showNewUserPwd ? 'text' : 'password'}
+                      placeholder="Senha"
+                      value={newUserPassword}
+                      onChange={(e) => setNewUserPassword(e.target.value)}
+                    />
+                    <button type="button" onClick={() => setShowNewUserPwd((v) => !v)} className="absolute right-2 top-7 text-muted-foreground hover:text-foreground">
+                      {showNewUserPwd ? <EyeOff size={12} /> : <Eye size={12} />}
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1"><ShieldCheck size={11} className="inline mr-1" />Tipo</label>
+                    <select className="input-field w-full text-xs" value={newUserRole} onChange={(e) => setNewUserRole(e.target.value as UserRole | '')}>
+                      <option value="">— Selecione (opcional) —</option>
+                      {ROLE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1">
+                      Vincular a um AC <span className="text-muted-foreground/70">(opcional)</span>
+                    </label>
+                    <select className="input-field w-full text-xs" value={newUserACId} onChange={(e) => setNewUserACId(e.target.value)}>
+                      <option value="">— Sem vínculo —</option>
+                      <option value="__new__">+ Criar novo AC com o nome do usuário</option>
+                      {acs.filter((g) => g.active).map((g) => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))}
+                    </select>
+                    {newUserACId && newUserACId !== '' && (
+                      <div className="mt-1.5 flex items-start gap-1.5 text-[10px] text-sky-700 bg-sky-500/5 border border-sky-300/40 rounded-md px-2 py-1.5">
+                        <Info size={11} className="shrink-0 mt-0.5" />
+                        <span>
+                          Vinculado a um AC: ao acessar <strong>Equipe</strong>, o usuário verá apenas a própria carteira
+                          {newUserACId === '__new__' ? ' (criada com o nome dele).' : `: ${acs.find((g) => g.id === newUserACId)?.name ?? ''}.`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] text-muted-foreground mb-2 flex items-center gap-1">
+                      <ShieldCheck size={11} className="inline" /> Permissões
+                      <span className="text-muted-foreground/70 font-normal">— escolha o que ele pode visualizar e editar em cada aba</span>
+                    </label>
+                    <PermissionGrid
+                      value={newUserPermissions}
+                      onChange={setNewUserPermissions}
+                      canToggleAdmin={canManageUsers(currentUser)}
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <ConfirmarPagamentoToggle
+                      value={newUserCanConfirmar}
+                      onChange={setNewUserCanConfirmar}
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <CompanyAccessGrid
+                      companies={companies}
+                      value={newUserCompanyIds}
+                      onChange={setNewUserCompanyIds}
+                    />
+                  </div>
+                </div>
+                {userSaveError && (
+                  <p className="mt-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                    {userSaveError}
+                  </p>
+                )}
+                <button
+                  onClick={handleAddUser}
+                  disabled={!newUserName.trim() || !newUserLogin.trim() || !newUserPassword.trim() || savingUser}
+                  className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold iam-gradient text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus size={13} /> {savingUser ? 'Salvando...' : 'Salvar Usuário'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* AC Management */}
       <div className="bg-card border border-border rounded-2xl p-6 saas-shadow">
         <h3 className="text-sm font-semibold text-foreground mb-1">Assessores de Conta</h3>
@@ -807,245 +1042,6 @@ export default function ConfigPage() {
 
         <EstornosGoalsSection />
       </div>
-
-      {/* ── Usuários (admin only) ──────────────────────────────────────────────── */}
-      {currentUser?.role === 'admin' && (
-        <div className="bg-card border border-border rounded-2xl p-6 saas-shadow">
-          <div className="flex items-center gap-2 mb-1">
-            <ShieldCheck size={16} className="text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">Controle de Acesso — Usuários</h3>
-          </div>
-          <p className="text-xs text-muted-foreground mb-4">Gerencie quem pode acessar o sistema e com qual nível de permissão.</p>
-
-          {/* User list */}
-          <div className="space-y-2 mb-5">
-            {appUsers.map((u) => (
-              <div key={u.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                  {u.name.charAt(0)}
-                </div>
-                {editingUser?.id === u.id ? (
-                  <div className="flex-1 grid grid-cols-2 gap-2">
-                    <input className="input-field text-xs py-1" placeholder="Nome" value={editUserName} onChange={(e) => setEditUserName(e.target.value)} />
-                    <input className="input-field text-xs py-1" placeholder="Login" value={editUserLogin} onChange={(e) => setEditUserLogin(e.target.value)} />
-                    <div className="col-span-2 relative">
-                      <input
-                        className="input-field text-xs py-1 pr-8 w-full"
-                        placeholder="Senha"
-                        type={showEditUserPwd ? 'text' : 'password'}
-                        value={editUserPassword}
-                        onChange={(e) => setEditUserPassword(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowEditUserPwd((v) => !v)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        tabIndex={-1}
-                        title={showEditUserPwd ? 'Ocultar senha' : 'Ver senha'}
-                      >
-                        {showEditUserPwd ? <EyeOff size={12} /> : <Eye size={12} />}
-                      </button>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] text-muted-foreground mb-1">Tipo</label>
-                      <select className="input-field w-full text-xs py-1" value={editUserRole} onChange={(e) => setEditUserRole(e.target.value as UserRole)}>
-                        {ROLE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] text-muted-foreground mb-1">Vincular a um AC (opcional)</label>
-                      <select className="input-field w-full text-xs py-1" value={editUserACId} onChange={(e) => setEditUserACId(e.target.value)}>
-                        <option value="">— Sem vínculo —</option>
-                        {acs.filter((g) => g.active).map((g) => (
-                          <option key={g.id} value={g.id}>{g.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <PermissionGrid
-                      value={editUserPermissions}
-                      onChange={setEditUserPermissions}
-                      canToggleAdmin={currentUser?.permissions?.admin === 'edit'}
-                    />
-
-
-                    <ConfirmarPagamentoToggle
-                      value={editUserCanConfirmar}
-                      onChange={setEditUserCanConfirmar}
-                    />
-
-                    <CompanyAccessGrid
-                      companies={companies}
-                      value={editUserCompanyIds}
-                      onChange={setEditUserCompanyIds}
-                    />
-
-
-
-                    <div className="col-span-2 flex gap-2 justify-end pt-1">
-                      <button
-                        onClick={() => setEditingUser(null)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border border-border bg-background hover:bg-muted text-muted-foreground transition-colors"
-                      >
-                        <X size={12} /> Cancelar
-                      </button>
-                      <button
-                        onClick={handleSaveUser}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold iam-gradient text-primary-foreground hover:opacity-90 transition-opacity"
-                      >
-                        <Save size={12} /> Salvar alterações
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground">{u.name}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        @{u.login}{getUserACIdForActiveCompany(u) ? ` · ${acs.find((g) => g.id === getUserACIdForActiveCompany(u))?.name ?? getUserACIdForActiveCompany(u)}` : ''}
-                      </p>
-                      <PermissionsSummary user={u} />
-                    </div>
-                    <button onClick={() => startEditUser(u)} className="action-btn" title="Editar"><Edit2 size={12} /></button>
-                    {u.id !== 'admin-default' && (
-                      <button onClick={() => setDeleteUserId(u.id)} className="action-btn text-destructive" title="Excluir"><Trash2 size={12} /></button>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Add new user form */}
-          <div className="border-t border-border pt-4">
-            {!showAddUserForm ? (
-              <button
-                onClick={() => setShowAddUserForm(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold iam-gradient text-primary-foreground hover:opacity-90 transition-opacity"
-              >
-                <Plus size={14} /> Adicionar Usuário
-              </button>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase">Adicionar Usuário</p>
-                  <button
-                    onClick={() => {
-                      setShowAddUserForm(false);
-                      setUserSaveError('');
-                      setNewUserName(''); setNewUserLogin(''); setNewUserPassword('');
-                      setNewUserACId(''); setNewUserRole(''); setNewUserPermissions(EMPTY_PERMS);
-                      setNewUserCanConfirmar(false);
-                    }}
-                    className="action-btn"
-                    title="Fechar"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] text-muted-foreground mb-1"><User size={11} className="inline mr-1" />Nome</label>
-                    <input className="input-field w-full text-xs" placeholder="Nome completo" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-muted-foreground mb-1"><User size={11} className="inline mr-1" />Login</label>
-                    <input className="input-field w-full text-xs" placeholder="Login de acesso" value={newUserLogin} onChange={(e) => setNewUserLogin(e.target.value)} />
-                  </div>
-                  <div className="relative">
-                    <label className="block text-[11px] text-muted-foreground mb-1"><Lock size={11} className="inline mr-1" />Senha</label>
-                    <input
-                      className="input-field w-full text-xs pr-8"
-                      type={showNewUserPwd ? 'text' : 'password'}
-                      placeholder="Senha"
-                      value={newUserPassword}
-                      onChange={(e) => setNewUserPassword(e.target.value)}
-                    />
-                    <button type="button" onClick={() => setShowNewUserPwd((v) => !v)} className="absolute right-2 top-7 text-muted-foreground hover:text-foreground">
-                      {showNewUserPwd ? <EyeOff size={12} /> : <Eye size={12} />}
-                    </button>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-muted-foreground mb-1"><ShieldCheck size={11} className="inline mr-1" />Tipo</label>
-                    <select className="input-field w-full text-xs" value={newUserRole} onChange={(e) => setNewUserRole(e.target.value as UserRole | '')}>
-                      <option value="">— Selecione (opcional) —</option>
-                      {ROLE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-muted-foreground mb-1">
-                      Vincular a um AC <span className="text-muted-foreground/70">(opcional)</span>
-                    </label>
-                    <select className="input-field w-full text-xs" value={newUserACId} onChange={(e) => setNewUserACId(e.target.value)}>
-                      <option value="">— Sem vínculo —</option>
-                      <option value="__new__">+ Criar novo AC com o nome do usuário</option>
-                      {acs.filter((g) => g.active).map((g) => (
-                        <option key={g.id} value={g.id}>{g.name}</option>
-                      ))}
-                    </select>
-                    {newUserACId && newUserACId !== '' && (
-                      <div className="mt-1.5 flex items-start gap-1.5 text-[10px] text-sky-700 bg-sky-500/5 border border-sky-300/40 rounded-md px-2 py-1.5">
-                        <Info size={11} className="shrink-0 mt-0.5" />
-                        <span>
-                          Vinculado a um AC: ao acessar <strong>Equipe</strong>, o usuário verá apenas a própria carteira
-                          {newUserACId === '__new__' ? ' (criada com o nome dele).' : `: ${acs.find((g) => g.id === newUserACId)?.name ?? ''}.`}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] text-muted-foreground mb-2 flex items-center gap-1">
-                      <ShieldCheck size={11} className="inline" /> Permissões
-                      <span className="text-muted-foreground/70 font-normal">— escolha o que ele pode visualizar e editar em cada aba</span>
-                    </label>
-                    <PermissionGrid
-                      value={newUserPermissions}
-                      onChange={setNewUserPermissions}
-                      canToggleAdmin={currentUser?.permissions?.admin === 'edit'}
-                    />
-
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <ConfirmarPagamentoToggle
-                      value={newUserCanConfirmar}
-                      onChange={setNewUserCanConfirmar}
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <CompanyAccessGrid
-                      companies={companies}
-                      value={newUserCompanyIds}
-                      onChange={setNewUserCompanyIds}
-                    />
-                  </div>
-
-                </div>
-                {userSaveError && (
-                  <p className="mt-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
-                    {userSaveError}
-                  </p>
-                )}
-                <button
-                  onClick={handleAddUser}
-                  disabled={!newUserName.trim() || !newUserLogin.trim() || !newUserPassword.trim() || savingUser}
-                  className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold iam-gradient text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Plus size={13} /> {savingUser ? 'Salvando...' : 'Salvar Usuário'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Tags de Alunos */}
       <div className="bg-card border border-border rounded-2xl p-6 saas-shadow">

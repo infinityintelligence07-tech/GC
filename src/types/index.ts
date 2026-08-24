@@ -261,7 +261,7 @@ export function getEffectivePermissions(user: AppUser | null | undefined): UserP
     return {
       dashboard: 'edit', alunos: 'edit', equipe: 'edit', rendaExtra: 'edit',
       cancelamentos: 'edit', comissoes: 'edit', estornos: 'edit', conciliacao: 'edit', config: 'edit',
-      admin: stored.admin ?? 'none',
+      admin: stored.admin ?? 'edit',
     };
   }
 
@@ -291,6 +291,13 @@ export function canViewTab(user: AppUser | null | undefined, tab: PermissionTab)
 
 export function canEditTab(user: AppUser | null | undefined, tab: PermissionTab): boolean {
   return getEffectivePermissions(user)[tab] === 'edit';
+}
+
+/** Gerenciar usuários e permissões (Configurações → Controle de Acesso). */
+export function canManageUsers(user: AppUser | null | undefined): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return getEffectivePermissions(user).admin === 'edit';
 }
 
 /**
