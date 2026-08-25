@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, calculateChurnRisk, calculateRendaExtraMetrics, isRecompraOuFundoParcela } from '@/store/useAppStore';
 import { Student, StudentStatus, MOTIVOS_CANCELAMENTO, Notification } from '@/types';
 import StudentModal from '@/components/modals/StudentModal';
@@ -176,15 +176,66 @@ export default function ACPortfolioPage() {
   const hiddenIdsKey = [...hiddenFromPortfolioKeys.ids].sort().join(',');
   const hiddenNamesKey = [...hiddenFromPortfolioKeys.names].sort().join(',');
 
+  // ── Revertidos / Boletos Antecipados (filtros de card) ───────────────────
+  const cancellationDateRange = (() => {
+    if (mode === 'historico') {
+      if (!historicoEnd) return null;
+      const start = historicoStart
+        ? new Date(historicoStart + 'T00:00:00')
+        : new Date(historicoEnd + 'T00:00:00');
+      const end = new Date(historicoEnd + 'T23:59:59');
+      return { start, end };
+    }
+    if (perfPreset === 'todos') return null;
+    return getPerfRange(perfPreset, perfCustomStart, perfCustomEnd);
+  })();
+  const acCases = cancellationCases.filter((c) => {
+    if (c.ac !== ac?.name) return false;
+    return isCancellationCaseInRange(c, cancellationDateRange);
+  });
+  const revertidos = acCases.filter(isCancellationCaseRevertido);
+  const revertidosStudentIds = useMemo(
+    () => studentIdsFromRevertidosCases(revertidos, students, ac?.name),
+    [revertidos, students, ac?.name],
+  );
+  const boletosTagIds = useMemo(
+    () => getTagIdsForKpiGroup(studentTags, 'fundo_tmf_antecipacao'),
+    [studentTags],
+  );
+
+  useEffect(() => {
+    if (kpiCardFilter !== 'boletos_antecipados') return;
+    const active =
+      boletosTagIds.length > 0 &&
+      boletosTagIds.length === tagFilters.length &&
+      boletosTagIds.every((id) => tagFilters.includes(id));
+    if (!active) setKpiCardFilter('');
+  }, [tagFilters, boletosTagIds, kpiCardFilter]);
+
+  const studentsTableRef = useRef<HTMLDivElement>(null);
+  const scrollToStudentsTable = () => {
+    window.setTimeout(() => {
+      studentsTableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  };
+
   // Base AC students with auto-status applied + filtro por tag (recalcula
   // installments/status quando tag está marcada apenas em parcelas específicas)
   const [acStudents, setAcStudents] = useState<Student[]>([]);
   useEffect(() => {
     if (!ac) { setAcStudents([]); return; }
+    const revertidosMode = kpiCardFilter === 'revertidos';
     const base = students
       .filter((s) => s.ac === ac.name)
-      .filter((s) => !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students))
-      .filter((s) => statusFilter === 'Pago' || isStudentInAcPortfolio(s))
+      .filter((s) => {
+        if (revertidosMode && revertidosStudentIds.has(s.id)) return true;
+        return !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students);
+      })
+      .filter((s) => {
+        if (statusFilter === 'Pago' || isStudentInAcPortfolio(s)) return true;
+        if (revertidosMode && revertidosStudentIds.has(s.id)) return true;
+        return false;
+      })
       .filter((s) => studentMatchesTagFilter(s, tagFilters))
       .map((s) => {
         const withStatus = { ...s, status: resolveStudentDisplayStatus(s) } as Student;
@@ -192,7 +243,7 @@ export default function ACPortfolioPage() {
       });
     setAcStudents(base);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey, statusFilter]);
+  }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey, statusFilter, kpiCardFilter, revertidosStudentIds]);
 
 
   // ── KPI students (mode-dependent) ─────────────────────────────────────────
@@ -385,48 +436,12 @@ export default function ACPortfolioPage() {
   // "Todos" (index 0) mostra todos; Hoje/Amanhã/etc filtra a lista
   const [filteredByDue, setFilteredByDue] = useState<Student[]>([]);
   useEffect(() => {
-    if (mode === 'historico') {
+    if (mode === 'historico' || kpiCardFilter === 'revertidos' || kpiCardFilter === 'boletos_antecipados') {
       setFilteredByDue(acStudents);
     } else {
       setFilteredByDue(acStudents.filter(hasInstallmentInForecastRange));
     }
-  }, [acStudents, mode, forecastIndex, forecastCustomStart, forecastCustomEnd]);
-
-  // ── Revertidos / Boletos Antecipados (filtros de card) ───────────────────
-  const cancellationDateRange = (() => {
-    if (mode === 'historico') {
-      if (!historicoEnd) return null;
-      const start = historicoStart
-        ? new Date(historicoStart + 'T00:00:00')
-        : new Date(historicoEnd + 'T00:00:00');
-      const end = new Date(historicoEnd + 'T23:59:59');
-      return { start, end };
-    }
-    if (perfPreset === 'todos') return null;
-    return getPerfRange(perfPreset, perfCustomStart, perfCustomEnd);
-  })();
-  const acCases = cancellationCases.filter((c) => {
-    if (c.ac !== ac?.name) return false;
-    return isCancellationCaseInRange(c, cancellationDateRange);
-  });
-  const revertidos = acCases.filter(isCancellationCaseRevertido);
-  const revertidosStudentIds = useMemo(
-    () => studentIdsFromRevertidosCases(revertidos, students, ac?.name),
-    [revertidos, students, ac?.name],
-  );
-  const boletosTagIds = useMemo(
-    () => getTagIdsForKpiGroup(studentTags, 'fundo_tmf_antecipacao'),
-    [studentTags],
-  );
-
-  useEffect(() => {
-    if (kpiCardFilter !== 'boletos_antecipados') return;
-    const active =
-      boletosTagIds.length > 0 &&
-      boletosTagIds.length === tagFilters.length &&
-      boletosTagIds.every((id) => tagFilters.includes(id));
-    if (!active) setKpiCardFilter('');
-  }, [tagFilters, boletosTagIds, kpiCardFilter]);
+  }, [acStudents, mode, forecastIndex, forecastCustomStart, forecastCustomEnd, kpiCardFilter]);
 
   const setStatusFilter = (v: string) => {
     setStatusFilterRaw(v);
@@ -440,7 +455,22 @@ export default function ACPortfolioPage() {
     if (!normalizeSearch(s.name).includes(normalizeSearch(search))) return false;
     if (scoreFilter !== null && calcularScoreComportamento(s.installments) !== scoreFilter) return false;
     if (productFilter && s.product !== productFilter) return false;
-    if (kpiCardFilter === 'revertidos' && !revertidosStudentIds.has(s.id)) return false;
+
+    if (kpiCardFilter === 'revertidos') {
+      return revertidosStudentIds.has(s.id);
+    }
+    if (kpiCardFilter === 'boletos_antecipados') {
+      if (statusFilter) {
+        if (statusFilter === 'cancelado' && s.statusCancelamento !== 'cancelado') return false;
+        if (statusFilter === 'cancelamento_solicitado' && !isSolicCancel(s)) return false;
+        if (statusFilter === 'Pago' && s.status !== 'Pago') return false;
+        if (statusFilter === 'Renda Extra') {
+          if (!(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')) return false;
+        } else if (!['cancelado', 'cancelamento_solicitado', 'Pago'].includes(statusFilter) && (s.status !== statusFilter || isSolicCancel(s))) return false;
+      }
+      return true;
+    }
+
     // Tag filter já aplicado na base acStudents — não filtra de novo aqui
     if (statusFilter) {
       if (statusFilter === 'cancelado' && s.statusCancelamento !== 'cancelado') return false;
@@ -1085,11 +1115,13 @@ export default function ACPortfolioPage() {
 
         <div
           onClick={() => {
-            if (kpiCardFilter === 'revertidos') setKpiCardFilter('');
-            else {
+            if (kpiCardFilter === 'revertidos') {
+              setKpiCardFilter('');
+            } else {
               setKpiCardFilter('revertidos');
               setStatusFilterRaw('');
               setTagFilters([]);
+              scrollToStudentsTable();
             }
           }}
           className={`h-full min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${kpiCardFilter === 'revertidos' ? 'ring-2 ring-emerald-500/40' : ''}`}
@@ -1130,6 +1162,7 @@ export default function ACPortfolioPage() {
                 setKpiCardFilter('boletos_antecipados');
                 setStatusFilterRaw('');
                 setTagFilters(boletosTagIds);
+                scrollToStudentsTable();
               }
             }}
             className={`h-full min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 ${tagKpis[0].color} transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-500/30 ${kpiCardFilter === 'boletos_antecipados' ? 'ring-2 ring-indigo-500/40' : ''}`}
@@ -1234,6 +1267,23 @@ export default function ACPortfolioPage() {
       </div>
 
       {/* ── 6. Filtro Buscar Aluno ────────────────────────────────────────────── */}
+      {kpiCardFilter && (
+        <div className="flex items-center justify-between gap-3 flex-wrap bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
+          <p className="text-[11px] text-emerald-800">
+            <span className="font-semibold">Filtro ativo:</span>{' '}
+            {kpiCardFilter === 'revertidos' ? 'Revertidos' : (tagKpis[0]?.label ?? 'Boletos Antecipados')}
+            {' · '}
+            <span className="font-semibold">{sorted.length}</span> aluno{sorted.length === 1 ? '' : 's'}
+          </p>
+          <button
+            type="button"
+            onClick={() => { setKpiCardFilter(''); setTagFilters([]); }}
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+          >
+            Limpar filtro
+          </button>
+        </div>
+      )}
       <div className="relative max-w-sm">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input
@@ -1245,7 +1295,7 @@ export default function ACPortfolioPage() {
       </div>
 
       {/* ── Students Table ────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden saas-shadow">
+      <div ref={studentsTableRef} className="bg-card border border-border rounded-2xl overflow-hidden saas-shadow scroll-mt-4">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
