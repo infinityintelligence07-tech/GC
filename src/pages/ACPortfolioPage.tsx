@@ -33,7 +33,7 @@ import {
   studentIdsFromRevertidosCases,
 } from '@/lib/cancellationIndicators';
 import { statusColors } from '@/lib/statusColors';
-import { getTodayBrasilia, calcularDiasVencido } from '@/lib/brasiliaDate';
+import { getTodayBrasilia, calcularDiasVencido, dueDateForDisplay } from '@/lib/brasiliaDate';
 import { getDisplayInstallmentValue, normalizeSearch } from '@/lib/utils';
 import { getTagStyle } from '@/lib/tagColors';
 import { computeTagKpis, getTagIdsForKpiGroup } from '@/lib/tagKpis';
@@ -116,6 +116,7 @@ export default function ACPortfolioPage() {
     const next = [...s.installments].filter((i) => !i.paid).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
     return next?.dueDate ?? '';
   };
+  const nextDueDateUi = (s: Student) => dueDateForDisplay(nextDueDate(s));
   const fmtDateBR = (iso: string) => {
     if (!iso) return '—';
     const [y, m, d] = iso.split('-');
@@ -1387,7 +1388,21 @@ export default function ACPortfolioPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDateBR(nextDueDate(student))}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                        {(() => {
+                          const due = nextDueDateUi(student);
+                          if (!due.displayIso) return '—';
+                          return (
+                            <span
+                              title={due.rolledFromWeekend
+                                ? `Contrato ${fmtDateBR(due.originalIso)} (fim de semana) — vencimento efetivo ${fmtDateBR(due.displayIso)}`
+                                : undefined}
+                            >
+                              {fmtDateBR(due.displayIso)}
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1 items-start">
                           {(() => {
@@ -1412,8 +1427,14 @@ export default function ACPortfolioPage() {
                                     <StatusBadgeManual student={student} status={tableStatus} />
                                     {tableStatus !== 'Em Dia' && tableStatus !== 'Pago' && tableStatus !== 'Pendente' && (() => {
                                       const dias = calcularDiasVencido(student.installments);
+                                      const due = nextDueDateUi(student);
                                       return dias && dias > 0 ? (
-                                        <span className="text-[9px] font-bold text-destructive">
+                                        <span
+                                          className="text-[9px] font-bold text-destructive"
+                                          title={due.rolledFromWeekend
+                                            ? `${dias} dia(s) desde o vencimento efetivo (${fmtDateBR(due.displayIso)}). Contrato: ${fmtDateBR(due.originalIso)}.`
+                                            : `${dias} dia(s) em atraso`}
+                                        >
                                           {dias}d
                                         </span>
                                       ) : null;

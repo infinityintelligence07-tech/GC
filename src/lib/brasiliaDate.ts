@@ -95,6 +95,31 @@ export function isDueToday(dueDateStr: string, ref?: Date): boolean {
   return eff.getTime() === today.getTime();
 }
 
+/** ISO YYYY-MM-DD a partir de Date local (sem UTC). */
+export function toIsoDateLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Data exibida na UI: usa vencimento efetivo quando cai no fim de semana. */
+export function dueDateForDisplay(dueDateStr: string): {
+  displayIso: string;
+  originalIso: string;
+  rolledFromWeekend: boolean;
+} {
+  if (!dueDateStr) return { displayIso: '', originalIso: '', rolledFromWeekend: false };
+  const eff = effectiveDueDate(dueDateStr);
+  const displayIso = toIsoDateLocal(eff);
+  const originalIso = dueDateStr.slice(0, 10);
+  return {
+    displayIso,
+    originalIso,
+    rolledFromWeekend: displayIso !== originalIso,
+  };
+}
+
 /**
  * Calcula há quantos dias a parcela mais antiga vencida está em atraso.
  * Considera rolagem de fim de semana (vencimento efetivo).

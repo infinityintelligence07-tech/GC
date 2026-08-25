@@ -15,7 +15,7 @@ import { Plus, Search, DollarSign, Clock, Trash2, Eye, XCircle, ChevronDown, Che
 import * as XLSX from 'xlsx';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import { statusColors } from '@/lib/statusColors';
-import { calcularDiasVencido } from '@/lib/brasiliaDate';
+import { calcularDiasVencido, dueDateForDisplay } from '@/lib/brasiliaDate';
 import { getTagStyle } from '@/lib/tagColors';
 import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagRefs } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
@@ -140,6 +140,7 @@ export default function StudentsPage() {
     const next = [...insts].filter((i) => !i.paid).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
     return next?.dueDate ?? '';
   };
+  const nextDueDateUi = (s: Student) => dueDateForDisplay(nextDueDate(s));
   const fmtDateBR = (iso: string) => {
     if (!iso) return '—';
     const [y, m, d] = iso.split('-');
@@ -704,7 +705,21 @@ export default function StudentsPage() {
                         </div>
                       </td>
 
-                      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDateBR(nextDueDate(student))}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                        {(() => {
+                          const due = nextDueDateUi(student);
+                          if (!due.displayIso) return '—';
+                          return (
+                            <span
+                              title={due.rolledFromWeekend
+                                ? `Contrato ${fmtDateBR(due.originalIso)} (fim de semana) — vencimento efetivo ${fmtDateBR(due.displayIso)}`
+                                : undefined}
+                            >
+                              {fmtDateBR(due.displayIso)}
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{student.ac}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1 items-start">
@@ -730,8 +745,14 @@ export default function StudentsPage() {
                                     <StatusBadgeManual student={student} status={student.status} />
                                     {student.status !== 'Em Dia' && student.status !== 'Pago' && student.status !== 'Pendente' && (() => {
                                       const dias = calcularDiasVencido(student.installments);
+                                      const due = nextDueDateUi(student);
                                       return dias && dias > 0 ? (
-                                        <span className="text-[9px] font-bold text-destructive">
+                                        <span
+                                          className="text-[9px] font-bold text-destructive"
+                                          title={due.rolledFromWeekend
+                                            ? `${dias} dia(s) desde o vencimento efetivo (${fmtDateBR(due.displayIso)}). Contrato: ${fmtDateBR(due.originalIso)}.`
+                                            : `${dias} dia(s) em atraso`}
+                                        >
                                           {dias}d
                                         </span>
                                       ) : null;
