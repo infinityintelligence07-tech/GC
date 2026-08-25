@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Student, StudentStatus, StudentTag, canEditTab } from '@/types';
 import { useAppStore, formatCurrency, calculateAutoStatus, calcularScoreComportamento } from '@/store/useAppStore';
+import { cancelamentoOverridesFinancialStatus } from '@/lib/acPortfolioVisibility';
+import { getCancelamentoBadge, resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
 import StudentModal from '@/components/modals/StudentModal';
 import FinancialModal from '@/components/modals/FinancialModal';
 import HistoryModal from '@/components/modals/HistoryModal';
@@ -77,9 +79,11 @@ function hasActiveRecompra(student: Student, studentTags: StudentTag[]): boolean
   });
 }
 
-// ── Status cancelamento badge ──────────────────────────────────────────────────
+// ── Status cancelamento badge (legado — preferir studentDisplayStatus) ────────
 const cancelStatusConfig: Record<string, { label: string; color: string }> = {
-  solicitado: { label: 'Solicitação Cancelamento', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
+  solicitado: { label: 'Solicitação Cancelamento', color: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200' },
+  em_tratamento: { label: 'Em Tratamento', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
+  juridico: { label: 'Jurídico', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
   aguardando_conciliacao: { label: 'Conciliação Pendente', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
   pagamento_multa_pendente: { label: 'Pagamento Multa Pendente', color: 'bg-amber-100 text-amber-700 border border-amber-300' },
   revertido: { label: 'Revertido', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
@@ -167,9 +171,8 @@ export default function StudentsPage() {
         updateStudent(s.id, { statusCancelamento: null });
       }
       if (s.status === 'Negativado') return;
-      if (s.status === 'Solicitação Cancelamento') return;
-      // Contrato cancelado (já conciliado) nunca volta a ser recalculado.
-      if (s.status === 'Cancelado' || s.statusCancelamento === 'cancelado') return;
+      // Cancelamento (solicitação, conciliação pendente, cancelado…) não recalcula Vencido.
+      if (cancelamentoOverridesFinancialStatus(s)) return;
       if (s.statusMode === 'Automático') {
         const autoStatus = calculateAutoStatus(s.installments);
         if (autoStatus !== s.status) updateStudent(s.id, { status: autoStatus });
@@ -239,11 +242,7 @@ export default function StudentsPage() {
     };
     // "Negativado" é sempre preservado, mesmo quando statusMode='Automático'
     // (evita rebaixamento visual durante a janela até o safety-net corrigir).
-    const baseStatus = (safe.status === 'Cancelado' || safe.statusCancelamento === 'cancelado')
-      ? 'Cancelado'
-      : safe.status === 'Negativado'
-      ? 'Negativado'
-      : (safe.statusMode === 'Automático' ? calculateAutoStatus(safe.installments) : safe.status);
+    const baseStatus = resolveStudentDisplayStatus(safe);
     const withStatus = { ...safe, status: baseStatus };
     const filtered = tagFilters.length > 0 ? applyTagFilterToStudent(withStatus, tagFilters) : withStatus;
     return {
@@ -699,12 +698,16 @@ export default function StudentsPage() {
                       <td className="px-4 py-3 text-xs text-muted-foreground">{student.ac}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1 items-start">
-                          {sc === 'solicitado' ? (
-                            /* Solicitação de cancelamento sobrepõe visualmente qualquer outro status */
-                            <span className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200">
-                              Solicitação Cancelamento
-                            </span>
-                          ) : (
+                          {(() => {
+                            const cancelBadge = getCancelamentoBadge(student);
+                            if (cancelamentoOverridesFinancialStatus(student) && cancelBadge) {
+                              return (
+                                <span className={`text-[10px] font-semibold px-2 py-1 rounded-lg ${cancelBadge.color}`}>
+                                  {cancelBadge.label}
+                                </span>
+                              );
+                            }
+                            return (
                             <>
                               {/* Renda Extra finalizado: mostra somente "Renda Extra" como status principal */}
                               {isRendaExtraAtivo(student) && student.rendaExtraStatus !== 'Conciliar Exclusão' ? (
@@ -738,7 +741,8 @@ export default function StudentsPage() {
                                 </span>
                               )}
                             </>
-                          )}
+                            );
+                          })()}
                         </div>
                       </td>
 

@@ -237,7 +237,27 @@ export function useSupabaseSync() {
         }
         const sc = s.statusCancelamento;
         // Se já está cancelado de fato ou em conciliação, não rebaixar.
-        if (sc === 'cancelado' || sc === 'aguardando_conciliacao') return s;
+        if (sc === 'cancelado' || sc === 'aguardando_conciliacao') {
+          if (
+            sc === 'aguardando_conciliacao' &&
+            (s.statusMode !== 'Manual' || s.status !== 'Solicitação Cancelamento')
+          ) {
+            return {
+              ...s,
+              status: 'Solicitação Cancelamento' as const,
+              statusMode: 'Manual' as const,
+            };
+          }
+          return s;
+        }
+        if (sc === 'pagamento_multa_pendente' || sc === 'em_tratamento' || sc === 'juridico') {
+          if (s.statusMode === 'Manual' && s.status === 'Solicitação Cancelamento') return s;
+          return {
+            ...s,
+            status: 'Solicitação Cancelamento' as const,
+            statusMode: 'Manual' as const,
+          };
+        }
         // Só considera reconciliado se o badge de status também já reflete
         // a solicitação — antes bastava o vínculo, e o aluno seguia com o
         // status antigo ("À Negativar", "Vencido 1"...), o que fazia o KPI

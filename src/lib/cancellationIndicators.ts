@@ -67,3 +67,31 @@ export function isRevertidoInRange(
 export function studentHasPedidoCancelamento(s: Student): boolean {
   return isSolicitacaoCancelamento(s);
 }
+
+/** Alunos vinculados a casos revertidos (por id do caso ou nome + AC). */
+export function studentIdsFromRevertidosCases(
+  cases: CancellationCase[],
+  students: Student[],
+  acName?: string,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const c of cases) {
+    if (c.studentId) {
+      ids.add(c.studentId);
+      continue;
+    }
+    students
+      .filter(
+        (s) =>
+          (!acName || s.ac === acName) &&
+          s.name.trim().toLowerCase() === c.studentName.trim().toLowerCase(),
+      )
+      .forEach((s) => ids.add(s.id));
+  }
+  if (acName) {
+    students
+      .filter((s) => s.ac === acName && s.statusCancelamento === 'revertido')
+      .forEach((s) => ids.add(s.id));
+  }
+  return ids;
+}

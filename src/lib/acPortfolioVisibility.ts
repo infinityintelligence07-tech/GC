@@ -1,9 +1,30 @@
-import type { CancellationCase, ConciliacaoItem, Student } from '@/types';
+import type { CancellationCase, ConciliacaoItem, Student, StatusCancelamento } from '@/types';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 
-/** Solicitação de cancelamento sobrepõe o status financeiro nos KPIs. */
+const FUNIL_CANCELAMENTO_ATIVO = new Set<StatusCancelamento>([
+  'solicitado',
+  'em_tratamento',
+  'juridico',
+  'aguardando_conciliacao',
+  'pagamento_multa_pendente',
+]);
+
+/**
+ * Cancelamento (solicitação ou concluído) sobrepõe Vencido/Em Dia/etc.
+ * Usado para KPIs, auto-recálculo e exibição.
+ */
+export function cancelamentoOverridesFinancialStatus(s: Student): boolean {
+  const sc = s.statusCancelamento;
+  if (sc === 'cancelado' || s.status === 'Cancelado') return true;
+  if (sc && FUNIL_CANCELAMENTO_ATIVO.has(sc)) return true;
+  return s.status === 'Solicitação Cancelamento';
+}
+
+/** Aluno no funil de cancelamento (exclui já cancelado conciliado). */
 export function isSolicitacaoCancelamento(s: Student): boolean {
-  return s.statusCancelamento === 'solicitado' || s.status === 'Solicitação Cancelamento';
+  const sc = s.statusCancelamento;
+  if (sc && FUNIL_CANCELAMENTO_ATIVO.has(sc)) return true;
+  return s.status === 'Solicitação Cancelamento';
 }
 
 function normalizeStudentName(name?: string | null): string {

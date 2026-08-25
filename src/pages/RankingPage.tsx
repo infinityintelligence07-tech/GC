@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { getHiddenFromAcPortfolioKeys, studentsForAcRanking } from '@/lib/acPortfolioVisibility';
+import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, cancelamentoOverridesFinancialStatus } from '@/lib/acPortfolioVisibility';
+import { resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
 import type { Student, ConciliacaoItem } from '@/types';
 
 /**
@@ -73,9 +74,9 @@ export default function RankingPage() {
         students.map((s) =>
           s.statusMode === 'Automático' &&
           s.status !== 'Negativado' &&
-          s.status !== 'Solicitação Cancelamento'
+          !cancelamentoOverridesFinancialStatus(s)
             ? { ...s, status: calculateAutoStatus(s.installments) }
-            : s,
+            : { ...s, status: resolveStudentDisplayStatus(s) },
         ),
         hiddenKeys,
         students,
@@ -96,8 +97,8 @@ export default function RankingPage() {
         .map((s) => ({
           ...s,
           status:
-            s.status === 'Negativado' || s.status === 'Solicitação Cancelamento'
-              ? s.status
+            s.status === 'Negativado' || cancelamentoOverridesFinancialStatus(s)
+              ? resolveStudentDisplayStatus(s)
               : calculateAutoStatusAt(s.installments, ref),
         })),
       hiddenKeys,

@@ -872,6 +872,8 @@ export const useAppStore = create<AppState>()(
         if (st.cancellationCaseId !== caseId) return st;
         return {
           ...st,
+          status: 'Solicitação Cancelamento' as StudentStatus,
+          statusMode: 'Manual' as const,
           statusCancelamento: 'aguardando_conciliacao' as StatusCancelamento,
           history: [...st.history, historyEntry],
         };
@@ -880,6 +882,8 @@ export const useAppStore = create<AppState>()(
     updateCancellationCaseDb(caseId, updatedCase).catch(reportDbError("salvar alteração"));
     if (linkedStudent) {
       updateStudentDb(linkedStudent.id, {
+        status: 'Solicitação Cancelamento',
+        statusMode: 'Manual',
         statusCancelamento: 'aguardando_conciliacao',
         history: [...linkedStudent.history, historyEntry],
       }).catch(reportDbError("salvar alteração"));

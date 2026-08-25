@@ -78,3 +78,12 @@ export function computeTagKpis(
 
   return [{ key: group.key, label: group.label, color: group.color, text: group.text, value, overdueValue, count: hit.length, students: hit }];
 }
+
+/** IDs das tags do catálogo que pertencem a um grupo de KPI (ex.: Fundo/TMF/Antecipação). */
+export function getTagIdsForKpiGroup(studentTags: StudentTag[], key: TagKpiGroupKey): string[] {
+  const group = TAG_KPI_GROUPS.find((g) => g.key === key);
+  if (!group) return [];
+  return studentTags
+    .filter((t) => group.matchers.some((m) => norm(t.name).includes(m)))
+    .map((t) => t.id);
+}
