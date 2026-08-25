@@ -117,6 +117,7 @@ export function rowToStudent(r: any): Student {
     tags: typeof r.tags === 'string' ? JSON.parse(r.tags) : (r.tags ?? []),
     productHistory: typeof r.product_history === 'string' ? JSON.parse(r.product_history) : (r.product_history ?? []),
     ciclo: r.ciclo ?? undefined,
+    kaminoSyncedAt: r.kamino_synced_at ?? undefined,
     // Somente leitura — vindo do IAM Control
     iamControlAlunoId: r.iam_control_aluno_id != null ? Number(r.iam_control_aluno_id) : undefined,
     iamControlSyncedAt: r.iam_control_synced_at ?? undefined,

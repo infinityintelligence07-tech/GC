@@ -127,6 +127,8 @@ export interface Student {
   // aluno tenha múltiplos contratos independentes (ex.: renovação anual Liberty).
   // Cada ciclo é uma ficha separada com seu próprio fluxo de pagamento.
   ciclo?: string;
+  /** Preenchido pela sync Kamino — aluno entra na carteira financeira principal. */
+  kaminoSyncedAt?: string;
   // Integração IAM Control (somente leitura — nunca editável pela interface)
   iamControlAlunoId?: number;
   iamControlSyncedAt?: string;

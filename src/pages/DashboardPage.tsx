@@ -18,7 +18,7 @@ import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
-import { countsInFinancialTotals, isIamControlStudent, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
+import { countsInFinancialTotals, isIamControlStudent, isInstallmentExcludedFromFinancialTotals, isKaminoPortfolioStudent } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -116,6 +116,7 @@ export default function DashboardPage() {
   // filtro de Score está ativo).
   const acProductFilteredRaw = students.filter((s) => {
     if (isIamControlStudent(s)) return false;
+    if (!isKaminoPortfolioStudent(s)) return false;
     if (acFilter && s.ac !== acFilter) return false;
     if (productFilter && s.product !== productFilter) return false;
     if (!studentMatchesTagFilter(s, tagFilters)) return false;
@@ -1004,8 +1005,8 @@ export default function DashboardPage() {
             </div>
             <p className="text-xs text-muted-foreground mb-4">
               {dateBasis === 'vencimento'
-                ? `Projeção financeira por período ${acFilter ? `(${acFilter})` : '(todas as carteiras)'}`
-                : `Títulos pagos no período ${acFilter ? `(${acFilter})` : '(todas as carteiras)'}`}
+                ? `Projeção financeira por período ${acFilter ? `(${acFilter})` : '(carteira Kamino)'}`
+                : `Títulos pagos no período ${acFilter ? `(${acFilter})` : '(carteira Kamino)'}`}
             </p>
             <div className="flex gap-1 mb-4 flex-wrap items-center">
               {dateBasis === 'vencimento' &&

@@ -15,6 +15,11 @@ export function isIamControlStudent(student: Student): boolean {
   return student.iamControlAlunoId != null && Number.isFinite(student.iamControlAlunoId);
 }
 
+/** Aluno com financeiro vindo da sync Kamino (carteira principal). */
+export function isKaminoPortfolioStudent(student: Student): boolean {
+  return Boolean(student.kaminoSyncedAt);
+}
+
 /** IAM PENDENTE / PARA_CONCILIAR ainda não aprovado na Conciliação do GC. */
 export function isAwaitingIamGcApproval(student: Student): boolean {
   if (student.iamGcConciliadoAt) return false;
@@ -23,15 +28,16 @@ export function isAwaitingIamGcApproval(student: Student): boolean {
   );
 }
 
-/** Parcela fora da dashboard/carteira Kamino — todo aluno IAM fica na aba IAM Control. */
+/** Parcela fora da dashboard/carteira Kamino. */
 export function isInstallmentExcludedFromFinancialTotals(student: Student, inst: Installment): boolean {
+  if (!countsInFinancialTotals(student)) return true;
   if (!isIamControlStudent(student)) return false;
   return !inst.paid;
 }
 
-/** Aluno IAM não entra nos totais da dashboard principal nem carteira AC. */
+/** Somente alunos Kamino (sync) entram nos totais da dashboard principal e carteira AC. */
 export function countsInFinancialTotals(student: Student): boolean {
-  return !isIamControlStudent(student);
+  return isKaminoPortfolioStudent(student) && !isIamControlStudent(student);
 }
 
 function hasOpenIamPendenteItem(studentId: string, items: ConciliacaoItem[]): boolean {
