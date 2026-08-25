@@ -1,6 +1,7 @@
 import type { Student, StudentStatus, StatusCancelamento, Installment } from '@/types';
 import { calculateAutoStatus } from '@/store/useAppStore';
 import { cancelamentoOverridesFinancialStatus } from '@/lib/acPortfolioVisibility';
+import { isAwaitingIamGcApproval } from '@/lib/iamPendenteConciliacao';
 
 /** Etapas do funil em que o status financeiro (Vencido, Em Dia…) não deve aparecer. */
 const FUNIL_CANCELAMENTO_ATIVO = new Set<StatusCancelamento>([
@@ -30,36 +31,67 @@ export function isFunilCancelamentoAtivo(sc?: StatusCancelamento | null): boolea
   return !!sc && FUNIL_CANCELAMENTO_ATIVO.has(sc);
 }
 
-const PENDENCIA_INSTALLMENT_TAGS = ['entrada-restante', 'entrada-pendente'];
+export const PENDENCIA_INSTALLMENT_TAGS = ['entrada-restante', 'entrada-pendente'] as const;
 
-/** Parcelas que representam a pendência operacional (PIX/link/entrada), não o plano inteiro. */
+export function isEntradaPendenciaInstallment(inst: Installment): boolean {
+  return (inst.tags ?? []).some((t) =>
+    (PENDENCIA_INSTALLMENT_TAGS as readonly string[]).includes(t),
+  );
+}
+
+/** Parcelas de entrada ainda não quitadas (PIX/link da entrada). */
+export function getEntradaPendenteInstallments(student: Student): Installment[] {
+  return student.installments.filter((i) => !i.paid && isEntradaPendenciaInstallment(i));
+}
+
+export function sumEntradaPendenteValue(student: Student): number {
+  return getEntradaPendenteInstallments(student).reduce((acc, i) => acc + i.value, 0);
+}
+
+/**
+ * Parcelas que representam a pendência operacional (PIX/link), não o plano de parcelas futuro.
+ */
 export function getOperationalPendenteInstallments(student: Student): Installment[] {
   if (!isOperationalPendente(student)) return [];
   const unpaid = student.installments.filter((i) => !i.paid);
   if (unpaid.length === 0) return [];
 
-  const iamStatus = String(student.iamControlContratoStatus ?? '').toUpperCase();
-  if (iamStatus === 'PENDENTE') {
-    const tagged = unpaid.filter((i) =>
-      (i.tags ?? []).some((t) => PENDENCIA_INSTALLMENT_TAGS.includes(t)),
-    );
-    if (tagged.length > 0) return tagged;
-    const sorted = [...unpaid].sort((a, b) => a.number - b.number);
-    return sorted.slice(0, 1);
-  }
+  const entradaTagged = getEntradaPendenteInstallments(student);
+  if (entradaTagged.length > 0) return entradaTagged;
 
   const sorted = [...unpaid].sort((a, b) => a.number - b.number);
   return sorted.slice(0, 1);
+}
+
+/** Valor da entrada: quitada (down_payment) + parcelas com tag de entrada pendente. */
+export function getEntradaDisplayValue(student: Student): number {
+  const paidEntrada = Number(student.downPayment) || 0;
+  return paidEntrada + sumEntradaPendenteValue(student);
+}
+
+/** Tipo da pendência operacional para exibição em tabelas/KPIs. */
+export function getOperationalPendenteTipoLabel(student: Student): string {
+  const insts = getOperationalPendenteInstallments(student);
+  if (insts.some((i) => isEntradaPendenciaInstallment(i))) {
+    const tipo = String(student.iamControlPendenteTipo ?? '').toUpperCase();
+    if (tipo === 'PIX') return 'Entrada (PIX)';
+    if (tipo === 'LINK') return 'Entrada (Link)';
+    return 'Entrada';
+  }
+  const tipo = String(student.iamControlPendenteTipo ?? '').toUpperCase();
+  if (tipo === 'PIX') return 'PIX';
+  if (tipo === 'LINK') return 'Link';
+  return 'Pendência';
 }
 
 export function sumOperationalPendenteValue(student: Student): number {
   return getOperationalPendenteInstallments(student).reduce((acc, i) => acc + i.value, 0);
 }
 
-/** Pendência operacional (PIX/link IAM ou status manual Pendente). */
+/** Pendência operacional (PIX/link IAM, PARA_CONCILIAR ou status manual Pendente). */
 export function isOperationalPendente(student: Student): boolean {
   if (student.status === 'Pendente') return true;
-  return String(student.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE';
+  return isAwaitingIamGcApproval(student);
 }
 
 /** Status operacional exibido em tabelas/KPIs (sem Vencido quando há cancelamento ativo). */

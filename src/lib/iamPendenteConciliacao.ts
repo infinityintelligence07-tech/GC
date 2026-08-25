@@ -1,21 +1,27 @@
 import type { ConciliacaoItem, Student, Installment } from '@/types';
 import { createConciliacaoItemDb } from '@/lib/supabaseMutations';
-import { getOperationalPendenteInstallments } from '@/lib/studentDisplayStatus';
 
-/** IAM PENDENTE ainda não aprovado na Conciliação do GC. */
-export function isAwaitingIamGcApproval(student: Student): boolean {
-  if (student.iamGcConciliadoAt) return false;
-  return String(student.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE';
+const IAM_STATUSES_AWAITING_GC_APPROVAL = new Set(['PENDENTE', 'PARA_CONCILIAR']);
+
+export function normalizeIamContratoStatus(status?: string | null): string {
+  return String(status ?? '')
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, '_');
 }
 
-/**
- * Parcela de pendência IAM (PIX/link/entrada) — não entra em Carteira Total
- * até aprovação na Conciliação. Demais parcelas do aluno continuam na carteira.
- */
+/** IAM PENDENTE / PARA_CONCILIAR ainda não aprovado na Conciliação do GC. */
+export function isAwaitingIamGcApproval(student: Student): boolean {
+  if (student.iamGcConciliadoAt) return false;
+  return IAM_STATUSES_AWAITING_GC_APPROVAL.has(
+    normalizeIamContratoStatus(student.iamControlContratoStatus),
+  );
+}
+
+/** Contrato inteiro fora da dash até aprovação na Conciliação GC. */
 export function isInstallmentExcludedFromFinancialTotals(student: Student, inst: Installment): boolean {
   if (!isAwaitingIamGcApproval(student)) return false;
-  const pend = getOperationalPendenteInstallments(student);
-  return pend.some((p) => p.number === inst.number);
+  return !inst.paid;
 }
 
 /** Aluno permanece na carteira; exclusão é por parcela (ver isInstallmentExcludedFromFinancialTotals). */
@@ -32,7 +38,7 @@ function hasOpenIamPendenteItem(studentId: string, items: ConciliacaoItem[]): bo
   );
 }
 
-/** Cria item na fila de Conciliação para cada import IAM PENDENTE sem pendência aberta. */
+/** Cria item na fila de Conciliação para cada import IAM aguardando aprovação GC. */
 export async function ensureIamPendenteConciliacaoItems(
   students: Student[],
   items: ConciliacaoItem[],
@@ -40,6 +46,7 @@ export async function ensureIamPendenteConciliacaoItems(
   const created: ConciliacaoItem[] = [];
   for (const s of students) {
     if (!isAwaitingIamGcApproval(s)) continue;
+    const iamStatus = normalizeIamContratoStatus(s.iamControlContratoStatus);
     if (hasOpenIamPendenteItem(s.id, items)) continue;
     if (items.some((i) => i.tipo === 'iam_pendente' && i.studentId === s.id && i.status === 'conciliado')) {
       continue;
@@ -50,9 +57,9 @@ export async function ensureIamPendenteConciliacaoItems(
         studentId: s.id,
         studentName: s.name,
         ac: s.ac,
-        resumo: `Import IAM — contrato PENDENTE (${s.iamControlPendenteTipo ?? '—'})`,
+        resumo: `Import IAM — contrato ${iamStatus.replace(/_/g, ' ')} (${s.iamControlPendenteTipo ?? '—'})`,
         antes: {
-          iam_control_contrato_status: 'PENDENTE',
+          iam_control_contrato_status: iamStatus,
         },
         depois: {
           iam_control_contrato_status: 'CONCILIADO',

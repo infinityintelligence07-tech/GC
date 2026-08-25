@@ -1453,7 +1453,7 @@ export default function ConciliacaoPage() {
           });
         }
       }
-      // ─── Import IAM PENDENTE: só conta nos totais após conciliar ────────
+      // ─── Import IAM (PENDENTE / PARA_CONCILIAR): só conta nos totais após conciliar
       if (it.tipo === 'iam_pendente' && it.studentId) {
         const st = useAppStore.getState().students.find((s) => s.id === it.studentId);
         if (st) {
@@ -1461,6 +1461,8 @@ export default function ConciliacaoPage() {
           const autoStatus = calculateAutoStatus(st.installments);
           const nowIso = new Date().toISOString();
           const revisor = currentUser?.name ?? 'Conciliação';
+          const statusAnterior = String(st.iamControlContratoStatus ?? 'PENDENTE')
+            .replace(/_/g, ' ');
           updateStudent(st.id, {
             iamControlContratoStatus: 'CONCILIADO',
             iamGcConciliadoAt: nowIso,
@@ -1471,7 +1473,7 @@ export default function ConciliacaoPage() {
               {
                 date: nowIso,
                 type: 'Sistema' as const,
-                text: `Contrato IAM PENDENTE aprovado na Conciliação por ${revisor}. Passa a contar nos totais financeiros.`,
+                text: `Contrato IAM (${statusAnterior}) aprovado na Conciliação por ${revisor}. Passa a contar nos totais financeiros.`,
               },
             ],
           });

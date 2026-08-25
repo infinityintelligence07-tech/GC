@@ -3,7 +3,12 @@ import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
 
-import { resolveStudentDisplayStatus, getOperationalPendenteInstallments } from '@/lib/studentDisplayStatus';
+import {
+  resolveStudentDisplayStatus,
+  getOperationalPendenteInstallments,
+  isEntradaPendenciaInstallment,
+  getOperationalPendenteTipoLabel,
+} from '@/lib/studentDisplayStatus';
 import { isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
 
 export type KpiValueMode = 'unpaid' | 'overdue' | 'operational_pendente';
@@ -23,7 +28,17 @@ export default function KpiStudentsModal({
   todayMs: number;
   onClose: () => void;
 }) {
-  type Row = { studentId: string; studentName: string; ac: string; status: string; installmentNumber: number; dueDate: string; value: number };
+  type Row = {
+    studentId: string;
+    studentName: string;
+    ac: string;
+    status: string;
+    tipo: string;
+    installmentNumber: number;
+    dueDate: string;
+    entradaValor: number;
+    pendenciaValor: number;
+  };
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const allRows: Row[] = [];
@@ -40,15 +55,19 @@ export default function KpiStudentsModal({
       }
       return true;
     });
+    const paidEntrada = Number(s.downPayment) || 0;
     unpaid.forEach((i) => {
+      const isEntrada = valueMode === 'operational_pendente' && isEntradaPendenciaInstallment(i);
       allRows.push({
         studentId: s.id,
         studentName: s.name,
         ac: s.ac || '—',
         status: resolveStudentDisplayStatus(s),
+        tipo: valueMode === 'operational_pendente' ? getOperationalPendenteTipoLabel(s) : '—',
         installmentNumber: i.number,
         dueDate: i.dueDate,
-        value: i.value,
+        entradaValor: isEntrada ? i.value : valueMode === 'operational_pendente' && paidEntrada > 0.0049 ? paidEntrada : 0,
+        pendenciaValor: isEntrada ? 0 : i.value,
       });
     });
   });
@@ -62,7 +81,9 @@ export default function KpiStudentsModal({
     if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
     return a.studentName.localeCompare(b.studentName);
   });
-  const total = rows.reduce((acc, r) => acc + r.value, 0);
+  const totalEntrada = rows.reduce((acc, r) => acc + r.entradaValor, 0);
+  const totalPendencia = rows.reduce((acc, r) => acc + r.pendenciaValor, 0);
+  const total = totalEntrada + totalPendencia;
   const fmtDate = (iso: string) => {
     if (!iso) return '—';
     const [y, m, d] = iso.split('-');
@@ -89,7 +110,17 @@ export default function KpiStudentsModal({
           <div>
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {studentCount} {studentCount === 1 ? 'aluno' : 'alunos'} · {rows.length} {valueMode === 'operational_pendente' ? 'pendência(s)' : 'parcela(s)'} · Total: <span className="font-semibold text-primary">{formatCurrency(total)}</span>
+              {studentCount} {studentCount === 1 ? 'aluno' : 'alunos'} · {rows.length} {valueMode === 'operational_pendente' ? 'pendência(s)' : 'parcela(s)'}
+              {valueMode === 'operational_pendente' ? (
+                <>
+                  {' · '}
+                  Entrada: <span className="font-semibold text-amber-700">{formatCurrency(totalEntrada)}</span>
+                  {' · '}
+                  Pendência: <span className="font-semibold text-primary">{formatCurrency(totalPendencia)}</span>
+                </>
+              ) : (
+                <> · Total: <span className="font-semibold text-primary">{formatCurrency(total)}</span></>
+              )}
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground" aria-label="Fechar">✕</button>
@@ -118,15 +149,25 @@ export default function KpiStudentsModal({
                 <th className="text-left font-semibold px-4 py-2">Aluno</th>
                 <th className="text-left font-semibold px-4 py-2">AC</th>
                 <th className="text-left font-semibold px-4 py-2">Status</th>
+                {valueMode === 'operational_pendente' && (
+                  <th className="text-left font-semibold px-4 py-2">Tipo</th>
+                )}
                 <th className="text-center font-semibold px-4 py-2">Parc.</th>
                 <th className="text-left font-semibold px-4 py-2">Vencimento</th>
-                <th className="text-right font-semibold px-4 py-2">{valueMode === 'operational_pendente' ? 'Valor Pendência' : 'Valor Parcela'}</th>
+                {valueMode === 'operational_pendente' ? (
+                  <>
+                    <th className="text-right font-semibold px-4 py-2">Valor Entrada</th>
+                    <th className="text-right font-semibold px-4 py-2">Valor Pendência</th>
+                  </>
+                ) : (
+                  <th className="text-right font-semibold px-4 py-2">Valor Parcela</th>
+                )}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-xs text-muted-foreground">Nenhum registro.</td>
+                  <td colSpan={valueMode === 'operational_pendente' ? 8 : 6} className="px-4 py-8 text-center text-xs text-muted-foreground">Nenhum registro.</td>
                 </tr>
               ) : (
                 rows.map((r, idx) => (
@@ -136,9 +177,25 @@ export default function KpiStudentsModal({
                     <td className="px-4 py-2">
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-muted text-foreground border border-border">{r.status}</span>
                     </td>
+                    {valueMode === 'operational_pendente' && (
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{r.tipo}</td>
+                    )}
                     <td className="px-4 py-2 text-xs text-center text-muted-foreground tabular-nums">{r.installmentNumber || '—'}</td>
                     <td className="px-4 py-2 text-xs text-foreground tabular-nums">{fmtDate(r.dueDate)}</td>
-                    <td className="px-4 py-2 text-right font-semibold text-foreground tabular-nums">{r.value > 0 ? formatCurrency(r.value) : '—'}</td>
+                    {valueMode === 'operational_pendente' ? (
+                      <>
+                        <td className="px-4 py-2 text-right font-semibold text-amber-700 tabular-nums">
+                          {r.entradaValor > 0 ? formatCurrency(r.entradaValor) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right font-semibold text-foreground tabular-nums">
+                          {r.pendenciaValor > 0 ? formatCurrency(r.pendenciaValor) : '—'}
+                        </td>
+                      </>
+                    ) : (
+                      <td className="px-4 py-2 text-right font-semibold text-foreground tabular-nums">
+                        {(r.entradaValor + r.pendenciaValor) > 0 ? formatCurrency(r.entradaValor + r.pendenciaValor) : '—'}
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -146,8 +203,15 @@ export default function KpiStudentsModal({
             {rows.length > 0 && (
               <tfoot className="sticky bottom-0 bg-muted/70 backdrop-blur border-t border-border">
                 <tr>
-                  <td colSpan={5} className="px-4 py-2 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total</td>
-                  <td className="px-4 py-2 text-right text-sm font-bold text-primary tabular-nums">{formatCurrency(total)}</td>
+                  <td colSpan={valueMode === 'operational_pendente' ? 6 : 5} className="px-4 py-2 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total</td>
+                  {valueMode === 'operational_pendente' ? (
+                    <>
+                      <td className="px-4 py-2 text-right text-sm font-bold text-amber-700 tabular-nums">{formatCurrency(totalEntrada)}</td>
+                      <td className="px-4 py-2 text-right text-sm font-bold text-primary tabular-nums">{formatCurrency(totalPendencia)}</td>
+                    </>
+                  ) : (
+                    <td className="px-4 py-2 text-right text-sm font-bold text-primary tabular-nums">{formatCurrency(total)}</td>
+                  )}
                 </tr>
               </tfoot>
             )}

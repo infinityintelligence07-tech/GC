@@ -11,6 +11,7 @@ import StudentDraftBanner from '@/components/ui/StudentDraftBanner';
 import { getTagStyle } from '@/lib/tagColors';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import { getInstallmentCreditApplied, getInstallmentOutstanding, getStudentCreditAppliedTotal } from '@/lib/utils';
+import { isEntradaPendenciaInstallment, sumEntradaPendenteValue } from '@/lib/studentDisplayStatus';
 
 interface Props {
   student: Student;
@@ -443,6 +444,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   );
   const entradaValor = student.downPayment ?? 0;
   const hasEntrada = entradaValor > 0.0049;
+  const entradaPendenteValor = useMemo(
+    () => sumEntradaPendenteValue(student),
+    [student.installments],
+  );
+  const hasEntradaPendente = entradaPendenteValor > 0.0049;
   const displayParcelLabel = (instNumber: number) => (hasEntrada ? instNumber + 1 : instNumber);
   const saldoContratoReal = (student.saleValue ?? 0) - totalPagoContrato;
   const deltaContrato = totalAberto - saldoContratoReal; // >0 sobra (encargo/erro), <0 falta
@@ -1377,8 +1383,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fluxo de Pagamento</h3>
               <span className="text-[10px] text-muted-foreground">
-                {student.installments.length + (hasEntrada ? 1 : 0)} parcelas
-                {hasEntrada ? ' (incl. entrada)' : ''}
+                {student.installments.length + (hasEntrada ? 1 : 0) + (hasEntradaPendente ? 1 : 0)} parcelas
+                {hasEntrada || hasEntradaPendente ? ' (incl. entrada)' : ''}
               </span>
             </div>
             {(() => {
@@ -1390,6 +1396,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 .sort((a, b) => a.num - b.num);
               const cols = 5
                 + ((student.downPayment ?? 0) > 0 ? 1 : 0)
+                + (hasEntradaPendente ? 1 : 0)
                 + (encargosHistoricoTotal > 0.0049 ? 1 : 0)
                 + (hasAtribuidos ? 1 : 0);
               const colsClass =
@@ -1411,8 +1418,14 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               </div>
               {(student.downPayment ?? 0) > 0 && (
                 <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-                  <p className="text-[9px] text-emerald-700 uppercase tracking-wide">Entrada</p>
+                  <p className="text-[9px] text-emerald-700 uppercase tracking-wide">Entrada Paga</p>
                   <p className="text-xs font-bold text-emerald-700">{formatCurrency(student.downPayment ?? 0)}</p>
+                </div>
+              )}
+              {hasEntradaPendente && (
+                <div className="p-2 bg-amber-50 border border-amber-300 rounded-lg">
+                  <p className="text-[9px] text-amber-700 uppercase tracking-wide">Entrada Pendente</p>
+                  <p className="text-xs font-bold text-amber-800">{formatCurrency(entradaPendenteValor)}</p>
                 </div>
               )}
               {encargosHistoricoTotal > 0.0049 && (
@@ -1513,9 +1526,33 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     </span>
                   </div>
                 )}
+                {hasEntradaPendente && student.installments.filter((i) => isEntradaPendenciaInstallment(i)).map((inst) => {
+                  const isOverdue = !inst.paid && parseDateLocal(inst.dueDate) < today;
+                  return (
+                    <div
+                      key={`entrada-pend-${inst.number}`}
+                      className={`flex flex-col items-center px-2 py-1.5 rounded-lg border min-w-[80px] ${
+                        isOverdue ? 'border-amber-400 bg-amber-50' : 'border-amber-300 bg-amber-50/80'
+                      }`}
+                      title={`Entrada pendente — ${formatCurrency(inst.value)} — Venc. ${formatDateBR(inst.dueDate)}`}
+                    >
+                      <span className="text-[9px] font-bold text-amber-800">Entrada</span>
+                      <span className="text-[8px] font-semibold text-amber-700 mt-0.5">Pendente</span>
+                      <span className="text-[10px] font-bold mt-0.5 text-amber-800">{formatCurrency(inst.value)}</span>
+                      <span className="text-[8px] text-muted-foreground mt-0.5 leading-tight text-center">
+                        Venc: {formatDateBR(inst.dueDate)}
+                      </span>
+                      <span className={`mt-0.5 text-[8px] font-semibold px-1 py-0.5 rounded ${isOverdue ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {isOverdue ? 'Vencido' : 'Aguardando'}
+                      </span>
+                    </div>
+                  );
+                })}
                 {[...student.installments].sort((a, b) => parseDateLocal(a.dueDate).getTime() - parseDateLocal(b.dueDate).getTime() || a.number - b.number).map((inst) => {
+                  const isEntradaPendente = isEntradaPendenciaInstallment(inst);
                   const isRecompraFundo = isRecompraOuFundoParcela(inst, studentTags);
                   const isOverdue = !inst.paid && !isRecompraFundo && parseDateLocal(inst.dueDate) < today;
+                  if (isEntradaPendente) return null;
                   return (
                     <div
                       key={inst.number}
