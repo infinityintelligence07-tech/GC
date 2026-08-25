@@ -1,5 +1,5 @@
--- PENDENTE: separar valor de entrada do saldo parcelado (PIX/link vs boleto).
--- Evita tratar o contrato inteiro como entrada quando há parcelas no plano.
+-- CONCILIADO quitado (à vista / valor_pago integral): não gera parcelas em aberto.
+-- Inclui separação entrada PENDENTE (PIX/link vs parcelado).
 
 CREATE OR REPLACE FUNCTION public.iam_treinamento_financeiro(p_treinamento jsonb)
 RETURNS TABLE (
