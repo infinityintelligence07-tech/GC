@@ -169,6 +169,14 @@ function getFunnelStage(c: CancellationCase): FunnelStage {
   return c.funnelStage ?? stageToFunnel(c.stage);
 }
 
+/** Sincroniza estágio legado ao mover no funil (evita `stage` antigo forçar coluna Finalizado). */
+const FUNNEL_TO_STAGE: Partial<Record<FunnelStage, CancellationStage>> = {
+  'Entrada': 'Aguardando Contato',
+  'Em Execução': 'Ajustes em Geral / Boleto',
+  'Formalização': 'Confeccionar Termo',
+  'Pendente': 'PROCON ou Judicial',
+};
+
 /**
  * Caso ainda em fluxo ativo (Entrada, Tratativas ou Distrato em andamento).
  * Nesses estágios não forçamos a coluna Finalizado por conciliações antigas.
@@ -177,10 +185,9 @@ function isActiveCancellationWorkflow(c: CancellationCase): boolean {
   const fs = getFunnelStage(c);
   if (fs === 'Entrada' || fs === 'Em Execução' || fs === 'Pendente') return true;
   if (fs === 'Formalização') {
-    const acao = (c.acao ?? '').trim();
-    const stage = c.stage ?? '';
-    if (acao === 'Assinar Termo' || stage === 'Assinar Termo') return false;
-    return true;
+    // Só considera "aguardando conciliação final" quando a AÇÃO atual é Assinar Termo.
+    // O estágio legado pode ficar desatualizado após reabertura ou envio ao Jurídico.
+    return (c.acao ?? '').trim() !== 'Assinar Termo';
   }
   return false;
 }
@@ -2818,9 +2825,11 @@ export default function CancelamentosPage() {
       'Formalização': 'Iniciar Tratativa',
     };
     const defaultAcao = defaultAcaoByFunnel[newFunnel];
+    const legacyStage = FUNNEL_TO_STAGE[newFunnel];
 
     updateCancellationCase(caseRef.id, {
       funnelStage: newFunnel,
+      ...(legacyStage ? { stage: legacyStage } : {}),
       movedToCurrentStageAt: now,
       ...(defaultAcao ? { acao: defaultAcao } : {}),
       // Limpa agendamento antigo ao sair de "Em Tratativas"
@@ -3248,6 +3257,7 @@ export default function CancelamentosPage() {
     const prevNotes = caseRef.notes ? `${caseRef.notes}\n\n` : '';
     updateCancellationCase(caseRef.id, {
       funnelStage: 'Formalização',
+      stage: 'Confeccionar Termo',
       acao: 'Iniciar Tratativa',
       responsavel: 'Jurídico',
       movedToCurrentStageAt: now,
@@ -3721,6 +3731,7 @@ export default function CancelamentosPage() {
                               const now = new Date().toISOString();
                               updateCancellationCase(cc.id, {
                                 funnelStage: 'Formalização',
+                                stage: 'Confeccionar Termo',
                                 acao: 'Iniciar Tratativa',
                                 responsavel: 'Jurídico',
                                 movedToCurrentStageAt: now,
@@ -4653,6 +4664,7 @@ export default function CancelamentosPage() {
             const legalNote = `[${new Date(now).toLocaleString('pt-BR')}] Observações para o Jurídico:\n${trimmed || '(sem observações)'}${parcialSuffix}`;
             updateCancellationCase(caseRef.id, {
               funnelStage: 'Formalização',
+              stage: 'Confeccionar Termo',
               acao: 'Iniciar Tratativa',
               movedToCurrentStageAt: now,
               responsavel: 'Jurídico',
@@ -4670,7 +4682,16 @@ export default function CancelamentosPage() {
                 type: 'Sistema',
                 text: `Cancelamento enviado ao Jurídico (Distrato do Contrato).${trimmed ? ` Observações: ${trimmed}` : ''}`,
               };
-              updateStudent(st.id, { history: [...st.history, studentEntry] });
+              const statusPatch =
+                st.statusCancelamento === 'aguardando_conciliacao' ||
+                st.statusCancelamento === 'pagamento_multa_pendente'
+                  ? {
+                      status: 'Solicitação Cancelamento' as const,
+                      statusMode: 'Manual' as const,
+                      statusCancelamento: 'solicitado' as const,
+                    }
+                  : {};
+              updateStudent(st.id, { ...statusPatch, history: [...st.history, studentEntry] });
             }
             setSendToLegalCase(null);
           }}

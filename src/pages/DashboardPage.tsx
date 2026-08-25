@@ -16,7 +16,7 @@ import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
-import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus } from '@/lib/acPortfolioVisibility';
+import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
 import {
   isCancellationCaseInRange,
@@ -45,7 +45,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function DashboardPage() {
   const { students, acs, products, cancellationCases, studentTags } = useAppStore();
-  const conciliacaoItems = useConciliacaoStore((s) => s.items);
   const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
   const [acFilter, setAcFilter] = useState('');
@@ -253,7 +252,7 @@ export default function DashboardPage() {
     // alunos com solicitação em aberto (statusCancelamento='solicitado').
     const stripCancelados = (arr: Student[]) =>
       statusFilter === 'cancelamento_solicitado'
-        ? arr.filter((s) => s.statusCancelamento === 'solicitado')
+        ? arr.filter((s) => matchesCancelamentoFilter(s, cancellationCases))
         : arr.filter((s) => s.statusCancelamento !== 'cancelado');
     // Renda Extra já conciliada (saiu de "Conciliar Exclusão") NÃO entra na carteira/KPIs;
     // só aparece quando o usuário filtrar explicitamente por status "Renda Extra".
@@ -344,7 +343,7 @@ export default function DashboardPage() {
         : withoutREConciliada;
       setKpiStudents(filtered);
     }
-  }, [mode, historicoEnd, baseStudents.length, acFilter, productFilter, scoreFilter, statusFilter, tagFilters, students, snapshotStudents, snapshotDate]);
+  }, [mode, historicoEnd, baseStudents.length, acFilter, productFilter, scoreFilter, statusFilter, tagFilters, students, snapshotStudents, snapshotDate, cancellationCases]);
 
   const cancellationDateRange = (() => {
     if (mode === 'historico') {
@@ -405,7 +404,7 @@ export default function DashboardPage() {
     ? kpiStudents.filter((s) => s.installments.some((i) => !i.paid && _instInRange(i)))
     : kpiStudents;
   const total = kpiStudentsScoped.length;
-  const _isSolic = isSolicitacaoCancelamento;
+  const _isSolic = (s: Student) => matchesCancelamentoFilter(s, cancellationCases);
   const emDia = kpiStudentsScoped.filter((s) => s.status === 'Em Dia' && !_isSolic(s));
   const alunosNovos = kpiStudentsScoped.filter((s) => s.status === 'Aluno Novo' && !_isSolic(s));
   const vencido1 = kpiStudentsScoped.filter((s) => s.status === 'Vencido 1' && !_isSolic(s));

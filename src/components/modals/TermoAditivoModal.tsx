@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { X, Download } from 'lucide-react';
+import { X, Download, Send, Check } from 'lucide-react';
 import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
+import { createIamAditivoTermo, openZapSignUrl } from '@/lib/iamControlTermo';
+import { toast } from 'sonner';
 import logoIAM from '@/assets/logo-iam-blue.png';
 
 interface Props {
@@ -18,12 +20,15 @@ interface Props {
     novaEntrada: number;
     novasParcelas: number;
     novoValorParcela: number;
+    saldoAposEntrada?: number;
+    primeiraParcelaVencimento?: string;
   };
   onClose: () => void;
 }
 
 export default function TermoAditivoModal({ student, originalValues, newValues, onClose }: Props) {
-  const [isSigning, setIsSigning] = useState(false);
+  const [zapsignSending, setZapsignSending] = useState(false);
+  const [zapsignSent, setZapsignSent] = useState(false);
 
   const handleGeneratePDF = () => {
     // Create a print-friendly version
@@ -330,6 +335,33 @@ export default function TermoAditivoModal({ student, originalValues, newValues, 
     }, 250);
   };
 
+  const handleSendToZapsign = async () => {
+    if (!student.iamControlAlunoId) {
+      toast.error('Vincule o aluno ao IAM Control para enviar via ZapSign.');
+      return;
+    }
+
+    setZapsignSending(true);
+    try {
+      const result = await createIamAditivoTermo({
+        student,
+        originalValues,
+        newValues,
+      });
+      if (!result.ok) throw new Error(result.error || 'Falha ao enviar para ZapSign.');
+
+      const signUrl = result.url_assinatura || result.file_url;
+      if (signUrl) openZapSignUrl(signUrl);
+
+      setZapsignSent(true);
+      toast.success('Termo aditivo enviado para assinatura na ZapSign.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao enviar para ZapSign.');
+    } finally {
+      setZapsignSending(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-50 fade-in">
       <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto shadow-2xl border border-border">
@@ -388,17 +420,30 @@ export default function TermoAditivoModal({ student, originalValues, newValues, 
 
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-xs text-blue-800">
-              Este termo documenta formalmente a renegociação do contrato. Após confirmação, um PDF pronto para impressão será gerado.
+              Este termo documenta formalmente a renegociação do contrato. Gere o PDF para impressão ou envie
+              diretamente para assinatura digital na ZapSign.
             </p>
           </div>
+
+          {!student.iamControlAlunoId && (
+            <p className="text-[11px] text-amber-700">
+              Vincule o aluno ao IAM Control para habilitar o envio via ZapSign.
+            </p>
+          )}
+
+          {zapsignSent && (
+            <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700">
+              Termo enviado para a ZapSign. O link de assinatura foi aberto em nova aba.
+            </div>
+          )}
         </div>
 
-        <div className="p-6 border-t border-border flex gap-3 justify-end">
+        <div className="p-6 border-t border-border flex gap-3 justify-end flex-wrap">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
-            Cancelar
+            Fechar
           </button>
           <button
             onClick={handleGeneratePDF}
@@ -406,6 +451,21 @@ export default function TermoAditivoModal({ student, originalValues, newValues, 
           >
             <Download size={16} />
             Gerar PDF
+          </button>
+          <button
+            onClick={handleSendToZapsign}
+            disabled={zapsignSending || zapsignSent || !student.iamControlAlunoId}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            {zapsignSent ? (
+              <>
+                <Check size={16} /> Enviado para ZapSign
+              </>
+            ) : (
+              <>
+                <Send size={16} /> {zapsignSending ? 'Enviando…' : 'Enviar via ZapSign'}
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -236,6 +236,16 @@ export function useSupabaseSync() {
           return s;
         }
         const sc = s.statusCancelamento;
+        if ((!sc || sc === 'nenhum') && caseId) {
+          return {
+            ...s,
+            status: 'Solicitação Cancelamento' as const,
+            statusMode: 'Manual' as const,
+            statusCancelamento: 'solicitado' as const,
+            cancellationCaseId: caseId,
+            __fallbackByName: !byId,
+          } as typeof s & { __fallbackByName?: boolean };
+        }
         // Se já está cancelado de fato ou em conciliação, não rebaixar.
         if (sc === 'cancelado' || sc === 'aguardando_conciliacao') {
           if (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, calculateChurnRisk, calculateRendaExtraMetrics, isRecompraOuFundoParcela } from '@/store/useAppStore';
 import { Student, StudentStatus, MOTIVOS_CANCELAMENTO, Notification } from '@/types';
 import StudentModal from '@/components/modals/StudentModal';
@@ -16,24 +16,26 @@ import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, 
 import NotificationBell from '@/components/NotificationBell';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import {
+  cancelamentoOverridesFinancialStatus,
   getHiddenFromAcPortfolioKeys,
   isSolicitacaoCancelamento,
   isStudentHiddenFromAcPortfolio,
   isStudentInAcPortfolio,
   isVisibleInAcPortfolio,
-  cancelamentoOverridesFinancialStatus,
+  hasActiveCancellationCase,
+  matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
+  studentIdsFromRevertidosCases,
 } from '@/lib/cancellationIndicators';
-import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
 import { statusColors } from '@/lib/statusColors';
 import { getTodayBrasilia, calcularDiasVencido } from '@/lib/brasiliaDate';
 import { getDisplayInstallmentValue, normalizeSearch } from '@/lib/utils';
 import { getTagStyle } from '@/lib/tagColors';
-import { computeTagKpis } from '@/lib/tagKpis';
+import { computeTagKpis, getTagIdsForKpiGroup } from '@/lib/tagKpis';
 import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagRefs } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
@@ -86,7 +88,7 @@ export default function ACPortfolioPage() {
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
   const [productFilter, setProductFilter] = useState('');
   const [statusFilter, setStatusFilterRaw] = useState('');
-  const [revertidosModalOpen, setRevertidosModalOpen] = useState(false);
+  const [kpiCardFilter, setKpiCardFilter] = useState<'' | 'revertidos' | 'boletos_antecipados' | 'pendente'>('');
   const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -176,15 +178,66 @@ export default function ACPortfolioPage() {
   const hiddenIdsKey = [...hiddenFromPortfolioKeys.ids].sort().join(',');
   const hiddenNamesKey = [...hiddenFromPortfolioKeys.names].sort().join(',');
 
+  // ── Revertidos / Boletos Antecipados / Pendências (filtros de card) ───────
+  const cancellationDateRange = (() => {
+    if (mode === 'historico') {
+      if (!historicoEnd) return null;
+      const start = historicoStart
+        ? new Date(historicoStart + 'T00:00:00')
+        : new Date(historicoEnd + 'T00:00:00');
+      const end = new Date(historicoEnd + 'T23:59:59');
+      return { start, end };
+    }
+    if (perfPreset === 'todos') return null;
+    return getPerfRange(perfPreset, perfCustomStart, perfCustomEnd);
+  })();
+  const acCases = cancellationCases.filter((c) => {
+    if (c.ac !== ac?.name) return false;
+    return isCancellationCaseInRange(c, cancellationDateRange);
+  });
+  const revertidos = acCases.filter(isCancellationCaseRevertido);
+  const revertidosStudentIds = useMemo(
+    () => studentIdsFromRevertidosCases(revertidos, students, ac?.name),
+    [revertidos, students, ac?.name],
+  );
+  const boletosTagIds = useMemo(
+    () => getTagIdsForKpiGroup(studentTags, 'fundo_tmf_antecipacao'),
+    [studentTags],
+  );
+
+  useEffect(() => {
+    if (kpiCardFilter !== 'boletos_antecipados') return;
+    const active =
+      boletosTagIds.length > 0 &&
+      boletosTagIds.length === tagFilters.length &&
+      boletosTagIds.every((id) => tagFilters.includes(id));
+    if (!active) setKpiCardFilter('');
+  }, [tagFilters, boletosTagIds, kpiCardFilter]);
+
+  const studentsTableRef = useRef<HTMLDivElement>(null);
+  const scrollToStudentsTable = () => {
+    window.setTimeout(() => {
+      studentsTableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  };
+
   // Base AC students with auto-status applied + filtro por tag (recalcula
   // installments/status quando tag está marcada apenas em parcelas específicas)
   const [acStudents, setAcStudents] = useState<Student[]>([]);
   useEffect(() => {
     if (!ac) { setAcStudents([]); return; }
+    const revertidosMode = kpiCardFilter === 'revertidos';
     const base = students
       .filter((s) => s.ac === ac.name)
-      .filter((s) => !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students))
-      .filter((s) => statusFilter === 'Pago' || isStudentInAcPortfolio(s))
+      .filter((s) => {
+        if (revertidosMode && revertidosStudentIds.has(s.id)) return true;
+        return !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students);
+      })
+      .filter((s) => {
+        if (statusFilter === 'Pago' || isStudentInAcPortfolio(s)) return true;
+        if (revertidosMode && revertidosStudentIds.has(s.id)) return true;
+        return false;
+      })
       .filter((s) => studentMatchesTagFilter(s, tagFilters))
       .map((s) => {
         const withStatus = { ...s, status: resolveStudentDisplayStatus(s) } as Student;
@@ -192,7 +245,7 @@ export default function ACPortfolioPage() {
       });
     setAcStudents(base);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey, statusFilter]);
+  }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey, statusFilter, kpiCardFilter, revertidosStudentIds]);
 
 
   // ── KPI students (mode-dependent) ─────────────────────────────────────────
@@ -215,7 +268,7 @@ export default function ACPortfolioPage() {
           if (statusFilter === 'cancelado') {
             if (s.statusCancelamento !== 'cancelado') return false;
           } else if (statusFilter === 'cancelamento_solicitado') {
-            if (!isSolicCancel(s)) return false;
+            if (!matchesCancelamentoFilter(s, cancellationCases)) return false;
           } else if (statusFilter === 'Renda Extra') {
             if (!(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')) return false;
           } else if (statusFilter === 'Pago') {
@@ -385,21 +438,53 @@ export default function ACPortfolioPage() {
   // "Todos" (index 0) mostra todos; Hoje/Amanhã/etc filtra a lista
   const [filteredByDue, setFilteredByDue] = useState<Student[]>([]);
   useEffect(() => {
-    if (mode === 'historico') {
+    if (
+      mode === 'historico' ||
+      kpiCardFilter === 'revertidos' ||
+      kpiCardFilter === 'boletos_antecipados' ||
+      kpiCardFilter === 'pendente'
+    ) {
       setFilteredByDue(acStudents);
     } else {
       setFilteredByDue(acStudents.filter(hasInstallmentInForecastRange));
     }
-  }, [acStudents, mode, forecastIndex, forecastCustomStart, forecastCustomEnd]);
+  }, [acStudents, mode, forecastIndex, forecastCustomStart, forecastCustomEnd, kpiCardFilter]);
+
+  const setStatusFilter = (v: string) => {
+    setStatusFilterRaw(v);
+    if (v) {
+      setKpiCardFilter('');
+      setTagFilters([]);
+    }
+  };
 
   const filtered = filteredByDue.filter((s) => {
     if (!normalizeSearch(s.name).includes(normalizeSearch(search))) return false;
     if (scoreFilter !== null && calcularScoreComportamento(s.installments) !== scoreFilter) return false;
     if (productFilter && s.product !== productFilter) return false;
+
+    if (kpiCardFilter === 'revertidos') {
+      return revertidosStudentIds.has(s.id);
+    }
+    if (kpiCardFilter === 'pendente') {
+      return s.status === 'Pendente' && !isSolicCancel(s);
+    }
+    if (kpiCardFilter === 'boletos_antecipados') {
+      if (statusFilter) {
+        if (statusFilter === 'cancelado' && s.statusCancelamento !== 'cancelado') return false;
+        if (statusFilter === 'cancelamento_solicitado' && !matchesCancelamentoFilter(s, cancellationCases)) return false;
+        if (statusFilter === 'Pago' && s.status !== 'Pago') return false;
+        if (statusFilter === 'Renda Extra') {
+          if (!(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')) return false;
+        } else if (!['cancelado', 'cancelamento_solicitado', 'Pago'].includes(statusFilter) && (s.status !== statusFilter || isSolicCancel(s))) return false;
+      }
+      return true;
+    }
+
     // Tag filter já aplicado na base acStudents — não filtra de novo aqui
     if (statusFilter) {
       if (statusFilter === 'cancelado' && s.statusCancelamento !== 'cancelado') return false;
-      if (statusFilter === 'cancelamento_solicitado' && !isSolicCancel(s)) return false;
+      if (statusFilter === 'cancelamento_solicitado' && !matchesCancelamentoFilter(s, cancellationCases)) return false;
       if (statusFilter === 'Pago' && s.status !== 'Pago') return false;
       if (statusFilter === 'Renda Extra') {
         if (!(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')) return false;
@@ -515,8 +600,6 @@ export default function ACPortfolioPage() {
 
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
   const tagKpis = computeTagKpis(kpiStudentsScoped, studentTags, _instInRange);
-  const setStatusFilter = (v: string) => { setStatusFilterRaw(v); };
-
 
   const pct = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
   const pctSolic = kpiStudents.length > 0
@@ -529,26 +612,10 @@ export default function ACPortfolioPage() {
     : '0.0';
   const paidCount = (s: Student) => s.installments.filter((i) => i.paid).length;
 
-  // ── Revertidos (respeita datas do DashDateFilter) ─────────────────────────
-  const cancellationDateRange = (() => {
-    if (mode === 'historico') {
-      if (!historicoEnd) return null;
-      const start = historicoStart
-        ? new Date(historicoStart + 'T00:00:00')
-        : new Date(historicoEnd + 'T00:00:00');
-      const end = new Date(historicoEnd + 'T23:59:59');
-      return { start, end };
-    }
-    if (perfPreset === 'todos') return null;
-    return getPerfRange(perfPreset, perfCustomStart, perfCustomEnd);
-  })();
-  const acCases = cancellationCases.filter((c) => {
-    if (c.ac !== ac?.name) return false;
-    return isCancellationCaseInRange(c, cancellationDateRange);
-  });
-  const revertidos = acCases.filter(isCancellationCaseRevertido);
   const revertPct = acCases.length > 0 ? Math.round((revertidos.length / acCases.length) * 100) : 0;
   const revertidosValue = revertidos.reduce((acc, c) => acc + (c.value ?? 0), 0);
+  const pendentes = kpiStudentsScoped.filter((s) => s.status === 'Pendente' && !isSolicCancel(s));
+  const pendenteValue = sumUnpaid(pendentes);
 
   // Display status for table rows (always current, table is independent)
   const displayStatus = (s: Student): StudentStatus => resolveStudentDisplayStatus(s);
@@ -853,7 +920,7 @@ export default function ACPortfolioPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
         <button
           type="button"
-          onClick={() => setStatusFilter('')}
+          onClick={() => { setStatusFilter(''); setKpiCardFilter(''); setTagFilters([]); }}
           className={`min-w-0 text-left rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-primary transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 ${statusFilter === '' ? 'ring-2 ring-primary/50' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
@@ -1030,8 +1097,8 @@ export default function ACPortfolioPage() {
         </div>
       </div>
 
-      {/* ── KPIs: Solicitação Cancelamento + Revertidos + Fundo/TMF ─────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-stretch">
+      {/* ── KPIs: Solicitação + Pendências + Revertidos + Boletos Antecipados ─ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 items-stretch">
         <div
           onClick={() => setStatusFilter(statusFilter === 'cancelamento_solicitado' ? '' : 'cancelamento_solicitado')}
           className={`h-full min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-fuchsia-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-fuchsia-500/30 ${statusFilter === 'cancelamento_solicitado' ? 'ring-2 ring-fuchsia-500/40' : ''}`}
@@ -1058,8 +1125,57 @@ export default function ACPortfolioPage() {
         </div>
 
         <div
-          onClick={() => setRevertidosModalOpen(true)}
-          className={`h-full min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${revertidosModalOpen ? 'ring-2 ring-emerald-500/40' : ''}`}
+          onClick={() => {
+            if (kpiCardFilter === 'pendente') {
+              setKpiCardFilter('');
+            } else {
+              setKpiCardFilter('pendente');
+              setStatusFilterRaw('');
+              setTagFilters([]);
+              scrollToStudentsTable();
+            }
+          }}
+          className={`h-full min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-yellow-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-yellow-500/30 ${kpiCardFilter === 'pendente' ? 'ring-2 ring-yellow-500/40' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Pendências</p>
+            <div className="flex items-center gap-1 shrink-0">
+              <AlertTriangle size={14} className="text-yellow-600/70" />
+              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'pendente' ? null : 'pendente'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
+                <Info size={14} />
+              </button>
+            </div>
+          </div>
+          <p className="kpi-value text-yellow-700" title={formatCurrency(pendenteValue)}>
+            <span className="hidden sm:inline">{formatCurrency(pendenteValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(pendenteValue)}</span>
+          </p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className="text-[11px] text-muted-foreground truncate">{pendentes.length} alunos</p>
+            <p className="text-[11px] font-semibold text-yellow-700 shrink-0">{pct(pendentes.length)}%</p>
+          </div>
+          {infoStatus === 'pendente' && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+              <p>
+                Pendência de pagamento fora de boleto (PIX, link, cartão, etc.).
+                Pagamentos de boleto não entram neste indicador.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div
+          onClick={() => {
+            if (kpiCardFilter === 'revertidos') {
+              setKpiCardFilter('');
+            } else {
+              setKpiCardFilter('revertidos');
+              setStatusFilterRaw('');
+              setTagFilters([]);
+              scrollToStudentsTable();
+            }
+          }}
+          className={`h-full min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${kpiCardFilter === 'revertidos' ? 'ring-2 ring-emerald-500/40' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Revertidos</p>
@@ -1089,7 +1205,18 @@ export default function ACPortfolioPage() {
 
         {tagKpis[0] && (
           <div
-            className={`h-full min-w-0 rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 ${tagKpis[0].color}`}
+            onClick={() => {
+              if (kpiCardFilter === 'boletos_antecipados') {
+                setKpiCardFilter('');
+                setTagFilters([]);
+              } else {
+                setKpiCardFilter('boletos_antecipados');
+                setStatusFilterRaw('');
+                setTagFilters(boletosTagIds);
+                scrollToStudentsTable();
+              }
+            }}
+            className={`h-full min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 ${tagKpis[0].color} transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-500/30 ${kpiCardFilter === 'boletos_antecipados' ? 'ring-2 ring-indigo-500/40' : ''}`}
           >
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate mb-2">{tagKpis[0].label}</p>
             <p className={`kpi-value ${tagKpis[0].text}`} title={formatCurrency(tagKpis[0].value)}>
@@ -1111,41 +1238,7 @@ export default function ACPortfolioPage() {
 
 
 
-      {(() => {
-        const pendenteStudents = kpiStudents.filter((s) => s.status === 'Pendente');
-        const pendenteCount = pendenteStudents.length;
-        const pendenteValue = sumUnpaid(pendenteStudents);
-        if (pendenteCount === 0) return null;
-        return (
-          <div
-            className="bg-card border border-border rounded-2xl p-4 saas-shadow cursor-pointer hover:ring-2 hover:ring-yellow-400/40 transition-all"
-            onClick={() => setStatusFilter(statusFilter === 'Pendente' ? '' : 'Pendente')}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-yellow-100 flex items-center justify-center">
-                  <AlertTriangle size={16} className="text-yellow-600" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pendências</p>
-                  <p className="text-xl font-bold text-yellow-700">{pendenteCount}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] text-muted-foreground">Valor em carteira</p>
-                <p className="text-sm font-bold text-yellow-700">{formatCurrency(pendenteValue)}</p>
-              </div>
-              {statusFilter === 'Pendente' && (
-                <span className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-yellow-100 text-yellow-700 border border-yellow-200">
-                  Filtro ativo
-                </span>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── 5. Indicadores Menores: Média pgto, Renda Extra, Revertidos ───────── */}
+      {/* ── 5. Indicadores Menores: Média pgto, Renda Extra ─────────────────── */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2 saas-shadow">
           <Clock size={13} className="text-muted-foreground" />
@@ -1191,6 +1284,27 @@ export default function ACPortfolioPage() {
       </div>
 
       {/* ── 6. Filtro Buscar Aluno ────────────────────────────────────────────── */}
+      {kpiCardFilter && (
+        <div className="flex items-center justify-between gap-3 flex-wrap bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
+          <p className="text-[11px] text-emerald-800">
+            <span className="font-semibold">Filtro ativo:</span>{' '}
+            {kpiCardFilter === 'revertidos'
+              ? 'Revertidos'
+              : kpiCardFilter === 'pendente'
+                ? 'Pendências'
+                : (tagKpis[0]?.label ?? 'Boletos Antecipados')}
+            {' · '}
+            <span className="font-semibold">{sorted.length}</span> aluno{sorted.length === 1 ? '' : 's'}
+          </p>
+          <button
+            type="button"
+            onClick={() => { setKpiCardFilter(''); setTagFilters([]); }}
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+          >
+            Limpar filtro
+          </button>
+        </div>
+      )}
       <div className="relative max-w-sm">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input
@@ -1202,7 +1316,7 @@ export default function ACPortfolioPage() {
       </div>
 
       {/* ── Students Table ────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden saas-shadow">
+      <div ref={studentsTableRef} className="bg-card border border-border rounded-2xl overflow-hidden saas-shadow scroll-mt-4">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -1418,14 +1532,6 @@ export default function ACPortfolioPage() {
       </div>
 
       {/* Modals */}
-      {revertidosModalOpen && (
-        <CancellationCasesModal
-          title="Casos revertidos"
-          subtitle={`${revertidos.length} de ${acCases.length} pedidos${cancellationDateRange ? ' no período' : ''} · ${revertPct}%`}
-          cases={revertidos}
-          onClose={() => setRevertidosModalOpen(false)}
-        />
-      )}
       {showStudentModal && (
         <StudentModal student={editingStudent} onClose={() => setShowStudentModal(false)} />
       )}

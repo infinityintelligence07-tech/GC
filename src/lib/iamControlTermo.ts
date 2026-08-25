@@ -95,19 +95,98 @@ export async function listIamTermoTemplates(): Promise<IamTermoTemplate[]> {
   return data.templates ?? [];
 }
 
-export async function createIamCancelamentoTermo(
-  input: BuildCancelamentoTermoInput,
+export interface BuildAditivoTermoInput {
+  student: Pick<Student, 'iamControlAlunoId' | 'name' | 'product' | 'cpf' | 'saleValue'>;
+  originalValues: {
+    valorVenda: number;
+    entrada: number;
+    parcelasOriginais: number;
+  };
+  newValues: {
+    novoSaldo: number;
+    multaAplicada: number;
+    jurosAplicados: number;
+    novaEntrada: number;
+    novasParcelas: number;
+    novoValorParcela: number;
+    saldoAposEntrada?: number;
+    primeiraParcelaVencimento?: string;
+  };
+  templateId?: string;
+}
+
+export function buildAditivoTermoPayload(input: BuildAditivoTermoInput) {
+  const totalComEncargos =
+    input.newValues.novoSaldo + input.newValues.multaAplicada + input.newValues.jurosAplicados;
+  const saldoAposEntrada =
+    input.newValues.saldoAposEntrada ??
+    Math.max(0, totalComEncargos - input.newValues.novaEntrada);
+
+  const observacoes = [
+    `Renegociação financeira — ${input.student.name}`,
+    input.student.product ? `Produto: ${input.student.product}` : '',
+    `Valor original do contrato: ${formatCurrency(input.originalValues.valorVenda)}`,
+    `Entrada original: ${formatCurrency(input.originalValues.entrada)}`,
+    `Parcelas originais: ${input.originalValues.parcelasOriginais}x`,
+    `Saldo devedor renegociado: ${formatCurrency(input.newValues.novoSaldo)}`,
+    `Multa aplicada: ${formatCurrency(input.newValues.multaAplicada)}`,
+    `Juros aplicados: ${formatCurrency(input.newValues.jurosAplicados)}`,
+    `Total com encargos: ${formatCurrency(totalComEncargos)}`,
+    input.newValues.novaEntrada > 0.0049
+      ? `Nova entrada: ${formatCurrency(input.newValues.novaEntrada)}`
+      : '',
+    `Saldo após entrada: ${formatCurrency(saldoAposEntrada)}`,
+    `Novo plano: ${input.newValues.novasParcelas}x de ${formatCurrency(input.newValues.novoValorParcela)}`,
+    input.newValues.primeiraParcelaVencimento
+      ? `1ª parcela do novo plano: ${input.newValues.primeiraParcelaVencimento}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const textoIntroducao =
+    'Pelo presente instrumento aditivo, as partes retificam as condições de parcelamento do contrato de ' +
+    'prestação de serviços educacionais, permanecendo em vigor as demais cláusulas do contrato original.';
+
+  return {
+    termo_titulo: `Termo Aditivo — ${input.student.name}`,
+    texto_introducao: textoIntroducao,
+    observacoes,
+    local_assinatura: 'Americana/SP',
+    template_id: input.templateId,
+    campos_variaveis: {
+      valor_contrato_original: formatCurrency(input.originalValues.valorVenda),
+      entrada_original: formatCurrency(input.originalValues.entrada),
+      parcelas_originais: String(input.originalValues.parcelasOriginais),
+      saldo_devedor: formatCurrency(input.newValues.novoSaldo),
+      multa: formatCurrency(input.newValues.multaAplicada),
+      juros: formatCurrency(input.newValues.jurosAplicados),
+      total_com_encargos: formatCurrency(totalComEncargos),
+      nova_entrada: formatCurrency(input.newValues.novaEntrada),
+      saldo_apos_entrada: formatCurrency(saldoAposEntrada),
+      novas_parcelas: String(input.newValues.novasParcelas),
+      valor_parcela: formatCurrency(input.newValues.novoValorParcela),
+      produto: input.student.product ?? '',
+      primeira_parcela: input.newValues.primeiraParcelaVencimento ?? '',
+    },
+  };
+}
+
+/** Busca template de aditivo no IAM Control (nome contém "aditivo"). */
+export async function findAditivoTemplateId(): Promise<string | undefined> {
+  const templates = await listIamTermoTemplates();
+  const match = templates.find((t) => /aditivo/i.test(t.nome));
+  return match?.id;
+}
+
+async function invokeIamTermoCreate(
+  iamControlAlunoId: number,
+  termo: ReturnType<typeof buildCancelamentoTermoPayload> | ReturnType<typeof buildAditivoTermoPayload>,
 ): Promise<IamTermoCreateResult> {
-  if (!input.student.iamControlAlunoId) {
-    return { ok: false, error: 'Aluno não está vinculado ao IAM Control.' };
-  }
-
-  const termo = buildCancelamentoTermoPayload(input);
-
   const { data, error } = await supabase.functions.invoke<IamTermoCreateResult>('iam-control-termo', {
     body: {
       action: 'create',
-      iam_control_aluno_id: input.student.iamControlAlunoId,
+      iam_control_aluno_id: iamControlAlunoId,
       ...termo,
     },
   });
@@ -119,6 +198,37 @@ export async function createIamCancelamentoTermo(
     return { ok: false, error: data?.error || 'Não foi possível gerar o termo na ZapSign.', detalhe: data?.detalhe };
   }
   return data;
+}
+
+export async function createIamAditivoTermo(
+  input: BuildAditivoTermoInput,
+): Promise<IamTermoCreateResult> {
+  if (!input.student.iamControlAlunoId) {
+    return { ok: false, error: 'Aluno não está vinculado ao IAM Control.' };
+  }
+
+  let templateId = input.templateId;
+  if (!templateId) {
+    try {
+      templateId = await findAditivoTemplateId();
+    } catch {
+      /* segue sem template — IAM pode usar padrão */
+    }
+  }
+
+  const termo = buildAditivoTermoPayload({ ...input, templateId });
+  return invokeIamTermoCreate(input.student.iamControlAlunoId, termo);
+}
+
+export async function createIamCancelamentoTermo(
+  input: BuildCancelamentoTermoInput,
+): Promise<IamTermoCreateResult> {
+  if (!input.student.iamControlAlunoId) {
+    return { ok: false, error: 'Aluno não está vinculado ao IAM Control.' };
+  }
+
+  const termo = buildCancelamentoTermoPayload(input);
+  return invokeIamTermoCreate(input.student.iamControlAlunoId, termo);
 }
 
 export function openZapSignUrl(url?: string) {

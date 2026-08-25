@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Student, StudentStatus, StudentTag, canEditTab } from '@/types';
 import { useAppStore, formatCurrency, calculateAutoStatus, calcularScoreComportamento } from '@/store/useAppStore';
-import { cancelamentoOverridesFinancialStatus } from '@/lib/acPortfolioVisibility';
+import { cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
 import StudentModal from '@/components/modals/StudentModal';
 import FinancialModal from '@/components/modals/FinancialModal';
@@ -265,7 +265,7 @@ export default function StudentsPage() {
 
     // Status filter (financial status + special statuses)
     if (statusFilter) {
-      if (statusFilter === 'cancelamento_solicitado' && s.statusCancelamento !== 'solicitado') return false;
+      if (statusFilter === 'cancelamento_solicitado' && !matchesCancelamentoFilter(s, cancellationCases)) return false;
       if (statusFilter === 'cancelado' && s.statusCancelamento !== 'cancelado') return false;
       if (statusFilter === 'renda_extra') {
         // Filtro "Renda Extra" mostra APENAS alunos já conciliados (saíram de "Conciliar Exclusão")

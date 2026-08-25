@@ -2621,11 +2621,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   </div>
                   <button
                     type="button"
-                    onClick={() => alert('Geração do Termo Aditivo será integrada ao Zapsign em breve. Esta ação ainda não está disponível.')}
-                    className="w-full flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-purple-700 hover:bg-purple-50 transition-colors"
-                    title="Em breve: vínculo direto com aditivo no Zapsign"
+                    onClick={() => setTermoModal(true)}
+                    className="w-full flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-purple-700 hover:bg-purple-50 border border-purple-200 transition-colors"
+                    title="Gerar termo aditivo (PDF ou ZapSign)"
                   >
-                    <FileText size={12} /> Gerar Termo Aditivo (em breve)
+                    <FileText size={12} /> Gerar Termo Aditivo
                   </button>
                 </div>
               )}
@@ -2810,6 +2810,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             novaEntrada: novaEntrada,
             novasParcelas: newInstallments,
             novoValorParcela: renegValues.newValue,
+            saldoAposEntrada: renegValues.remainingAfterEntrada,
+            primeiraParcelaVencimento: renegFirstDueDate ? formatDateBR(renegFirstDueDate) : undefined,
           }}
           onClose={() => setTermoModal(false)}
         />

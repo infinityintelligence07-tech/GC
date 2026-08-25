@@ -27,6 +27,32 @@ export function isSolicitacaoCancelamento(s: Student): boolean {
   return s.status === 'Solicitação Cancelamento';
 }
 
+const FINALIZED_CANCEL_STAGES = new Set(['Cancelado', 'Negativação Efetivada', 'Recuperado']);
+
+function findActiveCancellationCase(s: Student, cases: CancellationCase[]): CancellationCase | undefined {
+  if (s.cancellationCaseId) {
+    const byId = cases.find((c) => c.id === s.cancellationCaseId);
+    if (byId) return byId;
+  }
+  return cases.find((c) => c.studentId === s.id);
+}
+
+/** Caso de cancelamento ativo vinculado ao aluno (funil Kanban, não finalizado). */
+export function hasActiveCancellationCase(s: Student, cases: CancellationCase[]): boolean {
+  const linked = findActiveCancellationCase(s, cases);
+  if (!linked) return false;
+  if (linked.acao === 'Revertido' || linked.acao === 'Cancelado') return false;
+  if (linked.funnelStage === 'Finalizado') return false;
+  if (FINALIZED_CANCEL_STAGES.has(linked.stage)) return false;
+  return true;
+}
+
+/** Filtro "Cancelamento solicitado" — todo aluno em cancelamento ativo. */
+export function matchesCancelamentoFilter(s: Student, cases: CancellationCase[]): boolean {
+  if (s.statusCancelamento === 'cancelado' || s.status === 'Cancelado') return false;
+  return isSolicitacaoCancelamento(s) || hasActiveCancellationCase(s, cases);
+}
+
 function normalizeStudentName(name?: string | null): string {
   return (name || '').trim().toLowerCase();
 }
