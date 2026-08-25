@@ -15,6 +15,7 @@ import {
 } from '@/lib/supabaseMutations';
 import { logActivity, formatBRL } from '@/lib/activityLog';
 import { resolveOriginalCancellationAc } from '@/lib/cancellationOriginalAc';
+import type { KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
 
 
 interface AppState {
@@ -25,6 +26,9 @@ interface AppState {
   setSelectedACId: (id: string | null) => void;
 
   students: Student[];
+  /** Totais autoritativos da Kamino (staging), carregados no sync. */
+  kaminoPortfolioTotals: KaminoDashboardForecastTotals | null;
+  setKaminoPortfolioTotals: (totals: KaminoDashboardForecastTotals | null) => void;
   addStudent: (student: Student) => void;
   addStudentsBulk: (students: Student[]) => Promise<{ inserted: number; failed: number }>;
   updateStudent: (id: string, data: Partial<Student>) => void;
@@ -172,6 +176,8 @@ export const useAppStore = create<AppState>()(
 
   // ── Students ─ persistidos no Supabase ──────────────────────────────────
   students: [],
+  kaminoPortfolioTotals: null,
+  setKaminoPortfolioTotals: (totals) => set({ kaminoPortfolioTotals: totals }),
   addStudent: (student) => {
     const s = {
       ...student,

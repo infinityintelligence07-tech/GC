@@ -1341,6 +1341,10 @@ export type Database = {
         Args: { _tab: string; _user_id: string }
         Returns: boolean
       }
+      kamino_dashboard_forecast_totals: {
+        Args: { p_ac?: string | null; p_product?: string | null }
+        Returns: Json
+      }
       mark_student_negativado: {
         Args: { _actor_name?: string; _student_id: string }
         Returns: {

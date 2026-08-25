@@ -286,6 +286,14 @@ export function useSupabaseSync() {
       const patch: any = { acs, products, studentTags, students: studentsReconciled, cancellationCases, appUsers };
       if (rules) patch.rules = rules;
       setStore(patch);
+
+      try {
+        const { fetchKaminoDashboardForecastTotals } = await import('@/lib/kaminoDashboardTotals');
+        const kaminoPortfolioTotals = await fetchKaminoDashboardForecastTotals();
+        if (mounted) setStore({ kaminoPortfolioTotals });
+      } catch (e) {
+        console.warn('[kamino] falha ao carregar totais da carteira:', e);
+      }
       // Sync antecipação store
       useAntecipacaoStore.setState({ items: antecipacaoItems });
       // Fila de aprovação para imports IAM PENDENTE

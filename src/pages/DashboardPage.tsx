@@ -46,7 +46,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { students, acs, products, cancellationCases, studentTags } = useAppStore();
+  const { students, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
   const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
@@ -687,15 +687,19 @@ export default function DashboardPage() {
 
   // Carteira Total (card azul) = A Vencer / Vencido da projeção (mesmo valor do card laranja).
   const forecastTotaisBase = getForecastTotals();
+  const activeKaminoTotals = (acFilter || productFilter)
+    ? kaminoForecastTotals
+    : (kaminoForecastTotals ?? kaminoPortfolioTotals);
+  const kaminoTotalsPending = usesKaminoAuthoritativeForecast && !activeKaminoTotals;
   const forecastTotais =
-    usesKaminoAuthoritativeForecast && kaminoForecastTotals
+    usesKaminoAuthoritativeForecast && activeKaminoTotals
       ? {
           ...forecastTotaisBase,
-          aVencer: kaminoForecastTotals.aVencer,
-          pago: kaminoForecastTotals.pago,
-          pagoReal: kaminoForecastTotals.pagoReal,
-          total: kaminoForecastTotals.total,
-          totalReal: kaminoForecastTotals.aVencer + kaminoForecastTotals.pagoReal,
+          aVencer: activeKaminoTotals.aVencer,
+          pago: activeKaminoTotals.pago,
+          pagoReal: activeKaminoTotals.pagoReal,
+          total: activeKaminoTotals.total,
+          totalReal: activeKaminoTotals.aVencer + activeKaminoTotals.pagoReal,
         }
       : forecastTotaisBase;
   const carteiraTotalValue = forecastTotais.aVencer;
@@ -1155,17 +1159,17 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="kpi-fit rounded-xl border border-amber-200/60 bg-amber-50/60 p-2 min-w-0">
                     <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">A Vencer / Vencido</p>
-                    <p className="kpi-value-fit text-amber-700 mt-0.5" title={formatCurrency(aVencer)}>
-                      {formatCurrency(aVencer)}
+                    <p className="kpi-value-fit text-amber-700 mt-0.5" title={kaminoTotalsPending ? 'Carregando totais Kamino…' : formatCurrency(aVencer)}>
+                      {kaminoTotalsPending ? '…' : formatCurrency(aVencer)}
                     </p>
-                    <p className="text-[10px] font-semibold text-amber-700 mt-0">{pctAV}%</p>
+                    <p className="text-[10px] font-semibold text-amber-700 mt-0">{kaminoTotalsPending ? '—' : `${pctAV}%`}</p>
                   </div>
                   <div className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0">
                     <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Pago</p>
-                    <p className="kpi-value-fit text-emerald-700 mt-0.5" title={formatCurrency(pago)}>
-                      {formatCurrency(pago)}
+                    <p className="kpi-value-fit text-emerald-700 mt-0.5" title={kaminoTotalsPending ? 'Carregando totais Kamino…' : formatCurrency(pago)}>
+                      {kaminoTotalsPending ? '…' : formatCurrency(pago)}
                     </p>
-                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">{pctPg}%</p>
+                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">{kaminoTotalsPending ? '—' : `${pctPg}%`}</p>
                   </div>
                 </div>
               );

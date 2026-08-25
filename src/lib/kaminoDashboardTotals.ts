@@ -9,20 +9,15 @@ export type KaminoDashboardForecastTotals = {
   source: 'kamino_staging';
 };
 
-export async function fetchKaminoDashboardForecastTotals(
-  ac?: string,
-  product?: string,
-): Promise<KaminoDashboardForecastTotals | null> {
-  const { data, error } = await supabase.rpc('kamino_dashboard_forecast_totals', {
-    p_ac: ac?.trim() || null,
-    p_product: product?.trim() || null,
-  });
-  if (error) {
-    console.warn('[kamino] kamino_dashboard_forecast_totals:', error.message);
+function parseKaminoTotalsPayload(data: unknown): KaminoDashboardForecastTotals | null {
+  if (!data) return null;
+  let row: Record<string, unknown>;
+  try {
+    row = (typeof data === 'string' ? JSON.parse(data) : data) as Record<string, unknown>;
+  } catch {
     return null;
   }
-  if (!data || typeof data !== 'object') return null;
-  const row = data as Record<string, unknown>;
+  if (!row || typeof row !== 'object') return null;
   return {
     aVencer: Number(row.aVencer ?? 0),
     pago: Number(row.pago ?? 0),
@@ -31,4 +26,20 @@ export async function fetchKaminoDashboardForecastTotals(
     qtd: Number(row.qtd ?? 0),
     source: 'kamino_staging',
   };
+}
+
+export async function fetchKaminoDashboardForecastTotals(
+  ac?: string,
+  product?: string,
+): Promise<KaminoDashboardForecastTotals | null> {
+  const args = {
+    p_ac: ac?.trim() ? ac.trim() : null,
+    p_product: product?.trim() ? product.trim() : null,
+  };
+  const { data, error } = await supabase.rpc('kamino_dashboard_forecast_totals', args);
+  if (error) {
+    console.warn('[kamino] kamino_dashboard_forecast_totals:', error.message);
+    return null;
+  }
+  return parseKaminoTotalsPayload(data);
 }
