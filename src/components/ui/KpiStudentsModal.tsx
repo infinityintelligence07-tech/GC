@@ -4,6 +4,7 @@ import { formatCurrency } from '@/store/useAppStore';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
 
 import { resolveStudentDisplayStatus, getOperationalPendenteInstallments } from '@/lib/studentDisplayStatus';
+import { isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
 
 export type KpiValueMode = 'unpaid' | 'overdue' | 'operational_pendente';
 
@@ -33,6 +34,7 @@ export default function KpiStudentsModal({
         : s.installments;
     const unpaid = source.filter((i) => {
       if (i.paid || !instInRange(i)) return false;
+      if (valueMode !== 'operational_pendente' && isInstallmentExcludedFromFinancialTotals(s, i)) return false;
       if (valueMode === 'overdue') {
         return new Date(i.dueDate + 'T00:00:00').getTime() < todayMs;
       }

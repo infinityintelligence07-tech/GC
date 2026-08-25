@@ -1,5 +1,6 @@
-import type { ConciliacaoItem, Student } from '@/types';
+import type { ConciliacaoItem, Student, Installment } from '@/types';
 import { createConciliacaoItemDb } from '@/lib/supabaseMutations';
+import { getOperationalPendenteInstallments } from '@/lib/studentDisplayStatus';
 
 /** IAM PENDENTE ainda não aprovado na Conciliação do GC. */
 export function isAwaitingIamGcApproval(student: Student): boolean {
@@ -7,9 +8,19 @@ export function isAwaitingIamGcApproval(student: Student): boolean {
   return String(student.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE';
 }
 
-/** Só entra em totais financeiros (A vencer/vencido) após aprovação na Conciliação. */
-export function countsInFinancialTotals(student: Student): boolean {
-  return !isAwaitingIamGcApproval(student);
+/**
+ * Parcela de pendência IAM (PIX/link/entrada) — não entra em Carteira Total
+ * até aprovação na Conciliação. Demais parcelas do aluno continuam na carteira.
+ */
+export function isInstallmentExcludedFromFinancialTotals(student: Student, inst: Installment): boolean {
+  if (!isAwaitingIamGcApproval(student)) return false;
+  const pend = getOperationalPendenteInstallments(student);
+  return pend.some((p) => p.number === inst.number);
+}
+
+/** Aluno permanece na carteira; exclusão é por parcela (ver isInstallmentExcludedFromFinancialTotals). */
+export function countsInFinancialTotals(_student: Student): boolean {
+  return true;
 }
 
 function hasOpenIamPendenteItem(studentId: string, items: ConciliacaoItem[]): boolean {

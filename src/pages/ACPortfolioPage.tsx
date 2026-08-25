@@ -26,7 +26,7 @@ import {
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
-import { countsInFinancialTotals } from '@/lib/iamPendenteConciliacao';
+import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -413,6 +413,8 @@ export default function ACPortfolioPage() {
           return;
         }
 
+        if (isInstallmentExcludedFromFinancialTotals(st, i)) return;
+
         if (range) {
           const due = new Date(i.dueDate + 'T00:00:00');
           if (due < range.start || due > range.end) return;
@@ -580,7 +582,9 @@ export default function ACPortfolioPage() {
           .reduce((a, i) => a + i.value, 0);
       }
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
-      return acc + s.installments.filter((i) => !i.paid && _instInRange(i)).reduce((a, i) => a + i.value, 0);
+      return acc + s.installments
+        .filter((i) => !i.paid && _instInRange(i) && !isInstallmentExcludedFromFinancialTotals(s, i))
+        .reduce((a, i) => a + i.value, 0);
     }, 0);
 
   const _todayMs = (() => { const d = getTodayBrasilia(); d.setHours(0,0,0,0); return d.getTime(); })();

@@ -18,7 +18,7 @@ import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
-import { countsInFinancialTotals } from '@/lib/iamPendenteConciliacao';
+import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -456,7 +456,9 @@ export default function DashboardPage() {
           .reduce((a, i) => a + i.value, 0);
       }
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
-      return acc + s.installments.filter((i) => !i.paid && _instInRange(i)).reduce((a, i) => a + i.value, 0);
+      return acc + s.installments
+        .filter((i) => !i.paid && _instInRange(i) && !isInstallmentExcludedFromFinancialTotals(s, i))
+        .reduce((a, i) => a + i.value, 0);
     }, 0);
 
   const sumOverdue = (arr: Student[]) =>
@@ -483,13 +485,24 @@ export default function DashboardPage() {
   const solicCancValue = sumUnpaid(solicitacaoCancelamento);
   const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
+  // Mesma base do card "Carteira Total" — pendência IAM excluída por parcela, não por aluno.
+  const forecastBase = baseStudents.filter(
+    (s) =>
+      s.statusCancelamento !== 'cancelado' &&
+      countsInFinancialTotals(s) &&
+      !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão'),
+  );
+  const carteiraModalStudents = forecastBase.filter((s) =>
+    s.installments.some((i) => !i.paid && _instInRange(i) && !isInstallmentExcludedFromFinancialTotals(s, i)),
+  );
+
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
   const tagKpis = computeTagKpis(kpiStudentsScoped, studentTags, _instInRange);
 
   const kpiModalConfig: { title: string; students: Student[]; valueMode: KpiValueMode } | null = (() => {
     switch (kpiModalKey) {
       case 'total':
-        return { title: 'Carteira Total', students: kpiStudentsScoped, valueMode: 'unpaid' };
+        return { title: 'Carteira Total', students: carteiraModalStudents, valueMode: 'unpaid' };
       case 'emdia_novos':
         return { title: 'Em Dia + Novos', students: [...emDia, ...alunosNovos], valueMode: 'unpaid' };
       case 'emdia':
@@ -564,14 +577,7 @@ export default function DashboardPage() {
   };
 
   // Exclui Renda Extra (saída de Conciliar Exclusão) e Cancelados conciliados
-  // do bloco "Data de Vencimento" — devem sair da carteira financeira.
-  const forecastBase = baseStudents.filter(
-    (s) =>
-      s.statusCancelamento !== 'cancelado' &&
-      countsInFinancialTotals(s) &&
-      !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
-  );
-
+  // do bloco "Data de Vencimento" — forecastBase definido acima (alinhado ao modal).
   // Retorna totais da projeção: A Vencer/Vencido (não pagas), Pago (pagas) e soma (total).
   // "Todos" → toda a carteira; demais → filtrado por dueDate dentro do range.
   const getForecastTotals = () => {
@@ -632,6 +638,8 @@ export default function DashboardPage() {
           details.push({ studentId: st.id, studentName: st.name, ac: st.ac || 'Sem Assessor', installmentNumber: i.number, dueDate: i.dueDate, value: i.value, paidValue: realValue, paidDate: i.paidDate });
           return;
         }
+
+        if (isInstallmentExcludedFromFinancialTotals(st, i)) return;
 
         if (range) {
           const due = new Date(i.dueDate + 'T00:00:00');
