@@ -60,25 +60,48 @@ export function orderActiveAcs(acs: AC[]): AC[] {
     });
 }
 
+/** Normaliza nome de pessoa para comparação (minúsculas, sem acento). */
+export function normalizePersonName(name?: string | null): string {
+  return (name ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 /**
- * AC de uma ficha já existente com mesmo CPF+ciclo (não avança a fila).
- * Retorna o nome do assessor ou null.
+ * AC de outra ficha da mesma pessoa (qualquer treinamento/ciclo).
+ * 1) Mesmo CPF com AC preenchido
+ * 2) Fallback: mesmo nome normalizado (quando CPF não bate entre fichas)
  */
 export function findExistingStudentAc(
   students: Student[],
   cpf?: string | null,
-  ciclo?: string | null,
+  _ciclo?: string | null,
   excludeId?: string,
+  name?: string | null,
 ): string | null {
-  const key = cpfCicloKey(cpf, ciclo);
-  if (!normalizeCpfDigits(cpf)) return null;
-  const hit = students.find(
+  const cpfDigits = normalizeCpfDigits(cpf);
+  if (cpfDigits.length >= 11) {
+    const byCpf = students.find(
+      (s) =>
+        s.id !== excludeId &&
+        normalizeCpfDigits(s.cpf) === cpfDigits &&
+        isAcFilled(s.ac),
+    );
+    if (byCpf?.ac) return byCpf.ac.trim();
+  }
+
+  const nameKey = normalizePersonName(name);
+  if (!nameKey) return null;
+
+  const byName = students.find(
     (s) =>
       s.id !== excludeId &&
-      cpfCicloKey(s.cpf, s.ciclo) === key &&
+      normalizePersonName(s.name) === nameKey &&
       isAcFilled(s.ac),
   );
-  return hit?.ac?.trim() ?? null;
+  return byName?.ac?.trim() ?? null;
 }
 
 /**

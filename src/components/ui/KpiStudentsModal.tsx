@@ -3,7 +3,9 @@ import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
 
-export type KpiValueMode = 'unpaid' | 'overdue';
+import { resolveStudentDisplayStatus, getOperationalPendenteInstallments } from '@/lib/studentDisplayStatus';
+
+export type KpiValueMode = 'unpaid' | 'overdue' | 'operational_pendente';
 
 export default function KpiStudentsModal({
   title,
@@ -25,7 +27,11 @@ export default function KpiStudentsModal({
   const [dateTo, setDateTo] = useState('');
   const allRows: Row[] = [];
   students.forEach((s) => {
-    const unpaid = s.installments.filter((i) => {
+    const source =
+      valueMode === 'operational_pendente'
+        ? getOperationalPendenteInstallments(s)
+        : s.installments;
+    const unpaid = source.filter((i) => {
       if (i.paid || !instInRange(i)) return false;
       if (valueMode === 'overdue') {
         return new Date(i.dueDate + 'T00:00:00').getTime() < todayMs;
@@ -37,7 +43,7 @@ export default function KpiStudentsModal({
         studentId: s.id,
         studentName: s.name,
         ac: s.ac || '—',
-        status: s.status,
+        status: resolveStudentDisplayStatus(s),
         installmentNumber: i.number,
         dueDate: i.dueDate,
         value: i.value,
@@ -81,7 +87,7 @@ export default function KpiStudentsModal({
           <div>
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {studentCount} {studentCount === 1 ? 'aluno' : 'alunos'} · {rows.length} parcela(s) · Total: <span className="font-semibold text-primary">{formatCurrency(total)}</span>
+              {studentCount} {studentCount === 1 ? 'aluno' : 'alunos'} · {rows.length} {valueMode === 'operational_pendente' ? 'pendência(s)' : 'parcela(s)'} · Total: <span className="font-semibold text-primary">{formatCurrency(total)}</span>
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground" aria-label="Fechar">✕</button>
@@ -112,7 +118,7 @@ export default function KpiStudentsModal({
                 <th className="text-left font-semibold px-4 py-2">Status</th>
                 <th className="text-center font-semibold px-4 py-2">Parc.</th>
                 <th className="text-left font-semibold px-4 py-2">Vencimento</th>
-                <th className="text-right font-semibold px-4 py-2">Valor Parcela</th>
+                <th className="text-right font-semibold px-4 py-2">{valueMode === 'operational_pendente' ? 'Valor Pendência' : 'Valor Parcela'}</th>
               </tr>
             </thead>
             <tbody>

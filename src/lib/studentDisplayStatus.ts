@@ -1,4 +1,4 @@
-import type { Student, StudentStatus, StatusCancelamento } from '@/types';
+import type { Student, StudentStatus, StatusCancelamento, Installment } from '@/types';
 import { calculateAutoStatus } from '@/store/useAppStore';
 import { cancelamentoOverridesFinancialStatus } from '@/lib/acPortfolioVisibility';
 
@@ -28,6 +28,32 @@ export const CANCELAMENTO_BADGE_CONFIG: Record<string, { label: string; color: s
 
 export function isFunilCancelamentoAtivo(sc?: StatusCancelamento | null): boolean {
   return !!sc && FUNIL_CANCELAMENTO_ATIVO.has(sc);
+}
+
+const PENDENCIA_INSTALLMENT_TAGS = ['entrada-restante', 'entrada-pendente'];
+
+/** Parcelas que representam a pendência operacional (PIX/link/entrada), não o plano inteiro. */
+export function getOperationalPendenteInstallments(student: Student): Installment[] {
+  if (!isOperationalPendente(student)) return [];
+  const unpaid = student.installments.filter((i) => !i.paid);
+  if (unpaid.length === 0) return [];
+
+  const iamStatus = String(student.iamControlContratoStatus ?? '').toUpperCase();
+  if (iamStatus === 'PENDENTE') {
+    const tagged = unpaid.filter((i) =>
+      (i.tags ?? []).some((t) => PENDENCIA_INSTALLMENT_TAGS.includes(t)),
+    );
+    if (tagged.length > 0) return tagged;
+    const sorted = [...unpaid].sort((a, b) => a.number - b.number);
+    return sorted.slice(0, 1);
+  }
+
+  const sorted = [...unpaid].sort((a, b) => a.number - b.number);
+  return sorted.slice(0, 1);
+}
+
+export function sumOperationalPendenteValue(student: Student): number {
+  return getOperationalPendenteInstallments(student).reduce((acc, i) => acc + i.value, 0);
 }
 
 /** Pendência operacional (PIX/link IAM ou status manual Pendente). */

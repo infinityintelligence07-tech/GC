@@ -50,7 +50,7 @@ export default function EsteiraAssessoresBlock({ acs }: Props) {
           <p className="text-xs font-semibold text-foreground">Esteira de distribuição</p>
           <p className="text-[10px] text-muted-foreground mt-0.5">
             Alunos novos sem assessor entram na fila dos ativos. Quem recebe vai para o fim.
-            Se o CPF+ciclo já existir, o aluno fica com o assessor da ficha.
+            Se a pessoa já tiver assessor em outro treinamento (mesmo CPF ou mesmo nome), reutiliza o assessor.
             IPR (Imersão Prosperar) e Imersão de Negócios ficam de fora da esteira.
           </p>
         </div>

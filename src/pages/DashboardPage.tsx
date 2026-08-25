@@ -17,7 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
-import { resolveStudentDisplayStatus, isOperationalPendente } from '@/lib/studentDisplayStatus';
+import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
 import { countsInFinancialTotals } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
@@ -481,7 +481,7 @@ export default function DashboardPage() {
   const anValue = sumUnpaid(aNegativar);
   const negValue = sumOverdue(negativado);
   const solicCancValue = sumUnpaid(solicitacaoCancelamento);
-  const pendenteValue = sumUnpaid(pendentes);
+  const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
   const tagKpis = computeTagKpis(kpiStudentsScoped, studentTags, _instInRange);
@@ -507,7 +507,7 @@ export default function DashboardPage() {
       case 'solic':
         return { title: 'Solicitação Cancelamento', students: solicitacaoCancelamento, valueMode: 'unpaid' };
       case 'pendente':
-        return { title: 'Pendências', students: pendentes, valueMode: 'unpaid' };
+        return { title: 'Pendências', students: pendentes, valueMode: 'operational_pendente' };
       case 'tag':
         return tagKpis[0]
           ? { title: tagKpis[0].label, students: tagKpis[0].students, valueMode: 'unpaid' as KpiValueMode }

@@ -25,7 +25,7 @@ import {
   hasActiveCancellationCase,
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
-import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente } from '@/lib/studentDisplayStatus';
+import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
 import { countsInFinancialTotals } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
@@ -624,7 +624,7 @@ export default function ACPortfolioPage() {
   const revertPct = acCases.length > 0 ? Math.round((revertidos.length / acCases.length) * 100) : 0;
   const revertidosValue = revertidos.reduce((acc, c) => acc + (c.value ?? 0), 0);
   const pendentes = kpiStudentsScoped.filter((s) => isOperationalPendente(s) && !isSolicCancel(s));
-  const pendenteValue = sumUnpaid(pendentes);
+  const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
   // Display status for table rows (always current, table is independent)
   const displayStatus = (s: Student): StudentStatus => resolveStudentDisplayStatus(s);
