@@ -17,7 +17,10 @@ export function isIamControlStudent(student: Student): boolean {
 
 /** Aluno com financeiro vindo da sync Kamino (carteira principal). */
 export function isKaminoPortfolioStudent(student: Student): boolean {
-  return Boolean(student.kaminoSyncedAt);
+  if (isIamControlStudent(student)) return false;
+  if (student.kaminoSyncedAt) return true;
+  // Legado: coluna kamino_synced_at ainda não populada — não-IAM permanece na carteira Kamino.
+  return true;
 }
 
 /** IAM PENDENTE / PARA_CONCILIAR ainda não aprovado na Conciliação do GC. */
@@ -35,9 +38,9 @@ export function isInstallmentExcludedFromFinancialTotals(student: Student, inst:
   return !inst.paid;
 }
 
-/** Somente alunos Kamino (sync) entram nos totais da dashboard principal e carteira AC. */
+/** Somente carteira Kamino (não IAM) entra nos totais da dashboard principal e carteira AC. */
 export function countsInFinancialTotals(student: Student): boolean {
-  return isKaminoPortfolioStudent(student) && !isIamControlStudent(student);
+  return isKaminoPortfolioStudent(student);
 }
 
 function hasOpenIamPendenteItem(studentId: string, items: ConciliacaoItem[]): boolean {

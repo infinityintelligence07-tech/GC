@@ -19,6 +19,7 @@ import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
 import { countsInFinancialTotals, isIamControlStudent, isInstallmentExcludedFromFinancialTotals, isKaminoPortfolioStudent } from '@/lib/iamPendenteConciliacao';
+import { fetchKaminoDashboardForecastTotals, type KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -109,6 +110,28 @@ export default function DashboardPage() {
   // ── Forecast custom dates ─────────────────────────────────────────────────
   const [forecastCustomStart, setForecastCustomStart] = useState(currentMonthStart);
   const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
+  const [kaminoForecastTotals, setKaminoForecastTotals] = useState<KaminoDashboardForecastTotals | null>(null);
+
+  const usesKaminoAuthoritativeForecast =
+    mode === 'performance' &&
+    forecastIndex === 0 &&
+    dateBasis === 'vencimento' &&
+    tagFilters.length === 0 &&
+    scoreFilter === null;
+
+  useEffect(() => {
+    if (!usesKaminoAuthoritativeForecast) {
+      setKaminoForecastTotals(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchKaminoDashboardForecastTotals(acFilter || undefined, productFilter || undefined).then((totals) => {
+      if (!cancelled) setKaminoForecastTotals(totals);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [usesKaminoAuthoritativeForecast, acFilter, productFilter]);
 
   // ── Base dataset: filter by AC + Produto (Score aplicado depois) ─────────
   // Mantemos dois estágios para que a distribuição de Score continue refletindo
@@ -663,7 +686,18 @@ export default function DashboardPage() {
   };
 
   // Carteira Total (card azul) = A Vencer / Vencido da projeção (mesmo valor do card laranja).
-  const forecastTotais = getForecastTotals();
+  const forecastTotaisBase = getForecastTotals();
+  const forecastTotais =
+    usesKaminoAuthoritativeForecast && kaminoForecastTotals
+      ? {
+          ...forecastTotaisBase,
+          aVencer: kaminoForecastTotals.aVencer,
+          pago: kaminoForecastTotals.pago,
+          pagoReal: kaminoForecastTotals.pagoReal,
+          total: kaminoForecastTotals.total,
+          totalReal: kaminoForecastTotals.aVencer + kaminoForecastTotals.pagoReal,
+        }
+      : forecastTotaisBase;
   const carteiraTotalValue = forecastTotais.aVencer;
   const carteiraTotalAlunos = forecastTotais.qtdAlunosAVencer;
 
@@ -1005,8 +1039,8 @@ export default function DashboardPage() {
             </div>
             <p className="text-xs text-muted-foreground mb-4">
               {dateBasis === 'vencimento'
-                ? `Projeção financeira por período ${acFilter ? `(${acFilter})` : '(carteira Kamino)'}`
-                : `Títulos pagos no período ${acFilter ? `(${acFilter})` : '(carteira Kamino)'}`}
+                ? `Projeção financeira por período ${acFilter ? `(${acFilter})` : usesKaminoAuthoritativeForecast ? '(fonte Kamino)' : '(carteira GC)'}`
+                : `Títulos pagos no período ${acFilter ? `(${acFilter})` : '(carteira GC)'}`}
             </p>
             <div className="flex gap-1 mb-4 flex-wrap items-center">
               {dateBasis === 'vencimento' &&
