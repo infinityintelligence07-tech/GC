@@ -1,6 +1,29 @@
 import type { CancellationCase, Student } from '@/types';
 import { isSolicitacaoCancelamento } from '@/lib/acPortfolioVisibility';
 
+function normalizeStudentName(name?: string | null): string {
+  return (name ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/** Últimos 2 tokens do nome — ajuda a casar "MARI GOMES ROCHA" ↔ "MARILEUSA GOMES ROCHA". */
+function studentNameSuffix(name: string): string {
+  const parts = normalizeStudentName(name).split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return parts.slice(-2).join(' ');
+  return normalizeStudentName(name);
+}
+
+function studentMatchesCaseName(student: Student, caseName: string): boolean {
+  const sn = normalizeStudentName(student.name);
+  const cn = normalizeStudentName(caseName);
+  if (!sn || !cn) return false;
+  if (sn === cn) return true;
+  return studentNameSuffix(student.name) === studentNameSuffix(caseName);
+}
+
 /** Estágios legados considerados reversão. */
 const RECOVERED_STAGES = new Set(['Recuperado', 'Negativação Retirada']);
 
@@ -75,23 +98,30 @@ export function studentIdsFromRevertidosCases(
   acName?: string,
 ): Set<string> {
   const ids = new Set<string>();
+  const scoped = acName ? students.filter((s) => s.ac === acName) : students;
+
+  const add = (s: Student) => {
+    if (!acName || s.ac === acName) ids.add(s.id);
+  };
+
   for (const c of cases) {
     if (c.studentId) {
-      ids.add(c.studentId);
-      continue;
+      const byId = scoped.find((s) => s.id === c.studentId);
+      if (byId) add(byId);
     }
-    students
-      .filter(
-        (s) =>
-          (!acName || s.ac === acName) &&
-          s.name.trim().toLowerCase() === c.studentName.trim().toLowerCase(),
-      )
-      .forEach((s) => ids.add(s.id));
+
+    scoped.filter((s) => s.cancellationCaseId === c.id).forEach(add);
+
+    const byExactName = scoped.filter((s) => normalizeStudentName(s.name) === normalizeStudentName(c.studentName));
+    if (byExactName.length === 1) byExactName.forEach(add);
+
+    if (!c.studentId && c.studentName) {
+      const bySuffix = scoped.filter((s) => studentMatchesCaseName(s, c.studentName));
+      if (bySuffix.length === 1) bySuffix.forEach(add);
+    }
   }
-  if (acName) {
-    students
-      .filter((s) => s.ac === acName && s.statusCancelamento === 'revertido')
-      .forEach((s) => ids.add(s.id));
-  }
+
+  scoped.filter((s) => s.statusCancelamento === 'revertido').forEach(add);
+
   return ids;
 }

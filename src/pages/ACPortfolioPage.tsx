@@ -223,11 +223,14 @@ export default function ACPortfolioPage() {
 
   // Base AC students with auto-status applied + filtro por tag (recalcula
   // installments/status quando tag está marcada apenas em parcelas específicas)
-  const [acStudents, setAcStudents] = useState<Student[]>([]);
-  useEffect(() => {
-    if (!ac) { setAcStudents([]); return; }
+  const revertidosIdsKey = useMemo(
+    () => [...revertidosStudentIds].sort().join(','),
+    [revertidosStudentIds],
+  );
+  const acStudents = useMemo(() => {
+    if (!ac) return [];
     const revertidosMode = kpiCardFilter === 'revertidos';
-    const base = students
+    return students
       .filter((s) => s.ac === ac.name)
       .filter((s) => {
         if (revertidosMode && revertidosStudentIds.has(s.id)) return true;
@@ -243,9 +246,7 @@ export default function ACPortfolioPage() {
         const withStatus = { ...s, status: resolveStudentDisplayStatus(s) } as Student;
         return tagFilters.length > 0 ? applyTagFilterToStudent(withStatus, tagFilters) : withStatus;
       });
-    setAcStudents(base);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey, statusFilter, kpiCardFilter, revertidosStudentIds]);
+  }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey, statusFilter, kpiCardFilter, revertidosIdsKey, revertidosStudentIds]);
 
 
   // ── KPI students (mode-dependent) ─────────────────────────────────────────
@@ -436,18 +437,16 @@ export default function ACPortfolioPage() {
   // ── Due filter for table ─────────────────────────────────────────────────
   // Performance mode: filtra alunos com parcelas no período selecionado
   // "Todos" (index 0) mostra todos; Hoje/Amanhã/etc filtra a lista
-  const [filteredByDue, setFilteredByDue] = useState<Student[]>([]);
-  useEffect(() => {
+  const filteredByDue = useMemo(() => {
     if (
       mode === 'historico' ||
       kpiCardFilter === 'revertidos' ||
       kpiCardFilter === 'boletos_antecipados' ||
       kpiCardFilter === 'pendente'
     ) {
-      setFilteredByDue(acStudents);
-    } else {
-      setFilteredByDue(acStudents.filter(hasInstallmentInForecastRange));
+      return acStudents;
     }
+    return acStudents.filter(hasInstallmentInForecastRange);
   }, [acStudents, mode, forecastIndex, forecastCustomStart, forecastCustomEnd, kpiCardFilter]);
 
   const setStatusFilter = (v: string) => {
@@ -1295,6 +1294,12 @@ export default function ACPortfolioPage() {
                 : (tagKpis[0]?.label ?? 'Boletos Antecipados')}
             {' · '}
             <span className="font-semibold">{sorted.length}</span> aluno{sorted.length === 1 ? '' : 's'}
+            {kpiCardFilter === 'revertidos' && sorted.length === 0 && revertidos.length > 0 && (
+              <span className="text-amber-700">
+                {' '}
+                — {revertidos.length} pedido{revertidos.length === 1 ? '' : 's'} no período sem aluno vinculado nesta carteira
+              </span>
+            )}
           </p>
           <button
             type="button"
