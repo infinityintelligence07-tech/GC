@@ -171,8 +171,14 @@ export default function StudentsPage() {
         updateStudent(s.id, { statusCancelamento: null });
       }
       if (s.status === 'Negativado') return;
-      // Pendência IAM/Manual não recalcula Vencido.
-      if (s.status === 'Pendente' || String(s.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE') return;
+      // Pendência IAM: restaura Pendente/Manual e não recalcula Vencido.
+      if (String(s.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE') {
+        if (s.status !== 'Pendente' || s.statusMode !== 'Manual') {
+          updateStudent(s.id, { status: 'Pendente', statusMode: 'Manual' });
+        }
+        return;
+      }
+      if (s.status === 'Pendente') return;
       // Cancelamento (solicitação, conciliação pendente, cancelado…) não recalcula Vencido.
       if (cancelamentoOverridesFinancialStatus(s)) return;
       if (s.statusMode === 'Automático') {
@@ -722,7 +728,7 @@ export default function StudentsPage() {
                                 <>
                                   <div className="flex items-center gap-1.5">
                                     <StatusBadgeManual student={student} status={student.status} />
-                                    {student.status !== 'Em Dia' && student.status !== 'Pago' && (() => {
+                                    {student.status !== 'Em Dia' && student.status !== 'Pago' && student.status !== 'Pendente' && (() => {
                                       const dias = calcularDiasVencido(student.installments);
                                       return dias && dias > 0 ? (
                                         <span className="text-[9px] font-bold text-destructive">

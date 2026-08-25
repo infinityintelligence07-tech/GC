@@ -157,7 +157,14 @@ export default function ACPortfolioPage() {
       .forEach((s) => {
         // Negativado é sempre manual — não rebaixamos por auto-cálculo.
         if (s.status === 'Negativado') return;
-        if (s.status === 'Pendente' || String(s.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE') return;
+        // Pendência IAM: restaura Pendente/Manual e não recalcula Vencido.
+        if (String(s.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE') {
+          if (s.status !== 'Pendente' || s.statusMode !== 'Manual') {
+            updateStudent(s.id, { status: 'Pendente', statusMode: 'Manual' });
+          }
+          return;
+        }
+        if (s.status === 'Pendente') return;
         if (cancelamentoOverridesFinancialStatus(s)) return;
         if (s.statusMode === 'Automático') {
           const autoStatus = calculateAutoStatus(s.installments);
@@ -1397,7 +1404,7 @@ export default function ACPortfolioPage() {
                                 <>
                                   <div className="flex items-center gap-1.5">
                                     <StatusBadgeManual student={student} status={tableStatus} />
-                                    {tableStatus !== 'Em Dia' && tableStatus !== 'Pago' && (() => {
+                                    {tableStatus !== 'Em Dia' && tableStatus !== 'Pago' && tableStatus !== 'Pendente' && (() => {
                                       const dias = calcularDiasVencido(student.installments);
                                       return dias && dias > 0 ? (
                                         <span className="text-[9px] font-bold text-destructive">
