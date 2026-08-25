@@ -1067,7 +1067,7 @@ export default function DashboardPage() {
               )}
             </div>
             {(() => {
-              const { total, aVencer, pago, pagoReal, qtd, qtdAlunos, perAcList, details } = getForecastTotals();
+              const { total, aVencer, pago, pagoReal, qtd, qtdAlunos, perAcList, details } = forecastTotais;
               if (dateBasis === 'pagamento') {
                 return (
                   <>
