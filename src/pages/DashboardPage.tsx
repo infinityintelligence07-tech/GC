@@ -5,12 +5,12 @@ import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 import DashDateFilter, { DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
 import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity, FileText, AlertTriangle } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import { getTagStyle } from '@/lib/tagColors';
-import { computeTagKpis, getTagIdsForKpiGroup } from '@/lib/tagKpis';
+import { computeTagKpis } from '@/lib/tagKpis';
 import { studentMatchesTagFilter, applyTagFilterToStudent } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,11 +21,11 @@ import { resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
-  studentIdsFromRevertidosCases,
 } from '@/lib/cancellationIndicators';
+import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
 import DashboardReportModal, { type DashboardReportSection } from '@/components/ui/DashboardReportModal';
 
-type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'pendente' | 'tag';
+type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'pendente' | 'tag' | 'revertidos';
 
 function MediaDiasTag({ media }: { media: number | null }) {
   if (media === null) return <span className="text-[10px] text-muted-foreground">—</span>;
@@ -56,7 +56,6 @@ export default function DashboardPage() {
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [paymentDetailModal, setPaymentDetailModal] = useState<null | 'pago' | 'recebido'>(null);
   const [kpiModalKey, setKpiModalKey] = useState<KpiModalKey | null>(null);
-  const [kpiCardFilter, setKpiCardFilter] = useState<'' | 'revertidos' | 'boletos_antecipados'>('');
   const [reportOpen, setReportOpen] = useState(false);
 
   // ── Evolução Mensal (filtro exclusivo do bloco) ───────────────────────────
@@ -371,29 +370,6 @@ export default function DashboardPage() {
     return true;
   });
   const revertidos = acCases.filter(isCancellationCaseRevertido);
-  const revertidosStudentIds = useMemo(
-    () => studentIdsFromRevertidosCases(revertidos, students, acFilter || undefined),
-    [revertidos, students, acFilter],
-  );
-  const boletosTagIds = useMemo(
-    () => getTagIdsForKpiGroup(studentTags, 'fundo_tmf_antecipacao'),
-    [studentTags],
-  );
-
-  useEffect(() => {
-    if (kpiCardFilter !== 'boletos_antecipados') return;
-    const active =
-      boletosTagIds.length > 0 &&
-      boletosTagIds.length === tagFilters.length &&
-      boletosTagIds.every((id) => tagFilters.includes(id));
-    if (!active) setKpiCardFilter('');
-  }, [tagFilters, boletosTagIds, kpiCardFilter]);
-
-  const kpiStudentsForDisplay =
-    kpiCardFilter === 'revertidos'
-      ? kpiStudents.filter((s) => revertidosStudentIds.has(s.id))
-      : kpiStudents;
-
 
   // ── Média dias ────────────────────────────────────────────────────────────
   const allPaidInstallments = baseStudents.flatMap((s) => s.installments);
@@ -426,8 +402,8 @@ export default function DashboardPage() {
   // o valor da carteira (sumUnpaid) também ignora pagas. Isso alinha o
   // "Carteira Total" com a aba Alunos.
   const kpiStudentsScoped = _fcRange
-    ? kpiStudentsForDisplay.filter((s) => s.installments.some((i) => !i.paid && _instInRange(i)))
-    : kpiStudentsForDisplay;
+    ? kpiStudents.filter((s) => s.installments.some((i) => !i.paid && _instInRange(i)))
+    : kpiStudents;
   const total = kpiStudentsScoped.length;
   const _isSolic = isSolicitacaoCancelamento;
   const emDia = kpiStudentsScoped.filter((s) => s.status === 'Em Dia' && !_isSolic(s));
@@ -531,6 +507,7 @@ export default function DashboardPage() {
         return tagKpis[0]
           ? { title: tagKpis[0].label, students: tagKpis[0].students, valueMode: 'unpaid' as KpiValueMode }
           : null;
+      case 'revertidos':
       case null:
         return null;
       default: {
@@ -1522,16 +1499,8 @@ export default function DashboardPage() {
         </div>
 
         <div
-          onClick={() => {
-            if (kpiCardFilter === 'revertidos') setKpiCardFilter('');
-            else {
-              setKpiCardFilter('revertidos');
-              setStatusFilter('');
-              setTagFilters([]);
-              setKpiModalKey(null);
-            }
-          }}
-          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${kpiCardFilter === 'revertidos' ? 'ring-2 ring-emerald-500/40' : ''}`}
+          onClick={() => setKpiModalKey(kpiModalKey === 'revertidos' ? null : 'revertidos')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${kpiModalKey === 'revertidos' ? 'ring-2 ring-emerald-500/40' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Revertidos</p>
@@ -1561,18 +1530,8 @@ export default function DashboardPage() {
 
         {tagKpis[0] && (
           <div
-            onClick={() => {
-              if (kpiCardFilter === 'boletos_antecipados') {
-                setKpiCardFilter('');
-                setTagFilters([]);
-              } else {
-                setKpiCardFilter('boletos_antecipados');
-                setStatusFilter('');
-                setKpiModalKey(null);
-                setTagFilters(boletosTagIds);
-              }
-            }}
-            className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 ${tagKpis[0].color} transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-500/30 ${kpiCardFilter === 'boletos_antecipados' ? 'ring-2 ring-indigo-500/40' : ''}`}
+            onClick={() => setKpiModalKey('tag')}
+            className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 ${tagKpis[0].color} transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-500/30`}
           >
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate mb-2">{tagKpis[0].label}</p>
             <p className={`kpi-value ${tagKpis[0].text}`} title={formatCurrency(tagKpis[0].value)}>
@@ -1781,6 +1740,15 @@ export default function DashboardPage() {
           instInRange={_instInRange}
           valueMode={kpiModalConfig.valueMode}
           todayMs={_refDayMs}
+          onClose={() => setKpiModalKey(null)}
+        />
+      )}
+
+      {kpiModalKey === 'revertidos' && (
+        <CancellationCasesModal
+          title="Casos revertidos"
+          subtitle={`${revertidos.length} de ${acCases.length} pedidos${cancellationDateRange ? ' no período' : ''} · ${revertPct}%`}
+          cases={revertidos}
           onClose={() => setKpiModalKey(null)}
         />
       )}
