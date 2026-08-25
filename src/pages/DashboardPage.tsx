@@ -18,7 +18,7 @@ import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
-import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
+import { countsInFinancialTotals, isIamControlStudent, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -115,6 +115,7 @@ export default function DashboardPage() {
   // a carteira filtrada por AC+Produto (sem se auto-zerar quando o próprio
   // filtro de Score está ativo).
   const acProductFilteredRaw = students.filter((s) => {
+    if (isIamControlStudent(s)) return false;
     if (acFilter && s.ac !== acFilter) return false;
     if (productFilter && s.product !== productFilter) return false;
     if (!studentMatchesTagFilter(s, tagFilters)) return false;
@@ -470,6 +471,7 @@ export default function DashboardPage() {
           !i.paid &&
           !isRecompraOuFundoParcela(i, studentTags) &&
           _instInRange(i) &&
+          !isInstallmentExcludedFromFinancialTotals(s, i) &&
           new Date(i.dueDate + 'T00:00:00').getTime() < _refDayMs,
         )
         .reduce((a, i) => a + i.value, 0);

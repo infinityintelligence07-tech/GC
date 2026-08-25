@@ -10,6 +10,11 @@ export function normalizeIamContratoStatus(status?: string | null): string {
     .replace(/\s+/g, '_');
 }
 
+/** Aluno importado/sincronizado pelo IAM Control. */
+export function isIamControlStudent(student: Student): boolean {
+  return student.iamControlAlunoId != null && Number.isFinite(student.iamControlAlunoId);
+}
+
 /** IAM PENDENTE / PARA_CONCILIAR ainda não aprovado na Conciliação do GC. */
 export function isAwaitingIamGcApproval(student: Student): boolean {
   if (student.iamGcConciliadoAt) return false;
@@ -18,15 +23,15 @@ export function isAwaitingIamGcApproval(student: Student): boolean {
   );
 }
 
-/** Contrato inteiro fora da dash até aprovação na Conciliação GC. */
+/** Parcela fora da dashboard/carteira Kamino — todo aluno IAM fica na aba IAM Control. */
 export function isInstallmentExcludedFromFinancialTotals(student: Student, inst: Installment): boolean {
-  if (!isAwaitingIamGcApproval(student)) return false;
+  if (!isIamControlStudent(student)) return false;
   return !inst.paid;
 }
 
-/** Aluno permanece na carteira; exclusão é por parcela (ver isInstallmentExcludedFromFinancialTotals). */
-export function countsInFinancialTotals(_student: Student): boolean {
-  return true;
+/** Aluno IAM não entra nos totais da dashboard principal nem carteira AC. */
+export function countsInFinancialTotals(student: Student): boolean {
+  return !isIamControlStudent(student);
 }
 
 function hasOpenIamPendenteItem(studentId: string, items: ConciliacaoItem[]): boolean {

@@ -5,7 +5,7 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import { useAuth } from '@/hooks/useAuth';
 import { TabKey, PermissionTab, canViewTab, canManageUsers } from '@/types';
 import logoIamWhite from '@/assets/logo-iam-white.png';
-import { BarChart3, GraduationCap, Users, DollarSign, Settings, User, ChevronDown, XCircle, LogOut, Trophy, ClipboardCheck, X, ScrollText, Award, Wallet, MessageSquareText, Landmark, ShieldCheck } from 'lucide-react';
+import { BarChart3, GraduationCap, Users, DollarSign, Settings, User, ChevronDown, XCircle, LogOut, Trophy, ClipboardCheck, X, ScrollText, Award, Wallet, MessageSquareText, Landmark, ShieldCheck, Cloud } from 'lucide-react';
 
 interface SidebarProps {
   /** Quando true, mostra a sidebar em mobile (drawer). Em desktop é sempre visível. */
@@ -33,6 +33,7 @@ const navItems: NavItem[] = [
   { key: 'comissoes', label: 'Comissões', icon: <Award size={17} strokeWidth={1.8} />, permissionTab: 'comissoes' },
   { key: 'conciliacao', label: 'Conciliação', icon: <ClipboardCheck size={17} strokeWidth={1.8} />, permissionTab: 'conciliacao' },
   { key: 'extrato', label: 'Extrato de Conferência', icon: <Landmark size={17} strokeWidth={1.8} />, permissionTab: 'conciliacao' },
+  { key: 'iamControl', label: 'IAM Control', icon: <Cloud size={17} strokeWidth={1.8} />, permissionTab: 'admin' },
   { key: 'config', label: 'Configurações', icon: <Settings size={17} strokeWidth={1.8} />, separator: true, permissionTab: 'config' },
   { key: 'perfil', label: 'Perfil', icon: <User size={17} strokeWidth={1.8} />, permissionTab: 'always' },
   { key: 'sair', label: 'Sair', icon: <LogOut size={17} strokeWidth={1.8} />, permissionTab: 'always' },

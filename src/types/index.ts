@@ -191,7 +191,7 @@ export interface FinancialRules {
   multaCancelamentoSemAntecedencia: number;
 }
 
-export type TabKey = 'dashboard' | 'alunos' | 'regua' | 'configUsuarios' | 'equipe' | 'rendaExtra' | 'config' | 'perfil' | 'ac' | 'cancelamentos' | 'comissoes' | 'estornos' | 'ranking' | 'conciliacao' | 'extrato' | 'registros';
+export type TabKey = 'dashboard' | 'alunos' | 'regua' | 'configUsuarios' | 'equipe' | 'rendaExtra' | 'config' | 'perfil' | 'ac' | 'cancelamentos' | 'comissoes' | 'estornos' | 'ranking' | 'conciliacao' | 'extrato' | 'registros' | 'iamControl';
 
 // ─── Feature: Antecipação (módulo isolado por AC) ────────────────────────────
 export type AntecipacaoOrigem = 'Banco' | 'Sicoob' | 'Fundo';

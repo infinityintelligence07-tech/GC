@@ -26,7 +26,7 @@ import {
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
-import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
+import { countsInFinancialTotals, isIamControlStudent, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -247,6 +247,7 @@ export default function ACPortfolioPage() {
     const revertidosMode = kpiCardFilter === 'revertidos';
     return students
       .filter((s) => s.ac === ac.name)
+      .filter((s) => !isIamControlStudent(s))
       .filter((s) => {
         if (revertidosMode && revertidosStudentIds.has(s.id)) return true;
         return !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students);
