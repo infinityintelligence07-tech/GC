@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { isDoubleCheckItem } from '@/lib/doubleCheckRejection';
 import { useAppStore } from '@/store/useAppStore';
 import type { ConciliacaoItem, ConciliacaoTipo, ConciliacaoImportError, ConciliacaoImportErrorMotivo, Student, Installment, FunnelStage } from '@/types';
+import { canEditTab } from '@/types';
 import ImportConciliacaoModal from '@/components/modals/ImportConciliacaoModal';
 import FinancialModal from '@/components/modals/FinancialModal';
 import HistoryModal from '@/components/modals/HistoryModal';
@@ -27,6 +28,7 @@ const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
   'quitacao',
   'renegociacao',
+  'iam_pendente',
 ]);
 
 /** Grupo em que as alterações de rascunho já estão no aluno — só falta confirmar. */
@@ -77,6 +79,7 @@ const TIPO_LABEL: Record<ConciliacaoTipo, string> = {
   baixa_kamino: 'Baixa Kamino',
   encargo_aplicado: 'Encargo aplicado',
   correcao_contrato: 'Correção de contrato',
+  iam_pendente: 'Import IAM (Pendente)',
 };
 
 const TIPO_COLOR: Record<ConciliacaoTipo, string> = {
@@ -93,6 +96,7 @@ const TIPO_COLOR: Record<ConciliacaoTipo, string> = {
   baixa_kamino: 'bg-emerald-100 text-emerald-700',
   encargo_aplicado: 'bg-amber-100 text-amber-800',
   correcao_contrato: 'bg-orange-100 text-orange-800',
+  iam_pendente: 'bg-fuchsia-100 text-fuchsia-800',
 };
 
 /** Filtro simplificado da Conciliação por grupo de aba. */
@@ -1158,6 +1162,7 @@ export default function ConciliacaoPage() {
   const updateCancellationCase = useAppStore((s) => s.updateCancellationCase);
   const students = useAppStore((s) => s.students);
   const isAdmin = currentUser?.role === 'admin';
+  const canConciliarEdit = canEditTab(currentUser, 'conciliacao');
   const confirm = useConfirm();
 
   const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'kamino-gc'>('menu');
@@ -1296,6 +1301,10 @@ export default function ConciliacaoPage() {
   const [cancelConfirmBoletos, setCancelConfirmBoletos] = useState<boolean | null>(null);
 
   const handleConciliarGrupo = async (group: Group) => {
+    if (!canConciliarEdit) {
+      toast.error('Somente Admin ou usuários com permissão de Conciliação podem conciliar.');
+      return;
+    }
     // Se há um item de cancelamento no grupo, abrir gate de confirmação
     const cancItem = group.items.find((i) => i.tipo === 'cancelamento' && i.relatedCaseId);
     if (cancItem) {
@@ -1444,6 +1453,30 @@ export default function ConciliacaoPage() {
           });
         }
       }
+      // ─── Import IAM PENDENTE: só conta nos totais após conciliar ────────
+      if (it.tipo === 'iam_pendente' && it.studentId) {
+        const st = useAppStore.getState().students.find((s) => s.id === it.studentId);
+        if (st) {
+          const { calculateAutoStatus } = await import('@/store/useAppStore');
+          const autoStatus = calculateAutoStatus(st.installments);
+          const nowIso = new Date().toISOString();
+          const revisor = currentUser?.name ?? 'Conciliação';
+          updateStudent(st.id, {
+            iamControlContratoStatus: 'CONCILIADO',
+            iamGcConciliadoAt: nowIso,
+            statusMode: 'Automático',
+            status: autoStatus,
+            history: [
+              ...st.history,
+              {
+                date: nowIso,
+                type: 'Sistema' as const,
+                text: `Contrato IAM PENDENTE aprovado na Conciliação por ${revisor}. Passa a contar nos totais financeiros.`,
+              },
+            ],
+          });
+        }
+      }
     }
     notifyConciliacaoGrupo(group.items, 'aprovada');
   };
@@ -1452,6 +1485,10 @@ export default function ConciliacaoPage() {
   // O card sai de "Pendentes" e entra em "Aprovados". A execução real só
   // acontece quando alguém clicar em "Conciliar" na aba Aprovados.
   const handleAprovarGrupo = async (group: Group) => {
+    if (!canConciliarEdit) {
+      toast.error('Somente Admin ou usuários com permissão de Conciliação podem aprovar.');
+      return;
+    }
     const ok = await confirm({
       title: group.items.length > 1 ? `Aprovar ${group.items.length} alterações` : 'Aprovar alteração',
       description: `${group.studentName}\n\nAs alterações ainda NÃO serão executadas. Vão para a aba "Aprovados" e aguardam conciliação.\n\n${group.items.map((i) => `• ${i.resumo}`).join('\n')}`,
@@ -1939,6 +1976,7 @@ export default function ConciliacaoPage() {
                         const isAprovado = group.items[0].status === 'aprovado';
                         return (
                           <>
+                            {canConciliarEdit ? (
                             <button
                               onClick={() => handleConciliarGrupo(group)}
                               className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm"
@@ -1959,7 +1997,12 @@ export default function ConciliacaoPage() {
                                   ? `Confirmar${group.items.length > 1 ? ` (${group.items.length})` : ''}`
                                   : `Conciliar${group.items.length > 1 ? ` (${group.items.length})` : ''}`}
                             </button>
-                            {!isAprovado && !aprovarSoObs && (
+                            ) : (
+                              <p className="text-[10px] text-center text-muted-foreground px-1 leading-tight">
+                                Somente Admin ou Conciliação pode aprovar
+                              </p>
+                            )}
+                            {!isAprovado && !aprovarSoObs && canConciliarEdit && (
                               <button
                                 onClick={() => handleAprovarGrupo(group)}
                                 className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-card border border-sky-200 text-sky-700 text-xs font-semibold hover:bg-sky-50 transition-colors"
@@ -1975,7 +2018,8 @@ export default function ConciliacaoPage() {
                             )}
                             <button
                               onClick={() => openReprovar(group)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-card border border-rose-200 text-rose-600 text-xs font-semibold hover:bg-rose-50 transition-colors"
+                              disabled={!canConciliarEdit}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-card border border-rose-200 text-rose-600 text-xs font-semibold hover:bg-rose-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Reprovar e reverter as alterações"
                             >
                               <Ban size={14} /> Reprovar{group.items.length > 1 ? ` (${group.items.length})` : ''}

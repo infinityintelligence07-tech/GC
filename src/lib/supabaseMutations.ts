@@ -56,6 +56,18 @@ function studentToRow(s: Partial<Student>): Record<string, unknown> {
   if (s.history !== undefined) row.history = s.history;
   if ((s as any).detalhes !== undefined) row.detalhes = (s as any).detalhes;
   if (s.ciclo !== undefined) row.ciclo = s.ciclo;
+  if ((s as Student).iamControlContratoStatus !== undefined) {
+    row.iam_control_contrato_status = (s as Student).iamControlContratoStatus;
+  }
+  if ((s as Student).iamControlPendenteTipo !== undefined) {
+    row.iam_control_pendente_tipo = (s as Student).iamControlPendenteTipo;
+  }
+  if ((s as Student).iamControlPendenteLink !== undefined) {
+    row.iam_control_pendente_link = (s as Student).iamControlPendenteLink;
+  }
+  if ((s as Student).iamGcConciliadoAt !== undefined) {
+    row.iam_gc_conciliado_at = (s as Student).iamGcConciliadoAt;
+  }
   return row;
 }
 
@@ -112,6 +124,7 @@ export function rowToStudent(r: any): Student {
     iamControlContratoStatus: r.iam_control_contrato_status ?? undefined,
     iamControlPendenteTipo: (r.iam_control_pendente_tipo as 'LINK' | 'PIX' | null) ?? undefined,
     iamControlPendenteLink: r.iam_control_pendente_link ?? undefined,
+    iamGcConciliadoAt: r.iam_gc_conciliado_at ?? undefined,
   };
 }
 

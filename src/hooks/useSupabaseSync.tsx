@@ -288,8 +288,16 @@ export function useSupabaseSync() {
       setStore(patch);
       // Sync antecipação store
       useAntecipacaoStore.setState({ items: antecipacaoItems });
+      // Fila de aprovação para imports IAM PENDENTE
+      let finalConciliacaoItems = conciliacaoItems;
+      try {
+        const { ensureIamPendenteConciliacaoItems } = await import('@/lib/iamPendenteConciliacao');
+        finalConciliacaoItems = await ensureIamPendenteConciliacaoItems(studentsReconciled, conciliacaoItems);
+      } catch (e) {
+        console.error('Falha ao garantir fila IAM pendente:', e);
+      }
       // Sync conciliação store
-      useConciliacaoStore.setState({ items: conciliacaoItems, importErrors: conciliacaoImportErrors });
+      useConciliacaoStore.setState({ items: finalConciliacaoItems, importErrors: conciliacaoImportErrors });
 
       // Comissões: carrega do banco e recupera reversões antigas sem comissão
       useCommissionsStore.getState().loadAll().then(async () => {

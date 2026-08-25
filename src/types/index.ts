@@ -134,6 +134,8 @@ export interface Student {
   iamControlContratoStatus?: string;
   iamControlPendenteTipo?: 'LINK' | 'PIX';
   iamControlPendenteLink?: string;
+  /** Aprovado na Conciliação GC — passa a contar nos totais financeiros. */
+  iamGcConciliadoAt?: string;
 }
 
 export interface AC {
@@ -563,7 +565,8 @@ export type ConciliacaoTipo =
   | 'renda_extra_acordo'   // acordo de quitação fechado em Renda Extra (com desconto) — conciliar baixa bancária
   | 'baixa_kamino'         // parcela baixada via importação Kamino → GC (histórico)
   | 'encargo_aplicado'     // encargo (multa/juros) declarado pelo AC ao alterar parcelas
-  | 'correcao_contrato';   // correção de erro de registro no saleValue (com justificativa)
+  | 'correcao_contrato'    // correção de erro de registro no saleValue (com justificativa)
+  | 'iam_pendente';        // import IAM com contrato PENDENTE — aguarda aprovação p/ CONCILIADO
 
 export type ConciliacaoStatus = 'pendente' | 'aprovado' | 'conciliado' | 'reprovado';
 

@@ -18,6 +18,7 @@ import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente } from '@/lib/studentDisplayStatus';
+import { countsInFinancialTotals } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -567,6 +568,7 @@ export default function DashboardPage() {
   const forecastBase = baseStudents.filter(
     (s) =>
       s.statusCancelamento !== 'cancelado' &&
+      countsInFinancialTotals(s) &&
       !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
   );
 

@@ -172,7 +172,7 @@ export default function StudentsPage() {
       }
       if (s.status === 'Negativado') return;
       // Pendência IAM: restaura Pendente/Manual e não recalcula Vencido.
-      if (String(s.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE') {
+      if (String(s.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE' && !s.iamGcConciliadoAt) {
         if (s.status !== 'Pendente' || s.statusMode !== 'Manual') {
           updateStudent(s.id, { status: 'Pendente', statusMode: 'Manual' });
         }

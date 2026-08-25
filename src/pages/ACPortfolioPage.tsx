@@ -26,6 +26,7 @@ import {
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente } from '@/lib/studentDisplayStatus';
+import { countsInFinancialTotals } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -158,7 +159,7 @@ export default function ACPortfolioPage() {
         // Negativado é sempre manual — não rebaixamos por auto-cálculo.
         if (s.status === 'Negativado') return;
         // Pendência IAM: restaura Pendente/Manual e não recalcula Vencido.
-        if (String(s.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE') {
+        if (String(s.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE' && !s.iamGcConciliadoAt) {
           if (s.status !== 'Pendente' || s.statusMode !== 'Manual') {
             updateStudent(s.id, { status: 'Pendente', statusMode: 'Manual' });
           }
@@ -364,6 +365,7 @@ export default function ACPortfolioPage() {
     (s) =>
       isStudentInAcPortfolio(s) &&
       s.statusCancelamento !== 'cancelado' &&
+      countsInFinancialTotals(s) &&
       !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
   );
 
