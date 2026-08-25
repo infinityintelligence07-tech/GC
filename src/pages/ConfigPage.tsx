@@ -552,7 +552,10 @@ export default function ConfigPage() {
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">Máx. Parcelas Renegociação</label>
-            <input className="input-field w-full mt-1" type="number" step="1" min="1" value={rules.maxParcelasRenegociacao} onChange={(e) => setRules({ maxParcelasRenegociacao: Number(e.target.value) })} />
+            <input className="input-field w-full mt-1" type="number" step="1" min="1" value={rules.maxParcelasRenegociacao} onChange={(e) => {
+              const v = Number(e.target.value);
+              setRules({ maxParcelasRenegociacao: v, maxParcelasCadastro: v });
+            }} />
           </div>
         </div>
 

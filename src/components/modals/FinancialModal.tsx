@@ -1089,7 +1089,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   // em Configurações (maxParcelasCadastro) e o aluno fica com uma parcela
   // a mais para ajustar manualmente os valores depois.
   const handleDuplicateInstallment = (inst: Installment) => {
-    const limite = rules.maxParcelasCadastro || rules.maxParcelasRenegociacao || 24;
+    const limite = Math.max(
+      rules.maxParcelasRenegociacao ?? 24,
+      rules.maxParcelasCadastro ?? 24,
+    );
     if (student.installments.length >= limite) {
       toast.error(`Limite máximo de ${limite} parcelas atingido (Configurações).`);
       return;

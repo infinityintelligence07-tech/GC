@@ -505,7 +505,7 @@ export const useAppStore = create<AppState>()(
   },
 
   // ── Regras financeiras ─ persistidas no Supabase
-  rules: { multaPercent: 2, jurosPercent: 1, descontoRendaExtra: 30, maxParcelasRenegociacao: 15, maxParcelasCadastro: 15, meta1: 60, meta2: 80, meta3: 95, multaCancelamentoComAntecedencia: 30, multaCancelamentoSemAntecedencia: 40 },
+  rules: { multaPercent: 2, jurosPercent: 1, descontoRendaExtra: 30, maxParcelasRenegociacao: 24, maxParcelasCadastro: 24, meta1: 60, meta2: 80, meta3: 95, multaCancelamentoComAntecedencia: 30, multaCancelamentoSemAntecedencia: 40 },
   setRules: (rules) => {
     set((s) => ({ rules: { ...s.rules, ...rules } }));
     updateRulesDb(rules).catch((e) => console.error('Falha ao atualizar regras:', e));
