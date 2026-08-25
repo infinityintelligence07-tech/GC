@@ -25,7 +25,7 @@ import {
   hasActiveCancellationCase,
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
-import { getCancelamentoBadge, resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
+import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente } from '@/lib/studentDisplayStatus';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -157,6 +157,7 @@ export default function ACPortfolioPage() {
       .forEach((s) => {
         // Negativado é sempre manual — não rebaixamos por auto-cálculo.
         if (s.status === 'Negativado') return;
+        if (s.status === 'Pendente' || String(s.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE') return;
         if (cancelamentoOverridesFinancialStatus(s)) return;
         if (s.statusMode === 'Automático') {
           const autoStatus = calculateAutoStatus(s.installments);
@@ -466,7 +467,7 @@ export default function ACPortfolioPage() {
       return revertidosStudentIds.has(s.id);
     }
     if (kpiCardFilter === 'pendente') {
-      return s.status === 'Pendente' && !isSolicCancel(s);
+      return isOperationalPendente(s) && !isSolicCancel(s);
     }
     if (kpiCardFilter === 'boletos_antecipados') {
       if (statusFilter) {
@@ -613,7 +614,7 @@ export default function ACPortfolioPage() {
 
   const revertPct = acCases.length > 0 ? Math.round((revertidos.length / acCases.length) * 100) : 0;
   const revertidosValue = revertidos.reduce((acc, c) => acc + (c.value ?? 0), 0);
-  const pendentes = kpiStudentsScoped.filter((s) => s.status === 'Pendente' && !isSolicCancel(s));
+  const pendentes = kpiStudentsScoped.filter((s) => isOperationalPendente(s) && !isSolicCancel(s));
   const pendenteValue = sumUnpaid(pendentes);
 
   // Display status for table rows (always current, table is independent)

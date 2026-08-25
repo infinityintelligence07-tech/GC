@@ -17,7 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
-import { resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
+import { resolveStudentDisplayStatus, isOperationalPendente } from '@/lib/studentDisplayStatus';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -296,10 +296,12 @@ export default function DashboardPage() {
         : baseStudents.filter((s) => new Date(s.enrollmentDate) <= refDate);
       const remapped = base.map((s) => {
         // "Negativado" é preservado sempre — nunca rebaixado por auto-cálculo.
-        if (s.status === 'Negativado' || cancelamentoOverridesFinancialStatus(s)) {
+        if (s.status === 'Negativado' || cancelamentoOverridesFinancialStatus(s) || isOperationalPendente(s)) {
           return cancelamentoOverridesFinancialStatus(s) && s.status !== 'Cancelado'
             ? ({ ...s, status: 'Solicitação Cancelamento' as StudentStatus })
-            : s;
+            : isOperationalPendente(s)
+              ? ({ ...s, status: 'Pendente' as StudentStatus })
+              : s;
         }
         if (s.statusMode === 'Automático') {
           const st = isTodaySnapshot
@@ -322,10 +324,12 @@ export default function DashboardPage() {
       setKpiStudents(filtered);
     } else {
       const mapped = baseStudents.map((s) => {
-        if (s.status === 'Negativado' || cancelamentoOverridesFinancialStatus(s)) {
+        if (s.status === 'Negativado' || cancelamentoOverridesFinancialStatus(s) || isOperationalPendente(s)) {
           return cancelamentoOverridesFinancialStatus(s) && s.status !== 'Cancelado'
             ? ({ ...s, status: 'Solicitação Cancelamento' } as Student)
-            : s;
+            : isOperationalPendente(s)
+              ? ({ ...s, status: 'Pendente' } as Student)
+              : s;
         }
         if (s.statusMode === 'Automático') {
           return { ...s, status: calculateAutoStatus(s.installments) } as Student;
@@ -417,7 +421,7 @@ export default function DashboardPage() {
   const solicitacaoCancelamento = kpiStudents.filter(_isSolic);
   // Pendência = pagamento aguardando fora de boleto (PIX, link, cartão, etc.).
   // Boleto NÃO entra neste status — segue Em Dia / Vencido / etc.
-  const pendentes = kpiStudentsScoped.filter((s) => s.status === 'Pendente' && !_isSolic(s));
+  const pendentes = kpiStudentsScoped.filter((s) => isOperationalPendente(s) && !_isSolic(s));
   const inadimplentes = vencido1.length + vencido2.length + aNegativar.length + negativado.length;
 
   // Dia de referência dos KPIs: no Histórico é o "fim" escolhido; senão, hoje.

@@ -30,6 +30,12 @@ export function isFunilCancelamentoAtivo(sc?: StatusCancelamento | null): boolea
   return !!sc && FUNIL_CANCELAMENTO_ATIVO.has(sc);
 }
 
+/** Pendência operacional (PIX/link IAM ou status manual Pendente). */
+export function isOperationalPendente(student: Student): boolean {
+  if (student.status === 'Pendente') return true;
+  return String(student.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE';
+}
+
 /** Status operacional exibido em tabelas/KPIs (sem Vencido quando há cancelamento ativo). */
 export function resolveStudentDisplayStatus(student: Student): StudentStatus {
   if (student.statusCancelamento === 'cancelado' || student.status === 'Cancelado') {
@@ -39,6 +45,8 @@ export function resolveStudentDisplayStatus(student: Student): StudentStatus {
   if (cancelamentoOverridesFinancialStatus(student)) {
     return 'Solicitação Cancelamento';
   }
+  // Pendência IAM / Manual não é sobrescrita por Em Dia/Vencido.
+  if (isOperationalPendente(student)) return 'Pendente';
   if (student.statusMode === 'Automático') {
     return calculateAutoStatus(student.installments);
   }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Student, StudentStatus, StudentTag, canEditTab } from '@/types';
 import { useAppStore, formatCurrency, calculateAutoStatus, calcularScoreComportamento } from '@/store/useAppStore';
 import { cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
-import { getCancelamentoBadge, resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
+import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente } from '@/lib/studentDisplayStatus';
 import StudentModal from '@/components/modals/StudentModal';
 import FinancialModal from '@/components/modals/FinancialModal';
 import HistoryModal from '@/components/modals/HistoryModal';
@@ -171,6 +171,8 @@ export default function StudentsPage() {
         updateStudent(s.id, { statusCancelamento: null });
       }
       if (s.status === 'Negativado') return;
+      // Pendência IAM/Manual não recalcula Vencido.
+      if (s.status === 'Pendente' || String(s.iamControlContratoStatus ?? '').toUpperCase() === 'PENDENTE') return;
       // Cancelamento (solicitação, conciliação pendente, cancelado…) não recalcula Vencido.
       if (cancelamentoOverridesFinancialStatus(s)) return;
       if (s.statusMode === 'Automático') {
@@ -179,6 +181,8 @@ export default function StudentsPage() {
       } else {
         // Safety net: se foi marcado manualmente como não-vencido (ex.: "Em Dia")
         // mas surgiu parcela vencida depois, reverte p/ Automático apontando vencido.
+        // Não aplica a Pendente (pagamento fora de boleto / IAM).
+        if (s.status === 'Pendente') return;
         const autoStatus = calculateAutoStatus(s.installments);
         const isOverdueNow = autoStatus === 'Vencido 1' || autoStatus === 'Vencido 2';
         const manualSaysNotOverdue = s.status !== 'Vencido 1' && s.status !== 'Vencido 2';
@@ -272,7 +276,7 @@ export default function StudentsPage() {
         if (!(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')) return false;
       }
       if (statusFilter === 'Pago' && s.status !== 'Pago') return false;
-      if (statusFilter === 'Pendente' && s.status !== 'Pendente') return false;
+      if (statusFilter === 'Pendente' && !isOperationalPendente(s)) return false;
       if (!['cancelamento_solicitado', 'cancelado', 'renda_extra', 'Pago', 'Pendente'].includes(statusFilter) && s.status !== statusFilter) return false;
     }
 
