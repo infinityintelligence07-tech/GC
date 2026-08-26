@@ -22,8 +22,6 @@ import { openCancellationPdf, downloadCancellationPdf, isViewableInBrowser } fro
 import type { CaseNoteAttachment } from '@/types';
 import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
 import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
-import IamControlSyncSection from '@/components/IamControlSyncSection';
-
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -1851,10 +1849,6 @@ export default function ConciliacaoPage() {
           </>
         )}
       </div>
-
-      {flow === 'iam-control-gc' && tab === 'iam_pendentes' && (
-        <IamControlSyncSection />
-      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
