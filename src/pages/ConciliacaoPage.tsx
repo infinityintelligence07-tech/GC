@@ -22,6 +22,7 @@ import { openCancellationPdf, downloadCancellationPdf, isViewableInBrowser } fro
 import type { CaseNoteAttachment } from '@/types';
 import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
 import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
+import { isCancelamentoEspelhoItem } from '@/lib/cancelamentoGcConciliacao';
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -1165,7 +1166,7 @@ export default function ConciliacaoPage() {
   const canConciliarEdit = canEditTab(currentUser, 'conciliacao');
   const confirm = useConfirm();
 
-  const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'kamino-gc' | 'iam-control-gc'>('menu');
+  const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'kamino-gc' | 'iam-control-gc' | 'cancelamentos-gc'>('menu');
   const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'renda_extra' | 'historico' | 'erros' | 'iam_pendentes'>('ajuste_financeiro');
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<ConciliacaoGrupoFilter>('todos');
@@ -1209,7 +1210,8 @@ export default function ConciliacaoPage() {
           if (i.status !== 'conciliado' && i.status !== 'reprovado') return false;
           if (flow === 'kamino-gc') return i.tipo === 'baixa_kamino';
           if (flow === 'iam-control-gc') return i.tipo === 'iam_pendente';
-          return i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente';
+          if (flow === 'cancelamentos-gc') return isCancelTipo(i.tipo);
+          return i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente' && !isCancelTipo(i.tipo);
         }
         return false;
       })
@@ -1270,7 +1272,9 @@ export default function ConciliacaoPage() {
     ? items.filter((i) => i.status === 'conciliado' && i.tipo === 'baixa_kamino').length
     : flow === 'iam-control-gc'
       ? items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo === 'iam_pendente').length
-      : items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente').length;
+      : flow === 'cancelamentos-gc'
+        ? items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && isCancelTipo(i.tipo)).length
+        : items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente' && !isCancelTipo(i.tipo)).length;
   const errosPendentesCount = importErrors.filter((e) => e.status === 'pendente').length;
 
   // (handleConciliar individual removido — agora todo conciliamento de pendências
@@ -1322,6 +1326,10 @@ export default function ConciliacaoPage() {
   const handleConciliarGrupo = async (group: Group) => {
     if (!canConciliarEdit) {
       toast.error('Somente Admin ou usuários com permissão de Conciliação podem conciliar.');
+      return;
+    }
+    if (group.items.some(isCancelamentoEspelhoItem)) {
+      toast.error('Este aluno está em cancelamento em andamento. Finalize na aba Cancelamentos antes de conciliar no GC.');
       return;
     }
     // Se há um item de cancelamento no grupo, abrir gate de confirmação
@@ -1636,7 +1644,7 @@ export default function ConciliacaoPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-6xl mx-auto">
           {/* GC → Kamino */}
           <button
             onClick={() => { setFlow('gc-kamino'); setTab('ajuste_financeiro'); }}
@@ -1651,9 +1659,9 @@ export default function ConciliacaoPage() {
             <p className="text-xs text-muted-foreground leading-relaxed">
               Alterações feitas neste sistema (vencimento, parcelas, juros, etc.) que precisam ser refletidas no Kamino.
             </p>
-            {(ajusteFinanceiroCount + cancelamentosCount + rendaExtraCount) > 0 && (
+            {(ajusteFinanceiroCount + rendaExtraCount) > 0 && (
               <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-red-600 text-[11px] font-bold border border-amber-300">
-                {ajusteFinanceiroCount + cancelamentosCount + rendaExtraCount} pendente{(ajusteFinanceiroCount + cancelamentosCount + rendaExtraCount) !== 1 ? 's' : ''}
+                {ajusteFinanceiroCount + rendaExtraCount} pendente{(ajusteFinanceiroCount + rendaExtraCount) !== 1 ? 's' : ''}
               </span>
             )}
           </button>
@@ -1699,6 +1707,27 @@ export default function ConciliacaoPage() {
               </span>
             )}
           </button>
+
+          {/* Cancelamentos → GC */}
+          <button
+            onClick={() => { setFlow('cancelamentos-gc'); setTab('cancelamentos'); }}
+            className="group relative bg-card border-2 border-border hover:border-primary rounded-2xl p-6 text-left transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <span className="px-3 py-1.5 rounded-lg bg-rose-100 text-rose-700 font-bold text-lg">Cancelamentos</span>
+              <ArrowRight size={24} className="text-primary" />
+              <span className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary font-bold text-lg">GC</span>
+            </div>
+            <h3 className="font-semibold text-foreground mb-1">Cancelamentos → GC</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Cancelamentos finalizados e espelhos em andamento (inclui alunos fora da Kamino). Conciliação antes de atualizar a carteira.
+            </p>
+            {cancelamentosCount > 0 && (
+              <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[11px] font-bold border border-rose-300">
+                {cancelamentosCount} pendente{cancelamentosCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </button>
         </div>
       </div>
     );
@@ -1725,6 +1754,12 @@ export default function ConciliacaoPage() {
             ) : flow === 'iam-control-gc' ? (
               <>
                 <span className="px-2.5 py-1 rounded-md bg-fuchsia-100 text-fuchsia-800 font-bold text-sm">IAM Control</span>
+                <ArrowRight size={16} className="text-muted-foreground" />
+                <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary font-bold text-sm">GC</span>
+              </>
+            ) : flow === 'cancelamentos-gc' ? (
+              <>
+                <span className="px-2.5 py-1 rounded-md bg-rose-100 text-rose-700 font-bold text-sm">Cancelamentos</span>
                 <ArrowRight size={16} className="text-muted-foreground" />
                 <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary font-bold text-sm">GC</span>
               </>
@@ -1775,6 +1810,31 @@ export default function ConciliacaoPage() {
               Histórico ({historicoCount})
             </button>
           </>
+        ) : flow === 'cancelamentos-gc' ? (
+          <>
+            <button
+              onClick={() => { setTab('cancelamentos'); setTipoFilter('todos'); }}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border transition-all whitespace-nowrap ${
+                tab === 'cancelamentos'
+                  ? 'bg-rose-100 text-rose-700 border-rose-300 shadow-sm'
+                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+              }`}
+            >
+              <Ban size={14} />
+              Cancelamentos ({cancelamentosCount})
+            </button>
+            <button
+              onClick={() => setTab('historico')}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap ${
+                tab === 'historico'
+                  ? 'bg-card text-foreground border-border shadow-sm'
+                  : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-muted/70 hover:text-foreground'
+              }`}
+            >
+              <ScrollText size={14} />
+              Histórico ({historicoCount})
+            </button>
+          </>
         ) : flow === 'gc-kamino' ? (
           <>
             <button
@@ -1787,17 +1847,6 @@ export default function ConciliacaoPage() {
             >
               <Wallet size={14} />
               Ajuste financeiro ({ajusteFinanceiroCount})
-            </button>
-            <button
-              onClick={() => { setTab('cancelamentos'); setTipoFilter('todos'); }}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border transition-all whitespace-nowrap ${
-                tab === 'cancelamentos'
-                  ? 'bg-rose-100 text-rose-700 border-rose-300 shadow-sm'
-                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-              }`}
-            >
-              <Ban size={14} />
-              Cancelamentos ({cancelamentosCount})
             </button>
             <button
               onClick={() => { setTab('renda_extra'); setTipoFilter('todos'); }}
@@ -1923,6 +1972,7 @@ export default function ConciliacaoPage() {
               const jaConciliadoSistema = groupJaAplicadoNoSistema(group.items);
               const temObservacao = groupTemObservacao(group.items);
               const aprovarSoObs = jaConciliadoSistema && temObservacao;
+              const isEspelhoCancel = group.items.some(isCancelamentoEspelhoItem);
               return (
                 <div key={group.key} className="bg-card border border-border rounded-2xl p-4 hover:shadow-sm transition-shadow">
                   <div className="flex items-start justify-between gap-4">
@@ -1943,6 +1993,14 @@ export default function ConciliacaoPage() {
                             title="As alterações já estão aplicadas no aluno. Conciliar só confirma o double-check (não reaplica nem desfaz nada)."
                           >
                             Já conciliado
+                          </span>
+                        )}
+                        {isEspelhoCancel && (
+                          <span
+                            className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200"
+                            title="Cancelamento ainda em andamento no funil — finalize na aba Cancelamentos antes de conciliar no GC"
+                          >
+                            Em andamento
                           </span>
                         )}
                       </div>
@@ -2050,7 +2108,7 @@ export default function ConciliacaoPage() {
                         const isAprovado = group.items[0].status === 'aprovado';
                         return (
                           <>
-                            {canConciliarEdit ? (
+                            {canConciliarEdit && !isEspelhoCancel ? (
                             <button
                               onClick={() => handleConciliarGrupo(group)}
                               className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm"
@@ -2071,12 +2129,16 @@ export default function ConciliacaoPage() {
                                   ? `Confirmar${group.items.length > 1 ? ` (${group.items.length})` : ''}`
                                   : `Conciliar${group.items.length > 1 ? ` (${group.items.length})` : ''}`}
                             </button>
+                            ) : isEspelhoCancel ? (
+                              <p className="text-[10px] text-center text-rose-700 px-1 leading-tight">
+                                Finalize o cancelamento na aba Cancelamentos
+                              </p>
                             ) : (
                               <p className="text-[10px] text-center text-muted-foreground px-1 leading-tight">
                                 Somente Admin ou Conciliação pode aprovar
                               </p>
                             )}
-                            {!isAprovado && !aprovarSoObs && canConciliarEdit && (
+                            {!isAprovado && !aprovarSoObs && canConciliarEdit && !isEspelhoCancel && (
                               <button
                                 onClick={() => handleAprovarGrupo(group)}
                                 className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-card border border-sky-200 text-sky-700 text-xs font-semibold hover:bg-sky-50 transition-colors"

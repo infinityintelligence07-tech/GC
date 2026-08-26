@@ -304,6 +304,16 @@ export function useSupabaseSync() {
       } catch (e) {
         console.error('Falha ao garantir fila IAM pendente:', e);
       }
+      try {
+        const { ensureCancelamentoEspelhoConciliacaoItems } = await import('@/lib/cancelamentoGcConciliacao');
+        finalConciliacaoItems = await ensureCancelamentoEspelhoConciliacaoItems(
+          studentsReconciled,
+          cancellationCases,
+          finalConciliacaoItems,
+        );
+      } catch (e) {
+        console.error('Falha ao garantir fila Cancelamentos espelho:', e);
+      }
       // Sync conciliação store
       useConciliacaoStore.setState({ items: finalConciliacaoItems, importErrors: conciliacaoImportErrors });
 
