@@ -3,7 +3,7 @@
 // Importação de pagamentos do Kamino (Erros para revisar).
 
 import { useMemo, useState, useEffect } from 'react';
-import { CheckCircle2, Search, FileSpreadsheet, ScrollText, User as UserIcon, Calendar, ArrowRight, ArrowLeft, Upload, AlertTriangle, XCircle, Trash2, Loader2, Wallet, History as HistoryIcon, Ban, ThumbsUp, Pencil, Check, X as XIcon, Settings2, FileText, Eye, DollarSign, Cloud } from 'lucide-react';
+import { CheckCircle2, Search, FileSpreadsheet, ScrollText, User as UserIcon, Calendar, ArrowRight, ArrowLeft, Upload, AlertTriangle, XCircle, Trash2, Loader2, Wallet, History as HistoryIcon, Ban, ThumbsUp, Pencil, Check, X as XIcon, Settings2, FileText, Eye, DollarSign, Cloud, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useConciliacaoStore, notifyConciliacaoGrupo } from '@/store/useConciliacaoStore';
 
@@ -22,7 +22,7 @@ import { openCancellationPdf, downloadCancellationPdf, isViewableInBrowser } fro
 import type { CaseNoteAttachment } from '@/types';
 import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
 import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
-import { isCancelamentoEspelhoItem, groupBlocksEspelhoConciliacao } from '@/lib/cancelamentoGcConciliacao';
+import { isCancelamentoEspelhoItem, groupBlocksEspelhoConciliacao, isCancelamentoAguardandoFinalizacaoGc, isCancelamentoProntoConciliarGc } from '@/lib/cancelamentoGcConciliacao';
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -1168,6 +1168,7 @@ export default function ConciliacaoPage() {
 
   const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'kamino-gc' | 'iam-control-gc' | 'cancelamentos-gc'>('menu');
   const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'renda_extra' | 'historico' | 'erros' | 'iam_pendentes'>('ajuste_financeiro');
+  const [cancelGcFilter, setCancelGcFilter] = useState<'todos' | 'aguardando_finalizacao' | 'prontos_conciliar'>('prontos_conciliar');
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<ConciliacaoGrupoFilter>('todos');
   const [erroStatusFilter, setErroStatusFilter] = useState<'pendente' | 'resolvido' | 'ignorado' | 'todos'>('pendente');
@@ -1224,8 +1225,18 @@ export default function ConciliacaoPage() {
           i.resumo.toLowerCase().includes(q) ||
           (i.ac ?? '').toLowerCase().includes(q)
         );
+      })
+      .filter((i) => {
+        if (flow !== 'cancelamentos-gc' || tab !== 'cancelamentos' || cancelGcFilter === 'todos') {
+          return true;
+        }
+        const st = i.studentId ? students.find((s) => s.id === i.studentId) : undefined;
+        if (cancelGcFilter === 'aguardando_finalizacao') {
+          return isCancelamentoAguardandoFinalizacaoGc(i, st, items);
+        }
+        return isCancelamentoProntoConciliarGc(i, st, items);
       });
-  }, [items, tab, tipoFilter, search, flow]);
+  }, [items, tab, tipoFilter, search, flow, cancelGcFilter, students]);
 
   const filteredErrors = useMemo(() => {
     return importErrors
@@ -1263,6 +1274,24 @@ export default function ConciliacaoPage() {
       .filter((i) => (i.status === 'pendente' || i.status === 'aprovado') && isCancelTipo(i.tipo))
       .map((i) => i.studentId ?? i.studentName),
   ).size;
+  const cancelGcFilterCounts = useMemo(() => {
+    const pending = items.filter(
+      (i) => (i.status === 'pendente' || i.status === 'aprovado') && isCancelTipo(i.tipo),
+    );
+    const aguardandoKeys = new Set<string>();
+    const prontosKeys = new Set<string>();
+    for (const i of pending) {
+      const st = i.studentId ? students.find((s) => s.id === i.studentId) : undefined;
+      const key = i.studentId ?? i.studentName;
+      if (isCancelamentoAguardandoFinalizacaoGc(i, st, items)) aguardandoKeys.add(key);
+      if (isCancelamentoProntoConciliarGc(i, st, items)) prontosKeys.add(key);
+    }
+    return {
+      todos: cancelamentosCount,
+      aguardando: aguardandoKeys.size,
+      prontos: prontosKeys.size,
+    };
+  }, [items, students, cancelamentosCount]);
   const rendaExtraCount = new Set(
     items
       .filter((i) => (i.status === 'pendente' || i.status === 'aprovado') && isRendaExtraTipo(i.tipo))
@@ -1710,7 +1739,7 @@ export default function ConciliacaoPage() {
 
           {/* Cancelamentos → GC */}
           <button
-            onClick={() => { setFlow('cancelamentos-gc'); setTab('cancelamentos'); }}
+            onClick={() => { setFlow('cancelamentos-gc'); setTab('cancelamentos'); setCancelGcFilter('prontos_conciliar'); }}
             className="group relative bg-card border-2 border-border hover:border-primary rounded-2xl p-6 text-left transition-all hover:shadow-lg"
           >
             <div className="flex items-center justify-center gap-3 mb-4">
@@ -1813,7 +1842,7 @@ export default function ConciliacaoPage() {
         ) : flow === 'cancelamentos-gc' ? (
           <>
             <button
-              onClick={() => { setTab('cancelamentos'); setTipoFilter('todos'); }}
+              onClick={() => { setTab('cancelamentos'); setTipoFilter('todos'); setCancelGcFilter('prontos_conciliar'); }}
               className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border transition-all whitespace-nowrap ${
                 tab === 'cancelamentos'
                   ? 'bg-rose-100 text-rose-700 border-rose-300 shadow-sm'
@@ -1935,6 +1964,45 @@ export default function ConciliacaoPage() {
             <option value="todos">Todos</option>
           </select>
         )}
+        {flow === 'cancelamentos-gc' && tab === 'cancelamentos' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCancelGcFilter('prontos_conciliar')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                cancelGcFilter === 'prontos_conciliar'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-sm'
+                  : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+              }`}
+            >
+              <CheckCircle2 size={13} />
+              Prontos p/ conciliar ({cancelGcFilterCounts.prontos})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCancelGcFilter('aguardando_finalizacao')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                cancelGcFilter === 'aguardando_finalizacao'
+                  ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm'
+                  : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+              }`}
+            >
+              <Clock size={13} />
+              Finalizar na aba Cancelamentos ({cancelGcFilterCounts.aguardando})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCancelGcFilter('todos')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                cancelGcFilter === 'todos'
+                  ? 'bg-card text-foreground border-border shadow-sm'
+                  : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+              }`}
+            >
+              Todos ({cancelGcFilterCounts.todos})
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Listas */}
@@ -1945,7 +2013,13 @@ export default function ConciliacaoPage() {
               <FileSpreadsheet size={28} className="mx-auto text-muted-foreground mb-2 opacity-50" />
               <p className="text-sm text-muted-foreground">
                 {tab === 'ajuste_financeiro' ? 'Nenhum ajuste financeiro pendente.'
-                  : tab === 'cancelamentos' ? 'Nenhuma pendência de cancelamento ou reversão.'
+                  : tab === 'cancelamentos' ? (
+                    flow === 'cancelamentos-gc' && cancelGcFilter === 'aguardando_finalizacao'
+                      ? 'Nenhum cancelamento aguardando finalização na aba Cancelamentos.'
+                      : flow === 'cancelamentos-gc' && cancelGcFilter === 'prontos_conciliar'
+                        ? 'Nenhum cancelamento pronto para conciliar.'
+                        : 'Nenhuma pendência de cancelamento ou reversão.'
+                  )
                   : tab === 'renda_extra' ? 'Nenhuma pendência de Renda Extra.'
                   : tab === 'iam_pendentes' ? 'Nenhum contrato IAM aguardando aprovação.'
                   : 'Nenhum item conciliado ainda.'}

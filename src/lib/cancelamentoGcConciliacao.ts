@@ -103,6 +103,26 @@ export function caseHasCancelamentoFinalPending(
   );
 }
 
+/** Espelho GC bloqueado — aluno ainda precisa finalizar na aba Cancelamentos. */
+export function isCancelamentoAguardandoFinalizacaoGc(
+  item: ConciliacaoItem,
+  student: Student | undefined,
+  allItems: ConciliacaoItem[],
+): boolean {
+  if (!isCancelamentoEspelhoItem(item)) return false;
+  return groupBlocksEspelhoConciliacao([item], student, allItems);
+}
+
+/** Cancelamento/reversão formal já disponível para conciliar no GC. */
+export function isCancelamentoProntoConciliarGc(
+  item: ConciliacaoItem,
+  student: Student | undefined,
+  allItems: ConciliacaoItem[],
+): boolean {
+  if (!isCancelamentoFinalPendingItem(item)) return false;
+  return !isCancelamentoAguardandoFinalizacaoGc(item, student, allItems);
+}
+
 /**
  * Espelho GC ainda bloqueia Conciliar/Aprovar?
  * Só quando o aluno segue no funil de cancelamento SEM item formal na fila.
