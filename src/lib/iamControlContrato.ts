@@ -102,7 +102,7 @@ export async function openIamControlContrato(
     return res;
   }
 
-  if (String(res.status_conciliacao).toUpperCase() === 'PENDENTE') {
+  if (String(res.status_conciliacao).toUpperCase().startsWith('PENDENTE')) {
     return res;
   }
 
@@ -112,13 +112,13 @@ export async function openIamControlContrato(
 export function isIamContratoPendenteLink(student: Pick<Student, 'iamControlContratoStatus' | 'iamControlPendenteTipo' | 'iamControlPendenteLink'>): boolean {
   const status = String(student.iamControlContratoStatus ?? '').toUpperCase();
   const tipo = String(student.iamControlPendenteTipo ?? '').toUpperCase();
-  return status === 'PENDENTE' && tipo === 'LINK' && Boolean(student.iamControlPendenteLink?.trim());
+  return (status === 'PENDENTE' || status === 'PENDENTE_LINK') && (tipo === 'LINK' || status === 'PENDENTE_LINK');
 }
 
 export function isIamContratoPendentePix(student: Pick<Student, 'iamControlContratoStatus' | 'iamControlPendenteTipo'>): boolean {
   const status = String(student.iamControlContratoStatus ?? '').toUpperCase();
   const tipo = String(student.iamControlPendenteTipo ?? '').toUpperCase();
-  return status === 'PENDENTE' && tipo === 'PIX';
+  return (status === 'PENDENTE' || status === 'PENDENTE_PIX') && (tipo === 'PIX' || status === 'PENDENTE_PIX');
 }
 
 export async function fetchIamControlPaymentLink(

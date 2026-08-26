@@ -1,10 +1,18 @@
 import type { ConciliacaoItem, Student, Installment } from '@/types';
 import { createConciliacaoItemDb } from '@/lib/supabaseMutations';
 
+/** Status IAM que exigem aprovação na Conciliação GC antes de entrar na dashboard. */
+export function isIamPendenteStatus(status?: string | null): boolean {
+  const s = normalizeIamContratoStatus(status);
+  return s === 'PENDENTE' || s === 'PENDENTE_LINK' || s === 'PENDENTE_PIX' || s.startsWith('PENDENTE_');
+}
+
 /** Contratos IAM que precisam passar pela Conciliação GC antes de entrar na dashboard. */
 const IAM_STATUSES_REQUIRING_GC_APPROVAL = new Set([
   'CONCILIADO',
   'PENDENTE',
+  'PENDENTE_LINK',
+  'PENDENTE_PIX',
   'PARA_CONCILIAR',
 ]);
 
@@ -98,8 +106,10 @@ function hasOpenIamPendenteItem(studentId: string, items: ConciliacaoItem[]): bo
 function iamConciliacaoResumo(student: Student): string {
   const iamStatus = normalizeIamContratoStatus(student.iamControlContratoStatus);
   const tipo = String(student.iamControlPendenteTipo ?? '').toUpperCase();
-  if (iamStatus === 'PENDENTE' && tipo === 'LINK') return 'IAM Control — Pendente Link';
-  if (iamStatus === 'PENDENTE' && tipo === 'PIX') return 'IAM Control — Pendente PIX';
+  const isPendente = isIamPendenteStatus(iamStatus);
+  if (isPendente && (tipo === 'LINK' || iamStatus === 'PENDENTE_LINK')) return 'IAM Control — Pendente Link';
+  if (isPendente && (tipo === 'PIX' || iamStatus === 'PENDENTE_PIX')) return 'IAM Control — Pendente PIX';
+  if (isPendente) return 'IAM Control — Pendente';
   if (iamStatus === 'PARA_CONCILIAR') return 'IAM Control — Para Conciliar';
   if (iamStatus === 'CONCILIADO') return 'IAM Control — Conciliado (aguarda aprovação GC)';
   return `IAM Control — ${iamStatus.replace(/_/g, ' ')}`;
