@@ -19,6 +19,7 @@ import RegistrosPage from '@/pages/RegistrosPage';
 import ReguaPage from '@/pages/ReguaPage';
 import ExtratoConferenciaPage from '@/pages/ExtratoConferenciaPage';
 import RankingPage from '@/pages/RankingPage';
+import LoginPage from '@/pages/LoginPage';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseSync } from '@/hooks/useSupabaseSync';
 
