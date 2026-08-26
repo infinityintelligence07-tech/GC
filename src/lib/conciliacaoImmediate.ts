@@ -42,13 +42,19 @@ export function applyConciliacaoImmediate(item: ConciliacaoItem): boolean {
     const parcelaNum = Number(depois.parcela);
     const valorPago = Number(depois.valor);
     if (!Number.isFinite(parcelaNum)) return false;
+    const paidDate =
+      typeof depois.paidDate === 'string' && depois.paidDate ? depois.paidDate : todayIso;
+    const paidMarkedAt =
+      typeof depois.paidMarkedAt === 'string' && depois.paidMarkedAt
+        ? depois.paidMarkedAt
+        : new Date().toISOString();
     const updatedInst: Installment[] = st.installments.map((i) => {
       if (i.number !== parcelaNum) return i;
       const paidValueField =
         Number.isFinite(valorPago) && Math.abs(valorPago - i.value) > 0.01
           ? { paidValue: valorPago }
           : {};
-      return { ...i, paid: true, paidDate: todayIso, ...paidValueField };
+      return { ...i, paid: true, paidDate, paidMarkedAt, ...paidValueField };
     });
     store.updateStudent(st.id, {
       installments: updatedInst,

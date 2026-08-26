@@ -41,6 +41,8 @@ export interface Installment {
   value: number;
   paid: boolean;
   paidDate?: string;
+  /** Momento em que o pagamento foi registrado no sistema (clique/confirmação). */
+  paidMarkedAt?: string;
   paidValue?: number;          // valor efetivamente pago (com juros/desconto). Se ausente ou igual a `value`, considerar pagamento exato.
   // Recompra / Antecipação de Recebíveis
   tipoParcela?: TipoParcela;   // 'propria' (default) | 'antecipada'

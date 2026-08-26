@@ -1,4 +1,5 @@
 import type { CancellationCase, ConciliacaoItem, Student, StatusCancelamento } from '@/types';
+import { needsIamGcConciliacaoApproval } from '@/lib/iamPendenteConciliacao';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import {
   caseHasCancelamentoFinalPending,
@@ -93,6 +94,8 @@ export function isStudentFullyPaid(student: Student): boolean {
  * Quitados (Pago / parcelas todas pagas) ficam só na aba Alunos.
  */
 export function isStudentInAcPortfolio(student: Student): boolean {
+  // IAM na fila Conciliação → GC: AC reservado na esteira, mas fora da carteira até aprovar.
+  if (needsIamGcConciliacaoApproval(student)) return false;
   if (isSolicitacaoCancelamento(student)) return true;
   if (isStudentFullyPaid(student)) return false;
   if (student.status === 'Pago') return false;

@@ -1,6 +1,6 @@
-// ─── Modal: Importar Planilha de Conciliação (Kamino → Pagamentos) ──────────
-// Lê a mesma planilha Kamino usada na importação de alunos, mas aqui o foco é
-// BAIXAR os pagamentos. Para cada linha:
+// ─── Modal: Importar Planilha de Conferência ─────────────────────────────────
+// Lê a planilha modelo (Aluno, VALOR PAGO, Recebimento, Vencimento…) ou export
+// legado do Kamino (Pessoa, Valor Recebido…). Para cada linha:
 //   1. Procura o aluno pelo nome (Pessoa) — independentemente da aba (Alunos,
 //      Cancelamento, Renda Extra). Match exato/normalizado por nome.
 //   2. Busca a parcela com vencimento E valor IGUAIS aos da planilha.
@@ -139,12 +139,81 @@ function valueWithinKaminoTolerance(installmentValue: number, paidValue: number)
 interface KaminoPaymentRow {
   rowIndex: number;
   pessoa: string;
+  assessor?: string;
   vencimento: string | null;
   valorReceber: number | null;
   valorRecebido: number | null;
   recebimento: string | null;     // data do pagamento (paidDate)
   situacao: string;
   raw: Record<string, unknown>;
+}
+
+type SheetFormat = 'conferencia' | 'kamino';
+
+function detectSheetFormat(keys: string[]): SheetFormat {
+  const normalized = keys.map((k) => k.replace(/\s+/g, ' ').trim().toLowerCase());
+  if (normalized.includes('aluno') && normalized.some((k) => k.includes('valor pago'))) {
+    return 'conferencia';
+  }
+  return 'kamino';
+}
+
+function pickField(row: Record<string, unknown>, ...names: string[]): unknown {
+  for (const name of names) {
+    const target = name.toLowerCase();
+    for (const [k, v] of Object.entries(row)) {
+      if (k.replace(/\s+/g, ' ').trim().toLowerCase() === target) return v;
+    }
+  }
+  return undefined;
+}
+
+function rowsFromSheetJson(
+  json: Record<string, unknown>[],
+  XLSX: XLSXModule,
+  serializeRaw: (r: Record<string, unknown>) => Record<string, unknown>,
+): KaminoPaymentRow[] {
+  if (json.length === 0) return [];
+  const format = detectSheetFormat(Object.keys(json[0] ?? {}));
+
+  if (format === 'conferencia') {
+    return json
+      .map((r, idx) => {
+        const aluno = String(pickField(r, 'Aluno') ?? '').trim();
+        const valorPago = normalizeNumber(pickField(r, 'VALOR PAGO'));
+        const valorOriginal = normalizeNumber(pickField(r, 'VALOR ORIGINAL'));
+        return {
+          rowIndex: idx + 2,
+          pessoa: aluno,
+          assessor: String(pickField(r, 'Assessor') ?? '').trim() || undefined,
+          vencimento: normalizeDate(pickField(r, 'Vencimento'), XLSX),
+          valorReceber: valorOriginal ?? valorPago,
+          valorRecebido: valorPago,
+          recebimento: normalizeDate(pickField(r, 'Recebimento'), XLSX),
+          situacao: valorPago != null && valorPago > 0 ? 'pago' : '',
+          raw: serializeRaw(r),
+        } satisfies KaminoPaymentRow;
+      })
+      .filter((r) => r.pessoa);
+  }
+
+  const rows: KaminoPaymentRow[] = json.map((r, idx) => ({
+    rowIndex: idx + 2,
+    pessoa: String(r['Pessoa'] ?? '').trim(),
+    vencimento: normalizeDate(r['Vencimento'], XLSX),
+    valorReceber: normalizeNumber(r['Valor a Receber (R$)']),
+    valorRecebido: normalizeNumber(r['Valor Recebido (R$)']),
+    recebimento: normalizeDate(r['Recebimento'], XLSX),
+    situacao: String(r['Situação'] ?? r['Situacao'] ?? '').trim(),
+    raw: serializeRaw(r),
+  }));
+
+  let lastName = '';
+  for (const r of rows) {
+    if (r.pessoa) lastName = r.pessoa;
+    else r.pessoa = lastName;
+  }
+  return rows;
 }
 
 interface BaixaKaminoEntry {
@@ -337,28 +406,11 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
     onClose();
   };
 
-  const handleDownloadTemplate = async () => {
-    let XLSX: XLSXModule;
-    try { XLSX = await loadXLSX(); } catch (err) { alert((err as Error).message); return; }
-    const example: Record<string, string | number> = {
-      'Pessoa': 'João da Silva',
-      'Telefone': '',
-      'E-mail': '',
-      'Classificação': '',
-      'Centro de Custo': '',
-      'Conta de Recebimento': '',
-      'Forma de Recebimento': '',
-      'Detalhe': '',
-      'Valor a Receber (R$)': 375,
-      'Valor Recebido (R$)': 375,
-      'Vencimento': '10/01/2026',
-      'Recebimento': '10/01/2026',
-      'Competência': '01/01/2026',
-    };
-    const ws = XLSX.utils.json_to_sheet([example]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Conciliacao');
-    XLSX.writeFile(wb, 'conciliacao-kamino-modelo.xlsx');
+  const handleDownloadTemplate = () => {
+    const link = document.createElement('a');
+    link.href = '/templates/planilha-conferencia-modelo.xlsx';
+    link.download = 'planilha-conferencia-modelo.xlsx';
+    link.click();
   };
 
   // ─── Parsing + matching (preview) ─────────────────────────────────────────
@@ -391,23 +443,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
         return out;
       };
 
-      const rows: KaminoPaymentRow[] = json.map((r, idx) => ({
-        rowIndex: idx + 2, // +2 = header + 1-index
-        pessoa: String(r['Pessoa'] ?? '').trim(),
-        vencimento: normalizeDate(r['Vencimento'], XLSX),
-        valorReceber: normalizeNumber(r['Valor a Receber (R$)']),
-        valorRecebido: normalizeNumber(r['Valor Recebido (R$)']),
-        recebimento: normalizeDate(r['Recebimento'], XLSX),
-        situacao: String(r['Situação'] ?? r['Situacao'] ?? '').trim(),
-        raw: serializeRaw(r),
-      }));
-
-      // Fill-down do nome (Kamino lista parcelas em linhas órfãs)
-      let lastName = '';
-      for (const r of rows) {
-        if (r.pessoa) lastName = r.pessoa;
-        else r.pessoa = lastName;
-      }
+      const rows = rowsFromSheetJson(json, XLSX, serializeRaw);
 
       const result = processRows(rows, students, file.name);
       setPreview(result);
@@ -552,8 +588,8 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
           <div className="flex items-center gap-3">
             <FileSpreadsheet className="text-primary" size={20} />
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Importar Planilha de Conciliação</h2>
-              <p className="text-xs text-muted-foreground">Baixa pagamentos exportados do Kamino. Match exato por valor + vencimento.</p>
+              <h2 className="text-lg font-semibold text-foreground">Importar Planilha Conferência</h2>
+              <p className="text-xs text-muted-foreground">Cruza pagamentos da planilha modelo com as parcelas do GC (nome + vencimento + valor).</p>
             </div>
           </div>
           <button onClick={handleClose} className="p-2 rounded-lg hover:bg-muted">
@@ -622,7 +658,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
                 ) : (
                   <>
                     <Upload className="mx-auto text-muted-foreground mb-2" size={28} />
-                    <p className="text-sm font-medium text-foreground">Clique ou arraste a planilha Kamino</p>
+                    <p className="text-sm font-medium text-foreground">Clique ou arraste a planilha de conferência</p>
                     <p className="text-xs text-muted-foreground mt-1">.xlsx, .xls ou .csv</p>
                   </>
                 )}
@@ -631,9 +667,9 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
               <div className="text-xs text-muted-foreground bg-muted/30 rounded-xl p-3 space-y-1">
                 <p><strong>Como funciona:</strong></p>
                 <ul className="list-disc list-inside space-y-0.5 ml-1">
-                  <li>O sistema procura cada aluno da planilha pelo nome (Pessoa) — em qualquer aba.</li>
-                  <li>Marca como paga somente a parcela com <strong>valor exato</strong> e <strong>vencimento exato</strong> da planilha.</li>
-                  <li>Linhas que não baterem ficam na sub-aba <strong>Erros</strong> para você revisar.</li>
+                  <li>Use a <strong>planilha modelo</strong> (Aluno, VALOR PAGO, Recebimento, Vencimento).</li>
+                  <li>O sistema localiza cada aluno pelo nome e a parcela pelo vencimento e valor pago.</li>
+                  <li>Divergências ficam na sub-aba <strong>Erros de Importação</strong> para revisão.</li>
                 </ul>
               </div>
             </div>

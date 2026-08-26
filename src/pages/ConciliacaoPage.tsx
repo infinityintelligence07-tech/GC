@@ -23,6 +23,7 @@ import type { CaseNoteAttachment } from '@/types';
 import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
 import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
 import { isCancelamentoEspelhoItem, groupBlocksEspelhoConciliacao, isCancelamentoAguardandoFinalizacaoGc, isCancelamentoProntoConciliarGc } from '@/lib/cancelamentoGcConciliacao';
+import { buildIamGcApprovalStudentPatch } from '@/lib/iamPendenteConciliacao';
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -167,6 +168,7 @@ const FIELD_LABELS: Record<string, string> = {
   dueDate: 'Data de vencimento',
   dataPagamento: 'Data do pagamento',
   paidDate: 'Data do pagamento',
+  paidMarkedAt: 'Registrado no sistema',
   paid: 'Situação do pagamento',
   status: 'Status',
   product: 'Produto',
@@ -218,6 +220,8 @@ function composeGroupLabel(ctx: string, key: string): string {
     case 'dataPagamento':
     case 'paidDate':
       return `Data de pagamento da ${ctx}`;
+    case 'paidMarkedAt':
+      return `Registro no sistema da ${ctx}`;
     case 'paid':
       return `Situação da ${ctx}`;
     case 'status':
@@ -291,6 +295,12 @@ function formatValue(key: string, v: unknown, parent?: Record<string, unknown>):
       if (typeof det === 'string' && det.trim()) return `${base} — ${det.trim()}`;
     }
     return base;
+  }
+  if (key === 'paidMarkedAt' && typeof v === 'string') {
+    const d = new Date(v);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    }
   }
   if (DATE_KEYS.has(key) && typeof v === 'string') {
     return formatDate(v);
@@ -1166,7 +1176,7 @@ export default function ConciliacaoPage() {
   const canConciliarEdit = canEditTab(currentUser, 'conciliacao');
   const confirm = useConfirm();
 
-  const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'kamino-gc' | 'iam-control-gc' | 'cancelamentos-gc'>('menu');
+  const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'planilha-conferencia' | 'iam-control-gc' | 'cancelamentos-gc'>('menu');
   const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'renda_extra' | 'historico' | 'erros' | 'iam_pendentes'>('ajuste_financeiro');
   const [cancelGcFilter, setCancelGcFilter] = useState<'todos' | 'aguardando_finalizacao' | 'prontos_conciliar'>('prontos_conciliar');
   const [search, setSearch] = useState('');
@@ -1209,7 +1219,7 @@ export default function ConciliacaoPage() {
         }
         if (tab === 'historico') {
           if (i.status !== 'conciliado' && i.status !== 'reprovado') return false;
-          if (flow === 'kamino-gc') return i.tipo === 'baixa_kamino';
+          if (flow === 'planilha-conferencia') return i.tipo === 'baixa_kamino';
           if (flow === 'iam-control-gc') return i.tipo === 'iam_pendente';
           if (flow === 'cancelamentos-gc') return isCancelTipo(i.tipo);
           return i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente' && !isCancelTipo(i.tipo);
@@ -1297,7 +1307,7 @@ export default function ConciliacaoPage() {
       .filter((i) => (i.status === 'pendente' || i.status === 'aprovado') && isRendaExtraTipo(i.tipo))
       .map((i) => i.studentId ?? i.studentName),
   ).size;
-  const historicoCount = flow === 'kamino-gc'
+  const historicoCount = flow === 'planilha-conferencia'
     ? items.filter((i) => i.status === 'conciliado' && i.tipo === 'baixa_kamino').length
     : flow === 'iam-control-gc'
       ? items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo === 'iam_pendente').length
@@ -1449,6 +1459,12 @@ export default function ConciliacaoPage() {
           const depois = it.depois as Record<string, unknown>;
           const parcelaNum = Number(depois?.parcela);
           const valorPago = Number(depois?.valor);
+          const paidDate =
+            typeof depois.paidDate === 'string' && depois.paidDate ? depois.paidDate : todayIso;
+          const paidMarkedAt =
+            typeof depois.paidMarkedAt === 'string' && depois.paidMarkedAt
+              ? depois.paidMarkedAt
+              : new Date().toISOString();
           if (Number.isFinite(parcelaNum)) {
             const updatedInst = st.installments.map((i) => {
               if (i.number !== parcelaNum) return i;
@@ -1456,7 +1472,7 @@ export default function ConciliacaoPage() {
                 Number.isFinite(valorPago) && Math.abs(valorPago - i.value) > 0.01
                   ? { paidValue: valorPago }
                   : {};
-              return { ...i, paid: true, paidDate: todayIso, ...paidValueField };
+              return { ...i, paid: true, paidDate, paidMarkedAt, ...paidValueField };
             });
             const paidCount = updatedInst.filter((i) => i.paid).length;
             updateStudent(st.id, {
@@ -1509,30 +1525,13 @@ export default function ConciliacaoPage() {
           });
         }
       }
-      // ─── Import IAM (PENDENTE / PARA_CONCILIAR): só conta nos totais após conciliar
+      // ─── Import IAM (PENDENTE / PARA_CONCILIAR): libera carteira + dashboard ──
       if (it.tipo === 'iam_pendente' && it.studentId) {
         const st = useAppStore.getState().students.find((s) => s.id === it.studentId);
-        if (st) {
+        if (st && !st.iamGcConciliadoAt) {
           const { calculateAutoStatus } = await import('@/store/useAppStore');
-          const autoStatus = calculateAutoStatus(st.installments);
-          const nowIso = new Date().toISOString();
           const revisor = currentUser?.name ?? 'Conciliação';
-          const statusAnterior = String(st.iamControlContratoStatus ?? 'PENDENTE')
-            .replace(/_/g, ' ');
-          updateStudent(st.id, {
-            iamControlContratoStatus: 'CONCILIADO',
-            iamGcConciliadoAt: nowIso,
-            statusMode: 'Automático',
-            status: autoStatus,
-            history: [
-              ...st.history,
-              {
-                date: nowIso,
-                type: 'Sistema' as const,
-                text: `Contrato IAM (${statusAnterior}) aprovado na Conciliação por ${revisor}. Passa a contar nos totais financeiros.`,
-              },
-            ],
-          });
+          updateStudent(st.id, buildIamGcApprovalStudentPatch(st, calculateAutoStatus(st.installments), revisor));
         }
       }
     }
@@ -1547,12 +1546,16 @@ export default function ConciliacaoPage() {
       toast.error('Somente Admin ou usuários com permissão de Conciliação podem aprovar.');
       return;
     }
+    const allIamPendente = group.items.every((i) => i.tipo === 'iam_pendente');
     const ok = await confirm({
       title: group.items.length > 1 ? `Aprovar ${group.items.length} alterações` : 'Aprovar alteração',
-      description: `${group.studentName}\n\nAs alterações ainda NÃO serão executadas. Vão para a aba "Aprovados" e aguardam conciliação.\n\n${group.items.map((i) => `• ${i.resumo}`).join('\n')}`,
+      description: allIamPendente
+        ? `${group.studentName}\n\nO contrato IAM será liberado na carteira do assessor e na dashboard.\n\n${group.items.map((i) => `• ${i.resumo}`).join('\n')}`
+        : `${group.studentName}\n\nAs alterações ainda NÃO serão executadas. Vão para a aba "Aprovados" e aguardam conciliação.\n\n${group.items.map((i) => `• ${i.resumo}`).join('\n')}`,
       confirmText: 'Aprovar',
     });
     if (!ok) return;
+    const updateStudent = useAppStore.getState().updateStudent;
     // Aprova comissões pendentes vinculadas a itens de reversão deste grupo.
     try {
       const { ensureReversalCommission } = await import('@/lib/ensureReversalCommission');
@@ -1563,14 +1566,28 @@ export default function ConciliacaoPage() {
       console.error('[aprovar] aprovar comissão falhou:', e);
     }
     for (const it of group.items) {
-      aprovar(it.id, undefined, { silent: true });
+      if (it.tipo === 'iam_pendente' && it.studentId) {
+        const st = useAppStore.getState().students.find((s) => s.id === it.studentId);
+        if (st && !st.iamGcConciliadoAt) {
+          const { calculateAutoStatus } = await import('@/store/useAppStore');
+          const revisor = currentUser?.name ?? 'Conciliação';
+          updateStudent(st.id, buildIamGcApprovalStudentPatch(st, calculateAutoStatus(st.installments), revisor));
+        }
+        conciliar(it.id, undefined, { silent: true });
+      } else {
+        aprovar(it.id, undefined, { silent: true });
+      }
     }
-    notifyConciliacaoGrupo(group.items, 'pre_aprovada');
+    notifyConciliacaoGrupo(group.items, allIamPendente ? 'aprovada' : 'pre_aprovada');
 
     toast.success(
-      group.items.length > 1
-        ? `${group.items.length} alterações aprovadas. Aguardando conciliação.`
-        : 'Alteração aprovada. Aguardando conciliação.',
+      allIamPendente
+        ? group.items.length > 1
+          ? `${group.items.length} contratos IAM liberados na carteira.`
+          : 'Contrato IAM liberado na carteira do assessor.'
+        : group.items.length > 1
+          ? `${group.items.length} alterações aprovadas. Aguardando conciliação.`
+          : 'Alteração aprovada. Aguardando conciliação.',
     );
   };
 
@@ -1695,19 +1712,19 @@ export default function ConciliacaoPage() {
             )}
           </button>
 
-          {/* Kamino → GC */}
+          {/* Importar planilha conferência */}
           <button
-            onClick={() => { setFlow('kamino-gc'); setTab('erros'); }}
+            onClick={() => { setFlow('planilha-conferencia'); setTab('erros'); }}
             className="group relative bg-card border-2 border-border hover:border-primary rounded-2xl p-6 text-left transition-all hover:shadow-lg"
           >
             <div className="flex items-center justify-center gap-3 mb-4">
-              <span className="px-3 py-1.5 rounded-lg bg-muted text-foreground font-bold text-lg">Kamino</span>
+              <span className="px-3 py-1.5 rounded-lg bg-sky-100 text-sky-800 font-bold text-lg">Planilha</span>
               <ArrowRight size={24} className="text-primary" />
               <span className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary font-bold text-lg">GC</span>
             </div>
-            <h3 className="font-semibold text-foreground mb-1">Kamino → IAM - GC</h3>
+            <h3 className="font-semibold text-foreground mb-1">Importar Planilha Conferência</h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Importar planilha do Kamino, conferir dados e resolver erros de importação.
+              Envie a planilha modelo, cruze pagamentos com o sistema e resolva divergências de importação.
             </p>
             {errosPendentesCount > 0 && (
               <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[11px] font-bold border border-rose-300">
@@ -1792,6 +1809,12 @@ export default function ConciliacaoPage() {
                 <ArrowRight size={16} className="text-muted-foreground" />
                 <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary font-bold text-sm">GC</span>
               </>
+            ) : flow === 'planilha-conferencia' ? (
+              <>
+                <span className="px-2.5 py-1 rounded-md bg-sky-100 text-sky-800 font-bold text-sm">Planilha Conferência</span>
+                <ArrowRight size={16} className="text-muted-foreground" />
+                <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary font-bold text-sm">GC</span>
+              </>
             ) : (
               <>
                 <span className="px-2.5 py-1 rounded-md bg-muted text-foreground font-bold text-sm">Kamino</span>
@@ -1801,7 +1824,7 @@ export default function ConciliacaoPage() {
             )}
           </div>
         </div>
-        {flow === 'kamino-gc' && (
+        {flow === 'planilha-conferencia' && (
           <button
             onClick={() => setShowImport(true)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 shadow-sm"

@@ -26,6 +26,7 @@ const FIELD_LABELS: Record<string, string> = {
   dueDate: 'Vencimento',
   dataPagamento: 'Data do pagamento',
   paidDate: 'Data do pagamento',
+  paidMarkedAt: 'Registrado no sistema',
   paid: 'Situação',
   value: 'Valor',
   juros: 'Juros',
@@ -60,6 +61,12 @@ function fmt(k: string, v: unknown): string {
   if (typeof v === 'boolean') return v ? 'Pago' : 'Pendente';
   if (CURRENCY_KEYS.has(k) && (typeof v === 'number' || !Number.isNaN(Number(v)))) {
     return fmtCurrency(Number(v));
+  }
+  if (k === 'paidMarkedAt' && typeof v === 'string') {
+    const d = new Date(v);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    }
   }
   if (DATE_KEYS.has(k) && typeof v === 'string') return fmtDateISO(v);
   if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ',');

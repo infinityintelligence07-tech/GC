@@ -259,6 +259,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
   const [renegMode, setRenegMode] = useState<RenegMode>('none');
   const [selectedParcels, setSelectedParcels] = useState<number[]>([]);
+  const [selectedPayDates, setSelectedPayDates] = useState<Record<number, string>>({});
+  const [quickPayDraft, setQuickPayDraft] = useState<{ number: number; paidDate: string } | null>(null);
   const [editingInstallment, setEditingInstallment] = useState<number | null>(null);
   const [editValue, setEditValue] = useState(0);
   const [editDueDate, setEditDueDate] = useState('');
@@ -358,8 +360,17 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const [quitParcelasMode, setQuitParcelasMode] = useState(false);
   const [quitParcSel, setQuitParcSel] = useState<number[]>([]);
   const [quitParcVal, setQuitParcVal] = useState<Record<number, number>>({});
-  const toggleQuitParc = (n: number) =>
-    setQuitParcSel((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
+  const [quitParcDate, setQuitParcDate] = useState<Record<number, string>>({});
+  const todayIsoDate = () => new Date().toISOString().split('T')[0];
+  const toggleQuitParc = (n: number) => {
+    const iso = todayIsoDate();
+    if (quitParcSel.includes(n)) {
+      setQuitParcSel((prev) => prev.filter((x) => x !== n));
+    } else {
+      setQuitParcSel((prev) => [...prev, n]);
+      setQuitParcDate((d) => ({ ...d, [n]: d[n] ?? iso }));
+    }
+  };
 
 
   // Observação livre p/ a Conciliação — preenchida ANTES de qualquer ajuste
@@ -532,9 +543,13 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   );
 
   const toggleParcel = (num: number) => {
-    setSelectedParcels((prev) =>
-      prev.includes(num) ? prev.filter((n) => n !== num) : [...prev, num]
-    );
+    const iso = todayIsoDate();
+    if (selectedParcels.includes(num)) {
+      setSelectedParcels((prev) => prev.filter((n) => n !== num));
+    } else {
+      setSelectedParcels((prev) => [...prev, num]);
+      setSelectedPayDates((d) => ({ ...d, [num]: d[num] ?? iso }));
+    }
   };
 
   const addHistoryEntry = (text: string) => ({
@@ -547,14 +562,17 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   // sem precisar usar o fluxo de "Confirmar Ajuste Financeiro". Vai direto
   // por registrarConc (executaImediatamente=true via wrapper local), que
   // aplica `paid: true` no aluno e grava item já conciliado p/ auditoria.
-  const handleQuickMarkPaid = async (inst: Installment) => {
+  const handleQuickMarkPaid = async (inst: Installment, paidDate: string) => {
     if (!immediateApply || !isImmediate) return;
     const charges = calculateCharges(inst.value, inst.dueDate, inst.number);
     const extra = !showCharges ? getExtra(inst.number) : 0;
     const paidAmount = showCharges ? charges.total : inst.value + extra;
+    const paidMarkedAt = new Date().toISOString();
     const ok = await confirm({
       title: `Marcar parcela ${inst.number} como paga?`,
-      description: `Valor: ${formatCurrency(paidAmount)} • Vencimento: ${formatDateBR(inst.dueDate)}.\n\nA baixa será aplicada agora (conciliada automaticamente).`,
+      description:
+        `Valor: ${formatCurrency(paidAmount)} • Vencimento: ${formatDateBR(inst.dueDate)} • Pago em: ${formatDateBR(paidDate)}.\n\n` +
+        'A baixa será aplicada agora (conciliada automaticamente).',
       confirmText: 'Marcar como paga',
       cancelText: 'Cancelar',
     });
@@ -565,14 +583,15 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       studentId: student.id,
       studentName: student.name,
       ac: student.ac,
-      resumo: `Pagamento parcela ${inst.number} — ${formatCurrency(paidAmount)}${showCharges ? ' (com encargos)' : ''}${extra > 0 ? ` (+ extra ${formatCurrency(extra)})` : ''}`,
+      resumo: `Pagamento parcela ${inst.number} — ${formatCurrency(paidAmount)}${showCharges ? ' (com encargos)' : ''}${extra > 0 ? ` (+ extra ${formatCurrency(extra)})` : ''} — pago em ${formatDateBR(paidDate)}`,
       antes: { parcela: inst.number, valor: inst.value, paid: false },
       depois: {
         parcela: inst.number,
         valor: paidAmount,
         valorExtra: extra || undefined,
         paid: true,
-        paidDate: today.toISOString().split('T')[0],
+        paidDate,
+        paidMarkedAt,
         comEncargos: showCharges,
       },
       autorObservacao: obsConciliacao.trim() || undefined,
@@ -584,7 +603,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           ? {
               ...i,
               paid: true,
-              paidDate: today.toISOString().split('T')[0],
+              paidDate,
+              paidMarkedAt,
               ...(Math.abs(paidAmount - i.value) > 0.01 ? { paidValue: paidAmount } : {}),
             }
           : i,
@@ -593,11 +613,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     setOriginalInstallmentsRef((prev) =>
       prev.map((i) =>
         i.number === inst.number
-          ? { ...i, paid: true, paidDate: today.toISOString().split('T')[0] }
+          ? { ...i, paid: true, paidDate, paidMarkedAt }
           : i,
       ),
     );
     setSelectedParcels((prev) => prev.filter((n) => n !== inst.number));
+    setQuickPayDraft(null);
     toast.success(`Parcela ${inst.number} marcada como paga (${formatCurrency(paidAmount)}).`);
   };
 
@@ -792,20 +813,23 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     // 3) Pagamentos manuais selecionados → uma pendência por parcela
     for (const { inst, paidAmount, extra } of pendingPayments) {
       const extraNote = extra > 0 ? ` (+ extra ${formatCurrency(extra)})` : '';
+      const paidDate = selectedPayDates[inst.number] ?? todayIsoDate();
+      const paidMarkedAt = new Date().toISOString();
       registrarConc({
         tipo: 'pagamento_parcela',
         studentSnapshot: buildStudentSnapshot(baseStudent),
         studentId: student.id,
         studentName: student.name,
         ac: student.ac,
-        resumo: `Pagamento parcela ${inst.number} — ${formatCurrency(paidAmount)}${showCharges ? ' (com encargos)' : ''}${extraNote}`,
+        resumo: `Pagamento parcela ${inst.number} — ${formatCurrency(paidAmount)}${showCharges ? ' (com encargos)' : ''}${extraNote} — pago em ${formatDateBR(paidDate)}`,
         antes: { parcela: inst.number, valor: inst.value, paid: false },
         depois: {
           parcela: inst.number,
           valor: paidAmount,
           valorExtra: extra || undefined,
           paid: true,
-          paidDate: today.toISOString().split('T')[0],
+          paidDate,
+          paidMarkedAt,
           comEncargos: showCharges,
         },
         autorObservacao: obs,
@@ -1041,9 +1065,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     }
 
     const obs = obsConciliacao.trim() || undefined;
-    const hoje = today.toISOString().split('T')[0];
 
     for (const { inst, valorOriginal, valorPago, diverge } of itens) {
+      const paidDate = quitParcDate[inst.number] ?? todayIsoDate();
+      const paidMarkedAt = new Date().toISOString();
       // Força executaImediatamente=false: esta ação SEMPRE vai para a aba
       // Conciliação, mesmo quando o usuário é admin/conciliação.
       registrarConciliacao({
@@ -1054,13 +1079,15 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         ac: student.ac,
         resumo:
           `Quitação parcela ${inst.number} — ${formatCurrency(valorPago)}` +
-          (diverge ? ` (divergente do registrado ${formatCurrency(valorOriginal)})` : ''),
+          (diverge ? ` (divergente do registrado ${formatCurrency(valorOriginal)})` : '') +
+          ` — pago em ${formatDateBR(paidDate)}`,
         antes: { parcela: inst.number, valor: valorOriginal, paid: false },
         depois: {
           parcela: inst.number,
           valor: valorPago,
           paid: true,
-          paidDate: hoje,
+          paidDate,
+          paidMarkedAt,
           valorDivergente: diverge || undefined,
         },
         autorObservacao: obs,
@@ -1086,6 +1113,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     setQuitParcelasMode(false);
     setQuitParcSel([]);
     setQuitParcVal({});
+    setQuitParcDate({});
     onClose();
   };
 
@@ -1841,13 +1869,46 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                           </span>
                         )}
                         {immediateApply && isImmediate && (
-                          <button
-                            onClick={() => handleQuickMarkPaid(inst)}
-                            className="action-btn !w-5 !h-5 text-emerald-600 hover:text-emerald-700"
-                            title="Marcar como paga (conciliação imediata)"
-                          >
-                            <BadgeCheck size={10} />
-                          </button>
+                          quickPayDraft?.number === inst.number ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="date"
+                                value={quickPayDraft.paidDate}
+                                onChange={(e) =>
+                                  setQuickPayDraft((prev) =>
+                                    prev ? { ...prev, paidDate: e.target.value } : prev,
+                                  )
+                                }
+                                className="input-field text-[10px] py-0.5 px-1"
+                                style={{ width: '7.5rem' }}
+                                title="Data em que o pagamento foi realizado"
+                              />
+                              <button
+                                onClick={() => handleQuickMarkPaid(inst, quickPayDraft.paidDate)}
+                                className="action-btn !w-5 !h-5 text-emerald-600 hover:text-emerald-700"
+                                title="Confirmar baixa"
+                              >
+                                <Check size={10} />
+                              </button>
+                              <button
+                                onClick={() => setQuickPayDraft(null)}
+                                className="action-btn !w-5 !h-5 text-muted-foreground"
+                                title="Cancelar"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                setQuickPayDraft({ number: inst.number, paidDate: todayIsoDate() })
+                              }
+                              className="action-btn !w-5 !h-5 text-emerald-600 hover:text-emerald-700"
+                              title="Marcar como paga (conciliação imediata)"
+                            >
+                              <BadgeCheck size={10} />
+                            </button>
+                          )
                         )}
                         <button onClick={() => handleEditInstallment(inst)} className="action-btn !w-5 !h-5" title="Editar valor, vencimento e encargo">
                           <Edit2 size={9} />
@@ -1869,6 +1930,25 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       </div>
                     )}
                     </div>
+                    {selectedParcels.includes(inst.number) && !isEditing && (
+                      <div className="mt-2 ml-7 flex items-center gap-2">
+                        <label className="text-[10px] font-medium text-muted-foreground shrink-0">
+                          Data do pagamento
+                        </label>
+                        <input
+                          type="date"
+                          value={selectedPayDates[inst.number] ?? todayIsoDate()}
+                          onChange={(e) =>
+                            setSelectedPayDates((prev) => ({ ...prev, [inst.number]: e.target.value }))
+                          }
+                          className="input-field text-xs py-1"
+                          style={{ width: '9rem' }}
+                        />
+                        <span className="text-[9px] text-muted-foreground">
+                          O registro do clique será salvo automaticamente na conciliação.
+                        </span>
+                      </div>
+                    )}
 
                   </div>
                 );
@@ -1887,6 +1967,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       <span className="text-xs font-medium text-foreground">Parcela {displayParcelLabel(inst.number)}</span>
                       <span className="ml-2 text-[10px] text-emerald-700">
                         Pago em {inst.paidDate ? formatDateBR(inst.paidDate) : '—'} • Venc. {formatDateBR(inst.dueDate)}
+                        {inst.paidMarkedAt && (
+                          <> • Registrado {new Date(inst.paidMarkedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</>
+                        )}
                       </span>
                     </div>
                     {(() => {
@@ -1915,7 +1998,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         });
                         if (!ok) return;
                         const updated = student.installments.map((i) =>
-                          i.number === inst.number ? { ...i, paid: false, paidDate: undefined } : i
+                          i.number === inst.number
+                            ? { ...i, paid: false, paidDate: undefined, paidMarkedAt: undefined }
+                            : i
                         );
                         const paidCount = updated.filter((i) => i.paid).length;
                         updateStudent(student.id, {
@@ -1940,7 +2025,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         // Atualiza snapshot original p/ que a parcela desconciliada
                         // entre no Check de Valor e aumente a carteira pendente.
                         setOriginalInstallmentsRef((prev) =>
-                          prev.map((i) => (i.number === inst.number ? { ...i, paid: false, paidDate: undefined } : i)),
+                          prev.map((i) =>
+                            i.number === inst.number
+                              ? { ...i, paid: false, paidDate: undefined, paidMarkedAt: undefined }
+                              : i,
+                          ),
                         );
                         toast.success(`Parcela ${inst.number} marcada como pendente.`);
                       }}
@@ -2123,8 +2212,14 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     // Pré-seleciona vencidas e pré-preenche valores com o registrado
                     setQuitParcSel(overdueInstallments.map((i) => i.number));
                     const vals: Record<number, number> = {};
-                    unpaidInstallments.forEach((i) => { vals[i.number] = i.value; });
+                    const dates: Record<number, string> = {};
+                    const iso = todayIsoDate();
+                    unpaidInstallments.forEach((i) => {
+                      vals[i.number] = i.value;
+                      dates[i.number] = iso;
+                    });
                     setQuitParcVal(vals);
+                    setQuitParcDate(dates);
                   }
                 }}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-all bg-gradient-to-r from-emerald-400 to-teal-500 text-white hover:shadow-lg hover:-translate-y-0.5 border border-emerald-600/20"
@@ -2263,6 +2358,19 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                             onChange={(v) => setQuitParcVal((prev) => ({ ...prev, [i.number]: v }))}
                           />
                         </div>
+                        {selected && (
+                          <div className="w-36 shrink-0">
+                            <label className="text-[9px] font-medium text-emerald-800 block mb-0.5">Pago em</label>
+                            <input
+                              type="date"
+                              value={quitParcDate[i.number] ?? todayIsoDate()}
+                              onChange={(e) =>
+                                setQuitParcDate((prev) => ({ ...prev, [i.number]: e.target.value }))
+                              }
+                              className="w-full rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2294,7 +2402,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setQuitParcelasMode(false); setQuitParcSel([]); setQuitParcVal({}); }}
+                  onClick={() => { setQuitParcelasMode(false); setQuitParcSel([]); setQuitParcVal({}); setQuitParcDate({}); }}
                   className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
                 >Cancelar</button>
                 <button

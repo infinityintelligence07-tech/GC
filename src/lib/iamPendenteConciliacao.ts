@@ -1,4 +1,4 @@
-import type { ConciliacaoItem, Student, Installment } from '@/types';
+import type { ConciliacaoItem, Student, Installment, StudentStatus } from '@/types';
 import { createConciliacaoItemDb } from '@/lib/supabaseMutations';
 
 /** Status IAM que exigem aprovação na Conciliação GC antes de entrar na dashboard. */
@@ -76,9 +76,11 @@ export function countsInFinancialTotals(student: Student): boolean {
   return isKaminoPortfolioStudent(student);
 }
 
-/** Entra na carteira do assessor (inclui IAM aguardando aprovação). */
+/** Entra na carteira do assessor — IAM só após aprovação na Conciliação GC. */
 export function countsInAcPortfolioTotals(student: Student): boolean {
-  if (isIamControlStudent(student)) return true;
+  if (isIamControlStudent(student)) {
+    return Boolean(student.iamGcConciliadoAt) || isIamConciliadoQuitadoAvista(student);
+  }
   return isKaminoPortfolioStudent(student);
 }
 
@@ -156,4 +158,28 @@ export async function ensureIamPendenteConciliacaoItems(
     }
   }
   return created.length > 0 ? [...items, ...created] : items;
+}
+
+/** Libera o aluno IAM na carteira do AC e na dashboard após aprovação na Conciliação GC. */
+export function buildIamGcApprovalStudentPatch(
+  student: Student,
+  autoStatus: StudentStatus,
+  revisorNome: string,
+): Partial<Student> {
+  const nowIso = new Date().toISOString();
+  const statusAnterior = String(student.iamControlContratoStatus ?? 'PENDENTE').replace(/_/g, ' ');
+  return {
+    iamControlContratoStatus: 'CONCILIADO',
+    iamGcConciliadoAt: nowIso,
+    statusMode: 'Automático',
+    status: autoStatus,
+    history: [
+      ...student.history,
+      {
+        date: nowIso,
+        type: 'Sistema',
+        text: `Contrato IAM (${statusAnterior}) aprovado na Conciliação por ${revisorNome}. Passa a contar na carteira e nos totais financeiros.`,
+      },
+    ],
+  };
 }

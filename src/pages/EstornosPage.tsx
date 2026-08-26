@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore, formatCurrency } from '@/store/useAppStore';
-import { Wallet, Search, Copy, Check, ChevronLeft, ChevronRight, Target, History, X, Upload, FileText, Trash2, Loader2, Eye } from 'lucide-react';
-import type { CancellationCase, RefundPaymentMethod } from '@/types';
+import { Wallet, Search, Copy, Check, ChevronLeft, ChevronRight, Target, History, X, Upload, FileText, Trash2, Loader2, Eye, Pencil } from 'lucide-react';
+import type { CancellationCase, RefundPaymentMethod, RefundPixKeyType } from '@/types';
 import { refundPaymentMethodLabel, resolveRefundPaymentMethod } from '@/types';
 import PeriodFilter, { type PeriodMode } from '@/components/ui/PeriodFilter';
 import { getMetaForRange, subscribeGoals, migrateLegacyIfNeeded } from '@/lib/estornosGoals';
@@ -23,6 +23,7 @@ export interface RefundLogEntry {
   at: string;
   byName: string;
   byUserId?: string | null;
+  detail?: string;
 }
 
 interface RefundRow {
@@ -56,8 +57,40 @@ function formatDateBR(iso: string): string {
   try { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('pt-BR'); } catch { return iso; }
 }
 
+function formatLogEntryText(e: RefundLogEntry): string {
+  switch (e.action) {
+    case 'marcou':
+      return `${e.byName} marcou como lançado`;
+    case 'desmarcou':
+      return `${e.byName} desmarcou o lançamento`;
+    case 'editou_dados':
+    case 'dados_alterados':
+      return `${e.byName} alterou dados do estorno${e.detail ? `: ${e.detail}` : ''}`;
+    case 'metodo_pagamento':
+      return `${e.byName} alterou o método de pagamento${e.detail ? `: ${e.detail}` : ''}`;
+    case 'boleto_anexado':
+      return `${e.byName} anexou boleto${e.detail ? `: ${e.detail}` : ''}`;
+    case 'boleto_removido':
+      return `${e.byName} removeu boleto${e.detail ? `: ${e.detail}` : ''}`;
+    default:
+      return `${e.byName} — ${e.action}${e.detail ? `: ${e.detail}` : ''}`;
+  }
+}
+
+function logEntryBorderClass(action: string): string {
+  if (action === 'marcou' || action === 'boleto_anexado') return 'border-emerald-200 bg-emerald-50';
+  if (action === 'desmarcou' || action === 'boleto_removido') return 'border-rose-200 bg-rose-50';
+  return 'border-sky-200 bg-sky-50';
+}
+
 function formatDateTimeBR(iso: string): string {
   try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return iso; }
+}
+
+interface EditRefundForm {
+  paymentMethod: RefundPaymentMethod;
+  pixKeyType: RefundPixKeyType;
+  pixKey: string;
 }
 
 export default function EstornosPage() {
@@ -72,6 +105,9 @@ export default function EstornosPage() {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [summaryCaseId, setSummaryCaseId] = useState<string | null>(null);
   const [logRow, setLogRow] = useState<RefundRow | null>(null);
+  const [editRow, setEditRow] = useState<RefundRow | null>(null);
+  const [editForm, setEditForm] = useState<EditRefundForm>({ paymentMethod: 'pix', pixKeyType: 'CPF', pixKey: '' });
+  const [editError, setEditError] = useState<string | null>(null);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -348,6 +384,101 @@ export default function EstornosPage() {
     }
   };
 
+  const openEdit = (r: RefundRow) => {
+    setEditRow(r);
+    setEditForm({
+      paymentMethod: r.paymentMethod,
+      pixKeyType: (r.pixKeyType as RefundPixKeyType) || 'CPF',
+      pixKey: r.pixKey,
+    });
+    setEditError(null);
+  };
+
+  const saveRefundEdit = () => {
+    if (!editRow) return;
+    const c = cancellationCases.find((x) => x.id === editRow.caseId) as CancellationCase | undefined;
+    if (!c?.refundPlan) return;
+
+    if (editForm.paymentMethod === 'pix' && !editForm.pixKey.trim()) {
+      setEditError('Informe a chave PIX do aluno.');
+      return;
+    }
+
+    const prevMethod = resolveRefundPaymentMethod(c.refundPlan);
+    const prevType = c.refundPlan.pixKeyType ?? '—';
+    const prevKey = c.refundPlan.pixKey ?? '';
+    const changes: string[] = [];
+
+    if (prevMethod !== editForm.paymentMethod) {
+      changes.push(`Método: ${refundPaymentMethodLabel(prevMethod)} → ${refundPaymentMethodLabel(editForm.paymentMethod)}`);
+    }
+    if (editForm.paymentMethod === 'pix') {
+      if (prevType !== editForm.pixKeyType) {
+        changes.push(`Tipo PIX: ${prevType} → ${editForm.pixKeyType}`);
+      }
+      if (prevKey.trim() !== editForm.pixKey.trim()) {
+        changes.push(`Chave PIX: ${prevKey.trim() || '—'} → ${editForm.pixKey.trim()}`);
+      }
+    }
+
+    if (changes.length === 0) {
+      setEditRow(null);
+      return;
+    }
+
+    const userName = currentUser?.name ?? 'Sistema';
+    const userId = currentUser?.authUserId ?? null;
+    const stamp = new Date().toISOString();
+    const detail = changes.join('; ');
+
+    let nextPlan = appendPlanLog(
+      {
+        ...c.refundPlan,
+        paymentMethod: editForm.paymentMethod,
+        pixKeyType: editForm.paymentMethod === 'pix' ? editForm.pixKeyType : c.refundPlan.pixKeyType,
+        pixKey: editForm.paymentMethod === 'pix' ? editForm.pixKey.trim() : '',
+      },
+      { action: 'dados_alterados', detail },
+    );
+
+    const logEntry: RefundLogEntry = { action: 'editou_dados', at: stamp, byName: userName, byUserId: userId, detail };
+    nextPlan = {
+      ...nextPlan,
+      installments: nextPlan.installments.map((p, idx) => {
+        if (idx !== editRow.installmentIndex - 1) return p;
+        const prevLog: RefundLogEntry[] = Array.isArray(p.lancadoLog) ? (p.lancadoLog as RefundLogEntry[]) : [];
+        return { ...p, lancadoLog: [...prevLog, logEntry] };
+      }),
+    };
+
+    updateCancellationCase(c.id, { refundPlan: nextPlan });
+    logActivity({
+      action: 'estorno.dados_alterados',
+      entity: 'cancellation',
+      entityId: c.id,
+      entityLabel: editRow.studentName,
+      summary: `${userName} alterou dados do estorno de ${editRow.studentName}: ${detail}`,
+      meta: { parcela: editRow.installmentIndex, alteracoes: changes },
+    });
+    setEditRow(null);
+  };
+
+  const getRowLogEntries = (r: RefundRow): RefundLogEntry[] => {
+    const c = cancellationCases.find((x) => x.id === r.caseId) as CancellationCase | undefined;
+    const planLog = (c?.refundPlan?.planLog ?? []) as RefundLogEntry[];
+    const parcelLog = r.log;
+    const merged = [...parcelLog, ...planLog];
+    const seen = new Set<string>();
+    return merged
+      .filter((e) => {
+        const key = `${e.at}|${e.action}|${e.byName}|${e.detail ?? ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => a.at.localeCompare(b.at));
+  };
+
   const toggleLancado = (r: RefundRow) => {
     const c = cancellationCases.find((x) => x.id === r.caseId) as CancellationCase | undefined;
     if (!c?.refundPlan) return;
@@ -526,15 +657,25 @@ export default function EstornosPage() {
 
                 {/* Método de pagamento — PIX ou Boleto + dados */}
                 <div className="space-y-2 py-1 min-w-0">
-                  <select
-                    value={r.paymentMethod}
-                    onChange={(e) => updatePaymentMethod(r.caseId, r.studentName, e.target.value as RefundPaymentMethod)}
-                    className="input-field text-xs w-full font-semibold"
-                    title="Escolha PIX ou Boleto"
-                  >
-                    <option value="pix">PIX</option>
-                    <option value="boleto">Boleto</option>
-                  </select>
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={r.paymentMethod}
+                      onChange={(e) => updatePaymentMethod(r.caseId, r.studentName, e.target.value as RefundPaymentMethod)}
+                      className="input-field text-xs flex-1 font-semibold"
+                      title="Escolha PIX ou Boleto"
+                    >
+                      <option value="pix">PIX</option>
+                      <option value="boleto">Boleto</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(r)}
+                      className="p-1.5 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                      title="Editar dados do estorno (PIX, método de pagamento)"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  </div>
 
                   {r.paymentMethod === 'pix' ? (
                     <div className="rounded-lg border border-border bg-card p-2 space-y-1">
@@ -664,12 +805,96 @@ export default function EstornosPage() {
         caseData={cancellationCases.find((c) => c.id === summaryCaseId) ?? null}
       />
 
+      {editRow && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setEditRow(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-card border border-border saas-shadow-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Editar dados do estorno</p>
+                <h3 className="text-sm font-semibold text-foreground break-words">{editRow.studentName}</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Parcela {editRow.installmentIndex}/{editRow.totalInstallments}
+                </p>
+              </div>
+              <button onClick={() => setEditRow(null)} className="text-muted-foreground hover:text-foreground shrink-0" aria-label="Fechar">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-[10px] font-semibold uppercase text-muted-foreground">Método de pagamento</label>
+                <select
+                  value={editForm.paymentMethod}
+                  onChange={(e) => setEditForm((f) => ({ ...f, paymentMethod: e.target.value as RefundPaymentMethod }))}
+                  className="input-field text-xs w-full mt-1"
+                >
+                  <option value="pix">PIX</option>
+                  <option value="boleto">Boleto</option>
+                </select>
+              </div>
+
+              {editForm.paymentMethod === 'pix' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-3">
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase text-muted-foreground">Tipo da chave</label>
+                    <select
+                      value={editForm.pixKeyType}
+                      onChange={(e) => setEditForm((f) => ({ ...f, pixKeyType: e.target.value as RefundPixKeyType }))}
+                      className="input-field text-xs w-full mt-1"
+                    >
+                      <option value="CPF">CPF</option>
+                      <option value="CNPJ">CNPJ</option>
+                      <option value="Email">Email</option>
+                      <option value="Telefone">Telefone</option>
+                      <option value="Aleatória">Aleatória</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase text-muted-foreground">Chave PIX do aluno</label>
+                    <input
+                      type="text"
+                      value={editForm.pixKey}
+                      onChange={(e) => setEditForm((f) => ({ ...f, pixKey: e.target.value }))}
+                      placeholder="Informe a chave PIX"
+                      className={`input-field text-xs w-full mt-1 ${!editForm.pixKey.trim() ? 'border-rose-500 ring-1 ring-rose-500' : ''}`}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-sky-800 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                  Para boleto, anexe o arquivo diretamente na linha da parcela. Alterações de método serão registradas no log.
+                </p>
+              )}
+
+              {editError && <p className="text-xs text-rose-600 font-medium">{editError}</p>}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditRow(null)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card hover:bg-muted"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={saveRefundEdit}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  Salvar alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {logRow && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setLogRow(null)}>
           <div className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-2xl bg-card border border-border saas-shadow-sm" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl">
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Log de lançamento</p>
+                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Log de alterações</p>
                 <h3 className="text-sm font-semibold text-foreground break-words">{logRow.studentName}</h3>
                 <p className="text-[11px] text-muted-foreground">
                   Parcela {logRow.installmentIndex}/{logRow.totalInstallments} · {formatCurrency(logRow.value)} · {formatDateBR(logRow.date)}
@@ -680,22 +905,24 @@ export default function EstornosPage() {
               </button>
             </div>
             <div className="p-5 space-y-2">
-              {logRow.log.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center">
-                  {logRow.lancadoPorNome
-                    ? `Lançado por ${logRow.lancadoPorNome}${logRow.lancadoAt ? ' em ' + formatDateTimeBR(logRow.lancadoAt) : ''}.`
-                    : 'Nenhuma alteração registrada nesta parcela ainda.'}
-                </p>
-              ) : (
-                [...logRow.log].reverse().map((e, i) => (
-                  <div key={i} className={`rounded-xl border p-3 ${e.action === 'marcou' ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
-                    <p className="text-xs font-semibold text-foreground break-words">
-                      {e.byName} {e.action === 'marcou' ? 'marcou como lançado' : 'desmarcou o lançamento'}
+              {(() => {
+                const entries = getRowLogEntries(logRow);
+                if (entries.length === 0) {
+                  return (
+                    <p className="text-xs text-muted-foreground text-center">
+                      {logRow.lancadoPorNome
+                        ? `Lançado por ${logRow.lancadoPorNome}${logRow.lancadoAt ? ' em ' + formatDateTimeBR(logRow.lancadoAt) : ''}.`
+                        : 'Nenhuma alteração registrada nesta parcela ainda.'}
                     </p>
+                  );
+                }
+                return [...entries].reverse().map((e, i) => (
+                  <div key={i} className={`rounded-xl border p-3 ${logEntryBorderClass(e.action)}`}>
+                    <p className="text-xs font-semibold text-foreground break-words">{formatLogEntryText(e)}</p>
                     <p className="text-[11px] text-muted-foreground">{formatDateTimeBR(e.at)}</p>
                   </div>
-                ))
-              )}
+                ));
+              })()}
             </div>
           </div>
         </div>
