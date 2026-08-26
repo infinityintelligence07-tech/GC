@@ -13,6 +13,8 @@ export interface ResolvedStudentFinance {
   /** A 1ª parcela do fluxo embute a entrada (down_payment = 0 no banco). */
   embeddedEntradaInstallment: Installment | null;
   inferredDownPayment: boolean;
+  /** Entrada já quitada (ex.: débito IAM), distinta de parcela com tag entrada-pendente. */
+  paidEntrada: boolean;
   correctedSaleValue: boolean;
 }
 
@@ -83,6 +85,7 @@ export function resolveStudentFinance(
   const sumInst = sumInstallmentValues(installments);
 
   let downPayment = storedDown;
+  let paidEntrada = storedDown > 0.0049;
   let inferredDownPayment = false;
   let embeddedEntradaInstallment: Installment | null = null;
 
@@ -91,18 +94,17 @@ export function resolveStudentFinance(
     if (embeddedEntradaInstallment) {
       downPayment = roundMoney(Number(embeddedEntradaInstallment.value) || 0);
       inferredDownPayment = true;
+      paidEntrada = !!embeddedEntradaInstallment.paid;
     }
   }
 
-  if (downPayment <= 0.0049) {
-    const entradaTagged = installments.filter(
-      (i) => !i.paid && isEntradaPendenciaInstallment(i),
-    );
-    if (entradaTagged.length > 0) {
-      downPayment = roundMoney(
-        entradaTagged.reduce((acc, i) => acc + (Number(i.value) || 0), 0),
-      );
+  // Entrada parcial já paga (ex.: IAM — débito R$197 + crédito R$2364 pendente).
+  if (downPayment <= 0.0049 && storedSale > 0.0049 && sumInst > 0.0049) {
+    const gap = roundMoney(storedSale - sumInst);
+    if (gap > 0.0049 && gap < storedSale - 0.01) {
+      downPayment = gap;
       inferredDownPayment = true;
+      paidEntrada = true;
     }
   }
 
@@ -126,10 +128,12 @@ export function resolveStudentFinance(
       downPayment = roundMoney(Number(firstPaid.value) || 0);
       embeddedEntradaInstallment = firstPaid;
       inferredDownPayment = true;
+      paidEntrada = true;
     } else if (paidParcelas <= 0.0049 && kaminoPaid <= storedSale + 0.05) {
       // Kamino informou pagamento mas nenhuma parcela marcada como paga → trata como entrada.
       downPayment = kaminoPaid;
       inferredDownPayment = true;
+      paidEntrada = true;
     }
   }
 
@@ -151,6 +155,7 @@ export function resolveStudentFinance(
     saleValue,
     embeddedEntradaInstallment,
     inferredDownPayment,
+    paidEntrada,
     correctedSaleValue,
   };
 }
@@ -177,9 +182,7 @@ export function getStudentTotalPaid(
 ): number {
   const finance = resolveStudentFinance(student, options);
   const embedded = finance.embeddedEntradaInstallment;
-  const entradaPaga =
-    finance.downPayment > 0.0049 &&
-    (embedded == null || embedded.paid || finance.inferredDownPayment);
+  const entradaPaga = finance.paidEntrada && finance.downPayment > 0.0049;
 
   const parcelasPagas = (student.installments ?? [])
     .filter((i) => {

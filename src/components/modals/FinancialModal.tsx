@@ -453,7 +453,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     [flowInstallments],
   );
   const entradaValor = finance.downPayment ?? 0;
-  const hasEntrada = entradaValor > 0.0049;
+  const hasEntrada = finance.paidEntrada && entradaValor > 0.0049;
   const entradaPendenteValor = useMemo(
     () => sumEntradaPendenteValue(student),
     [student.installments],
