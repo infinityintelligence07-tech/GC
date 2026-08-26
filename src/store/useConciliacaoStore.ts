@@ -21,6 +21,8 @@ import {
   deleteConciliacaoImportErrorDb,
 } from '@/lib/supabaseMutations';
 import { logActivity } from '@/lib/activityLog';
+import { applyConciliacaoEfetivacao, isDraftItem } from '@/lib/conciliacaoApply';
+import { computeConciliacaoImmediateUpdate } from '@/lib/conciliacaoImmediate';
 
 
 interface ConciliacaoState {
@@ -411,6 +413,28 @@ export function registrarConciliacao(input: {
     input = { ...input, executaImediatamente: true };
   }
 
+  // Evita baixa duplicada da mesma parcela (gerava histórico sem gravar o pagamento).
+  if (input.tipo === 'pagamento_parcela' && input.studentId) {
+    const parcela = Number(input.depois?.parcela);
+    if (Number.isFinite(parcela)) {
+      const st = useAppStore.getState().students.find((s) => s.id === input.studentId);
+      const jaPaga = !!st?.installments.find((i) => i.number === parcela)?.paid;
+      const jaConciliada = useConciliacaoStore.getState().items.some(
+        (it) =>
+          it.studentId === input.studentId &&
+          it.tipo === 'pagamento_parcela' &&
+          it.status === 'conciliado' &&
+          Number((it.depois as Record<string, unknown>)?.parcela) === parcela,
+      );
+      if (jaPaga || jaConciliada) {
+        void import('sonner').then(({ toast }) =>
+          toast.warning(`Parcela ${parcela} de ${input.studentName} já está paga ou conciliada.`),
+        );
+        return;
+      }
+    }
+  }
+
 
   // Embute snapshot dentro do antes (chave reservada `_snapshot`)
   if (input.studentSnapshot) {
@@ -477,41 +501,49 @@ export function registrarConciliacao(input: {
   });
 
 
-  // Aplica imediatamente no aluno (se for o caso).
-  if (imediato) {
-    import('@/lib/conciliacaoImmediate')
-      .then(({ applyConciliacaoImmediate }) => applyConciliacaoImmediate(optimistic))
-      .catch((e) => console.error('Falha ao aplicar conciliação imediata:', e));
-  } else if (input.draftAfter && input.studentId) {
-    // ─── RASCUNHO COM EFEITO IMEDIATO ────────────────────────────────────────
-    // Regra de negócio: a Conciliação é um DOUBLE-CHECK. O ajuste feito pelo
-    // assessor já vale em todo o sistema (ficha, carteira, cancelamentos)
-    // desde o envio. O `_after` permanece gravado apenas como registro do que
-    // foi proposto/efetivado.
-    import('@/lib/conciliacaoApply')
-      .then(({ applyConciliacaoEfetivacao }) => applyConciliacaoEfetivacao(optimistic, { upfront: true }))
-      .catch((e) => console.error('Falha ao aplicar rascunho imediatamente:', e));
-  }
-
-
-  // Registra no histórico do aluno para consulta futura
+  // Aplica imediatamente no aluno (se for o caso) — gravação única com histórico.
   if (input.studentId) {
     const appState = useAppStore.getState();
     const student = appState.students.find((s) => s.id === input.studentId);
     if (student) {
       const obsTxt = input.autorObservacao?.trim();
-      const text = imediato
+      const auditText = imediato
         ? `Alteração conciliada automaticamente — ${input.resumo}${obsTxt ? ` | Obs: ${obsTxt}` : ''}${u?.name ? ` (por ${u.name})` : ''}`
         : `Enviado para Conciliação — ${input.resumo}${obsTxt ? ` | Obs: ${obsTxt}` : ''}${u?.name ? ` (por ${u.name})` : ''}`;
-      const entry = {
-        date: new Date().toISOString(),
+      const auditEntry = {
+        date: nowIso,
         type: 'Sistema' as const,
-        text,
+        text: auditText,
       };
-      appState.updateStudent(input.studentId, {
-        history: [...(student.history ?? []), entry],
-      });
+
+      if (imediato) {
+        const patch = computeConciliacaoImmediateUpdate(optimistic, student);
+        if (patch) {
+          appState.updateStudent(input.studentId, {
+            ...patch,
+            history: [...(patch.history ?? student.history ?? []), auditEntry],
+          });
+        } else if (isDraftItem(optimistic)) {
+          applyConciliacaoEfetivacao(optimistic);
+          appState.updateStudent(input.studentId, {
+            history: [...(student.history ?? []), auditEntry],
+          });
+        } else {
+          appState.updateStudent(input.studentId, {
+            history: [...(student.history ?? []), auditEntry],
+          });
+        }
+      } else {
+        appState.updateStudent(input.studentId, {
+          history: [...(student.history ?? []), auditEntry],
+        });
+      }
     }
+  }
+
+  if (!imediato && input.draftAfter && input.studentId) {
+    // ─── RASCUNHO COM EFEITO IMEDIATO ────────────────────────────────────────
+    applyConciliacaoEfetivacao(optimistic, { upfront: true });
   }
 
   createConciliacaoItemDb({
