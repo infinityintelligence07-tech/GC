@@ -26,7 +26,7 @@ import {
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
-import { countsInFinancialTotals, isIamControlStudent, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
+import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -159,13 +159,8 @@ export default function ACPortfolioPage() {
       .forEach((s) => {
         // Negativado é sempre manual — não rebaixamos por auto-cálculo.
         if (s.status === 'Negativado') return;
-        // Pendência IAM: restaura Pendente/Manual e não recalcula Vencido.
-        if (
-          ['PENDENTE', 'PARA_CONCILIAR'].includes(
-            String(s.iamControlContratoStatus ?? '').toUpperCase().replace(/\s+/g, '_'),
-          ) &&
-          !s.iamGcConciliadoAt
-        ) {
+        // Pendência IAM: restaura Pendente/Manual até aprovação na Conciliação GC.
+        if (needsIamGcConciliacaoApproval(s)) {
           if (s.status !== 'Pendente' || s.statusMode !== 'Manual') {
             updateStudent(s.id, { status: 'Pendente', statusMode: 'Manual' });
           }
@@ -247,7 +242,6 @@ export default function ACPortfolioPage() {
     const revertidosMode = kpiCardFilter === 'revertidos';
     return students
       .filter((s) => s.ac === ac.name)
-      .filter((s) => !isIamControlStudent(s))
       .filter((s) => {
         if (revertidosMode && revertidosStudentIds.has(s.id)) return true;
         return !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students);
@@ -372,7 +366,7 @@ export default function ACPortfolioPage() {
     (s) =>
       isStudentInAcPortfolio(s) &&
       s.statusCancelamento !== 'cancelado' &&
-      countsInFinancialTotals(s) &&
+      countsInAcPortfolioTotals(s) &&
       !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
   );
 
@@ -420,7 +414,7 @@ export default function ACPortfolioPage() {
           return;
         }
 
-        if (isInstallmentExcludedFromFinancialTotals(st, i)) return;
+        if (isInstallmentExcludedFromAcPortfolio(st, i)) return;
 
         if (range) {
           const due = new Date(i.dueDate + 'T00:00:00');
@@ -590,7 +584,7 @@ export default function ACPortfolioPage() {
       }
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
       return acc + s.installments
-        .filter((i) => !i.paid && _instInRange(i) && !isInstallmentExcludedFromFinancialTotals(s, i))
+        .filter((i) => !i.paid && _instInRange(i) && !isInstallmentExcludedFromAcPortfolio(s, i))
         .reduce((a, i) => a + i.value, 0);
     }, 0);
 

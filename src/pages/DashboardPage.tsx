@@ -18,7 +18,7 @@ import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
-import { countsInFinancialTotals, isIamControlStudent, isInstallmentExcludedFromFinancialTotals, isKaminoPortfolioStudent } from '@/lib/iamPendenteConciliacao';
+import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
 import { fetchKaminoDashboardForecastTotals, type KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
 import {
   isCancellationCaseInRange,
@@ -138,8 +138,7 @@ export default function DashboardPage() {
   // a carteira filtrada por AC+Produto (sem se auto-zerar quando o próprio
   // filtro de Score está ativo).
   const acProductFilteredRaw = students.filter((s) => {
-    if (isIamControlStudent(s)) return false;
-    if (!isKaminoPortfolioStudent(s)) return false;
+    if (!countsInFinancialTotals(s)) return false;
     if (acFilter && s.ac !== acFilter) return false;
     if (productFilter && s.product !== productFilter) return false;
     if (!studentMatchesTagFilter(s, tagFilters)) return false;

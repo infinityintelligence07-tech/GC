@@ -20,7 +20,7 @@ import { getTagStyle } from '@/lib/tagColors';
 import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagRefs } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
-import { toDisplayName, getDisplayInstallmentValue, normalizeSearch } from '@/lib/utils';
+import { needsIamGcConciliacaoApproval } from '@/lib/iamPendenteConciliacao';
 
 
 // ── Score stars renderer ───────────────────────────────────────────────────────
@@ -172,13 +172,8 @@ export default function StudentsPage() {
         updateStudent(s.id, { statusCancelamento: null });
       }
       if (s.status === 'Negativado') return;
-      // Pendência IAM: restaura Pendente/Manual e não recalcula Vencido.
-      if (
-        ['PENDENTE', 'PARA_CONCILIAR'].includes(
-          String(s.iamControlContratoStatus ?? '').toUpperCase().replace(/\s+/g, '_'),
-        ) &&
-        !s.iamGcConciliadoAt
-      ) {
+      // Pendência IAM: restaura Pendente/Manual até aprovação na Conciliação GC.
+      if (needsIamGcConciliacaoApproval(s)) {
         if (s.status !== 'Pendente' || s.statusMode !== 'Manual') {
           updateStudent(s.id, { status: 'Pendente', statusMode: 'Manual' });
         }

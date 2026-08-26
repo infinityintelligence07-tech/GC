@@ -18,9 +18,6 @@ import EstornosPage from '@/pages/EstornosPage';
 import RegistrosPage from '@/pages/RegistrosPage';
 import ReguaPage from '@/pages/ReguaPage';
 import ExtratoConferenciaPage from '@/pages/ExtratoConferenciaPage';
-import IamControlPortfolioPage from '@/pages/IamControlPortfolioPage';
-
-import LoginPage from '@/pages/LoginPage';
 import RankingPage from '@/pages/RankingPage';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseSync } from '@/hooks/useSupabaseSync';
@@ -43,10 +40,9 @@ const TAB_TO_PERMISSION: Record<TabKey, PermissionTab | 'always'> = {
   config: 'config',
   perfil: 'always',
   registros: 'admin',
-  iamControl: 'admin',
 };
 
-const TAB_ORDER: TabKey[] = ['dashboard', 'alunos', 'equipe', 'ac', 'ranking', 'rendaExtra', 'cancelamentos', 'comissoes', 'estornos', 'conciliacao', 'extrato', 'iamControl', 'config', 'configUsuarios', 'regua', 'perfil', 'registros'];
+const TAB_ORDER: TabKey[] = ['dashboard', 'alunos', 'equipe', 'ac', 'ranking', 'rendaExtra', 'cancelamentos', 'comissoes', 'estornos', 'conciliacao', 'extrato', 'config', 'configUsuarios', 'regua', 'perfil', 'registros'];
 
 
 const Index = () => {
@@ -56,7 +52,7 @@ const Index = () => {
   useSupabaseSync();
 
   const isAllowed = (tab: TabKey): boolean => {
-    if (tab === 'configUsuarios' || tab === 'iamControl') return canManageUsers(currentUser);
+    if (tab === 'configUsuarios') return canManageUsers(currentUser);
     const p = TAB_TO_PERMISSION[tab];
     if (p === 'always') return true;
     return canViewTab(currentUser, p);
@@ -105,7 +101,6 @@ const Index = () => {
       case 'estornos': return <EstornosPage />;
       case 'conciliacao': return <ConciliacaoPage />;
       case 'extrato': return <ExtratoConferenciaPage />;
-      case 'iamControl': return <IamControlPortfolioPage />;
       case 'registros': return <RegistrosPage />;
       default: return <PerfilPage />;
 

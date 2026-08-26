@@ -1,7 +1,12 @@
 import type { ConciliacaoItem, Student, Installment } from '@/types';
 import { createConciliacaoItemDb } from '@/lib/supabaseMutations';
 
-const IAM_STATUSES_AWAITING_GC_APPROVAL = new Set(['PENDENTE', 'PARA_CONCILIAR']);
+/** Contratos IAM que precisam passar pela Conciliação GC antes de entrar na dashboard. */
+const IAM_STATUSES_REQUIRING_GC_APPROVAL = new Set([
+  'CONCILIADO',
+  'PENDENTE',
+  'PARA_CONCILIAR',
+]);
 
 export function normalizeIamContratoStatus(status?: string | null): string {
   return String(status ?? '')
@@ -23,24 +28,41 @@ export function isKaminoPortfolioStudent(student: Student): boolean {
   return true;
 }
 
-/** IAM PENDENTE / PARA_CONCILIAR ainda não aprovado na Conciliação do GC. */
-export function isAwaitingIamGcApproval(student: Student): boolean {
+/** IAM ainda não aprovado na Conciliação GC (fila IAM CONTROL → GC). */
+export function needsIamGcConciliacaoApproval(student: Student): boolean {
+  if (!isIamControlStudent(student)) return false;
   if (student.iamGcConciliadoAt) return false;
-  return IAM_STATUSES_AWAITING_GC_APPROVAL.has(
-    normalizeIamContratoStatus(student.iamControlContratoStatus),
-  );
+  const status = normalizeIamContratoStatus(student.iamControlContratoStatus);
+  return IAM_STATUSES_REQUIRING_GC_APPROVAL.has(status);
+}
+
+/** @deprecated Use needsIamGcConciliacaoApproval */
+export function isAwaitingIamGcApproval(student: Student): boolean {
+  return needsIamGcConciliacaoApproval(student);
+}
+
+/** Entra nos totais da dashboard principal — Kamino ou IAM já aprovado no GC. */
+export function countsInFinancialTotals(student: Student): boolean {
+  if (isIamControlStudent(student)) return Boolean(student.iamGcConciliadoAt);
+  return isKaminoPortfolioStudent(student);
+}
+
+/** Entra na carteira do assessor (inclui IAM aguardando aprovação). */
+export function countsInAcPortfolioTotals(student: Student): boolean {
+  if (isIamControlStudent(student)) return true;
+  return isKaminoPortfolioStudent(student);
 }
 
 /** Parcela fora da dashboard/carteira Kamino. */
 export function isInstallmentExcludedFromFinancialTotals(student: Student, inst: Installment): boolean {
   if (!countsInFinancialTotals(student)) return true;
-  if (!isIamControlStudent(student)) return false;
-  return !inst.paid;
+  return false;
 }
 
-/** Somente carteira Kamino (não IAM) entra nos totais da dashboard principal e carteira AC. */
-export function countsInFinancialTotals(student: Student): boolean {
-  return isKaminoPortfolioStudent(student);
+/** Parcela fora da carteira do assessor. */
+export function isInstallmentExcludedFromAcPortfolio(student: Student, inst: Installment): boolean {
+  if (!countsInAcPortfolioTotals(student)) return true;
+  return false;
 }
 
 function hasOpenIamPendenteItem(studentId: string, items: ConciliacaoItem[]): boolean {
@@ -52,14 +74,24 @@ function hasOpenIamPendenteItem(studentId: string, items: ConciliacaoItem[]): bo
   );
 }
 
-/** Cria item na fila de Conciliação para cada import IAM aguardando aprovação GC. */
+function iamConciliacaoResumo(student: Student): string {
+  const iamStatus = normalizeIamContratoStatus(student.iamControlContratoStatus);
+  const tipo = String(student.iamControlPendenteTipo ?? '').toUpperCase();
+  if (iamStatus === 'PENDENTE' && tipo === 'LINK') return 'IAM Control — Pendente Link';
+  if (iamStatus === 'PENDENTE' && tipo === 'PIX') return 'IAM Control — Pendente PIX';
+  if (iamStatus === 'PARA_CONCILIAR') return 'IAM Control — Para Conciliar';
+  if (iamStatus === 'CONCILIADO') return 'IAM Control — Conciliado (aguarda aprovação GC)';
+  return `IAM Control — ${iamStatus.replace(/_/g, ' ')}`;
+}
+
+/** Cria item na fila Conciliação > IAM CONTROL → GC. */
 export async function ensureIamPendenteConciliacaoItems(
   students: Student[],
   items: ConciliacaoItem[],
 ): Promise<ConciliacaoItem[]> {
   const created: ConciliacaoItem[] = [];
   for (const s of students) {
-    if (!isAwaitingIamGcApproval(s)) continue;
+    if (!needsIamGcConciliacaoApproval(s)) continue;
     const iamStatus = normalizeIamContratoStatus(s.iamControlContratoStatus);
     if (hasOpenIamPendenteItem(s.id, items)) continue;
     if (items.some((i) => i.tipo === 'iam_pendente' && i.studentId === s.id && i.status === 'conciliado')) {
@@ -71,7 +103,7 @@ export async function ensureIamPendenteConciliacaoItems(
         studentId: s.id,
         studentName: s.name,
         ac: s.ac,
-        resumo: `Import IAM — contrato ${iamStatus.replace(/_/g, ' ')} (${s.iamControlPendenteTipo ?? '—'})`,
+        resumo: iamConciliacaoResumo(s),
         antes: {
           iam_control_contrato_status: iamStatus,
         },

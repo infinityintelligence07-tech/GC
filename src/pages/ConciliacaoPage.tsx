@@ -3,7 +3,7 @@
 // Importação de pagamentos do Kamino (Erros para revisar).
 
 import { useMemo, useState, useEffect } from 'react';
-import { CheckCircle2, Search, FileSpreadsheet, ScrollText, User as UserIcon, Calendar, ArrowRight, ArrowLeft, Upload, AlertTriangle, XCircle, Trash2, Loader2, Wallet, History as HistoryIcon, Ban, ThumbsUp, Pencil, Check, X as XIcon, Settings2, FileText, Eye, DollarSign } from 'lucide-react';
+import { CheckCircle2, Search, FileSpreadsheet, ScrollText, User as UserIcon, Calendar, ArrowRight, ArrowLeft, Upload, AlertTriangle, XCircle, Trash2, Loader2, Wallet, History as HistoryIcon, Ban, ThumbsUp, Pencil, Check, X as XIcon, Settings2, FileText, Eye, DollarSign, Cloud } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useConciliacaoStore, notifyConciliacaoGrupo } from '@/store/useConciliacaoStore';
 
@@ -22,6 +22,7 @@ import { openCancellationPdf, downloadCancellationPdf, isViewableInBrowser } fro
 import type { CaseNoteAttachment } from '@/types';
 import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
 import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
+import IamControlSyncSection from '@/components/IamControlSyncSection';
 
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
@@ -79,7 +80,7 @@ const TIPO_LABEL: Record<ConciliacaoTipo, string> = {
   baixa_kamino: 'Baixa Kamino',
   encargo_aplicado: 'Encargo aplicado',
   correcao_contrato: 'Correção de contrato',
-  iam_pendente: 'Import IAM (Pendente)',
+  iam_pendente: 'IAM Control → GC',
 };
 
 const TIPO_COLOR: Record<ConciliacaoTipo, string> = {
@@ -106,8 +107,9 @@ const CANCEL_TIPOS: ConciliacaoTipo[] = ['cancelamento', 'reversao'];
 const isCancelTipo = (t: ConciliacaoTipo) => CANCEL_TIPOS.includes(t);
 const isRendaExtraTipo = (t: ConciliacaoTipo) => t === 'renda_extra_exclusao' || t === 'renda_extra_acordo';
 
-/** Parcelas, quitação, encargos etc. — sem cancelamento/reversão nem renda extra. */
-const isAjusteFinanceiroTipo = (t: ConciliacaoTipo) => !isCancelTipo(t) && !isRendaExtraTipo(t);
+/** Parcelas, quitação, encargos etc. — sem cancelamento/reversão, renda extra nem IAM. */
+const isAjusteFinanceiroTipo = (t: ConciliacaoTipo) =>
+  t !== 'iam_pendente' && !isCancelTipo(t) && !isRendaExtraTipo(t);
 
 function matchesGrupoFilter(tipo: ConciliacaoTipo, grupo: ConciliacaoGrupoFilter): boolean {
   if (grupo === 'todos') return true;
@@ -1165,8 +1167,8 @@ export default function ConciliacaoPage() {
   const canConciliarEdit = canEditTab(currentUser, 'conciliacao');
   const confirm = useConfirm();
 
-  const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'kamino-gc'>('menu');
-  const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'renda_extra' | 'historico' | 'erros'>('ajuste_financeiro');
+  const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'kamino-gc' | 'iam-control-gc'>('menu');
+  const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'renda_extra' | 'historico' | 'erros' | 'iam_pendentes'>('ajuste_financeiro');
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<ConciliacaoGrupoFilter>('todos');
   const [erroStatusFilter, setErroStatusFilter] = useState<'pendente' | 'resolvido' | 'ignorado' | 'todos'>('pendente');
@@ -1185,6 +1187,12 @@ export default function ConciliacaoPage() {
   const filtered = useMemo(() => {
     return items
       .filter((i) => {
+        if (tab === 'iam_pendentes') {
+          return (
+            (i.status === 'pendente' || i.status === 'aprovado') &&
+            i.tipo === 'iam_pendente'
+          );
+        }
         if (tab === 'ajuste_financeiro') {
           // Parcelas, quitação, renegociação, renda extra, encargos, etc.
           return (
@@ -1201,7 +1209,9 @@ export default function ConciliacaoPage() {
         }
         if (tab === 'historico') {
           if (i.status !== 'conciliado' && i.status !== 'reprovado') return false;
-          return flow === 'kamino-gc' ? i.tipo === 'baixa_kamino' : i.tipo !== 'baixa_kamino';
+          if (flow === 'kamino-gc') return i.tipo === 'baixa_kamino';
+          if (flow === 'iam-control-gc') return i.tipo === 'iam_pendente';
+          return i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente';
         }
         return false;
       })
@@ -1229,6 +1239,15 @@ export default function ConciliacaoPage() {
 
   // Conta por aluno distinto (não por item), para refletir as pendências
   // agrupadas exibidas como cards — alinhado com o badge da sidebar.
+  const iamControlGcCount = new Set(
+    items
+      .filter(
+        (i) =>
+          (i.status === 'pendente' || i.status === 'aprovado') &&
+          i.tipo === 'iam_pendente',
+      )
+      .map((i) => i.studentId ?? i.studentName),
+  ).size;
   const ajusteFinanceiroCount = new Set(
     items
       .filter(
@@ -1251,7 +1270,9 @@ export default function ConciliacaoPage() {
   ).size;
   const historicoCount = flow === 'kamino-gc'
     ? items.filter((i) => i.status === 'conciliado' && i.tipo === 'baixa_kamino').length
-    : items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo !== 'baixa_kamino').length;
+    : flow === 'iam-control-gc'
+      ? items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo === 'iam_pendente').length
+      : items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente').length;
   const errosPendentesCount = importErrors.filter((e) => e.status === 'pendente').length;
 
   // (handleConciliar individual removido — agora todo conciliamento de pendências
@@ -1262,7 +1283,7 @@ export default function ConciliacaoPage() {
   // num único card, com botão "Conciliar" que concilia todos de uma vez.
   const SESSION_WINDOW_MS = 30 * 60 * 1000;
   const groupedPending = useMemo<Group[]>(() => {
-    if (tab !== 'ajuste_financeiro' && tab !== 'cancelamentos' && tab !== 'renda_extra') return [];
+    if (tab !== 'ajuste_financeiro' && tab !== 'cancelamentos' && tab !== 'renda_extra' && tab !== 'iam_pendentes') return [];
     // Ordena por aluno → autor → tempo crescente para agrupar sessões corretamente
     const sorted = [...filtered].sort((a, b) => {
       const k1 = (a.studentId ?? a.studentName) + '|' + (a.autorId ?? '');
@@ -1617,7 +1638,7 @@ export default function ConciliacaoPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
           {/* GC → Kamino */}
           <button
             onClick={() => { setFlow('gc-kamino'); setTab('ajuste_financeiro'); }}
@@ -1659,6 +1680,27 @@ export default function ConciliacaoPage() {
               </span>
             )}
           </button>
+
+          {/* IAM Control → GC */}
+          <button
+            onClick={() => { setFlow('iam-control-gc'); setTab('iam_pendentes'); }}
+            className="group relative bg-card border-2 border-border hover:border-primary rounded-2xl p-6 text-left transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <span className="px-3 py-1.5 rounded-lg bg-fuchsia-100 text-fuchsia-800 font-bold text-lg">IAM</span>
+              <ArrowRight size={24} className="text-primary" />
+              <span className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary font-bold text-lg">GC</span>
+            </div>
+            <h3 className="font-semibold text-foreground mb-1">IAM Control → GC</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Contratos do IAM Control (conciliado, pendente link/pix, para conciliar). Aprovação obrigatória antes de entrar na dashboard.
+            </p>
+            {iamControlGcCount > 0 && (
+              <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-fuchsia-100 text-fuchsia-800 text-[11px] font-bold border border-fuchsia-300">
+                {iamControlGcCount} pendente{iamControlGcCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </button>
         </div>
       </div>
     );
@@ -1682,6 +1724,12 @@ export default function ConciliacaoPage() {
                 <ArrowRight size={16} className="text-muted-foreground" />
                 <span className="px-2.5 py-1 rounded-md bg-muted text-foreground font-bold text-sm">Kamino</span>
               </>
+            ) : flow === 'iam-control-gc' ? (
+              <>
+                <span className="px-2.5 py-1 rounded-md bg-fuchsia-100 text-fuchsia-800 font-bold text-sm">IAM Control</span>
+                <ArrowRight size={16} className="text-muted-foreground" />
+                <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary font-bold text-sm">GC</span>
+              </>
             ) : (
               <>
                 <span className="px-2.5 py-1 rounded-md bg-muted text-foreground font-bold text-sm">Kamino</span>
@@ -1704,7 +1752,32 @@ export default function ConciliacaoPage() {
 
       {/* Sub-tabs (contextuais ao fluxo) */}
       <div className="flex items-center gap-2 flex-wrap">
-        {flow === 'gc-kamino' ? (
+        {flow === 'iam-control-gc' ? (
+          <>
+            <button
+              onClick={() => { setTab('iam_pendentes'); setTipoFilter('todos'); }}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border transition-all whitespace-nowrap ${
+                tab === 'iam_pendentes'
+                  ? 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300 shadow-sm'
+                  : 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 hover:bg-fuchsia-100'
+              }`}
+            >
+              <Cloud size={14} />
+              Aguardando aprovação ({iamControlGcCount})
+            </button>
+            <button
+              onClick={() => setTab('historico')}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap ${
+                tab === 'historico'
+                  ? 'bg-card text-foreground border-border shadow-sm'
+                  : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-muted/70 hover:text-foreground'
+              }`}
+            >
+              <ScrollText size={14} />
+              Histórico ({historicoCount})
+            </button>
+          </>
+        ) : flow === 'gc-kamino' ? (
           <>
             <button
               onClick={() => { setTab('ajuste_financeiro'); setTipoFilter('todos'); }}
@@ -1779,6 +1852,10 @@ export default function ConciliacaoPage() {
         )}
       </div>
 
+      {flow === 'iam-control-gc' && tab === 'iam_pendentes' && (
+        <IamControlSyncSection />
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[240px]">
@@ -1820,17 +1897,18 @@ export default function ConciliacaoPage() {
       {/* Listas */}
       {tab !== 'erros' ? (
         <div className="space-y-3">
-          {((tab === 'ajuste_financeiro' || tab === 'cancelamentos' || tab === 'renda_extra') ? groupedPending.length === 0 : filtered.length === 0) ? (
+          {((tab === 'ajuste_financeiro' || tab === 'cancelamentos' || tab === 'renda_extra' || tab === 'iam_pendentes') ? groupedPending.length === 0 : filtered.length === 0) ? (
             <div className="text-center py-12 border border-dashed border-border rounded-2xl">
               <FileSpreadsheet size={28} className="mx-auto text-muted-foreground mb-2 opacity-50" />
               <p className="text-sm text-muted-foreground">
                 {tab === 'ajuste_financeiro' ? 'Nenhum ajuste financeiro pendente.'
                   : tab === 'cancelamentos' ? 'Nenhuma pendência de cancelamento ou reversão.'
                   : tab === 'renda_extra' ? 'Nenhuma pendência de Renda Extra.'
+                  : tab === 'iam_pendentes' ? 'Nenhum contrato IAM aguardando aprovação.'
                   : 'Nenhum item conciliado ainda.'}
               </p>
             </div>
-          ) : (tab === 'ajuste_financeiro' || tab === 'cancelamentos' || tab === 'renda_extra') ? (
+          ) : (tab === 'ajuste_financeiro' || tab === 'cancelamentos' || tab === 'renda_extra' || tab === 'iam_pendentes') ? (
             groupedPending.map((group) => {
               // Subtipos consolidados de TODAS as alterações do grupo
               const allChangedKeys = new Set<string>();
