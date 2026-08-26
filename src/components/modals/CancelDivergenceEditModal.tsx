@@ -27,6 +27,10 @@ import { useNotificationsStore } from '@/store/useNotificationsStore';
 import { PencilLine, ShieldAlert } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
 import { AJUSTE_TAG, FIELD_LABELS, type DivergenceField } from '@/lib/doubleCheckRejection';
+import {
+  getLatestCancellationCaseForStudent,
+  resolveStudentFinance,
+} from '@/lib/studentFinance';
 
 
 
@@ -68,7 +72,7 @@ function brlFromNumber(v: string): string {
 }
 
 export default function CancelDivergenceEditModal({ student, onClose, onSaved, allowedFields, rejectionMotivo, rejectionBy }: Props) {
-  const { acs, products, rules, updateStudent, appUsers, currentUser } = useAppStore();
+  const { acs, products, rules, updateStudent, appUsers, currentUser, cancellationCases } = useAppStore();
   const notify = useNotificationsStore((s) => s.notify);
   const confirm = useConfirm();
   // Campos bloqueados na correção pós-reprovação
@@ -76,7 +80,26 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved, a
 
 
 
-  const firstDue = student.installments?.[0]?.dueDate || student.enrollmentDate;
+  const latestCase = getLatestCancellationCaseForStudent(
+    student.id,
+    student.name,
+    cancellationCases,
+  );
+  const initialFinance = resolveStudentFinance(student, {
+    kaminoPaid: latestCase?.totalPagoAteMomento,
+  });
+  const embeddedEntrada = initialFinance.embeddedEntradaInstallment;
+  const initialTotalInstallments = embeddedEntrada
+    ? Math.max(1, (student.installments?.length ?? student.totalInstallments) - 1)
+    : student.totalInstallments;
+  let initialPaidInstallments = student.paidInstallments;
+  if (embeddedEntrada?.paid && initialPaidInstallments > 0) {
+    initialPaidInstallments = Math.max(0, initialPaidInstallments - 1);
+  }
+  const firstDue =
+    (embeddedEntrada ? student.installments?.[1] : student.installments?.[0])?.dueDate
+    || student.installments?.[0]?.dueDate
+    || student.enrollmentDate;
   const [form, setForm] = useState({
     statusMode: student.statusMode as StatusMode,
     ac: student.ac,
@@ -86,10 +109,10 @@ export default function CancelDivergenceEditModal({ student, onClose, onSaved, a
     data_treinamento_origem: student.data_treinamento_origem || student.enrollmentDate,
     dueDate: firstDue,
     // Campos numéricos como string para permitir "0" explícito e detectar vazio
-    saleValue: brlFromNumber(String(student.saleValue ?? '')),
-    downPayment: brlFromNumber(String(student.downPayment ?? '')),
-    totalInstallments: String(student.totalInstallments ?? ''),
-    paidInstallments: String(student.paidInstallments ?? ''),
+    saleValue: brlFromNumber(String(initialFinance.saleValue ?? '')),
+    downPayment: brlFromNumber(String(initialFinance.downPayment ?? '')),
+    totalInstallments: String(initialTotalInstallments ?? ''),
+    paidInstallments: String(initialPaidInstallments ?? ''),
   });
 
   const num = (v: string) => {

@@ -22,7 +22,7 @@ import { openCancellationPdf, downloadCancellationPdf, isViewableInBrowser } fro
 import type { CaseNoteAttachment } from '@/types';
 import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
 import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
-import { isCancelamentoEspelhoItem } from '@/lib/cancelamentoGcConciliacao';
+import { isCancelamentoEspelhoItem, groupBlocksEspelhoConciliacao } from '@/lib/cancelamentoGcConciliacao';
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -1328,7 +1328,7 @@ export default function ConciliacaoPage() {
       toast.error('Somente Admin ou usuários com permissão de Conciliação podem conciliar.');
       return;
     }
-    if (group.items.some(isCancelamentoEspelhoItem)) {
+    if (group.items.some(isCancelamentoEspelhoItem) && groupBlocksEspelhoConciliacao(group.items, group.studentId ? useAppStore.getState().students.find((s) => s.id === group.studentId) : undefined, useConciliacaoStore.getState().items)) {
       toast.error('Este aluno está em cancelamento em andamento. Finalize na aba Cancelamentos antes de conciliar no GC.');
       return;
     }
@@ -1387,7 +1387,7 @@ export default function ConciliacaoPage() {
       if (it.tipo === 'renda_extra_exclusao' && it.studentId) {
         setRendaExtraStatus(it.studentId, 'Disponível Negociação');
       }
-      if (it.tipo === 'cancelamento' && it.relatedCaseId && !isConciliacaoReversaoItem(it)) {
+      if (it.tipo === 'cancelamento' && it.relatedCaseId && !isConciliacaoReversaoItem(it) && !isCancelamentoEspelhoItem(it)) {
         concluirConciliacaoCancelamento(it.relatedCaseId);
       }
       // ─── Quitação: baixa ocorre APENAS na aprovação da conciliação ─────
@@ -1972,7 +1972,7 @@ export default function ConciliacaoPage() {
               const jaConciliadoSistema = groupJaAplicadoNoSistema(group.items);
               const temObservacao = groupTemObservacao(group.items);
               const aprovarSoObs = jaConciliadoSistema && temObservacao;
-              const isEspelhoCancel = group.items.some(isCancelamentoEspelhoItem);
+              const isEspelhoCancel = groupBlocksEspelhoConciliacao(group.items, st ?? undefined, items);
               return (
                 <div key={group.key} className="bg-card border border-border rounded-2xl p-4 hover:shadow-sm transition-shadow">
                   <div className="flex items-start justify-between gap-4">

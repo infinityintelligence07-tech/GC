@@ -46,7 +46,16 @@ import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
 import ExternalCancellationViewModal from '@/components/modals/ExternalCancellationViewModal';
 import CancelDivergenceEditModal from '@/components/modals/CancelDivergenceEditModal';
 import { pendingDoubleCheckCorrection } from '@/lib/doubleCheckRejection';
+import {
+  caseHasCancelamentoFinalPending,
+  isCancelamentoFinalPendingItem,
+} from '@/lib/cancelamentoGcConciliacao';
 import { getTodayStringBrasilia } from '@/lib/brasiliaDate';
+import {
+  getParcelInstallments,
+  getStudentTotalPaid,
+  resolveStudentFinance,
+} from '@/lib/studentFinance';
 
 // ─── Novo Funil (5 colunas fixas) ─────────────────────────────────────────────
 
@@ -365,10 +374,10 @@ function CancellationCard({
   const isRenegociacaoJuridica = c.acao === 'Renegociação Jurídico';
   const [showErro, setShowErro] = useState(false);
   // Conciliação: caso cancelado mas aluno ainda aguarda baixa contábil.
-  // "pendente" e "aprovado" contam como aguardando — só "conciliado" encerra.
-  const hasPendingConciliacao = useConciliacaoStore((s) =>
-    s.items.some((it) => it.relatedCaseId === c.id && (it.status === 'pendente' || it.status === 'aprovado'))
-  );
+  // Só exibimos o selo na coluna Finalizado — espelhos GC e pendências
+  // de etapas anteriores não devem mostrar "Aguardando Conciliação".
+  const conciliacaoItemsCard = useConciliacaoStore((s) => s.items);
+  const hasPendingConciliacao = caseHasCancelamentoFinalPending(c.id, conciliacaoItemsCard);
   // Reversão já conciliada: existe item conciliado do caso e nada pendente.
   const hasConciliadoItem = useConciliacaoStore((s) =>
     s.items.some((it) => it.relatedCaseId === c.id && it.status === 'conciliado')
@@ -383,14 +392,17 @@ function CancellationCard({
     )
   );
   const aguardandoConciliacao =
-    hasPendingConciliacao ||
-    (student?.statusCancelamento === 'aguardando_conciliacao' && !hasCancelConciliado);
-  const aguardandoPagamentoMulta = student?.statusCancelamento === 'pagamento_multa_pendente';
+    isFinal &&
+    (hasPendingConciliacao ||
+      (student?.statusCancelamento === 'aguardando_conciliacao' && !hasCancelConciliado));
+  const aguardandoPagamentoMulta =
+    isFinal && student?.statusCancelamento === 'pagamento_multa_pendente';
   const isRevertido = student?.statusCancelamento === 'revertido' || c.acao === 'Revertido';
   const conciliado =
-    (student?.statusCancelamento === 'cancelado' && !hasPendingConciliacao) ||
-    (isRevertido && hasConciliadoItem && !hasPendingConciliacao) ||
-    (hasCancelConciliado && !hasPendingConciliacao);
+    isFinal &&
+    ((student?.statusCancelamento === 'cancelado' && !hasPendingConciliacao) ||
+      (isRevertido && hasConciliadoItem && !hasPendingConciliacao) ||
+      (hasCancelConciliado && !hasPendingConciliacao));
 
   // Trava só faz sentido quando o caso já foi finalizado como Cancelado e
   // aguarda apenas a baixa contábil. Antes disso (Em Tratativas/Em Execução),
@@ -1286,18 +1298,22 @@ interface CancellationReviewModalProps {
 }
 
 function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onPartialRevertBeforeCancel, simplified = false }: CancellationReviewModalProps) {
-  const installments = student?.installments ?? [];
+  const finance = student ? resolveStudentFinance(student, { kaminoPaid: caseRef.totalPagoAteMomento }) : null;
+  const parcelInstallments = student ? getParcelInstallments(student) : [];
+  const installments = parcelInstallments.length > 0 ? parcelInstallments : (student?.installments ?? []);
   const pending = installments.filter((i) => !i.paid);
   const paid = installments.filter((i) => i.paid);
-  const entrada = Number(student?.downPayment) || 0;
+  const entrada = finance?.downPayment ?? (Number(student?.downPayment) || 0);
   const totalPaidParcelas = paid.reduce((sum, i) => sum + i.value, 0);
   // Casos importados manualmente (sem ficha de aluno vinculada) usam os valores
   // informados na importação: valor do contrato e "Pago até o momento (Kamino)".
-  const totalPaidCalc = totalPaidParcelas + entrada;
+  const totalPaidCalc = student
+    ? getStudentTotalPaid(student, { kaminoPaid: caseRef.totalPagoAteMomento })
+    : totalPaidParcelas + entrada;
   const totalPaid = student ? totalPaidCalc : (Number(caseRef.totalPagoAteMomento) || totalPaidCalc);
   const totalPendingCalc = pending.reduce((sum, i) => sum + i.value, 0);
   const totalContract =
-    student?.saleValue ?? (Number(caseRef.value) || totalPaidCalc + totalPendingCalc);
+    finance?.saleValue ?? student?.saleValue ?? (Number(caseRef.value) || totalPaidCalc + totalPendingCalc);
   const totalPending = student
     ? totalPendingCalc
     : Math.max(0, Math.round((totalContract - totalPaid) * 100) / 100);
@@ -3017,8 +3033,9 @@ export default function CancelamentosPage() {
   const pendingConciliacaoCaseIds = useMemo(() => {
     const set = new Set<string>();
     for (const it of conciliacaoItems) {
-      // "pendente" e "aprovado" ainda aguardam a conciliação definitiva
-      if ((it.status === 'pendente' || it.status === 'aprovado') && it.relatedCaseId) set.add(it.relatedCaseId);
+      if (it.relatedCaseId && isCancelamentoFinalPendingItem(it)) {
+        set.add(it.relatedCaseId);
+      }
     }
     return set;
   }, [conciliacaoItems]);
@@ -4013,7 +4030,7 @@ export default function CancelamentosPage() {
       )}
       {viewingCase && (() => {
         const c = viewingCase.caseRef;
-        const st = viewingCase.student;
+        const st = students.find((s) => s.id === viewingCase.student.id) ?? viewingCase.student;
         const funnelStage = getFunnelStage(c);
         const cfg = FUNNEL_STAGES.find((f) => f.label === funnelStage);
         // Etiquetas: combina tags do aluno + tags específicas do caso
@@ -4310,14 +4327,11 @@ export default function CancelamentosPage() {
               //     para ajustar o saldo restante.
               if (partial && st) {
                 const totalInsc = revertChoice.quantidadeInscricoes ?? 1;
-                const totalContract = st.saleValue ?? 0;
+                const finance = resolveStudentFinance(st, { kaminoPaid: revertChoice.totalPagoAteMomento });
+                const totalContract = finance.saleValue;
                 const valorPorInscricao = totalInsc > 0 ? totalContract / totalInsc : 0;
                 const valorInscricoesRevertidas = Math.round(valorPorInscricao * partial * 100) / 100;
-                const entrada = Number(st.downPayment) || 0;
-                const parcelasPagas = (st.installments ?? [])
-                  .filter((i) => i.paid)
-                  .reduce((s, i) => s + (Number((i as { paidValue?: number }).paidValue) || i.value || 0), 0);
-                const pagoTotal = Math.round((entrada + parcelasPagas) * 100) / 100;
+                const pagoTotal = getStudentTotalPaid(st, { kaminoPaid: revertChoice.totalPagoAteMomento });
                 if (pagoTotal >= valorInscricoesRevertidas && valorInscricoesRevertidas > 0) {
                   const msg =
                     `Reversão parcial SEM ajuste financeiro necessário.\n\n` +

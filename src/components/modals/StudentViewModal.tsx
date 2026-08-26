@@ -11,6 +11,12 @@ import { getTagStyle } from '@/lib/tagColors';
 import { getDisplayInstallmentValue } from '@/lib/utils';
 import { getVisibleStudentTagRefs } from '@/lib/tagFilter';
 import StudentDraftBanner from '@/components/ui/StudentDraftBanner';
+import {
+  getLatestCancellationCaseForStudent,
+  getParcelInstallments,
+  getStudentTotalPaid,
+  resolveStudentFinance,
+} from '@/lib/studentFinance';
 
 interface Props {
   student: Student;
@@ -59,9 +65,11 @@ function formatDateOnlyBR(value?: string | null) {
 
 export default function StudentViewModal({ student, onClose, extraSections, headerBadge }: Props) {
   const { studentTags, students, updateStudent, currentUser, cancellationCases } = useAppStore();
-  const latestCancellationCase = [...cancellationCases]
-    .filter((c) => c.studentId === student.id || c.studentName === student.name)
-    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
+  const latestCancellationCase = getLatestCancellationCaseForStudent(
+    student.id,
+    student.name,
+    cancellationCases,
+  );
   // Data em que o card entrou no GC = 1º registro de histórico do caso
   // (createdAt pode ser retroagido para a data da solicitação no chat).
   const inclusaoGcDate = latestCancellationCase
@@ -135,14 +143,23 @@ export default function StudentViewModal({ student, onClose, extraSections, head
     });
     setShowFinancial(true);
   };
+  const finance = resolveStudentFinance(currentStudent, {
+    kaminoPaid: latestCancellationCase?.totalPagoAteMomento,
+  });
+  const parcelInstallments = getParcelInstallments(currentStudent);
   const score = calcularScoreComportamento(currentStudent.installments);
-  const paidCount = currentStudent.installments.filter((i) => i.paid).length;
-  const totalPaidValue = currentStudent.installments.filter((i) => i.paid).reduce((a, i) => a + i.value, 0);
-  const totalUnpaidValue = currentStudent.installments.filter((i) => !i.paid).reduce((a, i) => a + i.value, 0);
+  const paidCount = parcelInstallments.filter((i) => i.paid).length;
+  const totalInstallmentsReal = parcelInstallments.length || currentStudent.totalInstallments;
+  const totalPaidValue = getStudentTotalPaid(currentStudent, {
+    kaminoPaid: latestCancellationCase?.totalPagoAteMomento,
+  });
+  const totalUnpaidValue = parcelInstallments.filter((i) => !i.paid).reduce((a, i) => a + i.value, 0);
   const mediaDias = calcularMediaDiasPagamento(currentStudent.installments);
   // ─── Valor de parcela exibido (deriva das parcelas reais p/ não divergir da Gestão Financeira) ───
-  const { value: displayInstallmentValue, varied: hasVariedValues } = getDisplayInstallmentValue(currentStudent);
-  const totalInstallmentsReal = currentStudent.installments.length || currentStudent.totalInstallments;
+  const { value: displayInstallmentValue, varied: hasVariedValues } = getDisplayInstallmentValue({
+    installments: parcelInstallments,
+    installmentValue: currentStudent.installmentValue,
+  });
 
   // Resolve todas as tags visíveis (aluno + parcelas), com fallback por nome.
   // Filtra "Recompra" pura — mantém apenas variantes nomeadas como "Fundo - Receita (Recompra)".
@@ -288,8 +305,8 @@ export default function StudentViewModal({ student, onClose, extraSections, head
 
           {/* Financeiro */}
           <Section title="Contrato Financeiro">
-            <Field icon={CreditCard} label="Valor Contrato" value={formatCurrency(student.saleValue)} />
-            <Field label="Valor Entrada" value={formatCurrency(student.downPayment)} />
+            <Field icon={CreditCard} label="Valor Contrato" value={formatCurrency(finance.saleValue)} />
+            <Field label="Valor Entrada" value={formatCurrency(finance.downPayment)} />
             <Field label="Nº Parcelas" value={`${totalInstallmentsReal}x de ${formatCurrency(displayInstallmentValue)}${hasVariedValues ? ' (valores variados)' : ''}`} />
             <Field label="Parcelas Pagas" value={`${paidCount} de ${totalInstallmentsReal}`} />
             <Field label="Total Pago" value={formatCurrency(totalPaidValue)} />

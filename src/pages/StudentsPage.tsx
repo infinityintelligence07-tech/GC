@@ -20,7 +20,7 @@ import { getTagStyle } from '@/lib/tagColors';
 import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagRefs } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
-import { getDisplayInstallmentValue, toDisplayName } from '@/lib/utils';
+import { getDisplayInstallmentValue, normalizeSearch, toDisplayName } from '@/lib/utils';
 import { needsIamGcConciliacaoApproval } from '@/lib/iamPendenteConciliacao';
 
 

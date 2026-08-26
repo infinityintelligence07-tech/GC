@@ -1,5 +1,9 @@
 import type { CancellationCase, ConciliacaoItem, Student, StatusCancelamento } from '@/types';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
+import {
+  caseHasCancelamentoFinalPending,
+  isCancelamentoFinalPendingItem,
+} from '@/lib/cancelamentoGcConciliacao';
 
 const FUNIL_CANCELAMENTO_ATIVO = new Set<StatusCancelamento>([
   'solicitado',
@@ -28,6 +32,19 @@ export function isSolicitacaoCancelamento(s: Student): boolean {
 }
 
 const FINALIZED_CANCEL_STAGES = new Set(['Cancelado', 'Negativação Efetivada', 'Recuperado']);
+
+/** Caso ainda em fluxo ativo — espelha a regra do funil Cancelamentos. */
+function isActiveCancellationWorkflow(c: CancellationCase): boolean {
+  const fs = c.funnelStage ?? (
+    c.stage === 'PROCON ou Judicial' ? 'Pendente'
+    : c.stage === 'Confeccionar Termo' || c.stage === 'Assinar Termo' ? 'Formalização'
+    : c.stage === 'Aguardando Contato' ? 'Entrada'
+    : 'Em Execução'
+  );
+  if (fs === 'Entrada' || fs === 'Em Execução' || fs === 'Pendente') return true;
+  if (fs === 'Formalização') return (c.acao ?? '').trim() !== 'Assinar Termo';
+  return false;
+}
 
 function findActiveCancellationCase(s: Student, cases: CancellationCase[]): CancellationCase | undefined {
   if (s.cancellationCaseId) {
@@ -138,7 +155,7 @@ export function getHiddenFromAcPortfolioKeys(
   const conciliadoCaseIds = new Set<string>();
 
   for (const it of conciliacaoItems) {
-    if ((it.status === 'pendente' || it.status === 'aprovado') && it.relatedCaseId) {
+    if (it.relatedCaseId && isCancelamentoFinalPendingItem(it)) {
       pendingCaseIds.add(it.relatedCaseId);
     }
     if ((it.tipo === 'cancelamento' || it.tipo === 'reversao') && it.status === 'conciliado' && it.relatedCaseId) {
@@ -160,12 +177,19 @@ export function getHiddenFromAcPortfolioKeys(
       (total > 0 && revertidas >= total);
     if (isRevertido) return;
 
-    const aguardando =
+    const casoFinalizado = c.funnelStage === 'Finalizado';
+    const aguardandoPosFormalizacao =
       !reversaoParcialPendente &&
-      (pendingCaseIds.has(c.id) || st?.statusCancelamento === 'aguardando_conciliacao');
+      !isActiveCancellationWorkflow(c) &&
+      (caseHasCancelamentoFinalPending(c.id, conciliacaoItems) ||
+        st?.statusCancelamento === 'aguardando_conciliacao' ||
+        st?.statusCancelamento === 'pagamento_multa_pendente');
     const conciliado =
-      !reversaoParcialPendente && conciliadoCaseIds.has(c.id) && !pendingCaseIds.has(c.id);
-    const isFinalizado = c.funnelStage === 'Finalizado' || aguardando || conciliado;
+      !reversaoParcialPendente &&
+      !isActiveCancellationWorkflow(c) &&
+      conciliadoCaseIds.has(c.id) &&
+      !caseHasCancelamentoFinalPending(c.id, conciliacaoItems);
+    const isFinalizado = casoFinalizado || aguardandoPosFormalizacao || conciliado;
     if (!isJudicial && !isFinalizado) return;
 
     if (c.studentId) {

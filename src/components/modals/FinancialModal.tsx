@@ -12,6 +12,7 @@ import { getTagStyle } from '@/lib/tagColors';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import { getInstallmentCreditApplied, getInstallmentOutstanding, getStudentCreditAppliedTotal } from '@/lib/utils';
 import { isEntradaPendenciaInstallment, sumEntradaPendenteValue } from '@/lib/studentDisplayStatus';
+import { resolveStudentFinance } from '@/lib/studentFinance';
 
 interface Props {
   student: Student;
@@ -177,6 +178,15 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     }),
     [baseStudent, draftInstallments],
   );
+  const finance = useMemo(
+    () => resolveStudentFinance(student),
+    [student.downPayment, student.saleValue, student.installments, student.installmentValue],
+  );
+  const embeddedEntrada = finance.embeddedEntradaInstallment;
+  const flowInstallments = useMemo(() => {
+    if (!embeddedEntrada) return student.installments;
+    return student.installments.filter((i) => i.number !== embeddedEntrada.number);
+  }, [student.installments, embeddedEntrada]);
   const podeConfirmarPagto = canConfirmarPagamento(currentUser);
   // Confirmar Ajuste Financeiro (data/valor) — liberado para qualquer usuário
   // que tenha permissão de edição nas abas de Alunos ou Equipe (assessores
@@ -405,7 +415,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     return acc + (showCharges ? charges.total : base + extra);
   }, 0);
 
-  const valorContrato = student.saleValue ?? 0;
+  const valorContrato = finance.saleValue ?? 0;
 
   // Soma A Vencer + Vencido (sem encargos) — usada no novo KPI e no "Check de Valor"
   const totalAberto = unpaidInstallments.reduce((acc, i) => acc + getInstallmentOutstanding(i), 0);
@@ -428,21 +438,21 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     [student.installments],
   );
   const totalPagoContrato = useMemo(
-    () => (student.downPayment ?? 0)
-      + student.installments
+    () => (finance.downPayment ?? 0)
+      + flowInstallments
         .filter((i) => i.paid)
         .reduce((acc, i) => acc + ((i as { paidValue?: number }).paidValue ?? i.value), 0)
       + totalCreditoAbatimento,
-    [student.installments, student.downPayment, totalCreditoAbatimento],
+    [flowInstallments, finance.downPayment, totalCreditoAbatimento],
   );
   /** Parcelas quitadas — a entrada tem card próprio e não entra aqui. */
   const totalPagoParcelas = useMemo(
-    () => student.installments
+    () => flowInstallments
       .filter((i) => i.paid)
       .reduce((acc, i) => acc + ((i as { paidValue?: number }).paidValue ?? i.value), 0),
-    [student.installments],
+    [flowInstallments],
   );
-  const entradaValor = student.downPayment ?? 0;
+  const entradaValor = finance.downPayment ?? 0;
   const hasEntrada = entradaValor > 0.0049;
   const entradaPendenteValor = useMemo(
     () => sumEntradaPendenteValue(student),
@@ -450,7 +460,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   );
   const hasEntradaPendente = entradaPendenteValor > 0.0049;
   const displayParcelLabel = (instNumber: number) => (hasEntrada ? instNumber + 1 : instNumber);
-  const saldoContratoReal = (student.saleValue ?? 0) - totalPagoContrato;
+  const saldoContratoReal = (finance.saleValue ?? 0) - totalPagoContrato;
   const deltaContrato = totalAberto - saldoContratoReal; // >0 sobra (encargo/erro), <0 falta
   const hasDelta = Math.abs(deltaContrato) > 0.01;
   // Toda diferença é tratada automaticamente como Encargo (sem precisar
@@ -1383,7 +1393,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fluxo de Pagamento</h3>
               <span className="text-[10px] text-muted-foreground">
-                {student.installments.length + (hasEntrada ? 1 : 0) + (hasEntradaPendente ? 1 : 0)} parcelas
+                {flowInstallments.length + (hasEntrada ? 1 : 0) + (hasEntradaPendente ? 1 : 0)} parcelas
                 {hasEntrada || hasEntradaPendente ? ' (incl. entrada)' : ''}
               </span>
             </div>
@@ -1395,7 +1405,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 .filter((e) => e.val > 0.0049)
                 .sort((a, b) => a.num - b.num);
               const cols = 5
-                + ((student.downPayment ?? 0) > 0 ? 1 : 0)
+                + (hasEntrada ? 1 : 0)
                 + (hasEntradaPendente ? 1 : 0)
                 + (encargosHistoricoTotal > 0.0049 ? 1 : 0)
                 + (hasAtribuidos ? 1 : 0);
@@ -1416,10 +1426,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   </p>
                 )}
               </div>
-              {(student.downPayment ?? 0) > 0 && (
+              {hasEntrada && (
                 <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
                   <p className="text-[9px] text-emerald-700 uppercase tracking-wide">Entrada Paga</p>
-                  <p className="text-xs font-bold text-emerald-700">{formatCurrency(student.downPayment ?? 0)}</p>
+                  <p className="text-xs font-bold text-emerald-700">{formatCurrency(entradaValor)}</p>
                 </div>
               )}
               {hasEntradaPendente && (
@@ -1548,7 +1558,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     </div>
                   );
                 })}
-                {[...student.installments].sort((a, b) => parseDateLocal(a.dueDate).getTime() - parseDateLocal(b.dueDate).getTime() || a.number - b.number).map((inst) => {
+                {[...flowInstallments].sort((a, b) => parseDateLocal(a.dueDate).getTime() - parseDateLocal(b.dueDate).getTime() || a.number - b.number).map((inst) => {
                   const isEntradaPendente = isEntradaPendenciaInstallment(inst);
                   const isRecompraFundo = isRecompraOuFundoParcela(inst, studentTags);
                   const isOverdue = !inst.paid && !isRecompraFundo && parseDateLocal(inst.dueDate) < today;

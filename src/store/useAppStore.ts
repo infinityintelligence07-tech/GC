@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 import { Student, AC, Product, FinancialRules, TabKey, StudentStatus, Installment, HistoryEntry, CancellationCase, CancellationStage, CancellationOperationalStatus, RendaExtraStatus, AppUser, StatusCancelamento, StudentTag, AbatimentoInfo } from '@/types';
 import { getTodayBrasilia, effectiveDueDate } from '@/lib/brasiliaDate';
 import { getInstallmentOutstanding } from '@/lib/utils';
+import { resolveStudentFinance, getLatestCancellationCaseForStudent } from '@/lib/studentFinance';
 import {
   createAC, updateACDb, deleteACDb,
   createProduct, updateProductDb, deleteProductDb,
@@ -256,6 +257,23 @@ export const useAppStore = create<AppState>()(
           : st
       ),
     }));
+    const after = before ? { ...before, ...data } : undefined;
+    const financialKeys = ['saleValue', 'downPayment', 'totalInstallments', 'paidInstallments', 'installments', 'installmentValue'] as const;
+    if (after && financialKeys.some((k) => k in data)) {
+      const latestCase = getLatestCancellationCaseForStudent(
+        after.id,
+        after.name,
+        get().cancellationCases,
+      );
+      const finance = resolveStudentFinance(after, {
+        kaminoPaid: latestCase?.totalPagoAteMomento,
+      });
+      get()
+        .cancellationCases.filter((c) => c.studentId === id && c.value !== finance.saleValue)
+        .forEach((c) => {
+          get().updateCancellationCase(c.id, { value: finance.saleValue });
+        });
+    }
     const dbPromise = updateStudentDb(id, data).catch((e) => {
       console.error('Falha ao atualizar aluno:', e);
       // Desfaz o otimismo para não mostrar dado que não foi gravado.
@@ -1079,6 +1097,11 @@ export const useAppStore = create<AppState>()(
           executaImediatamente: false,
           studentSnapshot: linkedStudent ? buildStudentSnapshot(linkedStudent) : undefined,
         });
+        if (cancCase.studentId) {
+          import('@/lib/cancelamentoGcConciliacao')
+            .then(({ dismissEspelhoItemsForStudent }) => dismissEspelhoItemsForStudent(cancCase.studentId!))
+            .catch((e) => console.error('[cancelamento] falha ao arquivar espelho GC', e));
+        }
       }).catch(reportDbError("salvar alteração"));
     }
 

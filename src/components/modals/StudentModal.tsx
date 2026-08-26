@@ -14,6 +14,10 @@ import {
   isIamContratoPendenteLink,
   isIamContratoPendentePix,
 } from '@/lib/iamControlContrato';
+import {
+  getLatestCancellationCaseForStudent,
+  resolveStudentFinance,
+} from '@/lib/studentFinance';
 
 interface Props {
   student?: Student | null;
@@ -56,7 +60,7 @@ function maskCEP(v: string) {
 
 
 export default function StudentModal({ student, onClose }: Props) {
-  const { acs, products, addStudent, updateStudent, rules, studentTags, currentUser, students } = useAppStore();
+  const { acs, products, addStudent, updateStudent, rules, studentTags, currentUser, students, cancellationCases } = useAppStore();
   const canManageTags = canEditTab(currentUser, 'alunos');
   const assignableTags = studentTags.filter((t) => (t.scope || 'student') === 'student');
   const canChooseMode = !!student && (currentUser?.role === 'admin' || currentUser?.role === 'conciliacao');
@@ -105,6 +109,26 @@ export default function StudentModal({ student, onClose }: Props) {
 
   useEffect(() => {
     if (student) {
+      const latestCase = getLatestCancellationCaseForStudent(
+        student.id,
+        student.name,
+        cancellationCases,
+      );
+      const finance = resolveStudentFinance(student, {
+        kaminoPaid: latestCase?.totalPagoAteMomento,
+      });
+      const embedded = finance.embeddedEntradaInstallment;
+      let totalInstallments = student.totalInstallments;
+      let paidInstallments = student.paidInstallments;
+      if (embedded) {
+        totalInstallments = Math.max(
+          1,
+          (student.installments?.length ?? student.totalInstallments) - 1,
+        );
+        if (embedded.paid && paidInstallments > 0) {
+          paidInstallments = Math.max(0, paidInstallments - 1);
+        }
+      }
       setForm({
         name: student.name, whatsapp: student.whatsapp, email: student.email || '', cpf: student.cpf,
         address: student.address, numero: student.numero || '', cidade: student.cidade || '', estado: student.estado || '',
@@ -114,8 +138,8 @@ export default function StudentModal({ student, onClose }: Props) {
         enrollmentDate: student.enrollmentDate,
         data_treinamento_origem: student.data_treinamento_origem || student.enrollmentDate,
         dueDate: student.installments?.[0]?.dueDate || student.enrollmentDate, dueDay: student.dueDay,
-        saleValue: student.saleValue, downPayment: student.downPayment,
-        totalInstallments: student.totalInstallments, paidInstallments: student.paidInstallments,
+        saleValue: finance.saleValue, downPayment: finance.downPayment,
+        totalInstallments, paidInstallments,
         detalhes: student.detalhes || '',
         ciclo: student.ciclo || '',
       });

@@ -4,6 +4,7 @@ import { useAppStore, formatCurrency } from '@/store/useAppStore';
 import { useConfirm } from '@/hooks/useConfirm';
 import { X, AlertTriangle, Calendar, Tag, Plus, Pencil, Trash2, Check } from 'lucide-react';
 import { getTagStyle, TAG_COLOR_MAP } from '@/lib/tagColors';
+import { resolveStudentFinance } from '@/lib/studentFinance';
 
 interface Props {
   student: Student;
@@ -62,8 +63,8 @@ export default function CancellationStudentEditModal({ student, caseRef, onClose
   };
 
   // ── Calculo de valores ──
+  const finance = resolveStudentFinance(student);
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  let vencido = 0, aVencer = 0;
   student.installments.forEach((i) => {
     if (i.paid) return;
     if (new Date(i.dueDate) < today) vencido += i.value;
@@ -154,7 +155,7 @@ export default function CancellationStudentEditModal({ student, caseRef, onClose
           <div className="grid grid-cols-3 gap-2 p-3 bg-muted/40 rounded-lg border border-border/50">
             <div>
               <p className="text-[9px] text-muted-foreground uppercase">Valor Contrato</p>
-              <p className="text-xs font-bold text-foreground">{formatCurrency(student.saleValue)}</p>
+              <p className="text-xs font-bold text-foreground">{formatCurrency(finance.saleValue)}</p>
             </div>
             <div>
               <p className="text-[9px] text-muted-foreground uppercase">Valor Pendente</p>
