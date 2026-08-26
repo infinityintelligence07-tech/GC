@@ -28,10 +28,29 @@ export function isKaminoPortfolioStudent(student: Student): boolean {
   return true;
 }
 
+/** CONCILIADO quitado à vista / cartão integral — entra na dashboard sem aprovação GC. */
+export function isIamConciliadoQuitadoAvista(student: Student): boolean {
+  if (!isIamControlStudent(student)) return false;
+  if (normalizeIamContratoStatus(student.iamControlContratoStatus) !== 'CONCILIADO') return false;
+
+  const sale = Number(student.saleValue ?? 0);
+  const down = Number(student.downPayment ?? 0);
+  const totalInst = Number(student.totalInstallments ?? 0);
+  const paidInst = Number(student.paidInstallments ?? 0);
+
+  if (totalInst === 0 && down >= sale - 0.01) return true;
+  if (totalInst > 0 && paidInst >= totalInst) return true;
+
+  const inst = student.installments ?? [];
+  if (inst.length > 0 && inst.every((i) => i.paid)) return true;
+  return false;
+}
+
 /** IAM ainda não aprovado na Conciliação GC (fila IAM CONTROL → GC). */
 export function needsIamGcConciliacaoApproval(student: Student): boolean {
   if (!isIamControlStudent(student)) return false;
   if (student.iamGcConciliadoAt) return false;
+  if (isIamConciliadoQuitadoAvista(student)) return false;
   const status = normalizeIamContratoStatus(student.iamControlContratoStatus);
   return IAM_STATUSES_REQUIRING_GC_APPROVAL.has(status);
 }
@@ -43,7 +62,9 @@ export function isAwaitingIamGcApproval(student: Student): boolean {
 
 /** Entra nos totais da dashboard principal — Kamino ou IAM já aprovado no GC. */
 export function countsInFinancialTotals(student: Student): boolean {
-  if (isIamControlStudent(student)) return Boolean(student.iamGcConciliadoAt);
+  if (isIamControlStudent(student)) {
+    return Boolean(student.iamGcConciliadoAt) || isIamConciliadoQuitadoAvista(student);
+  }
   return isKaminoPortfolioStudent(student);
 }
 
