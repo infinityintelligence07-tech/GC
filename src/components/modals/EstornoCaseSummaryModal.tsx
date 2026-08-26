@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { formatCurrency } from '@/store/useAppStore';
 import type { CancellationCase } from '@/types';
+import { refundPaymentMethodLabel, resolveRefundPaymentMethod } from '@/types';
 
 function fmtDate(v?: string | null): string {
   if (!v) return '—';
@@ -90,7 +91,10 @@ export default function EstornoCaseSummaryModal({ open, onClose, caseData }: Pro
                 <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1">Estorno gerado</p>
                 <Row label="Valor total do estorno" value={formatCurrency(Number(c.refundPlan.totalValue ?? 0))} strong />
                 <Row label="Parcelas" value={c.refundPlan.installments?.length ?? 0} />
-                <Row label="Chave PIX" value={`${c.refundPlan.pixKeyType ?? '—'} · ${c.refundPlan.pixKey ?? '—'}`} />
+                <Row label="Método de pagamento" value={refundPaymentMethodLabel(resolveRefundPaymentMethod(c.refundPlan))} />
+                {resolveRefundPaymentMethod(c.refundPlan) === 'pix' && (
+                  <Row label="Chave PIX" value={`${c.refundPlan.pixKeyType ?? '—'} · ${c.refundPlan.pixKey ?? '—'}`} />
+                )}
                 <div className="mt-2 space-y-1">
                   {(c.refundPlan.installments ?? []).map((p: any, i: number) => (
                     <div

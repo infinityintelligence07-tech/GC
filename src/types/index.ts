@@ -433,6 +433,47 @@ export interface CancellationFinalChecklist {
 
 export type PagamentoTipo = 'Pix' | 'Cartão de Crédito' | 'Boleto' | 'Outro';
 
+export type RefundPaymentMethod = 'pix' | 'boleto';
+
+export type RefundPixKeyType = 'CPF' | 'CNPJ' | 'Email' | 'Telefone' | 'Aleatória';
+
+export interface RefundPlanLogEntry {
+  action: string;
+  at: string;
+  byName: string;
+  byUserId?: string | null;
+  detail?: string;
+}
+
+export interface RefundPlanInstallment {
+  date: string;
+  value: number;
+  lancadoParaPagamento?: boolean;
+  lancadoAt?: string;
+  lancadoPorNome?: string;
+  lancadoPorUserId?: string | null;
+  lancadoLog?: Array<{ action: string; at: string; byName: string; byUserId?: string | null }>;
+}
+
+export interface RefundPlan {
+  /** Método de pagamento do estorno; padrão PIX quando ausente (planos antigos). */
+  paymentMethod?: RefundPaymentMethod;
+  pixKey: string;
+  pixKeyType: RefundPixKeyType;
+  totalValue: number;
+  installments: RefundPlanInstallment[];
+  createdAt: string;
+  planLog?: RefundPlanLogEntry[];
+}
+
+export function refundPaymentMethodLabel(method?: RefundPaymentMethod | null): string {
+  return method === 'boleto' ? 'Boleto' : 'PIX';
+}
+
+export function resolveRefundPaymentMethod(plan?: Pick<RefundPlan, 'paymentMethod'> | null): RefundPaymentMethod {
+  return plan?.paymentMethod === 'boleto' ? 'boleto' : 'pix';
+}
+
 export interface CancellationCase {
   id: string;
   studentName: string;
@@ -501,13 +542,7 @@ export interface CancellationCase {
   /** Qtd de inscrições já revertidas (para suportar reversão parcial em contratos multi-inscrição) */
   inscricoesRevertidas?: number;
   /** Plano de estorno ao aluno quando saldo final é negativo (multa < pago) */
-  refundPlan?: {
-    pixKey: string;
-    pixKeyType: 'CPF' | 'CNPJ' | 'Email' | 'Telefone' | 'Aleatória';
-    totalValue: number;
-    installments: Array<{ date: string; value: number; lancadoParaPagamento?: boolean; lancadoAt?: string; lancadoPorNome?: string; lancadoPorUserId?: string | null; lancadoLog?: Array<{ action: string; at: string; byName: string; byUserId?: string | null }> }>;
-    createdAt: string;
-  };
+  refundPlan?: RefundPlan;
   /** Última reprovação da Conciliação vinculada a este caso (motivo preenchido pelo revisor) */
   conciliacaoReprovadaMotivo?: string;
   conciliacaoReprovadaAt?: string;

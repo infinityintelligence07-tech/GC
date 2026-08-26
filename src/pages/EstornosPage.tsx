@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore, formatCurrency } from '@/store/useAppStore';
 import { Wallet, Search, Copy, Check, ChevronLeft, ChevronRight, Target, History, X } from 'lucide-react';
-import type { CancellationCase } from '@/types';
+import type { CancellationCase, RefundPaymentMethod } from '@/types';
+import { refundPaymentMethodLabel, resolveRefundPaymentMethod } from '@/types';
 import PeriodFilter, { type PeriodMode } from '@/components/ui/PeriodFilter';
 import { getMetaForRange, subscribeGoals, migrateLegacyIfNeeded } from '@/lib/estornosGoals';
 import EstornoCaseSummaryModal from '@/components/modals/EstornoCaseSummaryModal';
@@ -34,6 +35,7 @@ interface RefundRow {
   value: number;
   pixKey: string;
   pixKeyType: string;
+  paymentMethod: RefundPaymentMethod;
   createdAt: string;
   lancadoParaPagamento: boolean;
   lancadoAt?: string;
@@ -127,6 +129,7 @@ export default function EstornosPage() {
           value: Number(p.value ?? 0),
           pixKey: plan.pixKey ?? '',
           pixKeyType: plan.pixKeyType ?? '—',
+          paymentMethod: resolveRefundPaymentMethod(plan),
           createdAt: plan.createdAt ?? c.createdAt ?? '',
           lancadoParaPagamento: !!p.lancadoParaPagamento,
           lancadoAt: p.lancadoAt,
@@ -165,6 +168,38 @@ export default function EstornosPage() {
       setCopiedIdx(idx);
       setTimeout(() => setCopiedIdx(null), 1500);
     } catch { /* noop */ }
+  };
+
+  const updatePaymentMethod = (caseId: string, studentName: string, next: RefundPaymentMethod) => {
+    const c = cancellationCases.find((x) => x.id === caseId) as CancellationCase | undefined;
+    if (!c?.refundPlan) return;
+    const prev = resolveRefundPaymentMethod(c.refundPlan);
+    if (prev === next) return;
+    const stamp = new Date().toISOString();
+    const userName = currentUser?.name ?? 'Sistema';
+    const userId = currentUser?.authUserId ?? null;
+    const prevLog = Array.isArray(c.refundPlan.planLog) ? c.refundPlan.planLog : [];
+    const planLog = [
+      ...prevLog,
+      {
+        action: 'metodo_pagamento',
+        at: stamp,
+        byName: userName,
+        byUserId: userId,
+        detail: `${refundPaymentMethodLabel(prev)} → ${refundPaymentMethodLabel(next)}`,
+      },
+    ];
+    updateCancellationCase(c.id, {
+      refundPlan: { ...c.refundPlan, paymentMethod: next, planLog },
+    });
+    logActivity({
+      action: 'estorno.metodo_pagamento',
+      entity: 'cancellation',
+      entityId: c.id,
+      entityLabel: studentName,
+      summary: `${userName} alterou o método de pagamento do estorno de ${studentName} de ${refundPaymentMethodLabel(prev)} para ${refundPaymentMethodLabel(next)}`,
+      meta: { de: prev, para: next },
+    });
   };
 
   const toggleLancado = (r: RefundRow) => {
@@ -285,8 +320,8 @@ export default function EstornosPage() {
 
       {/* Lista */}
       <div className="rounded-2xl border border-border bg-card overflow-x-auto saas-shadow-sm">
-        <div className="min-w-[1640px]">
-        <div className="grid grid-cols-[100px_minmax(220px,2fr)_72px_minmax(140px,1.1fr)_minmax(160px,1.2fr)_80px_130px_minmax(200px,1.6fr)_minmax(220px,1.5fr)_140px_70px] gap-2 px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground bg-muted/40 border-b border-border">
+        <div className="min-w-[1740px]">
+        <div className="grid grid-cols-[100px_minmax(220px,2fr)_72px_minmax(140px,1.1fr)_minmax(160px,1.2fr)_80px_130px_100px_minmax(200px,1.6fr)_minmax(220px,1.5fr)_140px_70px] gap-2 px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground bg-muted/40 border-b border-border">
           <span>Pagamento</span>
           <span>Aluno</span>
           <span className="text-center">Inscrições</span>
@@ -294,6 +329,7 @@ export default function EstornosPage() {
           <span>Assessor</span>
           <span className="text-center">Parcela</span>
           <span className="text-right">VALOR DA PARCELA</span>
+          <span className="text-center">Método</span>
           <span>Chave PIX</span>
           <span className="text-center">Lançado p/ pagamento</span>
           <span className="text-right">VALOR TOTAL DO ESTORNO</span>
@@ -302,7 +338,7 @@ export default function EstornosPage() {
         {filtered.length === 0 ? (
           <div className="p-6 text-center text-xs text-muted-foreground">Nenhum estorno registrado no filtro atual.</div>
         ) : paginated.map((r, idx) => (
-          <div key={`${r.caseId}-${r.installmentIndex}`} className={`grid grid-cols-[100px_minmax(220px,2fr)_72px_minmax(140px,1.1fr)_minmax(160px,1.2fr)_80px_130px_minmax(200px,1.6fr)_minmax(220px,1.5fr)_140px_70px] gap-2 px-4 py-2.5 items-start border-b border-border last:border-0 text-xs transition-colors ${r.lancadoParaPagamento ? 'bg-emerald-50/70 hover:bg-emerald-100/60' : 'bg-rose-50/60 hover:bg-rose-100/50'}`}>
+          <div key={`${r.caseId}-${r.installmentIndex}`} className={`grid grid-cols-[100px_minmax(220px,2fr)_72px_minmax(140px,1.1fr)_minmax(160px,1.2fr)_80px_130px_100px_minmax(200px,1.6fr)_minmax(220px,1.5fr)_140px_70px] gap-2 px-4 py-2.5 items-start border-b border-border last:border-0 text-xs transition-colors ${r.lancadoParaPagamento ? 'bg-emerald-50/70 hover:bg-emerald-100/60' : 'bg-rose-50/60 hover:bg-rose-100/50'}`}>
             <span className="font-semibold text-foreground py-1">{formatDateBR(r.date)}</span>
             <button
               type="button"
@@ -327,13 +363,30 @@ export default function EstornosPage() {
             <span className="text-muted-foreground break-words whitespace-normal leading-tight py-1">{r.ac ?? '—'}</span>
             <span className="text-center text-muted-foreground py-1">{r.installmentIndex}/{r.totalInstallments}</span>
             <span className="text-right font-semibold text-rose-700 py-1">{formatCurrency(r.value)}</span>
+            <span className="flex justify-center py-1">
+              <select
+                value={r.paymentMethod}
+                onChange={(e) => updatePaymentMethod(r.caseId, r.studentName, e.target.value as RefundPaymentMethod)}
+                className="input-field text-[10px] w-full max-w-[92px] py-1 px-1.5"
+                title="Alterar método de pagamento do estorno"
+              >
+                <option value="pix">PIX</option>
+                <option value="boleto">Boleto</option>
+              </select>
+            </span>
             <span className="flex items-start gap-1.5 min-w-0 py-1">
-              <span className="text-[9px] uppercase font-semibold text-muted-foreground px-1.5 py-0.5 rounded bg-muted shrink-0">{r.pixKeyType}</span>
-              <span className="text-foreground break-all whitespace-normal leading-tight">{r.pixKey || '—'}</span>
-              {r.pixKey && (
-                <button onClick={() => copy(r.pixKey, idx)} className="text-muted-foreground hover:text-foreground shrink-0" title="Copiar chave">
-                  {copiedIdx === idx ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
-                </button>
+              {r.paymentMethod === 'boleto' ? (
+                <span className="text-muted-foreground italic">Via boleto</span>
+              ) : (
+                <>
+                  <span className="text-[9px] uppercase font-semibold text-muted-foreground px-1.5 py-0.5 rounded bg-muted shrink-0">{r.pixKeyType}</span>
+                  <span className="text-foreground break-all whitespace-normal leading-tight">{r.pixKey || '—'}</span>
+                  {r.pixKey && (
+                    <button onClick={() => copy(r.pixKey, idx)} className="text-muted-foreground hover:text-foreground shrink-0" title="Copiar chave">
+                      {copiedIdx === idx ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                    </button>
+                  )}
+                </>
               )}
             </span>
             <label className="flex flex-col items-center justify-start gap-0.5 cursor-pointer text-center py-1">

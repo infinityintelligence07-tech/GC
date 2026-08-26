@@ -13,6 +13,8 @@ import {
   HistoryEntry,
   Installment,
   AbatimentoInfo,
+  RefundPaymentMethod,
+  refundPaymentMethodLabel,
 } from '@/types';
 import CancellationModal from '@/components/modals/CancellationModal';
 import ImportExternalCancellationModal from '@/components/modals/ImportExternalCancellationModal';
@@ -1299,7 +1301,9 @@ interface CancellationReviewModalProps {
 
 function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onPartialRevertBeforeCancel, simplified = false }: CancellationReviewModalProps) {
   const finance = student ? resolveStudentFinance(student, { kaminoPaid: caseRef.totalPagoAteMomento }) : null;
-  const parcelInstallments = student ? getParcelInstallments(student) : [];
+  const parcelInstallments = student
+    ? getParcelInstallments(student, { kaminoPaid: caseRef.totalPagoAteMomento })
+    : [];
   const installments = parcelInstallments.length > 0 ? parcelInstallments : (student?.installments ?? []);
   const pending = installments.filter((i) => !i.paid);
   const paid = installments.filter((i) => i.paid);
@@ -1406,6 +1410,9 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   );
   const [pixKey, setPixKey] = useState<string>(initialPlan?.pixKey ?? '');
   const [pixKeyType, setPixKeyType] = useState<PixType>(initialPlan?.pixKeyType ?? 'CPF');
+  const [refundPaymentMethod, setRefundPaymentMethod] = useState<RefundPaymentMethod>(
+    initialPlan?.paymentMethod === 'boleto' ? 'boleto' : 'pix',
+  );
 
   // Upload do termo assinado (PDF ou imagem)
   const termos = (caseRef.termAttachments ?? []).filter((t) => t.type === 'termo_assinado');
@@ -1640,7 +1647,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   const refundSum = Math.round(refundInstallments.reduce((s, p) => s + (p.value || 0), 0) * 100) / 100;
   const refundMatches = !precisaEstorno || Math.abs(refundSum - estornoTotal) < 0.01;
   const refundDatesOk = !precisaEstorno || refundInstallments.every((p) => !!p.date);
-  const refundPixOk = !precisaEstorno || pixKey.trim().length > 0;
+  const refundPixOk = !precisaEstorno || refundPaymentMethod === 'boleto' || pixKey.trim().length > 0;
   const abatimentoOk =
     !abaterOutroContrato ||
     (!!abatimentoStudentId && abatimentoValor > 0 && abatimentoValor <= estornoBruto + 0.01);
@@ -1724,7 +1731,8 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
       }
       if (precisaEstorno) {
         const plan = {
-          pixKey: pixKey.trim(),
+          paymentMethod: refundPaymentMethod,
+          pixKey: refundPaymentMethod === 'boleto' ? '' : pixKey.trim(),
           pixKeyType,
           totalValue: estornoTotal,
           installments: refundInstallments.map((p) => ({ date: p.date, value: Math.round(p.value * 100) / 100, lancadoParaPagamento: false })),
@@ -2129,8 +2137,8 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                   <strong>{formatCurrency(Math.max(0, saldoDevedorAluno(abatimentoStudent) - abatimentoValor))}</strong>{' '}
                   (parcelas em aberto quitadas/abatidas na ordem de vencimento).
                   {estornoTotal > 0.01
-                    ? <> Restam <strong>{formatCurrency(estornoTotal)}</strong> a estornar via PIX.</>
-                    : <> O saldo a devolver foi totalmente abatido — não há estorno via PIX.</>}
+                    ? <> Restam <strong>{formatCurrency(estornoTotal)}</strong> a estornar via {refundPaymentMethodLabel(refundPaymentMethod)}.</>
+                    : <> O saldo a devolver foi totalmente abatido — não há estorno a pagar.</>}
                 </div>
 
               )}
@@ -2204,6 +2212,21 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
 
               <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-2 pt-1">
                 <div>
+                  <label className="text-[10px] font-semibold uppercase text-rose-800">Método de pagamento</label>
+                  <select
+                    value={refundPaymentMethod}
+                    onChange={(e) => setRefundPaymentMethod(e.target.value as RefundPaymentMethod)}
+                    className="input-field text-xs w-full mt-1"
+                  >
+                    <option value="pix">PIX</option>
+                    <option value="boleto">Boleto</option>
+                  </select>
+                </div>
+              </div>
+
+              {refundPaymentMethod === 'pix' && (
+              <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-2 pt-1">
+                <div>
                   <label className="text-[10px] font-semibold uppercase text-rose-800">Tipo da chave PIX</label>
                   <select
                     value={pixKeyType}
@@ -2232,6 +2255,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                   {!pixKey.trim() && <p className="text-[9px] text-rose-600 font-medium mt-1">Chave PIX obrigatória</p>}
                 </div>
               </div>
+              )}
               <p className="text-[10px] text-rose-700/80">
                 Estas informações são registradas na aba <strong>Estornos</strong> e não são enviadas para a Conciliação.
               </p>
@@ -2463,7 +2487,8 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                           <p className="font-semibold">Estorno ao aluno</p>
                           <p className="mt-0.5">
                             Será realizado o estorno de <strong>{formatCurrency(estornoTotal)}</strong> ao aluno,
-                            em <strong>{refundInstallments.length}</strong> parcela(s) via PIX ({pixKeyType}).
+                            em <strong>{refundInstallments.length}</strong> parcela(s) via {refundPaymentMethodLabel(refundPaymentMethod)}
+                            {refundPaymentMethod === 'pix' ? ` (${pixKeyType})` : ''}.
                             O plano ficará registrado na aba <strong>Estornos</strong>.
                           </p>
                         </div>
@@ -2475,7 +2500,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                             O saldo de <strong>{formatCurrency(abatimentoValor)}</strong> será abatido no contrato de{' '}
                             <strong>{abatimentoStudent.name}</strong>
                             {abatimentoStudent.product ? ` (${abatimentoStudent.product})` : ''}.
-                            Não haverá estorno via PIX — o registro ficará apenas no histórico do cancelamento.
+                            Não haverá estorno a pagar — o registro ficará apenas no histórico do cancelamento.
                           </p>
                         </div>
                       )}

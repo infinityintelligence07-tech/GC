@@ -146,7 +146,9 @@ export default function StudentViewModal({ student, onClose, extraSections, head
   const finance = resolveStudentFinance(currentStudent, {
     kaminoPaid: latestCancellationCase?.totalPagoAteMomento,
   });
-  const parcelInstallments = getParcelInstallments(currentStudent);
+  const parcelInstallments = getParcelInstallments(currentStudent, {
+    kaminoPaid: latestCancellationCase?.totalPagoAteMomento,
+  });
   const score = calcularScoreComportamento(currentStudent.installments);
   const paidCount = parcelInstallments.filter((i) => i.paid).length;
   const totalInstallmentsReal = parcelInstallments.length || currentStudent.totalInstallments;

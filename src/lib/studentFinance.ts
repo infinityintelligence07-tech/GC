@@ -94,19 +94,40 @@ export function resolveStudentFinance(
     }
   }
 
+  if (downPayment <= 0.0049) {
+    const entradaTagged = installments.filter(
+      (i) => !i.paid && isEntradaPendenciaInstallment(i),
+    );
+    if (entradaTagged.length > 0) {
+      downPayment = roundMoney(
+        entradaTagged.reduce((acc, i) => acc + (Number(i.value) || 0), 0),
+      );
+      inferredDownPayment = true;
+    }
+  }
+
   const kaminoPaid = Math.max(0, Number(options?.kaminoPaid) || 0);
   if (downPayment <= 0.0049 && kaminoPaid > 0.0049) {
+    const paidInsts = installments.filter((i) => i.paid);
     const paidParcelas = roundMoney(
-      installments
-        .filter((i) => i.paid)
-        .reduce(
-          (acc, i) =>
-            acc + (Number((i as { paidValue?: number }).paidValue) || Number(i.value) || 0),
-          0,
-        ),
+      paidInsts.reduce(
+        (acc, i) =>
+          acc + (Number((i as { paidValue?: number }).paidValue) || Number(i.value) || 0),
+        0,
+      ),
     );
-    // Kamino informou pagamento mas nenhuma parcela marcada como paga → trata como entrada.
-    if (paidParcelas <= 0.0049 && kaminoPaid <= storedSale + 0.05) {
+    const firstPaid = paidInsts.find((i) => i.number === 1);
+    const onlyFirstPaidAsEntrada =
+      firstPaid != null &&
+      paidInsts.length === 1 &&
+      Math.abs(Number(firstPaid.value) - kaminoPaid) <= 0.05;
+
+    if (onlyFirstPaidAsEntrada) {
+      downPayment = roundMoney(Number(firstPaid.value) || 0);
+      embeddedEntradaInstallment = firstPaid;
+      inferredDownPayment = true;
+    } else if (paidParcelas <= 0.0049 && kaminoPaid <= storedSale + 0.05) {
+      // Kamino informou pagamento mas nenhuma parcela marcada como paga → trata como entrada.
       downPayment = kaminoPaid;
       inferredDownPayment = true;
     }
@@ -137,8 +158,10 @@ export function resolveStudentFinance(
 /** Parcelas do fluxo excluindo a 1ª quando ela representa entrada embutida. */
 export function getParcelInstallments(
   student: Pick<Student, 'downPayment' | 'saleValue' | 'installments' | 'installmentValue'>,
+  options?: ResolveStudentFinanceOptions,
 ): Installment[] {
-  const embedded = getEmbeddedEntradaInstallment(student);
+  const finance = resolveStudentFinance(student, options);
+  const embedded = finance.embeddedEntradaInstallment;
   const installments = student.installments ?? [];
   if (!embedded) return installments;
   return installments.filter((i) => i.number !== embedded.number);
