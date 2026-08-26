@@ -2224,6 +2224,12 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                 </div>
               </div>
 
+              {refundPaymentMethod === 'boleto' && (
+                <div className="rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2 text-[11px] text-sky-900">
+                  O boleto de cada parcela poderá ser anexado na aba <strong>Estornos</strong> após confirmar o cancelamento.
+                </div>
+              )}
+
               {refundPaymentMethod === 'pix' && (
               <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-2 pt-1">
                 <div>

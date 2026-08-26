@@ -1,7 +1,8 @@
-import { X } from 'lucide-react';
+import { X, FileText } from 'lucide-react';
 import { formatCurrency } from '@/store/useAppStore';
 import type { CancellationCase } from '@/types';
 import { refundPaymentMethodLabel, resolveRefundPaymentMethod } from '@/types';
+import { openCancellationPdf } from '@/lib/openCancellationPdf';
 
 function fmtDate(v?: string | null): string {
   if (!v) return '—';
@@ -99,12 +100,24 @@ export default function EstornoCaseSummaryModal({ open, onClose, caseData }: Pro
                   {(c.refundPlan.installments ?? []).map((p: any, i: number) => (
                     <div
                       key={i}
-                      className={`flex items-center justify-between text-xs rounded-lg px-2.5 py-1.5 border ${p.lancadoParaPagamento ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}
+                      className={`rounded-lg px-2.5 py-1.5 border text-xs ${p.lancadoParaPagamento ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}
                     >
-                      <span className="text-muted-foreground">
-                        Parcela {i + 1}/{c.refundPlan.installments.length} · {fmtDate(p.date)}
-                      </span>
-                      <span className="font-semibold text-foreground">{formatCurrency(Number(p.value ?? 0))}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">
+                          Parcela {i + 1}/{c.refundPlan.installments.length} · {fmtDate(p.date)}
+                        </span>
+                        <span className="font-semibold text-foreground">{formatCurrency(Number(p.value ?? 0))}</span>
+                      </div>
+                      {resolveRefundPaymentMethod(c.refundPlan) === 'boleto' && p.boletoFileUrl && (
+                        <button
+                          type="button"
+                          onClick={() => openCancellationPdf(p.boletoFileUrl, p.boletoFileName)}
+                          className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium text-sky-700 hover:underline"
+                        >
+                          <FileText size={11} />
+                          {p.boletoFileName ?? 'Ver boleto'}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore, formatCurrency } from '@/store/useAppStore';
-import { Wallet, Search, Copy, Check, ChevronLeft, ChevronRight, Target, History, X } from 'lucide-react';
+import { Wallet, Search, Copy, Check, ChevronLeft, ChevronRight, Target, History, X, Upload, FileText, Trash2, Loader2, Eye } from 'lucide-react';
 import type { CancellationCase, RefundPaymentMethod } from '@/types';
 import { refundPaymentMethodLabel, resolveRefundPaymentMethod } from '@/types';
 import PeriodFilter, { type PeriodMode } from '@/components/ui/PeriodFilter';
 import { getMetaForRange, subscribeGoals, migrateLegacyIfNeeded } from '@/lib/estornosGoals';
 import EstornoCaseSummaryModal from '@/components/modals/EstornoCaseSummaryModal';
 import { logActivity } from '@/lib/activityLog';
+import { supabase } from '@/integrations/supabase/client';
+import { useCompanyStore } from '@/store/useCompanyStore';
+import { openCancellationPdf } from '@/lib/openCancellationPdf';
 
 
 /**
@@ -36,6 +39,8 @@ interface RefundRow {
   pixKey: string;
   pixKeyType: string;
   paymentMethod: RefundPaymentMethod;
+  boletoFileUrl?: string;
+  boletoFileName?: string;
   createdAt: string;
   lancadoParaPagamento: boolean;
   lancadoAt?: string;
@@ -43,6 +48,9 @@ interface RefundRow {
   log: RefundLogEntry[];
 }
 
+function rowKey(r: Pick<RefundRow, 'caseId' | 'installmentIndex'>) {
+  return `${r.caseId}-${r.installmentIndex}`;
+}
 
 function formatDateBR(iso: string): string {
   try { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('pt-BR'); } catch { return iso; }
@@ -64,6 +72,10 @@ export default function EstornosPage() {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [summaryCaseId, setSummaryCaseId] = useState<string | null>(null);
   const [logRow, setLogRow] = useState<RefundRow | null>(null);
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingUploadRow = useRef<RefundRow | null>(null);
 
   const [onlyPending, setOnlyPending] = useState(false);
   const [page, setPage] = useState(1);
@@ -73,7 +85,6 @@ export default function EstornosPage() {
   useEffect(() => subscribeGoals(() => setGoalsTick((t) => t + 1)), []);
 
   const { dateFrom, dateTo } = useMemo(() => {
-    // Lazy: compute via helper without importing separately
     const modeMap = periodMode;
     if (modeMap === 'tudo') return { dateFrom: '', dateTo: '' };
     const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -88,7 +99,6 @@ export default function EstornosPage() {
     const y = periodAnchor.getFullYear();
     const m = periodAnchor.getMonth();
     if (weekIdx != null) {
-      // recompute weeks inline (mon-sun clipped)
       const first = new Date(y, m, 1);
       const last = new Date(y, m + 1, 0);
       let cursor = new Date(first);
@@ -130,12 +140,13 @@ export default function EstornosPage() {
           pixKey: plan.pixKey ?? '',
           pixKeyType: plan.pixKeyType ?? '—',
           paymentMethod: resolveRefundPaymentMethod(plan),
+          boletoFileUrl: p.boletoFileUrl,
+          boletoFileName: p.boletoFileName,
           createdAt: plan.createdAt ?? c.createdAt ?? '',
           lancadoParaPagamento: !!p.lancadoParaPagamento,
           lancadoAt: p.lancadoAt,
           lancadoPorNome: p.lancadoPorNome,
           log: Array.isArray(p.lancadoLog) ? (p.lancadoLog as RefundLogEntry[]) : [],
-
         });
       });
     });
@@ -170,28 +181,28 @@ export default function EstornosPage() {
     } catch { /* noop */ }
   };
 
+  const appendPlanLog = (plan: NonNullable<CancellationCase['refundPlan']>, entry: { action: string; detail?: string }) => {
+    const stamp = new Date().toISOString();
+    const userName = currentUser?.name ?? 'Sistema';
+    const userId = currentUser?.authUserId ?? null;
+    const prevLog = Array.isArray(plan.planLog) ? plan.planLog : [];
+    return {
+      ...plan,
+      planLog: [...prevLog, { action: entry.action, at: stamp, byName: userName, byUserId: userId, detail: entry.detail }],
+    };
+  };
+
   const updatePaymentMethod = (caseId: string, studentName: string, next: RefundPaymentMethod) => {
     const c = cancellationCases.find((x) => x.id === caseId) as CancellationCase | undefined;
     if (!c?.refundPlan) return;
     const prev = resolveRefundPaymentMethod(c.refundPlan);
     if (prev === next) return;
-    const stamp = new Date().toISOString();
     const userName = currentUser?.name ?? 'Sistema';
-    const userId = currentUser?.authUserId ?? null;
-    const prevLog = Array.isArray(c.refundPlan.planLog) ? c.refundPlan.planLog : [];
-    const planLog = [
-      ...prevLog,
-      {
-        action: 'metodo_pagamento',
-        at: stamp,
-        byName: userName,
-        byUserId: userId,
-        detail: `${refundPaymentMethodLabel(prev)} → ${refundPaymentMethodLabel(next)}`,
-      },
-    ];
-    updateCancellationCase(c.id, {
-      refundPlan: { ...c.refundPlan, paymentMethod: next, planLog },
-    });
+    const nextPlan = appendPlanLog(
+      { ...c.refundPlan, paymentMethod: next },
+      { action: 'metodo_pagamento', detail: `${refundPaymentMethodLabel(prev)} → ${refundPaymentMethodLabel(next)}` },
+    );
+    updateCancellationCase(c.id, { refundPlan: nextPlan });
     logActivity({
       action: 'estorno.metodo_pagamento',
       entity: 'cancellation',
@@ -200,6 +211,141 @@ export default function EstornosPage() {
       summary: `${userName} alterou o método de pagamento do estorno de ${studentName} de ${refundPaymentMethodLabel(prev)} para ${refundPaymentMethodLabel(next)}`,
       meta: { de: prev, para: next },
     });
+  };
+
+  const persistInstallment = (
+    c: CancellationCase,
+    installmentIndex: number,
+    patch: Record<string, unknown>,
+    planPatch?: Partial<NonNullable<CancellationCase['refundPlan']>>,
+  ) => {
+    if (!c.refundPlan) return;
+    const nextInstallments = c.refundPlan.installments.map((p, idx) =>
+      idx === installmentIndex - 1 ? { ...p, ...patch } : p,
+    );
+    updateCancellationCase(c.id, {
+      refundPlan: { ...c.refundPlan, ...planPatch, installments: nextInstallments },
+    });
+  };
+
+  const triggerBoletoUpload = (r: RefundRow) => {
+    pendingUploadRow.current = r;
+    setUploadError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleBoletoFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const r = pendingUploadRow.current;
+    pendingUploadRow.current = null;
+    if (!file || !r) return;
+
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|heic|avif)$/i.test(file.name);
+    if (!isPdf && !isImage) {
+      setUploadError('Selecione um PDF ou imagem do boleto.');
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      setUploadError('Arquivo maior que 15 MB.');
+      return;
+    }
+
+    const c = cancellationCases.find((x) => x.id === r.caseId) as CancellationCase | undefined;
+    if (!c?.refundPlan) return;
+
+    const key = rowKey(r);
+    setUploadingKey(key);
+    setUploadError(null);
+    try {
+      const companyId = useCompanyStore.getState().activeCompanyId;
+      if (!companyId) throw new Error('Empresa ativa não identificada.');
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${companyId}/estornos-boleto/${c.id}_p${r.installmentIndex}_${Date.now()}_${safeName}`;
+      const { error } = await supabase.storage.from('cancellation-docs').upload(path, file, {
+        contentType: file.type || (isPdf ? 'application/pdf' : 'application/octet-stream'),
+        upsert: false,
+      });
+      if (error) throw error;
+
+      const userName = currentUser?.name ?? 'Sistema';
+      const stamp = new Date().toISOString();
+      const prevInst = c.refundPlan.installments[r.installmentIndex - 1];
+      if (prevInst?.boletoFileUrl) {
+        try { await supabase.storage.from('cancellation-docs').remove([prevInst.boletoFileUrl]); } catch { /* noop */ }
+      }
+
+      const nextPlan = appendPlanLog(c.refundPlan, {
+        action: 'boleto_anexado',
+        detail: `Parcela ${r.installmentIndex}/${r.totalInstallments}: ${file.name}`,
+      });
+      persistInstallment(
+        c,
+        r.installmentIndex,
+        {
+          boletoFileUrl: path,
+          boletoFileName: file.name,
+          boletoUploadedAt: stamp,
+          boletoUploadedByNome: userName,
+        },
+        { planLog: nextPlan.planLog },
+      );
+
+      logActivity({
+        action: 'estorno.boleto_anexado',
+        entity: 'cancellation',
+        entityId: c.id,
+        entityLabel: r.studentName,
+        summary: `${userName} anexou boleto da parcela ${r.installmentIndex}/${r.totalInstallments} de estorno de ${r.studentName} (${formatCurrency(r.value)})`,
+        meta: { parcela: r.installmentIndex, arquivo: file.name },
+      });
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : 'Falha ao enviar o boleto.');
+    } finally {
+      setUploadingKey(null);
+    }
+  };
+
+  const removeBoleto = async (r: RefundRow) => {
+    const c = cancellationCases.find((x) => x.id === r.caseId) as CancellationCase | undefined;
+    if (!c?.refundPlan || !r.boletoFileUrl) return;
+    const userName = currentUser?.name ?? 'Sistema';
+    try {
+      await supabase.storage.from('cancellation-docs').remove([r.boletoFileUrl]);
+    } catch { /* noop */ }
+
+    const nextPlan = appendPlanLog(c.refundPlan, {
+      action: 'boleto_removido',
+      detail: `Parcela ${r.installmentIndex}/${r.totalInstallments}${r.boletoFileName ? `: ${r.boletoFileName}` : ''}`,
+    });
+    persistInstallment(
+      c,
+      r.installmentIndex,
+      {
+        boletoFileUrl: undefined,
+        boletoFileName: undefined,
+        boletoUploadedAt: undefined,
+        boletoUploadedByNome: undefined,
+      },
+      { planLog: nextPlan.planLog },
+    );
+    logActivity({
+      action: 'estorno.boleto_removido',
+      entity: 'cancellation',
+      entityId: c.id,
+      entityLabel: r.studentName,
+      summary: `${userName} removeu o boleto da parcela ${r.installmentIndex}/${r.totalInstallments} de estorno de ${r.studentName}`,
+    });
+  };
+
+  const openBoleto = async (r: RefundRow) => {
+    if (!r.boletoFileUrl) return;
+    try {
+      await openCancellationPdf(r.boletoFileUrl, r.boletoFileName);
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : 'Não foi possível abrir o boleto.');
+    }
   };
 
   const toggleLancado = (r: RefundRow) => {
@@ -227,9 +373,18 @@ export default function EstornosPage() {
     });
   };
 
+  const GRID = 'grid grid-cols-[100px_minmax(200px,2fr)_72px_minmax(130px,1.1fr)_minmax(140px,1.1fr)_72px_120px_minmax(300px,2.2fr)_minmax(200px,1.4fr)_130px_70px] gap-2';
 
   return (
     <div className="p-6 space-y-5">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={handleBoletoFileSelected}
+      />
+
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <Wallet size={20} className="text-primary" />
@@ -244,8 +399,17 @@ export default function EstornosPage() {
         </div>
       </div>
       <p className="text-xs text-muted-foreground -mt-3">
-        Lista de estornos gerados a partir de cancelamentos com saldo a devolver. Ordenados por data de pagamento.
+        Lista de estornos gerados a partir de cancelamentos com saldo a devolver. Escolha PIX ou Boleto e anexe o arquivo do boleto quando aplicável.
       </p>
+
+      {uploadError && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs text-rose-800 flex items-center justify-between gap-2">
+          <span>{uploadError}</span>
+          <button type="button" onClick={() => setUploadError(null)} className="text-rose-600 hover:text-rose-900 shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -266,12 +430,11 @@ export default function EstornosPage() {
           <p className="text-[10px] font-semibold uppercase text-muted-foreground">Total de estornos no período</p>
           <p className="text-xl font-bold text-primary">{formatCurrency(totalGeral)}</p>
         </div>
-
       </div>
 
       {(() => {
         const metaPeriodo = getMetaForRange(dateFrom, dateTo);
-        void goalsTick; // re-render on goal changes
+        void goalsTick;
         if (metaPeriodo <= 0) return null;
         const lancadoNoPeriodo = filtered.filter((r) => r.lancadoParaPagamento).reduce((s, r) => s + r.value, 0);
         const pct = metaPeriodo > 0 ? Math.min(100, (lancadoNoPeriodo / metaPeriodo) * 100) : 0;
@@ -289,8 +452,6 @@ export default function EstornosPage() {
         );
       })()}
 
-
-      {/* Filtro de período (Mês/Trimestre/Ano/Tudo + Semanas) */}
       <PeriodFilter
         mode={periodMode}
         setMode={setPeriodMode}
@@ -300,7 +461,6 @@ export default function EstornosPage() {
         setWeekIdx={setWeekIdx}
       />
 
-      {/* Busca */}
       <div className="flex flex-wrap gap-2 items-end">
         <div className="flex-1 min-w-[220px]">
           <label className="text-[10px] font-semibold uppercase text-muted-foreground">Buscar aluno</label>
@@ -317,108 +477,157 @@ export default function EstornosPage() {
         </div>
       </div>
 
-
-      {/* Lista */}
       <div className="rounded-2xl border border-border bg-card overflow-x-auto saas-shadow-sm">
-        <div className="min-w-[1740px]">
-        <div className="grid grid-cols-[100px_minmax(220px,2fr)_72px_minmax(140px,1.1fr)_minmax(160px,1.2fr)_80px_130px_100px_minmax(200px,1.6fr)_minmax(220px,1.5fr)_140px_70px] gap-2 px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground bg-muted/40 border-b border-border">
-          <span>Pagamento</span>
-          <span>Aluno</span>
-          <span className="text-center">Inscrições</span>
-          <span>Treinamento</span>
-          <span>Assessor</span>
-          <span className="text-center">Parcela</span>
-          <span className="text-right">VALOR DA PARCELA</span>
-          <span className="text-center">Método</span>
-          <span>Chave PIX</span>
-          <span className="text-center">Lançado p/ pagamento</span>
-          <span className="text-right">VALOR TOTAL DO ESTORNO</span>
-          <span className="text-center">Log</span>
-        </div>
-        {filtered.length === 0 ? (
-          <div className="p-6 text-center text-xs text-muted-foreground">Nenhum estorno registrado no filtro atual.</div>
-        ) : paginated.map((r, idx) => (
-          <div key={`${r.caseId}-${r.installmentIndex}`} className={`grid grid-cols-[100px_minmax(220px,2fr)_72px_minmax(140px,1.1fr)_minmax(160px,1.2fr)_80px_130px_100px_minmax(200px,1.6fr)_minmax(220px,1.5fr)_140px_70px] gap-2 px-4 py-2.5 items-start border-b border-border last:border-0 text-xs transition-colors ${r.lancadoParaPagamento ? 'bg-emerald-50/70 hover:bg-emerald-100/60' : 'bg-rose-50/60 hover:bg-rose-100/50'}`}>
-            <span className="font-semibold text-foreground py-1">{formatDateBR(r.date)}</span>
-            <button
-              type="button"
-              onClick={() => setSummaryCaseId(r.caseId)}
-              className="text-left text-primary hover:underline font-medium break-words whitespace-normal leading-tight py-1"
-              title={`Ver resumo do cancelamento de ${r.studentName}`}
-            >
-              {r.studentName}
-            </button>
-
-            <span className="text-center text-foreground font-semibold py-1">
-              {r.quantidadeInscricoes != null && r.quantidadeInscricoes > 0 ? r.quantidadeInscricoes : '—'}
-            </span>
-
-            <span className="py-1">
-              {r.product ? (
-                <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-md bg-muted text-foreground border border-border break-words whitespace-normal">{r.product}</span>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
-            </span>
-            <span className="text-muted-foreground break-words whitespace-normal leading-tight py-1">{r.ac ?? '—'}</span>
-            <span className="text-center text-muted-foreground py-1">{r.installmentIndex}/{r.totalInstallments}</span>
-            <span className="text-right font-semibold text-rose-700 py-1">{formatCurrency(r.value)}</span>
-            <span className="flex justify-center py-1">
-              <select
-                value={r.paymentMethod}
-                onChange={(e) => updatePaymentMethod(r.caseId, r.studentName, e.target.value as RefundPaymentMethod)}
-                className="input-field text-[10px] w-full max-w-[92px] py-1 px-1.5"
-                title="Alterar método de pagamento do estorno"
-              >
-                <option value="pix">PIX</option>
-                <option value="boleto">Boleto</option>
-              </select>
-            </span>
-            <span className="flex items-start gap-1.5 min-w-0 py-1">
-              {r.paymentMethod === 'boleto' ? (
-                <span className="text-muted-foreground italic">Via boleto</span>
-              ) : (
-                <>
-                  <span className="text-[9px] uppercase font-semibold text-muted-foreground px-1.5 py-0.5 rounded bg-muted shrink-0">{r.pixKeyType}</span>
-                  <span className="text-foreground break-all whitespace-normal leading-tight">{r.pixKey || '—'}</span>
-                  {r.pixKey && (
-                    <button onClick={() => copy(r.pixKey, idx)} className="text-muted-foreground hover:text-foreground shrink-0" title="Copiar chave">
-                      {copiedIdx === idx ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
-                    </button>
-                  )}
-                </>
-              )}
-            </span>
-            <label className="flex flex-col items-center justify-start gap-0.5 cursor-pointer text-center py-1">
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={r.lancadoParaPagamento}
-                  onChange={() => toggleLancado(r)}
-                  className="h-3.5 w-3.5 rounded border-border text-emerald-600 focus:ring-emerald-500 shrink-0"
-                />
-                <span className="text-[9px] font-medium text-muted-foreground leading-tight">{r.lancadoParaPagamento ? 'Sim' : 'Marcar como lançado'}</span>
-              </div>
-              {r.lancadoParaPagamento && (r.lancadoPorNome || r.lancadoAt) && (
-                <span className="text-[9px] leading-tight text-emerald-700 font-medium break-words whitespace-normal w-full">
-                  {r.lancadoPorNome ?? '—'}{r.lancadoAt ? ` · ${formatDateTimeBR(r.lancadoAt)}` : ''}
-                </span>
-              )}
-            </label>
-            <span className="text-right text-muted-foreground py-1">{formatCurrency(r.totalCase)}</span>
-            <span className="flex justify-center py-1">
-              <button
-                type="button"
-                onClick={() => setLogRow(r)}
-                className="p-1.5 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground"
-                title="Ver log de alterações desta parcela"
-              >
-                <History size={13} />
-              </button>
-            </span>
+        <div className="min-w-[1680px]">
+          <div className={`${GRID} px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground bg-muted/40 border-b border-border`}>
+            <span>Pagamento</span>
+            <span>Aluno</span>
+            <span className="text-center">Inscrições</span>
+            <span>Treinamento</span>
+            <span>Assessor</span>
+            <span className="text-center">Parcela</span>
+            <span className="text-right">Valor parcela</span>
+            <span>Método de pagamento</span>
+            <span className="text-center">Lançado p/ pagamento</span>
+            <span className="text-right">Total estorno</span>
+            <span className="text-center">Log</span>
           </div>
-        ))}
+          {filtered.length === 0 ? (
+            <div className="p-6 text-center text-xs text-muted-foreground">Nenhum estorno registrado no filtro atual.</div>
+          ) : paginated.map((r, idx) => {
+            const isUploading = uploadingKey === rowKey(r);
+            return (
+              <div
+                key={rowKey(r)}
+                className={`${GRID} px-4 py-3 items-start border-b border-border last:border-0 text-xs transition-colors ${r.lancadoParaPagamento ? 'bg-emerald-50/70 hover:bg-emerald-100/60' : 'bg-rose-50/60 hover:bg-rose-100/50'}`}
+              >
+                <span className="font-semibold text-foreground py-1">{formatDateBR(r.date)}</span>
+                <button
+                  type="button"
+                  onClick={() => setSummaryCaseId(r.caseId)}
+                  className="text-left text-primary hover:underline font-medium break-words whitespace-normal leading-tight py-1"
+                  title={`Ver resumo do cancelamento de ${r.studentName}`}
+                >
+                  {r.studentName}
+                </button>
+                <span className="text-center text-foreground font-semibold py-1">
+                  {r.quantidadeInscricoes != null && r.quantidadeInscricoes > 0 ? r.quantidadeInscricoes : '—'}
+                </span>
+                <span className="py-1">
+                  {r.product ? (
+                    <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-md bg-muted text-foreground border border-border break-words whitespace-normal">{r.product}</span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </span>
+                <span className="text-muted-foreground break-words whitespace-normal leading-tight py-1">{r.ac ?? '—'}</span>
+                <span className="text-center text-muted-foreground py-1">{r.installmentIndex}/{r.totalInstallments}</span>
+                <span className="text-right font-semibold text-rose-700 py-1">{formatCurrency(r.value)}</span>
 
+                {/* Método de pagamento — PIX ou Boleto + dados */}
+                <div className="space-y-2 py-1 min-w-0">
+                  <select
+                    value={r.paymentMethod}
+                    onChange={(e) => updatePaymentMethod(r.caseId, r.studentName, e.target.value as RefundPaymentMethod)}
+                    className="input-field text-xs w-full font-semibold"
+                    title="Escolha PIX ou Boleto"
+                  >
+                    <option value="pix">PIX</option>
+                    <option value="boleto">Boleto</option>
+                  </select>
+
+                  {r.paymentMethod === 'pix' ? (
+                    <div className="rounded-lg border border-border bg-card p-2 space-y-1">
+                      <span className="text-[9px] uppercase font-semibold text-muted-foreground">{r.pixKeyType}</span>
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-foreground break-all whitespace-normal leading-tight flex-1">{r.pixKey || '— Chave não informada —'}</span>
+                        {r.pixKey && (
+                          <button onClick={() => copy(r.pixKey, idx)} className="text-muted-foreground hover:text-foreground shrink-0" title="Copiar chave">
+                            {copiedIdx === idx ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-sky-200 bg-sky-50/80 p-2 space-y-2">
+                      <p className="text-[10px] font-semibold text-sky-900 uppercase">Arquivo do boleto</p>
+                      {r.boletoFileUrl ? (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <FileText size={13} className="text-sky-700 shrink-0" />
+                            <span className="text-[11px] text-foreground truncate" title={r.boletoFileName}>{r.boletoFileName ?? 'Boleto anexado'}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openBoleto(r)}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-sky-600 text-white hover:bg-sky-700"
+                            >
+                              <Eye size={11} /> Ver boleto
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => triggerBoletoUpload(r)}
+                              disabled={isUploading}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-sky-300 bg-white text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+                            >
+                              {isUploading ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                              Substituir
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeBoleto(r)}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
+                            >
+                              <Trash2 size={11} /> Remover
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => triggerBoletoUpload(r)}
+                          disabled={isUploading}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50 w-full justify-center"
+                        >
+                          {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                          {isUploading ? 'Enviando…' : 'Anexar boleto (PDF ou imagem)'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <label className="flex flex-col items-center justify-start gap-0.5 cursor-pointer text-center py-1">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={r.lancadoParaPagamento}
+                      onChange={() => toggleLancado(r)}
+                      className="h-3.5 w-3.5 rounded border-border text-emerald-600 focus:ring-emerald-500 shrink-0"
+                    />
+                    <span className="text-[9px] font-medium text-muted-foreground leading-tight">{r.lancadoParaPagamento ? 'Sim' : 'Marcar como lançado'}</span>
+                  </div>
+                  {r.lancadoParaPagamento && (r.lancadoPorNome || r.lancadoAt) && (
+                    <span className="text-[9px] leading-tight text-emerald-700 font-medium break-words whitespace-normal w-full">
+                      {r.lancadoPorNome ?? '—'}{r.lancadoAt ? ` · ${formatDateTimeBR(r.lancadoAt)}` : ''}
+                    </span>
+                  )}
+                </label>
+                <span className="text-right text-muted-foreground py-1">{formatCurrency(r.totalCase)}</span>
+                <span className="flex justify-center py-1">
+                  <button
+                    type="button"
+                    onClick={() => setLogRow(r)}
+                    className="p-1.5 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground"
+                    title="Ver log de alterações desta parcela"
+                  >
+                    <History size={13} />
+                  </button>
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -491,9 +700,6 @@ export default function EstornosPage() {
           </div>
         </div>
       )}
-
     </div>
-
-
   );
 }

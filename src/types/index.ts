@@ -453,6 +453,11 @@ export interface RefundPlanInstallment {
   lancadoPorNome?: string;
   lancadoPorUserId?: string | null;
   lancadoLog?: Array<{ action: string; at: string; byName: string; byUserId?: string | null }>;
+  /** PDF/imagem do boleto desta parcela (path no bucket cancellation-docs) */
+  boletoFileUrl?: string;
+  boletoFileName?: string;
+  boletoUploadedAt?: string;
+  boletoUploadedByNome?: string;
 }
 
 export interface RefundPlan {
