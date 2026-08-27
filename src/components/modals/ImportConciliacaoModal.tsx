@@ -1,11 +1,12 @@
 // ─── Modal: Importar Planilha de Conferência ─────────────────────────────────
 // Lê a planilha modelo (Aluno, VALOR PAGO, Recebimento, Vencimento…) ou export
 // legado do Kamino (Pessoa, Valor Recebido…). Para cada linha:
-//   1. Procura o aluno pelo nome (Pessoa) — independentemente da aba (Alunos,
-//      Cancelamento, Renda Extra). Match exato/normalizado por nome.
-//   2. Busca a parcela com vencimento E valor IGUAIS aos da planilha.
+//   1. Procura os contratos pelo nome (Pessoa) — independentemente da aba
+//      (Alunos, Cancelamento, Renda Extra).
+//   2. Usa o assessor quando informado e só baixa automaticamente quando existe
+//      uma única combinação contrato + vencimento + valor compatível.
 //   3. Marca como paga (paid=true) com paidDate = Recebimento.
-// Linhas sem match exato vão para a sub-aba "Erros" da Conciliação.
+// Linhas ambíguas ou sem identificação segura vão para "Erros".
 
 import { useRef, useState } from 'react';
 import { X, Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Loader2, Download, Check, Pencil, XCircle } from 'lucide-react';
@@ -63,9 +64,11 @@ function normalizeDate(value: unknown, xlsx?: XLSXModule): string | null {
   if (value == null || value === '') return null;
   // Date object (SheetJS pode devolver Date quando cellDates=true ou em algumas versões)
   if (value instanceof Date && !isNaN(value.getTime())) {
-    const y = value.getFullYear();
-    const m = String(value.getMonth() + 1).padStart(2, '0');
-    const d = String(value.getDate()).padStart(2, '0');
+    // Datas do Excel são calendários sem fuso. Usar componentes locais aqui
+    // fazia o navegador em Brasília transformar 25/08 em 24/08.
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
   if (typeof value === 'number') {
@@ -85,9 +88,9 @@ function normalizeDate(value: unknown, xlsx?: XLSXModule): string | null {
   // Tenta Date.parse como fallback (ex: "Fri Apr 17 2026 ...")
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
-    const y = parsed.getFullYear();
-    const m = String(parsed.getMonth() + 1).padStart(2, '0');
-    const d = String(parsed.getDate()).padStart(2, '0');
+    const y = parsed.getUTCFullYear();
+    const m = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
   return null;
@@ -596,7 +599,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
             <FileSpreadsheet className="text-primary" size={20} />
             <div>
               <h2 className="text-lg font-semibold text-foreground">Importar Planilha Conferência</h2>
-              <p className="text-xs text-muted-foreground">Cruza pagamentos da planilha modelo com as parcelas do GC (nome + vencimento + valor).</p>
+              <p className="text-xs text-muted-foreground">Cruza pagamentos da planilha com uma única parcela do contrato (nome + assessor + vencimento + valor).</p>
             </div>
           </div>
           <button onClick={handleClose} className="p-2 rounded-lg hover:bg-muted">
@@ -675,7 +678,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
                 <p><strong>Como funciona:</strong></p>
                 <ul className="list-disc list-inside space-y-0.5 ml-1">
                   <li>Use a <strong>planilha modelo</strong> (Aluno, VALOR PAGO, Recebimento, Vencimento).</li>
-                  <li>O sistema localiza cada aluno pelo nome e a parcela pelo vencimento e valor pago.</li>
+                  <li>O sistema localiza o contrato pelo nome e assessor, e a parcela pelo vencimento e valor pago.</li>
                   <li>Divergências ficam na sub-aba <strong>Erros de Importação</strong> para revisão.</li>
                 </ul>
               </div>
@@ -701,23 +704,25 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
                     <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={16} />
                     <div className="text-xs text-amber-900 flex-1">
                       <p className="font-semibold mb-1">{preview.summary.erros} linha(s) não puderam ser baixadas automaticamente.</p>
-                      <p>Marque as linhas que deseja <strong>conciliar</strong>, edite valor/data se necessário, ou <strong>ignore</strong>. Ao clicar em <strong>Confirmar</strong>, as marcadas serão baixadas; as desmarcadas vão para a sub-aba <strong>Erros</strong>.</p>
+                      <p>Linhas ambíguas, sem parcela identificada ou com divergência ficam protegidas e devem ser resolvidas manualmente na sub-aba <strong>Erros</strong>, onde o contrato e a parcela podem ser escolhidos.</p>
                     </div>
-                    <div className="flex gap-1 shrink-0">
-                      <button
-                        onClick={selectAll}
-                        className="px-2 py-1 rounded-md bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 inline-flex items-center gap-1"
-                        title="Selecionar todas as linhas resolvíveis"
-                      >
-                        <Check size={12} /> Selecionar todos
-                      </button>
-                      <button
-                        onClick={deselectAll}
-                        className="px-2 py-1 rounded-md bg-white border border-amber-300 text-amber-900 text-[11px] font-semibold hover:bg-amber-100 inline-flex items-center gap-1"
-                      >
-                        <XCircle size={12} /> Desmarcar todos
-                      </button>
-                    </div>
+                    {preview.errors.some((e) => isResolvable(e)) && (
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          onClick={selectAll}
+                          className="px-2 py-1 rounded-md bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 inline-flex items-center gap-1"
+                          title="Selecionar todas as linhas resolvíveis"
+                        >
+                          <Check size={12} /> Selecionar todos
+                        </button>
+                        <button
+                          onClick={deselectAll}
+                          className="px-2 py-1 rounded-md bg-white border border-amber-300 text-amber-900 text-[11px] font-semibold hover:bg-amber-100 inline-flex items-center gap-1"
+                        >
+                          <XCircle size={12} /> Desmarcar todos
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="max-h-80 overflow-y-auto rounded-lg border border-amber-200 bg-white">
                     <table className="w-full text-xs">
@@ -966,8 +971,12 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
     // O assessor pode desambiguar contratos quando a planilha possui essa coluna.
     // Se o nome do assessor não encontrar correspondência, não escolhemos um
     // contrato por heurística: a linha fica para resolução manual.
+    const assessorName = normName(row.assessor ?? '').replace(/\s+-\s+assessor(?:\s+\d+)?$/, '');
     const assessorMatches = row.assessor
-      ? matchesRaw.filter((s) => normName(s.ac) === normName(row.assessor ?? ''))
+      ? matchesRaw.filter((s) => {
+          const studentAc = normName(s.ac);
+          return studentAc === assessorName || normName(row.assessor ?? '').startsWith(`${studentAc} - assessor`);
+        })
       : matchesRaw;
     if (row.assessor && assessorMatches.length === 0 && matchesRaw.length > 1) {
       pushError(row, 'multiplos_alunos', undefined, `A planilha informa o assessor "${row.assessor}", mas há ${matchesRaw.length} contratos com este nome. Selecione o contrato correto manualmente.`);
