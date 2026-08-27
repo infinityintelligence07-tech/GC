@@ -88,13 +88,20 @@ function formatDateTimeBR(iso: string): string {
 }
 
 interface EditRefundForm {
+  studentName: string;
+  ac: string;
+  product: string;
+  quantidadeInscricoes: string;
+  installmentDate: string;
+  installmentValue: string;
+  totalValue: string;
   paymentMethod: RefundPaymentMethod;
   pixKeyType: RefundPixKeyType;
   pixKey: string;
 }
 
 export default function EstornosPage() {
-  const { cancellationCases, students, updateCancellationCase, currentUser } = useAppStore();
+  const { cancellationCases, students, updateCancellationCase, updateStudent, currentUser } = useAppStore();
   const [search, setSearch] = useState('');
   const [periodMode, setPeriodMode] = useState<PeriodMode>('mes');
   const [periodAnchor, setPeriodAnchor] = useState<Date>(() => {
@@ -106,7 +113,18 @@ export default function EstornosPage() {
   const [summaryCaseId, setSummaryCaseId] = useState<string | null>(null);
   const [logRow, setLogRow] = useState<RefundRow | null>(null);
   const [editRow, setEditRow] = useState<RefundRow | null>(null);
-  const [editForm, setEditForm] = useState<EditRefundForm>({ paymentMethod: 'pix', pixKeyType: 'CPF', pixKey: '' });
+  const [editForm, setEditForm] = useState<EditRefundForm>({
+    studentName: '',
+    ac: '',
+    product: '',
+    quantidadeInscricoes: '1',
+    installmentDate: '',
+    installmentValue: '0',
+    totalValue: '0',
+    paymentMethod: 'pix',
+    pixKeyType: 'CPF',
+    pixKey: '',
+  });
   const [editError, setEditError] = useState<string | null>(null);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -385,8 +403,17 @@ export default function EstornosPage() {
   };
 
   const openEdit = (r: RefundRow) => {
+    const c = cancellationCases.find((x) => x.id === r.caseId);
+    const student = students.find((s) => s.id === c?.studentId) ?? students.find((s) => s.cancellationCaseId === r.caseId);
     setEditRow(r);
     setEditForm({
+      studentName: c?.studentName ?? r.studentName,
+      ac: c?.ac ?? r.ac ?? '',
+      product: student?.product ?? c?.treinamento ?? r.product ?? '',
+      quantidadeInscricoes: String(c?.quantidadeInscricoes ?? r.quantidadeInscricoes ?? 1),
+      installmentDate: r.date,
+      installmentValue: String(r.value),
+      totalValue: String(c?.refundPlan?.totalValue ?? r.totalCase),
       paymentMethod: r.paymentMethod,
       pixKeyType: (r.pixKeyType as RefundPixKeyType) || 'CPF',
       pixKey: r.pixKey,
@@ -399,6 +426,36 @@ export default function EstornosPage() {
     const c = cancellationCases.find((x) => x.id === editRow.caseId) as CancellationCase | undefined;
     if (!c?.refundPlan) return;
 
+    const installment = c.refundPlan.installments[editRow.installmentIndex - 1];
+    if (!installment) return;
+    const linkedStudent = students.find((s) => s.id === c.studentId) ?? students.find((s) => s.cancellationCaseId === c.id);
+    const studentName = editForm.studentName.trim();
+    const ac = editForm.ac.trim();
+    const product = editForm.product.trim();
+    const quantity = Number.parseInt(editForm.quantidadeInscricoes, 10);
+    const installmentValue = Number(editForm.installmentValue.replace(',', '.'));
+    const totalValue = Number(editForm.totalValue.replace(',', '.'));
+
+    if (!studentName) {
+      setEditError('Informe o nome do aluno.');
+      return;
+    }
+    if (!editForm.installmentDate) {
+      setEditError('Informe a data da parcela.');
+      return;
+    }
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      setEditError('A quantidade de inscrições deve ser um número inteiro maior que zero.');
+      return;
+    }
+    if (!Number.isFinite(installmentValue) || installmentValue < 0) {
+      setEditError('Informe um valor válido para a parcela.');
+      return;
+    }
+    if (!Number.isFinite(totalValue) || totalValue < 0) {
+      setEditError('Informe um valor válido para o total do estorno.');
+      return;
+    }
     if (editForm.paymentMethod === 'pix' && !editForm.pixKey.trim()) {
       setEditError('Informe a chave PIX do aluno.');
       return;
@@ -409,6 +466,22 @@ export default function EstornosPage() {
     const prevKey = c.refundPlan.pixKey ?? '';
     const changes: string[] = [];
 
+    if (c.studentName !== studentName) changes.push(`Aluno: ${c.studentName || '—'} → ${studentName}`);
+    if ((c.ac ?? '') !== ac) changes.push(`Assessor: ${c.ac || '—'} → ${ac || '—'}`);
+    const previousProduct = linkedStudent?.product ?? c.treinamento ?? '';
+    if (previousProduct !== product) changes.push(`Treinamento: ${previousProduct || '—'} → ${product || '—'}`);
+    if ((c.quantidadeInscricoes ?? 1) !== quantity) {
+      changes.push(`Inscrições: ${c.quantidadeInscricoes ?? 1} → ${quantity}`);
+    }
+    if (installment.date !== editForm.installmentDate) {
+      changes.push(`Data da parcela: ${formatDateBR(installment.date)} → ${formatDateBR(editForm.installmentDate)}`);
+    }
+    if (Number(installment.value ?? 0) !== installmentValue) {
+      changes.push(`Valor da parcela: ${formatCurrency(Number(installment.value ?? 0))} → ${formatCurrency(installmentValue)}`);
+    }
+    if (Number(c.refundPlan.totalValue ?? 0) !== totalValue) {
+      changes.push(`Total do estorno: ${formatCurrency(Number(c.refundPlan.totalValue ?? 0))} → ${formatCurrency(totalValue)}`);
+    }
     if (prevMethod !== editForm.paymentMethod) {
       changes.push(`Método: ${refundPaymentMethodLabel(prevMethod)} → ${refundPaymentMethodLabel(editForm.paymentMethod)}`);
     }
@@ -434,9 +507,15 @@ export default function EstornosPage() {
     let nextPlan = appendPlanLog(
       {
         ...c.refundPlan,
+        totalValue,
         paymentMethod: editForm.paymentMethod,
         pixKeyType: editForm.paymentMethod === 'pix' ? editForm.pixKeyType : c.refundPlan.pixKeyType,
         pixKey: editForm.paymentMethod === 'pix' ? editForm.pixKey.trim() : '',
+        installments: c.refundPlan.installments.map((p, idx) =>
+          idx === editRow.installmentIndex - 1
+            ? { ...p, date: editForm.installmentDate, value: installmentValue }
+            : p,
+        ),
       },
       { action: 'dados_alterados', detail },
     );
@@ -451,13 +530,22 @@ export default function EstornosPage() {
       }),
     };
 
-    updateCancellationCase(c.id, { refundPlan: nextPlan });
+    updateCancellationCase(c.id, {
+      studentName,
+      ac,
+      treinamento: product,
+      quantidadeInscricoes: quantity,
+      refundPlan: nextPlan,
+    });
+    if (linkedStudent) {
+      updateStudent(linkedStudent.id, { name: studentName, ac, product });
+    }
     logActivity({
       action: 'estorno.dados_alterados',
       entity: 'cancellation',
       entityId: c.id,
-      entityLabel: editRow.studentName,
-      summary: `${userName} alterou dados do estorno de ${editRow.studentName}: ${detail}`,
+      entityLabel: studentName,
+      summary: `${userName} alterou dados do estorno de ${studentName}: ${detail}`,
       meta: { parcela: editRow.installmentIndex, alteracoes: changes },
     });
     setEditRow(null);
@@ -671,7 +759,7 @@ export default function EstornosPage() {
                       type="button"
                       onClick={() => openEdit(r)}
                       className="p-1.5 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
-                      title="Editar dados do estorno (PIX, método de pagamento)"
+                      title="Editar todos os dados do estorno"
                     >
                       <Pencil size={12} />
                     </button>
@@ -807,7 +895,7 @@ export default function EstornosPage() {
 
       {editRow && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setEditRow(null)}>
-          <div className="w-full max-w-md rounded-2xl bg-card border border-border saas-shadow-sm" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card border border-border saas-shadow-sm" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border">
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase text-muted-foreground">Editar dados do estorno</p>
@@ -821,6 +909,81 @@ export default function EstornosPage() {
               </button>
             </div>
             <div className="p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-semibold uppercase text-muted-foreground">Nome do aluno</label>
+                  <input
+                    type="text"
+                    value={editForm.studentName}
+                    onChange={(e) => setEditForm((f) => ({ ...f, studentName: e.target.value }))}
+                    className="input-field text-xs w-full mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold uppercase text-muted-foreground">Assessor</label>
+                  <input
+                    type="text"
+                    value={editForm.ac}
+                    onChange={(e) => setEditForm((f) => ({ ...f, ac: e.target.value }))}
+                    className="input-field text-xs w-full mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold uppercase text-muted-foreground">Treinamento</label>
+                  <input
+                    type="text"
+                    value={editForm.product}
+                    onChange={(e) => setEditForm((f) => ({ ...f, product: e.target.value }))}
+                    className="input-field text-xs w-full mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold uppercase text-muted-foreground">Quantidade de inscrições</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={editForm.quantidadeInscricoes}
+                    onChange={(e) => setEditForm((f) => ({ ...f, quantidadeInscricoes: e.target.value }))}
+                    className="input-field text-xs w-full mt-1"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] font-semibold uppercase text-muted-foreground">Data da parcela</label>
+                  <input
+                    type="date"
+                    value={editForm.installmentDate}
+                    onChange={(e) => setEditForm((f) => ({ ...f, installmentDate: e.target.value }))}
+                    className="input-field text-xs w-full mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold uppercase text-muted-foreground">Valor da parcela</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editForm.installmentValue}
+                    onChange={(e) => setEditForm((f) => ({ ...f, installmentValue: e.target.value }))}
+                    className="input-field text-xs w-full mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold uppercase text-muted-foreground">Total do estorno</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editForm.totalValue}
+                    onChange={(e) => setEditForm((f) => ({ ...f, totalValue: e.target.value }))}
+                    className="input-field text-xs w-full mt-1"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="text-[10px] font-semibold uppercase text-muted-foreground">Método de pagamento</label>
                 <select
@@ -862,7 +1025,7 @@ export default function EstornosPage() {
                 </div>
               ) : (
                 <p className="text-[11px] text-sky-800 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
-                  Para boleto, anexe o arquivo diretamente na linha da parcela. Alterações de método serão registradas no log.
+                  O boleto pode ser anexado ou substituído diretamente na linha da parcela. A alteração do método será registrada no log.
                 </p>
               )}
 
