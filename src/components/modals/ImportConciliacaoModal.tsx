@@ -225,6 +225,7 @@ interface BaixaKaminoEntry {
   ac?: string;
   installmentNumber: number;
   installmentValue: number;
+  paidValue: number;
   dueDate: string;
   paidDate: string;
 }
@@ -565,7 +566,14 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
             ac: b.ac,
             resumo: `Parcela ${b.installmentNumber} (venc. ${fmtDate(b.dueDate)} • ${fmtBRL(b.installmentValue)}) baixada via Kamino em ${fmtDate(b.paidDate)}.`,
             antes: { paid: false, paidDate: null, numero: b.installmentNumber, valor: b.installmentValue, vencimento: b.dueDate },
-            depois: { paid: true, paidDate: b.paidDate, numero: b.installmentNumber, valor: b.installmentValue, vencimento: b.dueDate },
+            depois: {
+              paid: true,
+              paidDate: b.paidDate,
+              numero: b.installmentNumber,
+              valor: b.installmentValue,
+              paidValue: b.paidValue,
+              vencimento: b.dueDate,
+            },
             autorId: currentUser?.id,
             autorNome: currentUser?.name,
             status: 'conciliado' as const,
@@ -1038,14 +1046,19 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
     if (exactMatches.length === 1) {
       const { student: studentMatched, installment: target } = exactMatches[0];
       const insts = getDraft(studentMatched);
+      const paidValue = Number(valorPago) || Number(target.value) || 0;
       target.paid = true;
       target.paidDate = row.recebimento ?? new Date().toISOString().split('T')[0];
+      if (Math.abs(paidValue - target.value) > 0.01) {
+        target.paidValue = paidValue;
+      }
       baixas.push({
         studentId: studentMatched.id,
         studentName: studentMatched.name,
         ac: studentMatched.ac,
         installmentNumber: target.number,
         installmentValue: Number(target.value) || 0,
+        paidValue,
         dueDate: target.dueDate,
         paidDate: target.paidDate,
       });
@@ -1058,7 +1071,30 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
       continue;
     }
     if (paidMatches.length === 1) {
-      jaPagas++;
+      const { student: paidStudent, installment: paidInstallment } = paidMatches[0];
+      const paidValue = Number(valorPago) || Number(paidInstallment.value) || 0;
+      const currentPaidValue = Number(paidInstallment.paidValue) || Number(paidInstallment.value) || 0;
+      // Reimportação da mesma planilha pode trazer o valor recebido com juros
+      // ou desconto. Atualiza somente esse valor, sem criar uma nova baixa
+      // quando ele já estiver idêntico.
+      if (Math.abs(currentPaidValue - paidValue) > 0.01) {
+        const insts = getDraft(paidStudent);
+        const target = insts.find((i) => i.number === paidInstallment.number);
+        if (target) target.paidValue = paidValue;
+        baixas.push({
+          studentId: paidStudent.id,
+          studentName: paidStudent.name,
+          ac: paidStudent.ac,
+          installmentNumber: paidInstallment.number,
+          installmentValue: Number(paidInstallment.value) || 0,
+          paidValue,
+          dueDate: paidInstallment.dueDate,
+          paidDate: paidInstallment.paidDate ?? row.recebimento ?? new Date().toISOString().split('T')[0],
+        });
+        pagas++;
+      } else {
+        jaPagas++;
+      }
       continue;
     }
     if (divergeMatches.length > 1) {
@@ -1093,13 +1129,21 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
     if (!original) continue;
     // Identifica novas baixas (em paralelo de índice — ordem é estável)
     const novas = insts.filter((i, idx) => i.paid && !original.installments[idx]?.paid);
-    if (novas.length === 0) continue;
+    const valoresAtualizados = insts.filter((i, idx) =>
+      i.paid &&
+      typeof i.paidValue === 'number' &&
+      Math.abs((original.installments[idx]?.paidValue ?? original.installments[idx]?.value ?? 0) - i.paidValue) > 0.01,
+    );
+    const alteradas = [...new Map(
+      [...novas, ...valoresAtualizados].map((i) => [i.number, i]),
+    ).values()];
+    if (alteradas.length === 0) continue;
     const totalPagas = insts.filter((i) => i.paid).length;
     const restantes = insts.length - totalPagas;
-    const newHistoryEntries = novas.map((i) => ({
+    const newHistoryEntries = alteradas.map((i) => ({
       date: new Date().toISOString(),
       type: 'Sistema' as const,
-      text: `Baixa via Conciliação Kamino — Parcela ${i.number}: ${fmtBRLh(Number(i.value) || 0)} pago em ${fmtDateH(i.paidDate ?? '')}. ${totalPagas}/${insts.length} pagas (faltam ${restantes}).`,
+      text: `Baixa via Conciliação Kamino — Parcela ${i.number}: ${fmtBRLh(Number(i.paidValue ?? i.value) || 0)} pago em ${fmtDateH(i.paidDate ?? '')}. ${totalPagas}/${insts.length} pagas (faltam ${restantes}).`,
     }));
     studentUpdates.set(id, {
       installments: insts,

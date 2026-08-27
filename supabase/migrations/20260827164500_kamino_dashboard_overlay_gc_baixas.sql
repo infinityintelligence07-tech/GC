@@ -85,9 +85,21 @@ AS $$
   )
   SELECT jsonb_build_object(
     'aVencer',
-      COALESCE(SUM(value) FILTER (WHERE NOT (staging_paid OR has_gc_baixa)), 0),
+      COALESCE(SUM(
+        CASE
+          WHEN staging_paid THEN 0
+          WHEN has_gc_baixa THEN GREATEST(value - gc_paid_value, 0)
+          ELSE value
+        END
+      ), 0),
     'pago',
-      COALESCE(SUM(value) FILTER (WHERE staging_paid OR has_gc_baixa), 0),
+      COALESCE(SUM(
+        CASE
+          WHEN staging_paid THEN value
+          WHEN has_gc_baixa THEN gc_paid_value
+          ELSE 0
+        END
+      ), 0),
     'pagoReal',
       COALESCE(SUM(
         CASE
