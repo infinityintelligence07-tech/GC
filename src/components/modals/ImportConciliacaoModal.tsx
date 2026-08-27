@@ -265,7 +265,14 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
   const [rowSelected, setRowSelected] = useState<Record<number, boolean>>({});
   // Modo de edição ativo por linha (separado de rowEdits, que armazena valores)
   const [rowEditing, setRowEditing] = useState<Record<number, boolean>>({});
-  const QUICK_BLOCKED: ConciliacaoImportErrorMotivo[] = ['aluno_nao_encontrado', 'multiplos_alunos', 'sem_pagamento', 'parcela_ja_paga'];
+  const QUICK_BLOCKED: ConciliacaoImportErrorMotivo[] = [
+    'aluno_nao_encontrado',
+    'multiplos_alunos',
+    'sem_pagamento',
+    'parcela_ja_paga',
+    'parcela_nao_encontrada',
+    'valor_diverge',
+  ];
 
   const isResolvable = (e: { motivo: ConciliacaoImportErrorMotivo; studentId?: string }) =>
     !QUICK_BLOCKED.includes(e.motivo) && !!e.studentId;
@@ -956,12 +963,17 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
       pushError(row, 'aluno_nao_encontrado');
       continue;
     }
-    // Prioriza: (1) tem parcela EM ABERTO com o vencimento da planilha,
-    // (2) tem parcela (paga ou não) com aquele vencimento, (3) NÃO Renda
-    // Extra, (4) maior nº de parcelas, (5) maior valor de contrato. Evita
-    // que o erro/baixa caia em um cadastro paralelo (com mesmo nome) que já
-    // teve a parcela daquela data baixada.
-    const matchesStudents = matchesRaw.slice().sort((a, b) => {
+    // O assessor pode desambiguar contratos quando a planilha possui essa coluna.
+    // Se o nome do assessor não encontrar correspondência, não escolhemos um
+    // contrato por heurística: a linha fica para resolução manual.
+    const assessorMatches = row.assessor
+      ? matchesRaw.filter((s) => normName(s.ac) === normName(row.assessor ?? ''))
+      : matchesRaw;
+    if (row.assessor && assessorMatches.length === 0 && matchesRaw.length > 1) {
+      pushError(row, 'multiplos_alunos', undefined, `A planilha informa o assessor "${row.assessor}", mas há ${matchesRaw.length} contratos com este nome. Selecione o contrato correto manualmente.`);
+      continue;
+    }
+    const matchesStudents = (assessorMatches.length > 0 ? assessorMatches : matchesRaw).slice().sort((a, b) => {
       const aHasOpen = row.vencimento ? getDraft(a).some((i) => i.dueDate === row.vencimento && !i.paid) : false;
       const bHasOpen = row.vencimento ? getDraft(b).some((i) => i.dueDate === row.vencimento && !i.paid) : false;
       if (aHasOpen !== bHasOpen) return aHasOpen ? -1 : 1;
@@ -984,38 +996,39 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
 
     // Tenta achar parcela em algum dos alunos com aquele nome.
     // Match exigido: dueDate === row.vencimento && value === valorPago && !paid.
-    let matchedStudentId: string | null = null;
-    let matchedInstallmentNumber: number | null = null;
-    let foundButPaid = false;
+    const exactMatches: Array<{ student: Student; installment: Installment }> = [];
+    const paidMatches: Array<{ student: Student; installment: Installment }> = [];
     // Aluno + valor da parcela onde o vencimento bateu mas o valor está fora
     // da tolerância. Guardamos o id para vincular o erro ao cadastro CERTO.
-    let divergeStudentId: string | null = null;
-    let divergeInstallmentValue: number | null = null;
+    const divergeMatches: Array<{ student: Student; installment: Installment }> = [];
 
     for (const s of matchesStudents) {
       const insts = getDraft(s);
       // 1. Vencimento bate + valor dentro da tolerância (±15%) e não paga
       const exato = insts.find((i) => i.dueDate === row.vencimento && valueWithinKaminoTolerance(i.value, valorPago) && !i.paid);
       if (exato) {
-        matchedStudentId = s.id;
-        matchedInstallmentNumber = exato.number;
-        break;
+        exactMatches.push({ student: s, installment: exato });
+        continue;
       }
       // 2. Vencimento + valor dentro da tolerância (já paga) → flag
       const jaPaga = insts.find((i) => i.dueDate === row.vencimento && valueWithinKaminoTolerance(i.value, valorPago) && i.paid);
-      if (jaPaga && !foundButPaid) foundButPaid = true;
+      if (jaPaga) paidMatches.push({ student: s, installment: jaPaga });
       // 3. Vencimento bate mas valor fora da tolerância → flag (apenas sinaliza)
       const venc = insts.find((i) => i.dueDate === row.vencimento && !i.paid);
-      if (venc && divergeStudentId == null) {
-        divergeStudentId = s.id;
-        divergeInstallmentValue = Number(venc.value) || 0;
-      }
+      if (venc) divergeMatches.push({ student: s, installment: venc });
     }
 
-    if (matchedStudentId && matchedInstallmentNumber != null) {
-      const studentMatched = matchesStudents.find((s) => s.id === matchedStudentId)!;
+    if (exactMatches.length > 1) {
+      const contratos = exactMatches
+        .map(({ student, installment }) => `${student.product || 'Treinamento não informado'}${student.ciclo ? ` (${student.ciclo})` : ''} — parcela ${installment.number}`)
+        .join('; ');
+      pushError(row, 'multiplos_alunos', undefined, `Há mais de um contrato com vencimento e valor compatíveis: ${contratos}. Selecione o contrato correto manualmente.`);
+      continue;
+    }
+
+    if (exactMatches.length === 1) {
+      const { student: studentMatched, installment: target } = exactMatches[0];
       const insts = getDraft(studentMatched);
-      const target = insts.find((i) => i.number === matchedInstallmentNumber)!;
       target.paid = true;
       target.paidDate = row.recebimento ?? new Date().toISOString().split('T')[0];
       baixas.push({
@@ -1031,20 +1044,30 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
       continue;
     }
 
-    if (foundButPaid) {
+    if (paidMatches.length > 1) {
+      pushError(row, 'multiplos_alunos', undefined, 'A mesma parcela já está paga em mais de um contrato com este nome. Selecione o contrato correto manualmente.');
+      continue;
+    }
+    if (paidMatches.length === 1) {
       jaPagas++;
       continue;
     }
-    if (divergeStudentId && divergeInstallmentValue != null) {
+    if (divergeMatches.length > 1) {
+      pushError(row, 'multiplos_alunos', undefined, 'O vencimento existe em mais de um contrato, mas os valores divergem. Selecione o contrato correto manualmente antes de baixar.');
+      continue;
+    }
+    if (divergeMatches.length === 1) {
+      const { student: divergeStudent, installment: divergeInstallment } = divergeMatches[0];
+      const divergeInstallmentValue = Number(divergeInstallment.value) || 0;
       const diffAbs = valorPago - divergeInstallmentValue;
       const diffPct = divergeInstallmentValue > 0 ? (diffAbs / divergeInstallmentValue) * 100 : 0;
       const fmt = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
       const sinal = diffAbs < 0 ? 'a menos' : 'a mais';
       const detail = `Parcela registrada ${fmt(divergeInstallmentValue)} · pago ${fmt(valorPago)} (${fmt(Math.abs(diffAbs))} ${sinal} · ${diffPct.toFixed(2).replace('.', ',')}%). Fora da tolerância de ±15% — revise o valor antes de baixar.`;
-      pushError(row, 'valor_diverge', divergeStudentId, detail);
+      pushError(row, 'valor_diverge', divergeStudent.id, detail);
       continue;
     }
-    pushError(row, 'parcela_nao_encontrada', matchesStudents[0]?.id);
+    pushError(row, 'parcela_nao_encontrada', undefined);
   }
 
   // Monta updates por aluno (apenas os que mudaram).

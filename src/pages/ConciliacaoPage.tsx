@@ -1029,6 +1029,8 @@ const QUICK_RESOLVE_BLOCKED: ConciliacaoImportErrorMotivo[] = [
   'multiplos_alunos',
   'sem_pagamento',
   'parcela_ja_paga',
+  'parcela_nao_encontrada',
+  'valor_diverge',
 ];
 
 async function quickResolveImportError(
@@ -3317,9 +3319,12 @@ function ResolveErrorModal({
                   >
                     {candidatos.map((c) => {
                       const abertas = c.installments.filter((i) => !i.paid).length;
+                      const contrato = [c.product, c.ciclo, c.cpf ? `CPF ${c.cpf}` : '']
+                        .filter(Boolean)
+                        .join(' · ');
                       return (
                         <option key={c.id} value={c.id}>
-                          {c.name} — {c.installments.length} parc. ({abertas} em aberto){c.isRendaExtra ? ' • Renda Extra' : ''}
+                          {c.name} — {contrato || 'Contrato sem identificação'} — {c.installments.length} parc. ({abertas} em aberto){c.isRendaExtra ? ' • Renda Extra' : ''}
                         </option>
                       );
                     })}
