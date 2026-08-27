@@ -6,7 +6,7 @@ export type KaminoDashboardForecastTotals = {
   pagoReal: number;
   total: number;
   qtd: number;
-  source: 'kamino_staging';
+  source: 'kamino_staging' | 'kamino_staging_gc_overlay';
 };
 
 function parseKaminoTotalsPayload(data: unknown): KaminoDashboardForecastTotals | null {
@@ -24,7 +24,9 @@ function parseKaminoTotalsPayload(data: unknown): KaminoDashboardForecastTotals 
     pagoReal: Number(row.pagoReal ?? 0),
     total: Number(row.total ?? 0),
     qtd: Number(row.qtd ?? 0),
-    source: 'kamino_staging',
+    source: row.source === 'kamino_staging_gc_overlay'
+      ? 'kamino_staging_gc_overlay'
+      : 'kamino_staging',
   };
 }
 
