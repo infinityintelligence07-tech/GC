@@ -19,7 +19,6 @@ import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
 import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
-import { fetchKaminoDashboardForecastTotals, type KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -46,7 +45,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { students, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals } = useAppStore();
+  const { students, acs, products, cancellationCases, studentTags } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
   const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
@@ -110,29 +109,6 @@ export default function DashboardPage() {
   // ── Forecast custom dates ─────────────────────────────────────────────────
   const [forecastCustomStart, setForecastCustomStart] = useState(currentMonthStart);
   const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
-  const [kaminoForecastTotals, setKaminoForecastTotals] = useState<KaminoDashboardForecastTotals | null>(null);
-
-  const usesKaminoAuthoritativeForecast =
-    mode === 'performance' &&
-    forecastIndex === 0 &&
-    dateBasis === 'vencimento' &&
-    tagFilters.length === 0 &&
-    scoreFilter === null;
-
-  useEffect(() => {
-    if (!usesKaminoAuthoritativeForecast) {
-      setKaminoForecastTotals(null);
-      return;
-    }
-    let cancelled = false;
-    void fetchKaminoDashboardForecastTotals(acFilter || undefined, productFilter || undefined).then((totals) => {
-      if (!cancelled) setKaminoForecastTotals(totals);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [usesKaminoAuthoritativeForecast, acFilter, productFilter]);
-
   // ── Base dataset: filter by AC + Produto (Score aplicado depois) ─────────
   // Mantemos dois estágios para que a distribuição de Score continue refletindo
   // a carteira filtrada por AC+Produto (sem se auto-zerar quando o próprio
@@ -686,21 +662,10 @@ export default function DashboardPage() {
 
   // Carteira Total (card azul) = A Vencer / Vencido da projeção (mesmo valor do card laranja).
   const forecastTotaisBase = getForecastTotals();
-  const activeKaminoTotals = (acFilter || productFilter)
-    ? kaminoForecastTotals
-    : (kaminoForecastTotals ?? kaminoPortfolioTotals);
-  const kaminoTotalsPending = usesKaminoAuthoritativeForecast && !activeKaminoTotals;
-  const forecastTotais =
-    usesKaminoAuthoritativeForecast && activeKaminoTotals
-      ? {
-          ...forecastTotaisBase,
-          aVencer: activeKaminoTotals.aVencer,
-          pago: activeKaminoTotals.pago,
-          pagoReal: activeKaminoTotals.pagoReal,
-          total: activeKaminoTotals.total,
-          totalReal: activeKaminoTotals.aVencer + activeKaminoTotals.pagoReal,
-        }
-      : forecastTotaisBase;
+  // O card deve reagir às baixas feitas no GC imediatamente. A fonte Kamino
+  // continua sendo usada nas importações/conciliações, mas não pode sobrescrever
+  // a carteira viva depois que uma alteração financeira foi aplicada no GC.
+  const forecastTotais = forecastTotaisBase;
   const carteiraTotalValue = forecastTotais.aVencer;
   const carteiraTotalAlunos = forecastTotais.qtdAlunosAVencer;
 
@@ -1042,7 +1007,7 @@ export default function DashboardPage() {
             </div>
             <p className="text-xs text-muted-foreground mb-4">
               {dateBasis === 'vencimento'
-                ? `Projeção financeira por período ${acFilter ? `(${acFilter})` : usesKaminoAuthoritativeForecast ? '(fonte Kamino)' : '(carteira GC)'}`
+                ? `Projeção financeira por período ${acFilter ? `(${acFilter})` : '(carteira GC)'}`
                 : `Títulos pagos no período ${acFilter ? `(${acFilter})` : '(carteira GC)'}`}
             </p>
             <div className="flex gap-1 mb-4 flex-wrap items-center">
@@ -1158,17 +1123,17 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="kpi-fit rounded-xl border border-amber-200/60 bg-amber-50/60 p-2 min-w-0">
                     <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">A Vencer / Vencido</p>
-                    <p className="kpi-value-fit text-amber-700 mt-0.5" title={kaminoTotalsPending ? 'Carregando totais Kamino…' : formatCurrency(aVencer)}>
-                      {kaminoTotalsPending ? '…' : formatCurrency(aVencer)}
+                    <p className="kpi-value-fit text-amber-700 mt-0.5" title={formatCurrency(aVencer)}>
+                      {formatCurrency(aVencer)}
                     </p>
-                    <p className="text-[10px] font-semibold text-amber-700 mt-0">{kaminoTotalsPending ? '—' : `${pctAV}%`}</p>
+                    <p className="text-[10px] font-semibold text-amber-700 mt-0">{`${pctAV}%`}</p>
                   </div>
                   <div className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0">
                     <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Pago</p>
-                    <p className="kpi-value-fit text-emerald-700 mt-0.5" title={kaminoTotalsPending ? 'Carregando totais Kamino…' : formatCurrency(pago)}>
-                      {kaminoTotalsPending ? '…' : formatCurrency(pago)}
+                    <p className="kpi-value-fit text-emerald-700 mt-0.5" title={formatCurrency(pago)}>
+                      {formatCurrency(pago)}
                     </p>
-                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">{kaminoTotalsPending ? '—' : `${pctPg}%`}</p>
+                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">{`${pctPg}%`}</p>
                   </div>
                 </div>
               );
