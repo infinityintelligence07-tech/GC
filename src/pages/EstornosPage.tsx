@@ -113,6 +113,7 @@ export default function EstornosPage() {
   const [summaryCaseId, setSummaryCaseId] = useState<string | null>(null);
   const [logRow, setLogRow] = useState<RefundRow | null>(null);
   const [editRow, setEditRow] = useState<RefundRow | null>(null);
+  const [editScopePrompt, setEditScopePrompt] = useState(false);
   const [editForm, setEditForm] = useState<EditRefundForm>({
     studentName: '',
     ac: '',
@@ -180,20 +181,21 @@ export default function EstornosPage() {
       if (!plan?.installments?.length) return;
       const st = students.find((s) => s.id === c.studentId);
       plan.installments.forEach((p: any, idx: number) => {
+        const overrides = p.refundOverrides ?? {};
         list.push({
           caseId: c.id,
-          studentName: c.studentName,
-          ac: c.ac,
-          product: st?.product ?? (c as any).treinamento ?? undefined,
-          quantidadeInscricoes: c.quantidadeInscricoes,
-          totalCase: Number(plan.totalValue ?? 0),
+          studentName: overrides.studentName ?? c.studentName,
+          ac: overrides.ac ?? c.ac,
+          product: overrides.product ?? st?.product ?? (c as any).treinamento ?? undefined,
+          quantidadeInscricoes: overrides.quantidadeInscricoes ?? c.quantidadeInscricoes,
+          totalCase: Number(overrides.totalValue ?? plan.totalValue ?? 0),
           installmentIndex: idx + 1,
           totalInstallments: plan.installments.length,
           date: p.date,
           value: Number(p.value ?? 0),
-          pixKey: plan.pixKey ?? '',
-          pixKeyType: plan.pixKeyType ?? '—',
-          paymentMethod: resolveRefundPaymentMethod(plan),
+          pixKey: overrides.pixKey ?? plan.pixKey ?? '',
+          pixKeyType: overrides.pixKeyType ?? plan.pixKeyType ?? '—',
+          paymentMethod: overrides.paymentMethod ?? resolveRefundPaymentMethod(plan),
           boletoFileUrl: p.boletoFileUrl,
           boletoFileName: p.boletoFileName,
           createdAt: plan.createdAt ?? c.createdAt ?? '',
@@ -407,13 +409,13 @@ export default function EstornosPage() {
     const student = students.find((s) => s.id === c?.studentId) ?? students.find((s) => s.cancellationCaseId === r.caseId);
     setEditRow(r);
     setEditForm({
-      studentName: c?.studentName ?? r.studentName,
-      ac: c?.ac ?? r.ac ?? '',
-      product: student?.product ?? c?.treinamento ?? r.product ?? '',
-      quantidadeInscricoes: String(c?.quantidadeInscricoes ?? r.quantidadeInscricoes ?? 1),
+      studentName: r.studentName,
+      ac: r.ac ?? '',
+      product: r.product ?? student?.product ?? c?.treinamento ?? '',
+      quantidadeInscricoes: String(r.quantidadeInscricoes ?? 1),
       installmentDate: r.date,
       installmentValue: String(r.value),
-      totalValue: String(c?.refundPlan?.totalValue ?? r.totalCase),
+      totalValue: String(r.totalCase),
       paymentMethod: r.paymentMethod,
       pixKeyType: (r.pixKeyType as RefundPixKeyType) || 'CPF',
       pixKey: r.pixKey,
@@ -421,14 +423,16 @@ export default function EstornosPage() {
     setEditError(null);
   };
 
-  const saveRefundEdit = () => {
+  const saveRefundEdit = (scope: 'current' | 'all') => {
     if (!editRow) return;
+    setEditScopePrompt(false);
     const c = cancellationCases.find((x) => x.id === editRow.caseId) as CancellationCase | undefined;
     if (!c?.refundPlan) return;
 
     const installment = c.refundPlan.installments[editRow.installmentIndex - 1];
     if (!installment) return;
     const linkedStudent = students.find((s) => s.id === c.studentId) ?? students.find((s) => s.cancellationCaseId === c.id);
+    const currentOverrides = installment.refundOverrides ?? {};
     const studentName = editForm.studentName.trim();
     const ac = editForm.ac.trim();
     const product = editForm.product.trim();
@@ -461,17 +465,21 @@ export default function EstornosPage() {
       return;
     }
 
-    const prevMethod = resolveRefundPaymentMethod(c.refundPlan);
-    const prevType = c.refundPlan.pixKeyType ?? '—';
-    const prevKey = c.refundPlan.pixKey ?? '';
+    const prevMethod = editRow.paymentMethod;
+    const prevType = editRow.pixKeyType || '—';
+    const prevKey = editRow.pixKey;
+    const prevName = editRow.studentName;
+    const prevAc = editRow.ac ?? '';
+    const prevProduct = editRow.product ?? '';
+    const prevQuantity = editRow.quantidadeInscricoes ?? 1;
+    const prevTotal = editRow.totalCase;
     const changes: string[] = [];
 
-    if (c.studentName !== studentName) changes.push(`Aluno: ${c.studentName || '—'} → ${studentName}`);
-    if ((c.ac ?? '') !== ac) changes.push(`Assessor: ${c.ac || '—'} → ${ac || '—'}`);
-    const previousProduct = linkedStudent?.product ?? c.treinamento ?? '';
-    if (previousProduct !== product) changes.push(`Treinamento: ${previousProduct || '—'} → ${product || '—'}`);
-    if ((c.quantidadeInscricoes ?? 1) !== quantity) {
-      changes.push(`Inscrições: ${c.quantidadeInscricoes ?? 1} → ${quantity}`);
+    if (prevName !== studentName) changes.push(`Aluno: ${prevName || '—'} → ${studentName}`);
+    if (prevAc !== ac) changes.push(`Assessor: ${prevAc || '—'} → ${ac || '—'}`);
+    if (prevProduct !== product) changes.push(`Treinamento: ${prevProduct || '—'} → ${product || '—'}`);
+    if (prevQuantity !== quantity) {
+      changes.push(`Inscrições: ${prevQuantity} → ${quantity}`);
     }
     if (installment.date !== editForm.installmentDate) {
       changes.push(`Data da parcela: ${formatDateBR(installment.date)} → ${formatDateBR(editForm.installmentDate)}`);
@@ -479,8 +487,8 @@ export default function EstornosPage() {
     if (Number(installment.value ?? 0) !== installmentValue) {
       changes.push(`Valor da parcela: ${formatCurrency(Number(installment.value ?? 0))} → ${formatCurrency(installmentValue)}`);
     }
-    if (Number(c.refundPlan.totalValue ?? 0) !== totalValue) {
-      changes.push(`Total do estorno: ${formatCurrency(Number(c.refundPlan.totalValue ?? 0))} → ${formatCurrency(totalValue)}`);
+    if (Number(prevTotal) !== totalValue) {
+      changes.push(`Total do estorno: ${formatCurrency(Number(prevTotal))} → ${formatCurrency(totalValue)}`);
     }
     if (prevMethod !== editForm.paymentMethod) {
       changes.push(`Método: ${refundPaymentMethodLabel(prevMethod)} → ${refundPaymentMethodLabel(editForm.paymentMethod)}`);
@@ -504,49 +512,65 @@ export default function EstornosPage() {
     const stamp = new Date().toISOString();
     const detail = changes.join('; ');
 
-    let nextPlan = appendPlanLog(
-      {
-        ...c.refundPlan,
-        totalValue,
-        paymentMethod: editForm.paymentMethod,
-        pixKeyType: editForm.paymentMethod === 'pix' ? editForm.pixKeyType : c.refundPlan.pixKeyType,
-        pixKey: editForm.paymentMethod === 'pix' ? editForm.pixKey.trim() : '',
-        installments: c.refundPlan.installments.map((p, idx) =>
-          idx === editRow.installmentIndex - 1
-            ? { ...p, date: editForm.installmentDate, value: installmentValue }
-            : p,
-        ),
-      },
-      { action: 'dados_alterados', detail },
-    );
-
     const logEntry: RefundLogEntry = { action: 'editou_dados', at: stamp, byName: userName, byUserId: userId, detail };
-    nextPlan = {
-      ...nextPlan,
-      installments: nextPlan.installments.map((p, idx) => {
-        if (idx !== editRow.installmentIndex - 1) return p;
-        const prevLog: RefundLogEntry[] = Array.isArray(p.lancadoLog) ? (p.lancadoLog as RefundLogEntry[]) : [];
-        return { ...p, lancadoLog: [...prevLog, logEntry] };
-      }),
+    const selectedIndex = editRow.installmentIndex - 1;
+    const nextInstallments = c.refundPlan.installments.map((p, idx) => {
+      if (idx !== selectedIndex) return scope === 'all' ? { ...p, refundOverrides: undefined } : p;
+      const refundOverrides = scope === 'all'
+        ? undefined
+        : {
+            ...currentOverrides,
+            studentName,
+            ac,
+            product,
+            quantidadeInscricoes: quantity,
+            totalValue,
+            paymentMethod: editForm.paymentMethod,
+            pixKeyType: editForm.pixKeyType,
+            pixKey: editForm.pixKey.trim(),
+          };
+      const prevLog: RefundLogEntry[] = Array.isArray(p.lancadoLog) ? (p.lancadoLog as RefundLogEntry[]) : [];
+      return {
+        ...p,
+        date: editForm.installmentDate,
+        value: installmentValue,
+        refundOverrides,
+        lancadoLog: [...prevLog, logEntry],
+      };
+    });
+    const basePlan = {
+      ...c.refundPlan,
+      installments: nextInstallments,
     };
+    const nextPlan = scope === 'all'
+      ? appendPlanLog(
+          {
+            ...basePlan,
+            totalValue,
+            paymentMethod: editForm.paymentMethod,
+            pixKeyType: editForm.paymentMethod === 'pix' ? editForm.pixKeyType : c.refundPlan.pixKeyType,
+            pixKey: editForm.paymentMethod === 'pix' ? editForm.pixKey.trim() : '',
+          },
+          { action: 'dados_alterados', detail: `Todos os lançamentos: ${detail}` },
+        )
+      : basePlan;
 
     updateCancellationCase(c.id, {
-      studentName,
-      ac,
-      treinamento: product,
-      quantidadeInscricoes: quantity,
+      ...(scope === 'all'
+        ? { studentName, ac, treinamento: product, quantidadeInscricoes: quantity }
+        : {}),
       refundPlan: nextPlan,
     });
-    if (linkedStudent) {
+    if (scope === 'all' && linkedStudent) {
       updateStudent(linkedStudent.id, { name: studentName, ac, product });
     }
     logActivity({
       action: 'estorno.dados_alterados',
       entity: 'cancellation',
       entityId: c.id,
-      entityLabel: studentName,
-      summary: `${userName} alterou dados do estorno de ${studentName}: ${detail}`,
-      meta: { parcela: editRow.installmentIndex, alteracoes: changes },
+      entityLabel: editRow.studentName,
+      summary: `${userName} alterou dados do estorno de ${editRow.studentName}: ${scope === 'all' ? 'todos os lançamentos' : 'somente este lançamento'} — ${detail}`,
+      meta: { parcela: editRow.installmentIndex, escopo: scope, alteracoes: changes },
     });
     setEditRow(null);
   };
@@ -1041,12 +1065,58 @@ export default function EstornosPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={saveRefundEdit}
+                  onClick={() => setEditScopePrompt(true)}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   Salvar alterações
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editScopePrompt && editRow && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4" onClick={() => setEditScopePrompt(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-card border border-border saas-shadow-md" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-border">
+              <p className="text-[10px] font-semibold uppercase text-muted-foreground">Confirmar abrangência</p>
+              <h3 className="text-sm font-semibold text-foreground mt-1">Como deseja aplicar as alterações?</h3>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Escolha se os dados alterados devem ficar somente neste lançamento ou também nos demais lançamentos deste estorno.
+              </p>
+            </div>
+            <div className="p-5 space-y-2">
+              <button
+                type="button"
+                onClick={() => saveRefundEdit('current')}
+                className="w-full text-left rounded-xl border border-border bg-card hover:bg-muted p-3 transition-colors"
+              >
+                <span className="block text-xs font-semibold text-foreground">Somente este lançamento</span>
+                <span className="block text-[11px] text-muted-foreground mt-0.5">
+                  Mantém os demais lançamentos como estão.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => saveRefundEdit('all')}
+                className="w-full text-left rounded-xl border border-primary/40 bg-primary/5 hover:bg-primary/10 p-3 transition-colors"
+              >
+                <span className="block text-xs font-semibold text-foreground">Este e todos os demais lançamentos</span>
+                <span className="block text-[11px] text-muted-foreground mt-0.5">
+                  Atualiza os dados compartilhados de todos os lançamentos deste estorno.
+                </span>
+              </button>
+              <p className="text-[10px] text-muted-foreground pt-2">
+                A data e o valor da parcela são individuais e serão alterados apenas na parcela selecionada.
+              </p>
+              <button
+                type="button"
+                onClick={() => setEditScopePrompt(false)}
+                className="w-full px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card hover:bg-muted mt-1"
+              >
+                Voltar
+              </button>
             </div>
           </div>
         </div>

@@ -450,6 +450,17 @@ export interface RefundPlanLogEntry {
 export interface RefundPlanInstallment {
   date: string;
   value: number;
+  /** Dados do estorno específicos desta parcela, quando diferentes do plano geral. */
+  refundOverrides?: {
+    studentName?: string;
+    ac?: string;
+    product?: string;
+    quantidadeInscricoes?: number;
+    totalValue?: number;
+    paymentMethod?: RefundPaymentMethod;
+    pixKeyType?: RefundPixKeyType;
+    pixKey?: string;
+  };
   lancadoParaPagamento?: boolean;
   lancadoAt?: string;
   lancadoPorNome?: string;
