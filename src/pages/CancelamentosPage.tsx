@@ -3087,16 +3087,23 @@ export default function CancelamentosPage() {
   // independentemente do funnelStage salvo.
   // EXCEÇÃO: reversão PARCIAL de inscrições — parte foi revertida e o restante
   // segue para o Jurídico (Distrato do Contrato). Nesse caso o card deve
-  // permanecer na coluna salva (Formalização), mesmo com conciliação pendente.
+  // permanecer na coluna salva (Formalização), enquanto não houver uma
+  // conciliação formal do cancelamento da inscrição remanescente.
   const hasReversaoParcialPendente = (c: CancellationCase): boolean => {
     const total = c.quantidadeInscricoes ?? 1;
     const revertidas = c.inscricoesRevertidas ?? 0;
-    return total > 1 && revertidas > 0 && revertidas < total;
+    const parcial = total > 1 && revertidas > 0 && revertidas < total;
+    const cancelamentoRemanescenteFormalizado =
+      pendingConciliacaoCaseIds.has(c.id) || conciliadoCancelCaseIds.has(c.id);
+    return parcial && !cancelamentoRemanescenteFormalizado;
   };
   const isAguardandoConciliacao = (c: CancellationCase): boolean => {
     if (hasReversaoParcialPendente(c)) return false;
-    if (isActiveCancellationWorkflow(c)) return false;
+    // Uma conciliação formal pendente comprova que o cancelamento já foi
+    // concluído pelo Jurídico. A ação exibida no card pode ter sido alterada
+    // depois (ex.: "Em Tratativa") e não deve devolver o caso ao Distrato.
     if (pendingConciliacaoCaseIds.has(c.id)) return true;
+    if (isActiveCancellationWorkflow(c)) return false;
     const st = students.find((s) => s.id === c.studentId) ?? (c.studentId ? undefined : students.find((s) => s.cancellationCaseId === c.id));
     return st?.statusCancelamento === 'aguardando_conciliacao';
   };
