@@ -68,6 +68,7 @@ function studentToRow(s: Partial<Student>): Record<string, unknown> {
   if ((s as Student).iamGcConciliadoAt !== undefined) {
     row.iam_gc_conciliado_at = (s as Student).iamGcConciliadoAt;
   }
+  if (s.recompraTreinamento !== undefined) row.recompra_treinamento = s.recompraTreinamento;
   return row;
 }
 
@@ -118,6 +119,7 @@ export function rowToStudent(r: any): Student {
     productHistory: typeof r.product_history === 'string' ? JSON.parse(r.product_history) : (r.product_history ?? []),
     ciclo: r.ciclo ?? undefined,
     kaminoSyncedAt: r.kamino_synced_at ?? undefined,
+    recompraTreinamento: r.recompra_treinamento ?? undefined,
     // Somente leitura — vindo do IAM Control
     iamControlAlunoId: r.iam_control_aluno_id != null ? Number(r.iam_control_aluno_id) : undefined,
     iamControlSyncedAt: r.iam_control_synced_at ?? undefined,

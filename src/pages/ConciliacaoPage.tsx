@@ -30,6 +30,7 @@ const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'quitacao',
   'renegociacao',
   'iam_pendente',
+  'recompra_vinculo',
 ]);
 
 /** Grupo em que as alterações de rascunho já estão no aluno — só falta confirmar. */
@@ -81,6 +82,7 @@ const TIPO_LABEL: Record<ConciliacaoTipo, string> = {
   encargo_aplicado: 'Encargo aplicado',
   correcao_contrato: 'Correção de contrato',
   iam_pendente: 'IAM Control → GC',
+  recompra_vinculo: 'Recompra — vincular treinamento',
 };
 
 const TIPO_COLOR: Record<ConciliacaoTipo, string> = {
@@ -98,6 +100,7 @@ const TIPO_COLOR: Record<ConciliacaoTipo, string> = {
   encargo_aplicado: 'bg-amber-100 text-amber-800',
   correcao_contrato: 'bg-orange-100 text-orange-800',
   iam_pendente: 'bg-fuchsia-100 text-fuchsia-800',
+  recompra_vinculo: 'bg-teal-100 text-teal-800',
 };
 
 /** Filtro simplificado da Conciliação por grupo de aba. */
@@ -107,9 +110,9 @@ const CANCEL_TIPOS: ConciliacaoTipo[] = ['cancelamento', 'reversao'];
 const isCancelTipo = (t: ConciliacaoTipo) => CANCEL_TIPOS.includes(t);
 const isRendaExtraTipo = (t: ConciliacaoTipo) => t === 'renda_extra_exclusao' || t === 'renda_extra_acordo';
 
-/** Parcelas, quitação, encargos etc. — sem cancelamento/reversão, renda extra nem IAM. */
+/** Parcelas, quitação, encargos etc. — sem cancelamento/reversão, renda extra, IAM nem Recompra. */
 const isAjusteFinanceiroTipo = (t: ConciliacaoTipo) =>
-  t !== 'iam_pendente' && !isCancelTipo(t) && !isRendaExtraTipo(t);
+  t !== 'iam_pendente' && t !== 'recompra_vinculo' && !isCancelTipo(t) && !isRendaExtraTipo(t);
 
 function matchesGrupoFilter(tipo: ConciliacaoTipo, grupo: ConciliacaoGrupoFilter): boolean {
   if (grupo === 'todos') return true;
@@ -123,6 +126,7 @@ const MOTIVO_LABEL: Record<ConciliacaoImportErrorMotivo, string> = {
   multiplos_alunos: 'Múltiplos alunos com mesmo nome',
   parcela_nao_encontrada: 'Parcela não encontrada (vencimento)',
   valor_diverge: 'Valor diverge do registrado',
+  vencimento_diverge: 'Vencimento diverge da parcela',
   parcela_ja_paga: 'Parcela já estava paga',
   sem_pagamento: 'Linha sem pagamento',
 };
@@ -1031,6 +1035,7 @@ const QUICK_RESOLVE_BLOCKED: ConciliacaoImportErrorMotivo[] = [
   'parcela_ja_paga',
   'parcela_nao_encontrada',
   'valor_diverge',
+  'vencimento_diverge',
 ];
 
 async function quickResolveImportError(
@@ -1174,12 +1179,13 @@ export default function ConciliacaoPage() {
   const cancellationCases = useAppStore((s) => s.cancellationCases);
   const updateCancellationCase = useAppStore((s) => s.updateCancellationCase);
   const students = useAppStore((s) => s.students);
+  const products = useAppStore((s) => s.products);
   const isAdmin = currentUser?.role === 'admin';
   const canConciliarEdit = canEditTab(currentUser, 'conciliacao');
   const confirm = useConfirm();
 
-  const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'planilha-conferencia' | 'iam-control-gc' | 'cancelamentos-gc'>('menu');
-  const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'renda_extra' | 'historico' | 'erros' | 'iam_pendentes'>('ajuste_financeiro');
+  const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'planilha-conferencia' | 'iam-control-gc' | 'cancelamentos-gc' | 'recompras-gc'>('menu');
+  const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'renda_extra' | 'historico' | 'erros' | 'iam_pendentes' | 'recompras'>('ajuste_financeiro');
   const [cancelGcFilter, setCancelGcFilter] = useState<'todos' | 'aguardando_finalizacao' | 'prontos_conciliar'>('prontos_conciliar');
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<ConciliacaoGrupoFilter>('todos');
@@ -1195,6 +1201,8 @@ export default function ConciliacaoPage() {
   const [rowEdits, setRowEdits] = useState<Record<string, { valor: number; dataPagamento: string }>>({});
   const [rowBusy, setRowBusy] = useState<Record<string, boolean>>({});
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Treinamento selecionado por grupo de Recompra (chave = group.key)
+  const [recompraSelects, setRecompraSelects] = useState<Record<string, string>>({});
 
   const filtered = useMemo(() => {
     return items
@@ -1203,6 +1211,12 @@ export default function ConciliacaoPage() {
           return (
             (i.status === 'pendente' || i.status === 'aprovado') &&
             i.tipo === 'iam_pendente'
+          );
+        }
+        if (tab === 'recompras') {
+          return (
+            (i.status === 'pendente' || i.status === 'aprovado') &&
+            i.tipo === 'recompra_vinculo'
           );
         }
         if (tab === 'ajuste_financeiro') {
@@ -1224,7 +1238,8 @@ export default function ConciliacaoPage() {
           if (flow === 'planilha-conferencia') return i.tipo === 'baixa_kamino';
           if (flow === 'iam-control-gc') return i.tipo === 'iam_pendente';
           if (flow === 'cancelamentos-gc') return isCancelTipo(i.tipo);
-          return i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente' && !isCancelTipo(i.tipo);
+          if (flow === 'recompras-gc') return i.tipo === 'recompra_vinculo';
+          return i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente' && i.tipo !== 'recompra_vinculo' && !isCancelTipo(i.tipo);
         }
         return false;
       })
@@ -1268,6 +1283,15 @@ export default function ConciliacaoPage() {
         (i) =>
           (i.status === 'pendente' || i.status === 'aprovado') &&
           i.tipo === 'iam_pendente',
+      )
+      .map((i) => i.studentId ?? i.studentName),
+  ).size;
+  const recomprasCount = new Set(
+    items
+      .filter(
+        (i) =>
+          (i.status === 'pendente' || i.status === 'aprovado') &&
+          i.tipo === 'recompra_vinculo',
       )
       .map((i) => i.studentId ?? i.studentName),
   ).size;
@@ -1315,7 +1339,9 @@ export default function ConciliacaoPage() {
       ? items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo === 'iam_pendente').length
       : flow === 'cancelamentos-gc'
         ? items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && isCancelTipo(i.tipo)).length
-        : items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente' && !isCancelTipo(i.tipo)).length;
+        : flow === 'recompras-gc'
+          ? items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo === 'recompra_vinculo').length
+          : items.filter((i) => (i.status === 'conciliado' || i.status === 'reprovado') && i.tipo !== 'baixa_kamino' && i.tipo !== 'iam_pendente' && i.tipo !== 'recompra_vinculo' && !isCancelTipo(i.tipo)).length;
   const errosPendentesCount = importErrors.filter((e) => e.status === 'pendente').length;
 
   // (handleConciliar individual removido — agora todo conciliamento de pendências
@@ -1326,7 +1352,7 @@ export default function ConciliacaoPage() {
   // num único card, com botão "Conciliar" que concilia todos de uma vez.
   const SESSION_WINDOW_MS = 30 * 60 * 1000;
   const groupedPending = useMemo<Group[]>(() => {
-    if (tab !== 'ajuste_financeiro' && tab !== 'cancelamentos' && tab !== 'renda_extra' && tab !== 'iam_pendentes') return [];
+    if (tab !== 'ajuste_financeiro' && tab !== 'cancelamentos' && tab !== 'renda_extra' && tab !== 'iam_pendentes' && tab !== 'recompras') return [];
     // Ordena por aluno → autor → tempo crescente para agrupar sessões corretamente
     const sorted = [...filtered].sort((a, b) => {
       const k1 = (a.studentId ?? a.studentName) + '|' + (a.autorId ?? '');
@@ -1595,6 +1621,47 @@ export default function ConciliacaoPage() {
 
 
 
+  // ─── Recompra: vincula treinamento e concilia o item ───────────────────────
+  const handleVincularRecompra = async (group: Group) => {
+    if (!canConciliarEdit) {
+      toast.error('Somente Admin ou usuários com permissão de Conciliação podem conciliar.');
+      return;
+    }
+    const treinamento = (recompraSelects[group.key] ?? '').trim();
+    if (!treinamento) {
+      toast.error('Selecione o treinamento ao qual esta recompra se refere.');
+      return;
+    }
+    const st = group.studentId ? useAppStore.getState().students.find((s) => s.id === group.studentId) : undefined;
+    if (!st) {
+      toast.error('Ficha da recompra não encontrada.');
+      return;
+    }
+    const ok = await confirm({
+      title: 'Vincular recompra',
+      description: `${group.studentName}\n\nA recompra será vinculada ao treinamento "${treinamento}" e continua na carteira do AC como contrato à parte.`,
+      confirmText: 'Vincular',
+    });
+    if (!ok) return;
+    const revisor = currentUser?.name ?? 'Conciliação';
+    useAppStore.getState().updateStudent(st.id, {
+      recompraTreinamento: treinamento,
+      history: [
+        ...st.history,
+        {
+          date: new Date().toISOString(),
+          type: 'Sistema',
+          text: `Recompra vinculada ao treinamento "${treinamento}" na Conciliação por ${revisor}.`,
+        },
+      ],
+    });
+    for (const it of group.items) {
+      conciliar(it.id, `Vinculada ao treinamento "${treinamento}"`, { silent: true });
+    }
+    notifyConciliacaoGrupo(group.items, 'aprovada');
+    toast.success(`Recompra vinculada a "${treinamento}".`);
+  };
+
   // ─── Reprovar grupo: reverte cada item + notifica autor (vermelho) ─────────
   const openReprovar = (group: Group) => {
     setReprovarGroup(group);
@@ -1776,6 +1843,27 @@ export default function ConciliacaoPage() {
               </span>
             )}
           </button>
+
+          {/* Recompras → vincular treinamento */}
+          <button
+            onClick={() => { setFlow('recompras-gc'); setTab('recompras'); }}
+            className="group relative bg-card border-2 border-border hover:border-primary rounded-2xl p-6 text-left transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <span className="px-3 py-1.5 rounded-lg bg-teal-100 text-teal-800 font-bold text-lg">Recompras</span>
+              <ArrowRight size={24} className="text-primary" />
+              <span className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary font-bold text-lg">GC</span>
+            </div>
+            <h3 className="font-semibold text-foreground mb-1">Recompras — vincular treinamento</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Fichas de Recompra (Fundo) na carteira do AC como contrato à parte. Selecione o treinamento ao qual cada recompra se refere.
+            </p>
+            {recomprasCount > 0 && (
+              <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[11px] font-bold border border-teal-300">
+                {recomprasCount} pendente{recomprasCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </button>
         </div>
       </div>
     );
@@ -1808,6 +1896,12 @@ export default function ConciliacaoPage() {
             ) : flow === 'cancelamentos-gc' ? (
               <>
                 <span className="px-2.5 py-1 rounded-md bg-rose-100 text-rose-700 font-bold text-sm">Cancelamentos</span>
+                <ArrowRight size={16} className="text-muted-foreground" />
+                <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary font-bold text-sm">GC</span>
+              </>
+            ) : flow === 'recompras-gc' ? (
+              <>
+                <span className="px-2.5 py-1 rounded-md bg-teal-100 text-teal-800 font-bold text-sm">Recompras</span>
                 <ArrowRight size={16} className="text-muted-foreground" />
                 <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary font-bold text-sm">GC</span>
               </>
@@ -1851,6 +1945,31 @@ export default function ConciliacaoPage() {
             >
               <Cloud size={14} />
               Aguardando aprovação ({iamControlGcCount})
+            </button>
+            <button
+              onClick={() => setTab('historico')}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap ${
+                tab === 'historico'
+                  ? 'bg-card text-foreground border-border shadow-sm'
+                  : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-muted/70 hover:text-foreground'
+              }`}
+            >
+              <ScrollText size={14} />
+              Histórico ({historicoCount})
+            </button>
+          </>
+        ) : flow === 'recompras-gc' ? (
+          <>
+            <button
+              onClick={() => { setTab('recompras'); setTipoFilter('todos'); }}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border transition-all whitespace-nowrap ${
+                tab === 'recompras'
+                  ? 'bg-teal-100 text-teal-800 border-teal-300 shadow-sm'
+                  : 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100'
+              }`}
+            >
+              <Wallet size={14} />
+              Aguardando vínculo ({recomprasCount})
             </button>
             <button
               onClick={() => setTab('historico')}
@@ -2033,7 +2152,7 @@ export default function ConciliacaoPage() {
       {/* Listas */}
       {tab !== 'erros' ? (
         <div className="space-y-3">
-          {((tab === 'ajuste_financeiro' || tab === 'cancelamentos' || tab === 'renda_extra' || tab === 'iam_pendentes') ? groupedPending.length === 0 : filtered.length === 0) ? (
+          {((tab === 'ajuste_financeiro' || tab === 'cancelamentos' || tab === 'renda_extra' || tab === 'iam_pendentes' || tab === 'recompras') ? groupedPending.length === 0 : filtered.length === 0) ? (
             <div className="text-center py-12 border border-dashed border-border rounded-2xl">
               <FileSpreadsheet size={28} className="mx-auto text-muted-foreground mb-2 opacity-50" />
               <p className="text-sm text-muted-foreground">
@@ -2047,10 +2166,11 @@ export default function ConciliacaoPage() {
                   )
                   : tab === 'renda_extra' ? 'Nenhuma pendência de Renda Extra.'
                   : tab === 'iam_pendentes' ? 'Nenhum contrato IAM aguardando aprovação.'
+                  : tab === 'recompras' ? 'Nenhuma recompra aguardando vínculo de treinamento.'
                   : 'Nenhum item conciliado ainda.'}
               </p>
             </div>
-          ) : (tab === 'ajuste_financeiro' || tab === 'cancelamentos' || tab === 'renda_extra' || tab === 'iam_pendentes') ? (
+          ) : (tab === 'ajuste_financeiro' || tab === 'cancelamentos' || tab === 'renda_extra' || tab === 'iam_pendentes' || tab === 'recompras') ? (
             groupedPending.map((group) => {
               // Subtipos consolidados de TODAS as alterações do grupo
               const allChangedKeys = new Set<string>();
@@ -2072,6 +2192,23 @@ export default function ConciliacaoPage() {
               const temObservacao = groupTemObservacao(group.items);
               const aprovarSoObs = jaConciliadoSistema && temObservacao;
               const isEspelhoCancel = groupBlocksEspelhoConciliacao(group.items, st ?? undefined, items);
+              const isRecompraGrupo = group.items.every((i) => i.tipo === 'recompra_vinculo');
+              // Opções de treinamento: contratos do próprio aluno primeiro, depois o catálogo
+              let recompraOpcoes: { proprios: string[]; catalogo: string[] } = { proprios: [], catalogo: [] };
+              if (isRecompraGrupo && st) {
+                const norm = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+                const proprios = Array.from(new Set(
+                  students
+                    .filter((s) => s.id !== st.id && norm(s.name) === norm(st.name) && !/recompra/i.test(s.product ?? ''))
+                    .map((s) => s.product)
+                    .filter((p): p is string => !!p),
+                ));
+                const catalogo = products
+                  .map((p) => p.name)
+                  .filter((n) => !!n && !/recompra/i.test(n) && !proprios.includes(n))
+                  .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+                recompraOpcoes = { proprios, catalogo };
+              }
               return (
                 <div key={group.key} className="bg-card border border-border rounded-2xl p-4 hover:shadow-sm transition-shadow">
                   <div className="flex items-start justify-between gap-4">
@@ -2118,6 +2255,37 @@ export default function ConciliacaoPage() {
 
                       {/* Resumo do contrato (Total Contratado / Pago / Saldo / Parcelas em aberto) */}
                       {st && <ContractSummaryPanel student={st} conciliacaoItems={group.items} />}
+
+                      {/* Recompra: seleção do treinamento de origem */}
+                      {isRecompraGrupo && st && (
+                        <div className="mt-3 rounded-xl border border-teal-200 bg-teal-50/60 px-3 py-2.5">
+                          <label className="block text-[10px] font-semibold uppercase tracking-wider text-teal-800 mb-1.5">
+                            Treinamento referente a esta recompra
+                          </label>
+                          <select
+                            value={recompraSelects[group.key] ?? ''}
+                            onChange={(e) => setRecompraSelects((prev) => ({ ...prev, [group.key]: e.target.value }))}
+                            className="input-field w-full text-xs py-2"
+                          >
+                            <option value="">Selecione o treinamento…</option>
+                            {recompraOpcoes.proprios.length > 0 && (
+                              <optgroup label="Contratos deste aluno">
+                                {recompraOpcoes.proprios.map((p) => (
+                                  <option key={`proprio-${p}`} value={p}>{p}</option>
+                                ))}
+                              </optgroup>
+                            )}
+                            <optgroup label="Todos os treinamentos">
+                              {recompraOpcoes.catalogo.map((p) => (
+                                <option key={`catalogo-${p}`} value={p}>{p}</option>
+                              ))}
+                            </optgroup>
+                          </select>
+                          <p className="text-[10px] text-teal-800/80 mt-1.5 leading-tight">
+                            A recompra permanece na carteira do AC como contrato à parte — o vínculo é só referência do treinamento de origem.
+                          </p>
+                        </div>
+                      )}
 
                       {/* Diff CONSOLIDADO de todas as alterações do grupo */}
                       {renderGroupDiff(group.items, st, cancellationCases)}
@@ -2205,6 +2373,31 @@ export default function ConciliacaoPage() {
                     <div className="shrink-0 flex flex-col gap-2 w-[150px]">
                       {(() => {
                         const isAprovado = group.items[0].status === 'aprovado';
+                        if (isRecompraGrupo) {
+                          const temSelecao = !!(recompraSelects[group.key] ?? '').trim();
+                          return canConciliarEdit ? (
+                            <>
+                              <button
+                                onClick={() => handleVincularRecompra(group)}
+                                disabled={!temSelecao}
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={temSelecao ? 'Vincular ao treinamento selecionado e conciliar' : 'Selecione o treinamento primeiro'}
+                              >
+                                <CheckCircle2 size={14} />
+                                Vincular
+                              </button>
+                              {!temSelecao && (
+                                <p className="text-[10px] text-center text-teal-800/80 px-1 leading-tight">
+                                  Selecione o treinamento ao lado
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-[10px] text-center text-muted-foreground px-1 leading-tight">
+                              Somente Admin ou Conciliação pode vincular
+                            </p>
+                          );
+                        }
                         return (
                           <>
                             {canConciliarEdit && !isEspelhoCancel ? (

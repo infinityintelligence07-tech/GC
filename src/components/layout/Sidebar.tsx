@@ -49,16 +49,18 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
   const isCancelConcTipo = (t: string) => t === 'cancelamento' || t === 'reversao';
   const rendaExtraItems = conciliacaoPendingItems.filter((i) => isRendaExtraTipo(i.tipo));
   const iamPendingItems = conciliacaoPendingItems.filter((i) => i.tipo === 'iam_pendente');
+  const recompraPendingItems = conciliacaoPendingItems.filter((i) => i.tipo === 'recompra_vinculo');
   const cancelPendingItems = conciliacaoPendingItems.filter((i) => isCancelConcTipo(i.tipo));
   const kaminoItems = conciliacaoPendingItems.filter(
-    (i) => !isRendaExtraTipo(i.tipo) && i.tipo !== 'iam_pendente' && !isCancelConcTipo(i.tipo),
+    (i) => !isRendaExtraTipo(i.tipo) && i.tipo !== 'iam_pendente' && i.tipo !== 'recompra_vinculo' && !isCancelConcTipo(i.tipo),
   );
   const distinctStudentsKamino = new Set(kaminoItems.map((i) => i.studentId).filter(Boolean)).size;
   const distinctStudentsIam = new Set(iamPendingItems.map((i) => i.studentId).filter(Boolean)).size;
+  const distinctStudentsRecompra = new Set(recompraPendingItems.map((i) => i.studentId).filter(Boolean)).size;
   const distinctStudentsCancel = new Set(cancelPendingItems.map((i) => i.studentId ?? i.studentName)).size;
   const distinctStudentsRE = new Set(rendaExtraItems.map((i) => i.studentId).filter(Boolean)).size;
   const errorCount = conciliacaoErrors.filter((e) => e.status === 'pendente').length;
-  const conciliacaoCount = distinctStudentsKamino + distinctStudentsIam + distinctStudentsCancel + errorCount;
+  const conciliacaoCount = distinctStudentsKamino + distinctStudentsIam + distinctStudentsRecompra + distinctStudentsCancel + errorCount;
   const rendaExtraCount = distinctStudentsRE;
   // Cancelamentos: contagem de casos com ação "Aguardando Contato"
   const cancelamentosCount = cancellationCases.filter(

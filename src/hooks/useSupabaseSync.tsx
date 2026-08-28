@@ -304,6 +304,13 @@ export function useSupabaseSync() {
       } catch (e) {
         console.error('Falha ao garantir fila IAM pendente:', e);
       }
+      // Fila de vínculo de treinamento para fichas de Recompra
+      try {
+        const { ensureRecompraVinculoConciliacaoItems } = await import('@/lib/recompraConciliacao');
+        finalConciliacaoItems = await ensureRecompraVinculoConciliacaoItems(studentsReconciled, finalConciliacaoItems);
+      } catch (e) {
+        console.error('Falha ao garantir fila Recompras:', e);
+      }
       try {
         const { ensureCancelamentoEspelhoConciliacaoItems } = await import('@/lib/cancelamentoGcConciliacao');
         finalConciliacaoItems = await ensureCancelamentoEspelhoConciliacaoItems(

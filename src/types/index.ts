@@ -131,6 +131,11 @@ export interface Student {
   ciclo?: string;
   /** Preenchido pela sync Kamino — aluno entra na carteira financeira principal. */
   kaminoSyncedAt?: string;
+  /**
+   * Fichas de Recompra (Fundo): treinamento ao qual a recompra se refere.
+   * NULL/undefined = aguardando vínculo no card "Recompras" da Conciliação.
+   */
+  recompraTreinamento?: string;
   // Integração IAM Control (somente leitura — nunca editável pela interface)
   iamControlAlunoId?: number;
   iamControlSyncedAt?: string;
@@ -621,7 +626,8 @@ export type ConciliacaoTipo =
   | 'baixa_kamino'         // parcela baixada via importação Kamino → GC (histórico)
   | 'encargo_aplicado'     // encargo (multa/juros) declarado pelo AC ao alterar parcelas
   | 'correcao_contrato'    // correção de erro de registro no saleValue (com justificativa)
-  | 'iam_pendente';        // import IAM com contrato PENDENTE — aguarda aprovação p/ CONCILIADO
+  | 'iam_pendente'         // import IAM com contrato PENDENTE — aguarda aprovação p/ CONCILIADO
+  | 'recompra_vinculo';    // ficha de Recompra aguardando vínculo com o treinamento de origem
 
 export type ConciliacaoStatus = 'pendente' | 'aprovado' | 'conciliado' | 'reprovado';
 
@@ -688,6 +694,7 @@ export type ConciliacaoImportErrorMotivo =
   | 'multiplos_alunos'             // nome bateu com 2+ alunos (ambíguo)
   | 'parcela_nao_encontrada'       // aluno achado, mas vencimento não bate com nenhuma parcela
   | 'valor_diverge'                // vencimento bateu, mas valor é diferente
+  | 'vencimento_diverge'           // valor bateu, mas vencimento é diferente (escolher: trocar data ou manter)
   | 'parcela_ja_paga'              // parcela existe e já estava marcada como paga
   | 'sem_pagamento';               // linha sem data/valor de pagamento
 

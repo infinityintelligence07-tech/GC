@@ -1492,84 +1492,31 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
     if (libertySkipped > 0) {
       toast.info(`${libertySkipped} linha(s) com Classificação "Liberty" foram ignoradas — contratos Liberty são geridos na empresa Liberty.`);
     }
-    // Anexa as Recompras ao contrato CORRETO do aluno.
-    // Quando o aluno tem 2+ contratos, o vínculo é decidido POR PARCELA usando
-    // valor da parcela + dia de vencimento (antes era só pelo nome, o que jogava
-    // parcelas de um contrato no outro).
+    // Recompra é CONTRATO À PARTE na carteira do AC: as linhas nunca são
+    // misturadas ao contrato principal. Se o aluno já tem ficha de Recompra,
+    // as parcelas são anexadas nela; caso contrário, a Recompra vira ficha
+    // própria e entra no card "Recompras" da Conciliação para vincular o
+    // treinamento de origem.
     const attachToExistingByGroupKey = new Map<string, string>(); // groupKey → existing studentId
-    const rowValor = (r: Record<string, unknown>) =>
-      normalizeNumber(r['Valor a Receber (R$)']) ?? normalizeNumber(r['Valor Recebido (R$)']) ?? null;
-    const rowDia = (r: Record<string, unknown>) => {
-      const d = normalizeDate(r['Vencimento'], XLSX);
-      return d ? Number(d.slice(8, 10)) : null;
-    };
-    /** Pontua o quanto uma parcela de Recompra combina com um conjunto de parcelas. */
-    const scoreMatch = (
-      valor: number | null,
-      dia: number | null,
-      valores: number[],
-      dias: number[],
-    ) => {
-      let score = 0;
-      if (valor != null && valores.some((v) => Math.abs(v - valor) < 0.01)) score += 2;
-      if (dia != null && dias.includes(dia)) score += 1;
-      return score;
-    };
 
     for (const [nameKey, recompraRows] of recompraPending) {
-      // Candidatos vindos da própria planilha
-      const sheetCandidates = Array.from(groups.values())
-        .filter((g) => g.nome.toLowerCase() === nameKey)
-        .map((g) => ({
-          group: g,
-          valores: g.rows.map((r) => rowValor(r)).filter((v): v is number => v != null),
-          dias: g.rows.map((r) => rowDia(r)).filter((d): d is number => d != null),
-        }));
-      // Candidatos já existentes no banco (não-Recompra)
-      const dbCandidates = students
-        .filter((s) => s.name.trim().toLowerCase() === nameKey && !isRecompraClassificacao(s.product || ''))
-        .map((s) => ({
-          student: s,
-          valores: (s.installments ?? []).map((i) => i.value),
-          dias: (s.installments ?? []).map((i) => Number((i.dueDate ?? '').slice(8, 10))).filter((d) => !Number.isNaN(d)),
-        }));
-
+      const fichaRecompra = students.find(
+        (s) => s.name.trim().toLowerCase() === nameKey && isRecompraClassificacao(s.product || ''),
+      );
       for (const row of recompraRows) {
         const cleanRow = { ...row, Classificação: normalizeString(row['Classificação']) };
-        const valor = rowValor(row);
-        const dia = rowDia(row);
-
-        let bestSheet: (typeof sheetCandidates)[number] | undefined;
-        let bestSheetScore = -1;
-        for (const c of sheetCandidates) {
-          const sc = scoreMatch(valor, dia, c.valores, c.dias);
-          if (sc > bestSheetScore) { bestSheetScore = sc; bestSheet = c; }
-        }
-        let bestDb: (typeof dbCandidates)[number] | undefined;
-        let bestDbScore = -1;
-        for (const c of dbCandidates) {
-          const sc = scoreMatch(valor, dia, c.valores, c.dias);
-          if (sc > bestDbScore) { bestDbScore = sc; bestDb = c; }
-        }
-
-        // Prefere o contrato presente na planilha, salvo quando um contrato do
-        // banco casa melhor (valor + dia) do que qualquer grupo da planilha.
-        if (bestSheet && bestSheetScore >= bestDbScore) {
-          bestSheet.group.recompraRows.push(cleanRow);
-          continue;
-        }
-        if (bestDb) {
-          const produto = bestDb.student.product || 'Sem Treinamento';
+        if (fichaRecompra) {
+          const produto = fichaRecompra.product || 'Fundo - Receita (Recompra)';
           const key = `${nameKey}||${produto.toLowerCase()}`;
           if (!groups.has(key)) {
-            groups.set(key, { nome: bestDb.student.name, produto, rows: [], recompraRows: [] });
-            attachToExistingByGroupKey.set(key, bestDb.student.id);
+            groups.set(key, { nome: fichaRecompra.name, produto, rows: [], recompraRows: [] });
+            attachToExistingByGroupKey.set(key, fichaRecompra.id);
           }
           groups.get(key)!.recompraRows.push(cleanRow);
           continue;
         }
-        // Sem contrato principal: a própria Recompra vira ficha base.
-        const produto = normalizeString(row['Classificação']) || 'Sem Treinamento';
+        // Sem ficha de Recompra: as linhas viram uma ficha própria (contrato à parte).
+        const produto = normalizeString(row['Classificação']) || 'Fundo - Receita (Recompra)';
         const nome = normalizeString(row['Pessoa']);
         const key = `${nameKey}||${produto.toLowerCase()}`;
         if (!groups.has(key)) groups.set(key, { nome, produto, rows: [], recompraRows: [] });
