@@ -18,8 +18,9 @@ import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
-import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
+import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { fetchKaminoDashboardForecastTotals, type KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
+import { useCompanyStore } from '@/store/useCompanyStore';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -112,7 +113,16 @@ export default function DashboardPage() {
   const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
   const [kaminoForecastTotals, setKaminoForecastTotals] = useState<KaminoDashboardForecastTotals | null>(null);
 
+  // No IAM, a fonte dos valores é a carteira GC (alunos importados/aprovados):
+  // a planilha cadastra os contratos, cancelamento conciliado debita e contrato
+  // IAM aprovado na Conciliação passa a contar. O espelho Kamino permanece como
+  // fonte autoritativa somente na empresa Liberty.
+  const { companies, activeCompanyId } = useCompanyStore();
+  const isLibertyCompany =
+    (companies.find((c) => c.id === activeCompanyId)?.slug ?? '').toLowerCase() === 'liberty';
+
   const usesKaminoAuthoritativeForecast =
+    isLibertyCompany &&
     mode === 'performance' &&
     forecastIndex === 0 &&
     dateBasis === 'vencimento' &&
@@ -624,6 +634,23 @@ export default function DashboardPage() {
     // Detalhes por parcela (para popup de valores pagos/recebidos)
     const details: Array<{ studentId: string; studentName: string; ac: string; installmentNumber: number; dueDate: string; value: number; paidValue: number; paidDate?: string }> = [];
     forecastBase.forEach((st) => {
+      // Contrato IAM Control conciliado e quitado à vista/cartão de crédito:
+      // entra DIRETO no card Pago (inclusive a entrada, que não vira parcela)
+      // e nunca soma no A Vencer/Vencido.
+      const quitadoAvista = isIamConciliadoQuitadoAvista(st);
+      if (quitadoAvista && !range && dateBasis === 'vencimento') {
+        const entrada = Number(st.downPayment ?? 0);
+        if (entrada > 0) {
+          total += entrada;
+          totalReal += entrada;
+          pago += entrada;
+          pagoReal += entrada;
+          qtd += 1;
+          qtdAlunosSet.add(st.id);
+          bumpAc(st.ac, entrada, entrada, st.id);
+          details.push({ studentId: st.id, studentName: st.name, ac: st.ac || 'Sem Assessor', installmentNumber: 0, dueDate: st.enrollmentDate || '', value: entrada, paidValue: entrada, paidDate: st.enrollmentDate || undefined });
+        }
+      }
       st.installments.forEach((i) => {
         if (dateBasis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
@@ -664,6 +691,9 @@ export default function DashboardPage() {
         }
 
         if (isInstallmentExcludedFromFinancialTotals(st, i)) return;
+        // Contrato quitado à vista/cartão nunca contribui para o A Vencer,
+        // mesmo que alguma parcela conste em aberto por inconsistência.
+        if (quitadoAvista) return;
 
         if (range) {
           const due = new Date(i.dueDate + 'T00:00:00');
@@ -685,9 +715,9 @@ export default function DashboardPage() {
 
   // Carteira Total (card azul) = A Vencer / Vencido da projeção (mesmo valor do card laranja).
   const forecastTotaisBase = getForecastTotals();
-  // A Kamino continua sendo a base autoritativa para preservar contratos que
-  // ainda não estão completos no GC. A RPC incorpora as baixas conciliadas do
-  // GC como overlay, fazendo o card reagir sem substituir toda a carteira.
+  // No Liberty, o espelho Kamino segue autoritativo para preservar contratos
+  // que ainda não estão completos no GC (a RPC incorpora as baixas do GC como
+  // overlay). No IAM, forecastTotaisBase (carteira GC) é a fonte única.
   const activeKaminoTotals = (acFilter || productFilter)
     ? kaminoForecastTotals
     : (kaminoForecastTotals ?? kaminoPortfolioTotals);

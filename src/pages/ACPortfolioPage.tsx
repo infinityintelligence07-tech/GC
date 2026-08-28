@@ -26,7 +26,7 @@ import {
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
-import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval } from '@/lib/iamPendenteConciliacao';
+import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -378,6 +378,21 @@ export default function ACPortfolioPage() {
     const qtdAlunosSet = new Set<string>();
     const qtdAlunosAVencerSet = new Set<string>();
     forecastBase.forEach((st) => {
+      // Contrato IAM Control conciliado e quitado à vista/cartão de crédito:
+      // entra DIRETO no Pago (inclusive a entrada, que não vira parcela)
+      // e nunca soma no A Vencer/Vencido.
+      const quitadoAvista = isIamConciliadoQuitadoAvista(st);
+      if (quitadoAvista && !range && dateBasis === 'vencimento') {
+        const entrada = Number(st.downPayment ?? 0);
+        if (entrada > 0) {
+          total += entrada;
+          totalReal += entrada;
+          pago += entrada;
+          pagoReal += entrada;
+          qtd += 1;
+          qtdAlunosSet.add(st.id);
+        }
+      }
       st.installments.forEach((i) => {
         if (dateBasis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
@@ -415,6 +430,9 @@ export default function ACPortfolioPage() {
         }
 
         if (isInstallmentExcludedFromAcPortfolio(st, i)) return;
+        // Contrato quitado à vista/cartão nunca contribui para o A Vencer,
+        // mesmo que alguma parcela conste em aberto por inconsistência.
+        if (quitadoAvista) return;
 
         if (range) {
           const due = new Date(i.dueDate + 'T00:00:00');
