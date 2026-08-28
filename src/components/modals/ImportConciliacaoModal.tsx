@@ -275,8 +275,9 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
   const [rowSelected, setRowSelected] = useState<Record<number, boolean>>({});
   // Modo de edição ativo por linha (separado de rowEdits, que armazena valores)
   const [rowEditing, setRowEditing] = useState<Record<number, boolean>>({});
-  // Modal de vencimento divergente: índice do erro sendo resolvido
+  // Modal de vencimento divergente: índice do erro sendo resolvido + data editável
   const [vencModalIdx, setVencModalIdx] = useState<number | null>(null);
+  const [vencModalDate, setVencModalDate] = useState<string>('');
   const QUICK_BLOCKED: ConciliacaoImportErrorMotivo[] = [
     'aluno_nao_encontrado',
     'multiplos_alunos',
@@ -369,6 +370,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
     p: ProcessResult,
     idx: number,
     keepInstallmentDate: boolean,
+    overrideDate?: string,
   ): ProcessResult | null {
     const err = p.errors[idx];
     if (!err || err.motivo !== 'vencimento_diverge' || !err.studentId) return null;
@@ -383,7 +385,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
     if (!target) return null;
 
     const paidDate = err.dataPagamento ?? new Date().toISOString().split('T')[0];
-    const newDueDate = keepInstallmentDate ? target.dueDate : (err.vencimento ?? target.dueDate);
+    const newDueDate = keepInstallmentDate ? target.dueDate : (overrideDate || err.vencimento || target.dueDate);
     const paidValue = err.valor ?? target.value;
 
     const newInsts = currentInsts.map((i) => i.number === instNumber
@@ -434,10 +436,10 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
     };
   }
 
-  const applyVencimentoResolve = (idx: number, keepInstallmentDate: boolean) => {
+  const applyVencimentoResolve = (idx: number, keepInstallmentDate: boolean, overrideDate?: string) => {
     setPreview((p) => {
       if (!p) return p;
-      const next = resolveVencimentoOnPreview(p, idx, keepInstallmentDate);
+      const next = resolveVencimentoOnPreview(p, idx, keepInstallmentDate, overrideDate);
       if (!next) {
         alert('Não foi possível aplicar a baixa: parcela em aberto não encontrada.');
         return p;
@@ -928,7 +930,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
                                     <>
                                       {e.motivo === 'vencimento_diverge' && Number.isFinite(Number((e.raw as Record<string, unknown>)?.__installmentNumber__)) && (
                                         <button
-                                          onClick={() => setVencModalIdx(i)}
+                                          onClick={() => { setVencModalIdx(i); setVencModalDate(e.vencimento ?? ''); }}
                                           className="p-1 rounded border border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100"
                                           title="Resolver vencimento: trocar a data ou manter a atual"
                                         >
@@ -1026,13 +1028,23 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
                 <p className="text-xs text-muted-foreground">
                   A parcela será baixada como paga{err.dataPagamento ? ` em ${fmtD(err.dataPagamento)}` : ''}. Escolha o vencimento que deve ficar registrado:
                 </p>
+                <div>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Novo vencimento (editável)</label>
+                  <input
+                    type="date"
+                    value={vencModalDate}
+                    onChange={(ev) => setVencModalDate(ev.target.value)}
+                    className="border border-border rounded-lg px-2 py-1.5 text-sm w-full"
+                  />
+                </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-2 px-5 pb-5">
                 <button
-                  onClick={() => applyVencimentoResolve(idx, false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700"
+                  onClick={() => applyVencimentoResolve(idx, false, vencModalDate || undefined)}
+                  disabled={!vencModalDate}
+                  className="flex-1 px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 disabled:opacity-50"
                 >
-                  Trocar para {fmtD(err.vencimento)}
+                  Trocar para {fmtD(vencModalDate || err.vencimento)}
                 </button>
                 <button
                   onClick={() => applyVencimentoResolve(idx, true)}
@@ -1300,20 +1312,32 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
           }
         }
       }
-      if (vencCandidates.length === 1) {
-        const { student: vs, installment: vi } = vencCandidates[0];
+      if (vencCandidates.length > 0) {
+        // Só é ambíguo quando MAIS DE UM CONTRATO tem parcela com este valor.
+        // Dentro do mesmo contrato (caso comum: todas as parcelas iguais),
+        // puxa a parcela em aberto com vencimento mais próximo do da planilha.
+        const contractIds = new Set(vencCandidates.map(({ student }) => student.id));
+        if (contractIds.size > 1) {
+          const contratos = vencCandidates
+            .map(({ student, installment }) => `${student.product || 'Treinamento não informado'}${student.ciclo ? ` (${student.ciclo})` : ''} — parcela ${installment.number} (${fmtD(installment.dueDate)})`)
+            .join('; ');
+          pushError(row, 'vencimento_diverge', undefined, `Há ${contractIds.size} contratos com parcela em aberto deste valor: ${contratos}. Selecione o contrato correto manualmente.`);
+          continue;
+        }
+        const ref = new Date(row.vencimento).getTime();
+        const { student: vs, installment: vi } = vencCandidates.slice().sort((a, b) => {
+          const da = Math.abs(new Date(a.installment.dueDate).getTime() - ref);
+          const db = Math.abs(new Date(b.installment.dueDate).getTime() - ref);
+          return da - db || a.installment.number - b.installment.number;
+        })[0];
+        const outras = vencCandidates.length - 1;
         pushError(
           row,
           'vencimento_diverge',
           vs.id,
-          `A parcela ${vi.number} tem o mesmo valor, mas vence em ${fmtD(vi.dueDate)} (planilha: ${fmtD(row.vencimento)}). Escolha entre trocar a data da parcela ou manter a atual.`,
+          `A parcela ${vi.number} tem o mesmo valor, mas vence em ${fmtD(vi.dueDate)} (planilha: ${fmtD(row.vencimento)})${outras > 0 ? ` — é a mais próxima entre ${vencCandidates.length} parcelas em aberto com este valor` : ''}. Escolha entre trocar a data da parcela ou manter a atual.`,
           { __installmentNumber__: vi.number, __installmentDueDate__: vi.dueDate },
         );
-        continue;
-      }
-      if (vencCandidates.length > 1) {
-        const vencs = vencCandidates.map(({ installment }) => `parcela ${installment.number} (${fmtD(installment.dueDate)})`).join('; ');
-        pushError(row, 'vencimento_diverge', undefined, `Há ${vencCandidates.length} parcelas em aberto com este valor e vencimentos diferentes: ${vencs}. Resolva manualmente.`);
         continue;
       }
     }
