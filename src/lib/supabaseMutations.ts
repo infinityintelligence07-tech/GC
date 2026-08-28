@@ -413,6 +413,7 @@ export async function createStudentsBulkDb(students: Omit<Student, 'id'>[]): Pro
 export async function updateStudentDb(id: string, data: Partial<Student>) {
   const row = studentToRow(data);
   if (Object.keys(row).length === 0) return;
+  let wroteFromStaleState = false;
 
   // Lê o estado atual do banco antes de gravar: evita (a) regravar financeiro
   // antigo por cima de ajuste mais novo e (b) apagar entradas de histórico.
@@ -440,6 +441,7 @@ export async function updateStudentDb(id: string, data: Partial<Student>) {
         }
       }
       if (dropped.length > 0) {
+        wroteFromStaleState = true;
         console.warn(
           `[studentWriteGuard] Gravação a partir de estado desatualizado do aluno ${id}. ` +
             `Campos financeiros ignorados para não sobrescrever dados mais novos: ${dropped.join(', ')}`
@@ -461,7 +463,13 @@ export async function updateStudentDb(id: string, data: Partial<Student>) {
   if (!updated) {
     throw new Error('Alteração não gravada: você não tem permissão para editar este aluno.');
   }
-  noteStudentVersion(id, (updated as any)?.updated_at);
+  // Se a sessão gravou a partir de estado velho, NÃO registrar a nova versão:
+  // registrar faria a próxima gravação da mesma sessão passar pela guarda e
+  // sobrescrever o financeiro com dados desatualizados. A versão só volta a
+  // valer quando a sessão reler o aluno do banco (rowToStudent).
+  if (!wroteFromStaleState) {
+    noteStudentVersion(id, (updated as any)?.updated_at);
+  }
   if (rowAffectsIamSync(row)) pushStudentStatus(id);
 }
 
