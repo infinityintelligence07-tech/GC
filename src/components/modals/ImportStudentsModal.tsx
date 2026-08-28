@@ -90,7 +90,7 @@ interface ImportStudentsModalProps {
 }
 
 type ImportMode = 'padrao' | 'kamino';
-type ClassDecision = 'treinamento' | 'treinamento-existente' | 'tag' | 'tag-existente';
+type ClassDecision = 'treinamento' | 'treinamento-existente' | 'tag' | 'tag-existente' | 'ignorar';
 
 // ─── Template column definition (Padrão) ──────────────────────────────────────
 const TEMPLATE_COLUMNS = [
@@ -141,6 +141,9 @@ interface KaminoExtras {
   // em vez de criar uma nova ficha. Usado quando uma planilha Kamino traz só linhas
   // de Recompra de um aluno cujo contrato principal já existe no banco.
   attachToStudentId?: string;
+  // ID de ficha existente (mesmo nome + treinamento) que deve ser ATUALIZADA com as
+  // parcelas da planilha, em vez de bloquear a linha como duplicada ou criar 2ª ficha.
+  updateExistingStudentId?: string;
 }
 
 interface ParsedRow {
@@ -749,6 +752,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
     const tagNames = new Set(studentTags.filter((t) => (t.scope ?? 'student') === 'student').map((t) => t.name.toLowerCase()));
     for (const c of unknownClassificacoes) {
       const decision = classDecisions[c] ?? (products.length > 0 ? 'treinamento-existente' : 'treinamento');
+      if (decision === 'ignorar') continue;
       const name = (classTagNames[c] ?? c).trim();
       if (!name) { toast.error(`Informe o destino da classificação "${c}"`); return false; }
       if (decision === 'treinamento-existente' && !productNames.has(name.toLowerCase())) { toast.error(`Selecione um treinamento cadastrado para "${c}"`); return false; }
@@ -1464,10 +1468,17 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
     type Group = { nome: string; produto: string; rows: Record<string, unknown>[]; recompraRows: Record<string, unknown>[] };
     const groups = new Map<string, Group>();
     const recompraPending = new Map<string, Record<string, unknown>[]>(); // por nome
+    let libertySkipped = 0;
     for (const row of json) {
       // Linhas sem Pessoa viram a ficha "Sem Nome" (agrupadas por Classificação).
       const nome = normalizeString(row['Pessoa']) || 'Sem Nome';
       const produto = normalizeString(row['Classificação']) || KAMINO_TAG_ONLY_PRODUCT;
+      // Contratos Liberty têm gestão própria na empresa Liberty. Fora dela,
+      // as linhas são descartadas para não duplicar a carteira Liberty no IAM.
+      if (!isLibertyCompany && produto.toLowerCase() === 'liberty') {
+        libertySkipped++;
+        continue;
+      }
       if (isRecompraClassificacao(produto)) {
         const k = nome.toLowerCase();
         if (!recompraPending.has(k)) recompraPending.set(k, []);
@@ -1477,6 +1488,9 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
       const key = `${nome.toLowerCase()}||${produto.toLowerCase()}`;
       if (!groups.has(key)) groups.set(key, { nome, produto, rows: [], recompraRows: [] });
       groups.get(key)!.rows.push(row);
+    }
+    if (libertySkipped > 0) {
+      toast.info(`${libertySkipped} linha(s) com Classificação "Liberty" foram ignoradas — contratos Liberty são geridos na empresa Liberty.`);
     }
     // Anexa as Recompras ao contrato CORRETO do aluno.
     // Quando o aluno tem 2+ contratos, o vínculo é decidido POR PARCELA usando
@@ -1566,16 +1580,6 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
 
 
     const acNames = new Set(acs.filter((g) => g.active).map((g) => g.name.toLowerCase()));
-    const existingImportKeys = new Set(
-      students.map((student) => buildImportIdentity({
-        name: student.name,
-        whatsapp: student.whatsapp,
-        product: student.product,
-        enrollmentDate: student.enrollmentDate,
-        saleValue: student.saleValue,
-        totalInstallments: student.totalInstallments,
-      }))
-    );
     const seenImportKeys = new Set<string>();
     const parsed: ParsedRow[] = [];
     let virtualIdx = 0;
@@ -1741,9 +1745,20 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
 
       // Quando vamos ANEXAR a uma ficha existente, não aplica os checks de duplicidade
       // de "aluno completo" — vamos só acrescentar parcelas novas.
+      // Contrato já cadastrado (mesmo nome + treinamento) não bloqueia mais a linha:
+      // a ficha existente é ATUALIZADA com as parcelas da planilha.
+      let updateExistingStudentId: string | undefined;
       if (!attachToStudentId) {
-        if (existingImportKeys.has(importKey)) {
-          errors.push('Aluno já cadastrado anteriormente');
+        const nomeLower = nome.trim().toLowerCase();
+        const produtoLower = produto.trim().toLowerCase();
+        const existingSameContract = students.filter(
+          (s) => s.name.trim().toLowerCase() === nomeLower && (s.product || '').trim().toLowerCase() === produtoLower,
+        );
+        if (existingSameContract.length > 1) {
+          errors.push(`Há ${existingSameContract.length} fichas no banco com este nome e treinamento — resolva a duplicidade antes de importar`);
+        } else if (existingSameContract.length === 1) {
+          updateExistingStudentId = existingSameContract[0].id;
+          warnings.push('Ficha existente encontrada — as parcelas serão substituídas pelas da planilha');
         } else if (seenImportKeys.has(importKey)) {
           errors.push('Aluno duplicado na planilha');
         }
@@ -1793,6 +1808,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
         kaminoTagNames: Array.from(allTagNames),
         acCandidate: !acName && topAcCandidate ? topAcCandidate : undefined,
         attachToStudentId,
+        updateExistingStudentId,
       };
       parsed.push({ rowIndex: virtualIdx, raw: first, data, errors: warnings });
     }
@@ -2007,7 +2023,9 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
     // ─── Classificações desconhecidas: aplica decisão do usuário ─────────────
     // 'treinamento' → cria Produto agora (await direto, não pode falhar em silêncio)
     // 'tag' → vira tag e treinamento fica em branco
+    // 'ignorar' → linhas descartadas por completo (ex.: receitas avulsas)
     const classToTag = new Set<string>(); // lowercase
+    const classToIgnore = new Set<string>(); // lowercase
     const classToProduct = new Map<string, string>(); // lowercase original -> produto final
     if (mode === 'kamino' && unknownClassificacoes.length > 0) {
       setProgressMessage('Criando treinamentos novos...');
@@ -2034,6 +2052,8 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
           }
         } else if (decision === 'treinamento-existente') {
           classToProduct.set(c.toLowerCase(), finalName);
+        } else if (decision === 'ignorar') {
+          classToIgnore.add(c.toLowerCase());
         } else {
           // 'tag' (cria nova) ou 'tag-existente' (reutiliza). Em ambos os casos,
           // o aluno entra na ficha consolidada "Sem Treinamento" e a tag é aplicada às parcelas.
@@ -2147,6 +2167,8 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
 
     const rawStudentsToImport: Student[] = validRows
       .filter((row) => row.data != null)
+      // Classificações marcadas como "Ignorar" são descartadas por completo.
+      .filter((row) => !(mode === 'kamino' && row.data!.product && classToIgnore.has(row.data!.product.toLowerCase())))
       .map((row) => {
         const data = row.data!;
         // Se a Classificação (product) não é um Treinamento cadastrado,
@@ -2245,7 +2267,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
         }
 
         // Remove campos extras antes de enviar ao banco
-        const { installments: _omit1, mirrorCancellation: _omit2, kaminoTagNames: _omit3, acCandidate: _omit4, pendingTagNames: _omit5, firstDueDate: _omit6, attachToStudentId: _omit7, ...studentData } = data;
+        const { installments: _omit1, mirrorCancellation: _omit2, kaminoTagNames: _omit3, acCandidate: _omit4, pendingTagNames: _omit5, firstDueDate: _omit6, attachToStudentId: _omit7, updateExistingStudentId: _omit8, ...studentData } = data;
         // Resolve AC final: se o aluno foi importado sem AC (acCandidate), aplica decisão.
         // Se continuar vazio, o trigger da esteira atribui o próximo AC ativo no INSERT.
         // Se attachToStudentId (ficha existente), o AC da ficha é preservado (não há INSERT).
@@ -2277,13 +2299,17 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
               : 'Importado via planilha Excel',
           }],
           attachToStudentId,
-        } as Student & { attachToStudentId?: string };
+          updateExistingStudentId: data.updateExistingStudentId,
+        } as Student & { attachToStudentId?: string; updateExistingStudentId?: string };
       });
 
     // Separa as linhas de "Recompra anexada a aluno existente". Elas não viram
     // novos cadastros: vamos só ACRESCENTAR as parcelas à ficha existente.
     const appendOps = rawStudentsToImport.filter((s) => (s as any).attachToStudentId);
-    const rawStudentsForInsert = rawStudentsToImport.filter((s) => !(s as any).attachToStudentId);
+    // Fichas existentes (mesmo nome + treinamento): não inserem — são ATUALIZADAS
+    // com as parcelas da planilha ao final do import.
+    const updateOps = rawStudentsToImport.filter((s) => !(s as any).attachToStudentId && (s as any).updateExistingStudentId);
+    const rawStudentsForInsert = rawStudentsToImport.filter((s) => !(s as any).attachToStudentId && !(s as any).updateExistingStudentId);
 
     const studentsToImport: Student[] = mode === 'kamino'
       ? Array.from(rawStudentsForInsert.reduce((map, student) => {
@@ -2318,7 +2344,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
 
     // Snapshot do que estamos enviando (antes do insert)
     const expectedMap = new Map<string, { name: string; product: string; installments: number }>();
-    for (const s of studentsToImport) {
+    for (const s of [...studentsToImport, ...updateOps]) {
       const key = `${s.name.toLowerCase()}||${s.product.toLowerCase()}`;
       expectedMap.set(key, {
         name: s.name,
@@ -2444,6 +2470,57 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
         }
         if (appended > 0) {
           toast.success(`${appendedRows} parcela(s) de Recompra processada(s) em ${appended} aluno(s).`);
+        }
+      }
+
+      // ─── Atualiza fichas existentes (mesmo nome + treinamento) ────────────
+      // As parcelas da planilha SUBSTITUEM as da ficha. Cadastro, AC, vínculos
+      // de cancelamento e histórico existentes são preservados.
+      let updatedCount = 0;
+      if (updateOps.length > 0) {
+        setProgressMessage('Atualizando fichas existentes...');
+        setProgressDetail(`${updateOps.length} ficha(s)`);
+        const { supabase } = await import('@/integrations/supabase/client');
+        for (const op of updateOps) {
+          const sid = (op as any).updateExistingStudentId as string;
+          if (!sid) continue;
+          try {
+            const { data: row, error: fetchErr } = await supabase
+              .from('students')
+              .select('id,history,status_mode')
+              .eq('id', sid)
+              .maybeSingle();
+            if (fetchErr || !row) { console.error('[updateExisting] fetch falhou', sid, fetchErr); continue; }
+            const newInstallments = op.installments ?? [];
+            const paid = newInstallments.filter((i) => i.paid).length;
+            const histArr = Array.isArray(row.history) ? (row.history as any[]) : [];
+            const newHist = [...histArr, {
+              date: new Date().toISOString(),
+              type: 'Sistema',
+              text: `Importação Kamino: ficha atualizada — ${newInstallments.length} parcela(s) substituída(s) pela planilha (${paid} paga(s)).`,
+            }];
+            const patch: Record<string, unknown> = {
+              installments: newInstallments,
+              sale_value: op.saleValue,
+              total_installments: newInstallments.length,
+              paid_installments: paid,
+              installment_value: op.installmentValue,
+              due_day: op.dueDay,
+              history: newHist,
+            };
+            // Status manual (ex.: Pendente definido na conciliação) é preservado.
+            if ((row.status_mode ?? 'Automático') === 'Automático') {
+              patch.status = calculateAutoStatus(newInstallments);
+            }
+            const { error: updErr } = await supabase.from('students').update(patch).eq('id', sid);
+            if (updErr) { console.error('[updateExisting] update falhou', sid, updErr); continue; }
+            updatedCount++;
+          } catch (e) {
+            console.error('[updateExisting] erro', e);
+          }
+        }
+        if (updatedCount > 0) {
+          toast.success(`${updatedCount} ficha(s) existente(s) atualizada(s) com as parcelas da planilha.`);
         }
       }
 
@@ -3569,8 +3646,9 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
                     <h3 className="text-xs font-bold text-foreground">Classificações sem Treinamento</h3>
                     <p className="text-[11px] text-muted-foreground">
                       A Classificação define o Produto/Treinamento do aluno. Para cada item escolha:
-                      {' '}<strong className="text-foreground">Atribuir Treinamento existente</strong> ou
-                      {' '}<strong className="text-foreground">Criar novo Treinamento</strong>.
+                      {' '}<strong className="text-foreground">Atribuir Treinamento existente</strong>,
+                      {' '}<strong className="text-foreground">Criar novo Treinamento</strong> ou
+                      {' '}<strong className="text-foreground">Ignorar</strong> (as linhas são descartadas — use para receitas avulsas que não são treinamentos).
                       {' '}Quando o valor de parcela for compatível com um treinamento já cadastrado, uma sugestão aparecerá em destaque.
                     </p>
                   </div>
@@ -3610,7 +3688,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
                           </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-1.5 mb-2">
+                        <div className="grid grid-cols-3 gap-1.5 mb-2">
                           <button
                             onClick={() => {
                               setClassDecisions((prev) => ({ ...prev, [c]: 'treinamento-existente' }));
@@ -3637,6 +3715,16 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
                           >
                             Criar Treinamento
                           </button>
+                          <button
+                            onClick={() => setClassDecisions((prev) => ({ ...prev, [c]: 'ignorar' }))}
+                            className={`px-2 py-1.5 rounded-md text-[10px] font-semibold border transition-all ${
+                              decision === 'ignorar'
+                                ? 'bg-slate-600 text-white border-slate-600 shadow-sm'
+                                : 'bg-background border-border text-muted-foreground hover:bg-muted'
+                            }`}
+                          >
+                            Ignorar
+                          </button>
                         </div>
                         {decision === 'treinamento-existente' && (
                           <div>
@@ -3662,6 +3750,11 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
                               placeholder={c}
                             />
                           </div>
+                        )}
+                        {decision === 'ignorar' && (
+                          <p className="text-[10px] text-muted-foreground">
+                            Todas as linhas com esta classificação serão descartadas — nenhum aluno, parcela ou tag será criado.
+                          </p>
                         )}
                       </div>
                     );
