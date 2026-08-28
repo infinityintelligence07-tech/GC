@@ -648,11 +648,20 @@ with gc as (
     and not (i->>'paid')::boolean
   group by 1
 )
-select coalesce(g.nome, p.nome) as nome,
-  coalesce(g.aberto,0) as gc,
-  coalesce(p.aberto,0) as planilha,
-  round(coalesce(g.aberto,0) - coalesce(p.aberto,0), 2) as diff
-from gc g
-full join _plan p on p.nome = g.nome
-where abs(coalesce(g.aberto,0) - coalesce(p.aberto,0)) > 0.01
-order by abs(coalesce(g.aberto,0) - coalesce(p.aberto,0)) desc;
+, diffs as (
+  select coalesce(g.nome, p.nome) as nome,
+    coalesce(g.aberto,0) as gc,
+    coalesce(p.aberto,0) as planilha,
+    round(coalesce(g.aberto,0) - coalesce(p.aberto,0), 2) as diff
+  from gc g
+  full join _plan p on p.nome = g.nome
+  where abs(coalesce(g.aberto,0) - coalesce(p.aberto,0)) > 0.01
+)
+select json_build_object(
+  'total_gc', (select round(sum(aberto),2) from gc),
+  'total_planilha', (select round(sum(aberto),2) from _plan),
+  'diff_total', (select round((select sum(aberto) from gc) - (select sum(aberto) from _plan),2)),
+  'n_divergentes', (select count(*) from diffs),
+  'soma_diffs', (select round(sum(diff),2) from diffs),
+  'top', (select json_agg(d) from (select * from diffs order by abs(diff) desc limit 25) d)
+) as resultado;
