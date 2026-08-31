@@ -1588,7 +1588,7 @@ export default function ConciliacaoPage() {
     try {
       const { ensureReversalCommission } = await import('@/lib/ensureReversalCommission');
       for (const it of group.items) {
-        if (isConciliacaoReversaoItem(it) && it.relatedCaseId) ensureReversalCommission(it.relatedCaseId);
+        if (isConciliacaoReversaoItem(it) && it.relatedCaseId) ensureReversalCommission(it.relatedCaseId, false);
       }
     } catch (e) {
       console.error('[aprovar] aprovar comissão falhou:', e);

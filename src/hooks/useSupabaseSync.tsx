@@ -327,7 +327,9 @@ export function useSupabaseSync() {
       // Comissões: carrega do banco e recupera reversões antigas sem comissão
       useCommissionsStore.getState().loadAll().then(async () => {
         try {
-          const key = `iam-comissoes-backfill-${activeCompanyId}`;
+          // v2 também recupera comissões que ficaram fora quando o primeiro
+          // backfill foi executado antes de todos os casos serem carregados.
+          const key = `iam-comissoes-backfill-v2-${activeCompanyId}`;
           if (localStorage.getItem(key)) return;
           const { backfillCommissionsFromCases } = await import('@/lib/commissionsBackfill');
           backfillCommissionsFromCases();

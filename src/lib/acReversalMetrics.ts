@@ -66,6 +66,12 @@ export function computeAcReversalMetrics({
   const map = new Map<string, AcMetric>();
   // caso → { acName, inscrições revertidas } para consolidar o numerador
   const caseInfo = new Map<string, { acName: string; revertidas: number }>();
+  const metricAcNames = new Set<string>(
+    acs
+      .filter((ac: any) => ac.active !== false)
+      .map((ac: any) => ac.name)
+      .filter((name: string) => !acNameFilter || name === acNameFilter),
+  );
   const activeCommissions = commissions.filter((com) => {
     if (com.status === 'cancelada' || !inRange(com.createdAt)) return false;
     const acName = com.acName || '—';
@@ -77,11 +83,12 @@ export function computeAcReversalMetrics({
 
   for (const c of cancellationCases) {
     if (!inRange(c.createdAt)) continue;
+    const acName = c.ac || '—';
+    if (acNameFilter && acName !== acNameFilter) continue;
+    metricAcNames.add(acName);
     // Esta área é específica de comissões: não contar cancelamentos que
     // ainda não geraram comissão para o assessor.
     if (!commissionCaseIds.has(c.id)) continue;
-    const acName = c.ac || '—';
-    if (acNameFilter && acName !== acNameFilter) continue;
     const qtd = Math.max(1, c.quantidadeInscricoes ?? 1);
     const valor = c.value ?? 0;
     const perInsc = valor / qtd;
@@ -140,6 +147,30 @@ export function computeAcReversalMetrics({
     cur.reversalPercent = cur.inscricoesTotal > 0 ? roundReversalPercent((cur.inscricoesRevertidas / cur.inscricoesTotal) * 100) : 0;
   }
 
+  // Mantém todas as assessoras disponíveis no painel, inclusive as que ainda
+  // não possuem comissão no período. Nesses casos, os valores ficam zerados.
+  for (const acName of metricAcNames) {
+    if (map.has(acName)) continue;
+    const acRef = acs.find((a: any) => a.name === acName);
+    map.set(acName, {
+      acName,
+      acPhoto: acRef?.photo,
+      inscricoesTotal: 0,
+      financeiroTotal: 0,
+      inscricoesRevertidas: 0,
+      inscricoesCanceladas: 0,
+      financeiroRevertido: 0,
+      financeiroCancelado: 0,
+      casos: 0,
+      comissaoValor: 0,
+      comissaoPossivelValor: 0,
+      comissaoPercent: 0,
+      reversalPercent: 0,
+      meta1: acRef?.meta1 ?? rules.metaReversao1 ?? rules.meta1,
+      meta2: acRef?.meta2 ?? rules.metaReversao2 ?? rules.meta2,
+      meta3: acRef?.meta3 ?? rules.metaReversao3 ?? rules.meta3,
+    });
+  }
 
   return Array.from(map.values()).sort(
     (a, b) => b.financeiroRevertido - a.financeiroRevertido || b.inscricoesRevertidas - a.inscricoesRevertidas,

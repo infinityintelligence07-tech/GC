@@ -46,10 +46,14 @@ export function backfillCommissionsFromCases(): number {
     const acFromCase = caseRef.ac ?? st?.ac;
     const acRow = acs.find((a) => a.name === (st?.ac ?? acFromCase));
 
-    // Se ainda existe item de conciliação pendente para o caso, a comissão
-    // segue aguardando aprovação; caso contrário já entra como computável.
-    const pendente = conciliacaoItems.some(
-      (i) => i.relatedCaseId === caseRef.id && i.status === 'pendente',
+    // Só libera a comissão quando existe uma conciliação concluída para o
+    // caso. Sem item conciliado (inclusive em casos legados), ela permanece
+    // como possível comissão até a confirmação do setor responsável.
+    const temConciliacaoConcluida = conciliacaoItems.some(
+      (i) =>
+        i.relatedCaseId === caseRef.id &&
+        (i.tipo === 'cancelamento' || i.tipo === 'reversao') &&
+        i.status === 'conciliado',
     );
 
     const created = store.register({
@@ -62,7 +66,7 @@ export function backfillCommissionsFromCases(): number {
       revertedValue: reverted,
       product: st?.product,
       observacao: 'Comissão recuperada automaticamente a partir do caso revertido.',
-      pendingApproval: pendente,
+      pendingApproval: !temConciliacaoConcluida,
     });
     if (created) criadas++;
   }

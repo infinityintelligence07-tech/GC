@@ -1,14 +1,14 @@
 // ─── Garantia de comissão em reversões ──────────────────────────────────────
 // Alguns fluxos de reversão (ex.: reversão reprovada e refeita, ou reversão
 // registrada na conciliação com tipo "cancelamento") acabavam sem comissão
-// gerada para o assessor. Este helper garante que, ao aprovar/conciliar uma
-// reversão, exista uma comissão vinculada ao caso — criando-a se necessário —
-// e a libera (pendingApproval = false).
+// gerada para o assessor. Este helper garante que exista uma comissão
+// vinculada ao caso — criando-a se necessário — e só a libera quando a
+// conciliação efetivamente é concluída.
 
 import { useAppStore } from '@/store/useAppStore';
 import { useCommissionsStore, mapPagamentoTipoToPaymentType } from '@/store/useCommissionsStore';
 
-export function ensureReversalCommission(caseId: string): void {
+export function ensureReversalCommission(caseId: string, release = true): void {
   const cs = useCommissionsStore.getState();
   const existing = cs.commissions.find(
     (c) => (c.cancellationCaseId === caseId || c.cancellationCaseId.startsWith(`${caseId}#`)) && c.status !== 'cancelada',
@@ -48,5 +48,7 @@ export function ensureReversalCommission(caseId: string): void {
     }
   }
 
-  useCommissionsStore.getState().approvePendingByCaseId(caseId);
+  if (release) {
+    useCommissionsStore.getState().approvePendingByCaseId(caseId);
+  }
 }
