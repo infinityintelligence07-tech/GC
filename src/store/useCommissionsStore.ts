@@ -8,6 +8,7 @@
 
 import { create } from 'zustand';
 import { reportDbError } from '@/lib/dbError';
+import { deleteCommissionDb, updateCommissionDb } from '@/lib/commissionsDb';
 
 export type CommissionPaymentType = 'boleto' | 'pix' | 'cartao';
 export type CommissionStatus = 'pendente' | 'paga' | 'cancelada';
@@ -59,6 +60,9 @@ interface State {
   approvePendingByCaseId: (caseId: string) => void;
   // Remove comissões pendentes de aprovação de um caso (usado em reprovação).
   removePendingByCaseId: (caseId: string) => void;
+  // Remove comissões ativas de um caso reativado; as já pagas ficam
+  // canceladas para preservar o histórico contábil.
+  removeByCaseId: (caseId: string) => void;
   // Marca as comissões do caso como reprovadas na conciliação (mantém na lista, riscadas).
   rejectByCaseId: (caseId: string, motivo: string) => void;
 
@@ -192,6 +196,31 @@ export const useCommissionsStore = create<State>()((set, get) => ({
     import('@/lib/commissionsDb').then(({ deleteCommissionDb }) => {
       alvos.forEach((c) => deleteCommissionDb(c.id).catch(reportDbError('excluir comissão')));
     });
+  },
+
+  removeByCaseId: (caseId) => {
+    const alvos = get().commissions.filter((c) => matchCase(c, caseId) && c.status !== 'cancelada');
+    if (!alvos.length) return;
+
+    const pagas = alvos.filter((c) => c.status === 'paga');
+    const removiveis = alvos.filter((c) => c.status !== 'paga');
+    const observacao = 'Comissão cancelada: caso de cancelamento reativado.';
+
+    set({
+      commissions: get().commissions
+        .filter((c) => !removiveis.some((alvo) => alvo.id === c.id))
+        .map((c) =>
+          pagas.some((alvo) => alvo.id === c.id)
+            ? { ...c, status: 'cancelada' as CommissionStatus, observacao }
+            : c,
+        ),
+    });
+
+    removiveis.forEach((c) => deleteCommissionDb(c.id).catch(reportDbError('excluir comissão')));
+    pagas.forEach((c) =>
+      updateCommissionDb(c.id, { status: 'cancelada', observacao })
+        .catch(reportDbError('cancelar comissão')),
+    );
   },
 
   rejectByCaseId: (caseId, motivo) => {

@@ -58,6 +58,7 @@ import {
   getStudentTotalPaid,
   resolveStudentFinance,
 } from '@/lib/studentFinance';
+import { resolveOriginalCancellationAc } from '@/lib/cancellationOriginalAc';
 
 // ─── Novo Funil (5 colunas fixas) ─────────────────────────────────────────────
 
@@ -337,6 +338,7 @@ interface CardProps {
   onRenegotiate?: (c: CancellationCase) => void;
   onFollowCancellation?: (c: CancellationCase) => void;
   onMultaPaga?: (c: CancellationCase, valorNegativado: number) => void;
+  onReactivate?: (c: CancellationCase) => void;
   readOnly?: boolean;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent, id: string) => void;
@@ -350,6 +352,7 @@ function CancellationCard({
   onChangeAcao, onChangeResponsavel,
   onConciliar, podeConciliar,
   onRenegotiate, onFollowCancellation, onMultaPaga,
+  onReactivate,
   readOnly, draggable, onDragStart,
 }: CardProps) {
   const cfg = FUNNEL_STAGES.find((f) => f.label === funnelStage)!;
@@ -771,6 +774,15 @@ function CancellationCard({
 
 
       {/* Ações do card */}
+      {isFinal && onReactivate && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onReactivate(c); }}
+          className="w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded text-[9px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all"
+          title="Reativar caso e escolher o próximo setor"
+        >
+          <RotateCcw size={10} /> Reativar caso
+        </button>
+      )}
       {!readOnly && (
         <div className="flex items-center gap-1 pt-1 mt-auto border-t border-border/50 flex-wrap">
           {funnelStage === 'Entrada' && !lockedForConciliation && (
@@ -977,6 +989,72 @@ function MotivoPromptModal({ caseRef, targetFunnel, onCancel, onConfirm }: Motiv
             Cancelar
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+type ReactivateDestination = 'financeiro' | 'juridico';
+
+interface ReactivateModalProps {
+  caseRef: CancellationCase;
+  onCancel: () => void;
+  onConfirm: (destination: ReactivateDestination) => void;
+}
+
+function ReactivateModal({ caseRef, onCancel, onConfirm }: ReactivateModalProps) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md saas-shadow-md">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-9 h-9 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center shrink-0">
+            <RotateCcw size={16} className="text-sky-700" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-foreground">Reativar caso</h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Escolha para qual setor <strong>{caseRef.studentName}</strong> deve retornar.
+            </p>
+          </div>
+          <button onClick={onCancel} className="ml-auto text-muted-foreground hover:text-foreground">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 mb-4 text-[11px] text-amber-800">
+          A reativação remove a comissão, o estorno e as pendências de conciliação deste caso. O histórico da operação será mantido.
+        </div>
+
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => onConfirm('financeiro')}
+            className="w-full text-left p-3 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-colors"
+          >
+            <span className="block text-xs font-bold text-amber-800">Financeiro</span>
+            <span className="block text-[10px] text-amber-700 mt-0.5">
+              Retorna para Em Tratativas e para a carteira do assessor responsável.
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm('juridico')}
+            className="w-full text-left p-3 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 transition-colors"
+          >
+            <span className="block text-xs font-bold text-violet-800">Jurídico</span>
+            <span className="block text-[10px] text-violet-700 mt-0.5">
+              Retorna para Distrato do Contrato para continuar a tratativa jurídica.
+            </span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={onCancel}
+          className="w-full mt-4 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Cancelar
+        </button>
       </div>
     </div>
   );
@@ -2685,6 +2763,8 @@ export default function CancelamentosPage() {
   // (assim como admin / jurídico). Apenas a role 'ac' (N1) seria escopada — porém
   // ela hoje não tem acesso à aba (ver permissions defaults em types/index.ts).
   const cancellationCases = allCancellationCases;
+  const removeConciliacaoByCaseId = useConciliacaoStore((s) => s.removeByCaseId);
+  const removeCommissionByCaseId = useCommissionsStore((s) => s.removeByCaseId);
 
   // UI state
   const [showModal, setShowModal] = useState(false);
@@ -2731,6 +2811,7 @@ export default function CancelamentosPage() {
   // Mostrar/ocultar histórico de finalizados
   const [showFinalizados, setShowFinalizados] = useState(false);
   const [showImportExternal, setShowImportExternal] = useState(false);
+  const [reactivateCase, setReactivateCase] = useState<CancellationCase | null>(null);
   // Pesquisa por nome do aluno (filtra cards do funil)
   const [searchTerm, setSearchTerm] = useState('');
   const [acFilter, setAcFilter] = useState<string>('all');
@@ -2761,6 +2842,101 @@ export default function CancelamentosPage() {
     } else {
       setEditing(c); setShowModal(true);
     }
+  };
+
+  const handleReactivate = (caseRef: CancellationCase, destination: ReactivateDestination) => {
+    const liveCase = cancellationCases.find((c) => c.id === caseRef.id) ?? caseRef;
+    const student = getCaseStudent(liveCase);
+    const now = new Date().toISOString();
+    const isFinanceiro = destination === 'financeiro';
+    const targetFunnel: FunnelStage = isFinanceiro ? 'Em Execução' : 'Formalização';
+    const targetStage: CancellationStage = isFinanceiro ? 'Ajustes em Geral / Boleto' : 'Confeccionar Termo';
+    const targetAction: CancellationAction = isFinanceiro ? 'Conversa WhatsApp' : 'Iniciar Tratativa';
+    const targetStatus: CancellationOperationalStatus = isFinanceiro ? 'Negociando' : 'Jurídico';
+    const targetCancellationStatus = isFinanceiro ? 'em_tratamento' as const : 'juridico' as const;
+
+    // A conciliação formal guarda o estado do aluno antes da baixa em
+    // `antes._snapshot`. Esse é o único estado confiável para devolver
+    // parcelas que já tinham sido removidas da carteira.
+    const relatedItems = conciliacaoItems.filter(
+      (item) =>
+        item.relatedCaseId === liveCase.id &&
+        (item.tipo === 'cancelamento' || item.tipo === 'reversao'),
+    );
+    const snapshotItem = [...relatedItems].reverse().find((item) => {
+      const snapshot = item.antes?._snapshot;
+      return !!snapshot && typeof snapshot === 'object'
+        && Array.isArray((snapshot as Record<string, unknown>).installments);
+    });
+    const snapshot = snapshotItem?.antes?._snapshot as Partial<Student> | undefined;
+    const restoredInstallments = (snapshot?.installments as Installment[] | undefined)
+      ?? student?.installments?.filter((item) => !(item.tags ?? []).includes('multa-cancelamento'));
+    const restoredAc = resolveOriginalCancellationAc(liveCase) || student?.ac || '';
+    const reopenedValue = restoredInstallments
+      ? restoredInstallments
+        .filter((item) => !item.paid)
+        .reduce((total, item) => total + getInstallmentOutstanding(item), 0)
+      : liveCase.value;
+
+    const caseHistoryEntry = {
+      date: now,
+      from: liveCase.stage,
+      to: targetStage,
+      operationalStatus: targetStatus,
+      note: `Caso reativado e enviado para ${isFinanceiro ? 'Financeiro (Em Tratativas)' : 'Jurídico (Distrato do Contrato)'}. Comissão, estorno e conciliação pendente removidos.`,
+    };
+    const updatedCase: Partial<CancellationCase> = {
+      funnelStage: targetFunnel,
+      stage: targetStage,
+      acao: targetAction,
+      responsavel: isFinanceiro ? 'Financeiro' : 'Jurídico',
+      operationalStatus: targetStatus,
+      value: reopenedValue,
+      movedToCurrentStageAt: now,
+      inscricoesRevertidas: 0,
+      cancellationFineValue: null as any,
+      cancellationReviewedInstallments: null as any,
+      multaPercent: null as any,
+      multaValue: null as any,
+      refundPlan: null as any,
+      abatimento: null as any,
+      finalChecklist: null as any,
+      conciliacaoReprovadaMotivo: null as any,
+      conciliacaoReprovadaAt: null as any,
+      conciliacaoReprovadaPorNome: null as any,
+      history: [...(liveCase.history ?? []), caseHistoryEntry],
+    };
+
+    if (student) {
+      const studentHistoryEntry: HistoryEntry = {
+        date: now,
+        type: 'Sistema',
+        text: `Caso de cancelamento reativado para ${isFinanceiro ? 'Financeiro (Em Tratativas)' : 'Jurídico (Distrato do Contrato)'}.`,
+      };
+      const studentUpdates: Partial<Student> = {
+        status: 'Solicitação Cancelamento',
+        statusMode: 'Manual',
+        statusCancelamento: targetCancellationStatus,
+        cancellationCaseId: liveCase.id,
+        ...(restoredInstallments ? {
+          installments: restoredInstallments,
+          totalInstallments: restoredInstallments.length,
+          paidInstallments: restoredInstallments.filter((item) => item.paid).length,
+        } : {}),
+        ...(snapshot?.installmentValue !== undefined ? { installmentValue: Number(snapshot.installmentValue) || 0 } : {}),
+        ...(snapshot?.saleValue !== undefined ? { saleValue: Number(snapshot.saleValue) || 0 } : {}),
+        ...(snapshot?.downPayment !== undefined ? { downPayment: Number(snapshot.downPayment) || 0 } : {}),
+        ...(restoredAc ? { ac: restoredAc } : {}),
+        history: [...(student.history ?? []), studentHistoryEntry],
+      };
+      updateStudent(student.id, studentUpdates);
+    }
+
+    updateCancellationCase(liveCase.id, updatedCase);
+    removeConciliacaoByCaseId(liveCase.id);
+    removeCommissionByCaseId(liveCase.id);
+    setReactivateCase(null);
+    toast.success(`${liveCase.studentName} reativado para ${isFinanceiro ? 'Financeiro' : 'Jurídico'}.`);
   };
 
   // Finalize handlers (Reverter / Cancelar)
@@ -3781,6 +3957,7 @@ export default function CancelamentosPage() {
                               setRenegSourceCaseId(cc.id);
                             }}
                             onMultaPaga={(cc, valor) => setMultaPagaCase({ caseRef: cc, valor })}
+                            onReactivate={(cc) => setReactivateCase(cc)}
                             onFollowCancellation={(cc) => {
                               if (!window.confirm('Devolver este caso ao Jurídico para prosseguir com o cancelamento?')) return;
                               const now = new Date().toISOString();
@@ -3970,6 +4147,15 @@ export default function CancelamentosPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 justify-end">
+                            {isFinal && (
+                              <button
+                                onClick={() => setReactivateCase(c)}
+                                className="flex items-center gap-1 p-1.5 rounded-lg text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all"
+                                title="Reativar caso"
+                              >
+                                <RotateCcw size={12} />
+                              </button>
+                            )}
                             {!isHistoricalMode && !isFinal && (
                               <>
                                 <button
@@ -4262,6 +4448,13 @@ export default function CancelamentosPage() {
             moveCaseToFunnel(updated, pendingMotivoCase.targetFunnel);
             setPendingMotivoCase(null);
           }}
+        />
+      )}
+      {reactivateCase && (
+        <ReactivateModal
+          caseRef={reactivateCase}
+          onCancel={() => setReactivateCase(null)}
+          onConfirm={(destination) => handleReactivate(reactivateCase, destination)}
         />
       )}
       {revertChoice && (() => {

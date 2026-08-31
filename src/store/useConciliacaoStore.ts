@@ -35,6 +35,7 @@ interface ConciliacaoState {
   aprovar: (id: string, nota?: string, opts?: { silent?: boolean }) => void;
   reprovar: (id: string, motivo: string, opts?: { silent?: boolean }) => void;
   remove: (id: string) => void;
+  removeByCaseId: (caseId: string) => void;
 
   // Erros de importação (Kamino → baixa de pagamentos)
   importErrors: ConciliacaoImportError[];
@@ -278,6 +279,19 @@ export const useConciliacaoStore = create<ConciliacaoState>()((set, get) => ({
   remove: (id) => {
     set((state) => ({ items: state.items.filter((i) => i.id !== id) }));
     deleteConciliacaoItemDb(id).catch(reportDbError("salvar alteração"));
+  },
+  removeByCaseId: (caseId) => {
+    const targets = get().items.filter(
+      (item) =>
+        item.relatedCaseId === caseId &&
+        (item.status === 'pendente' || item.status === 'aprovado'),
+    );
+    if (!targets.length) return;
+    const ids = new Set(targets.map((item) => item.id));
+    set((state) => ({ items: state.items.filter((item) => !ids.has(item.id)) }));
+    targets.forEach((item) =>
+      deleteConciliacaoItemDb(item.id).catch(reportDbError('remover conciliação pendente')),
+    );
   },
 
   importErrors: [],
