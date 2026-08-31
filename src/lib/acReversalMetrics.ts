@@ -66,9 +66,20 @@ export function computeAcReversalMetrics({
   const map = new Map<string, AcMetric>();
   // caso → { acName, inscrições revertidas } para consolidar o numerador
   const caseInfo = new Map<string, { acName: string; revertidas: number }>();
+  const activeCommissions = commissions.filter((com) => {
+    if (com.status === 'cancelada' || !inRange(com.createdAt)) return false;
+    const acName = com.acName || '—';
+    return !acNameFilter || acName === acNameFilter;
+  });
+  const commissionCaseIds = new Set(
+    activeCommissions.map((com) => String(com.cancellationCaseId ?? '').split('#')[0]).filter(Boolean),
+  );
 
   for (const c of cancellationCases) {
     if (!inRange(c.createdAt)) continue;
+    // Esta área é específica de comissões: não contar cancelamentos que
+    // ainda não geraram comissão para o assessor.
+    if (!commissionCaseIds.has(c.id)) continue;
     const acName = c.ac || '—';
     if (acNameFilter && acName !== acNameFilter) continue;
     const qtd = Math.max(1, c.quantidadeInscricoes ?? 1);
@@ -98,9 +109,7 @@ export function computeAcReversalMetrics({
 
   // Comissões contam mesmo aguardando conciliação; só as canceladas/reprovadas ficam fora.
   const casosComComissao = new Set<string>();
-  for (const com of commissions) {
-    if (com.status === 'cancelada') continue;
-    if (!inRange(com.createdAt)) continue;
+  for (const com of activeCommissions) {
     const acName = com.acName || '—';
     if (acNameFilter && acName !== acNameFilter) continue;
     const cur = map.get(acName);

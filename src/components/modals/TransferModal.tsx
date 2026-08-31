@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function TransferModal({ ac, onClose }: Props) {
-  const { acs, students, updateStudent, deleteAC } = useAppStore();
+  const { acs, students, cancellationCases, updateStudent, updateCancellationCase, deleteAC } = useAppStore();
   const availableACs = acs.filter((g) => g.id !== ac.id && g.active);
   const acStudents = students.filter((s) => s.ac === ac.name);
 
@@ -34,6 +34,7 @@ export default function TransferModal({ ac, onClose }: Props) {
     if (selectedACs.length === 0 || running) return;
     setRunning(true);
     const targetACs = availableACs.filter((g) => selectedACs.includes(g.id));
+    const targetByStudentId = new Map<string, string>();
 
     // Distribui proporcionalmente DENTRO de cada status, mas considerando TODOS os status
     const byStatus = new Map<string, Student[]>();
@@ -46,6 +47,7 @@ export default function TransferModal({ ac, onClose }: Props) {
     byStatus.forEach((group) => {
       group.forEach((student, idx) => {
         const targetAC = targetACs[idx % targetACs.length];
+        targetByStudentId.set(student.id, targetAC.name);
         updateStudent(student.id, {
           ac: targetAC.name,
           history: [
@@ -59,6 +61,19 @@ export default function TransferModal({ ac, onClose }: Props) {
         });
       });
     });
+
+    // Casos ativos acompanham o aluno. Comissões e casos finalizados permanecem
+    // com o assessor original para preservar o histórico operacional/contábil.
+    cancellationCases
+      .filter((c) =>
+        c.ac === ac.name &&
+        c.funnelStage !== 'Finalizado' &&
+        !['Cancelado', 'Recuperado', 'Negativação Efetivada', 'Negativação Retirada'].includes(c.stage),
+      )
+      .forEach((c) => {
+        const targetName = c.studentId ? targetByStudentId.get(c.studentId) : undefined;
+        if (targetName) updateCancellationCase(c.id, { ac: targetName });
+      });
 
     // Pequeno atraso pra garantir que os updates entrem na fila antes do delete
     await new Promise((r) => setTimeout(r, 300));
