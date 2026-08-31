@@ -133,14 +133,14 @@ export default function TransferModal({ ac, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-50 fade-in">
-      <div className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border">
-        <div className="flex items-center justify-between p-6 border-b border-border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30 p-4 backdrop-blur-sm fade-in">
+      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-border p-4 sm:p-6">
           <h2 className="text-lg font-semibold text-foreground">Transferir Carteira</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted transition-colors"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 hover:bg-muted transition-colors"><X size={18} /></button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
           <p className="text-xs text-muted-foreground">
             O assessor <strong className="text-foreground">{ac.name}</strong> possui{' '}
             <strong className="text-foreground">{acStudents.length}</strong> aluno(s).
@@ -160,23 +160,19 @@ export default function TransferModal({ ac, onClose }: Props) {
 
           <div className="space-y-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase">Destino</p>
-            {availableACs.length === 0 ? (
-              <p className="text-xs text-destructive">Nenhum assessor disponível para transferência.</p>
-            ) : (
-              availableACs.map((g) => (
-                <label key={g.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedACs.includes(g.id)}
-                    onChange={() => toggleAC(g.id)}
-                    className="rounded"
-                  />
-                  <span className="text-sm text-foreground">{g.name}</span>
-                </label>
-              ))
-            )}
+            {availableACs.map((g) => (
+              <label key={g.id} className="flex cursor-pointer items-center gap-2 rounded-lg p-2 hover:bg-muted/50">
+                <input
+                  type="checkbox"
+                  checked={selectedACs.includes(g.id)}
+                  onChange={() => toggleAC(g.id)}
+                  className="rounded"
+                />
+                <span className="text-sm text-foreground">{g.name}</span>
+              </label>
+            ))}
             {unlinkedAcUsers.map((user) => (
-              <label key={user.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 cursor-pointer">
+              <label key={user.id} className="flex cursor-pointer items-center gap-2 rounded-lg p-2 hover:bg-muted/50">
                 <input
                   type="checkbox"
                   checked={selectedACs.includes(`user:${user.id}`)}
@@ -191,19 +187,23 @@ export default function TransferModal({ ac, onClose }: Props) {
             {availableACs.length === 0 && unlinkedAcUsers.length === 0 && (
               <p className="text-xs text-destructive">Cadastre a Bianca como usuária AC antes de transferir.</p>
             )}
+            {selectedACs.length === 0 && (availableACs.length > 0 || unlinkedAcUsers.length > 0) && (
+              <p className="text-[11px] text-amber-700">Selecione pelo menos um destino para continuar.</p>
+            )}
           </div>
         </div>
 
-        <div className="p-6 border-t border-border flex gap-3 justify-end">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium bg-muted text-muted-foreground">
+        <div className="flex shrink-0 justify-end gap-3 border-t border-border p-4 sm:p-6">
+          <button type="button" onClick={onClose} className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-muted-foreground">
             Cancelar
           </button>
           <button
+            type="button"
             onClick={handleTransfer}
-            disabled={selectedACs.length === 0}
+            disabled={selectedACs.length === 0 || running}
             className="px-4 py-2 rounded-lg text-sm font-medium iam-gradient text-primary-foreground shadow-md disabled:opacity-40"
           >
-            Transferir e Excluir AC
+            {running ? 'Transferindo...' : 'Transferir e Excluir AC'}
           </button>
         </div>
       </div>

@@ -12,7 +12,8 @@ import {
 } from '@/lib/extratoConferencia';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import { supabase } from '@/integrations/supabase/client';
-import { CheckCircle2, AlertTriangle, Landmark, Wallet, Scale, Loader2, ArrowDownCircle, Filter } from 'lucide-react';
+import ExtratoCardTab from '@/components/ExtratoCardTab';
+import { CheckCircle2, AlertTriangle, Landmark, Wallet, Scale, Loader2, ArrowDownCircle, Filter, LineChart } from 'lucide-react';
 
 function formatDateBR(iso: string): string {
   try {
@@ -93,7 +94,10 @@ function LinhaExtrato({ linha }: { linha: ExtratoLinha }) {
   );
 }
 
+type ExtratoSubTab = 'conferencia' | 'card';
+
 export default function ExtratoConferenciaPage() {
+  const [subTab, setSubTab] = useState<ExtratoSubTab>('conferencia');
   const { students, acs, currentUser } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
   const activeCompanyId = useCompanyStore((s) => s.activeCompanyId);
@@ -210,6 +214,47 @@ export default function ExtratoConferenciaPage() {
 
   const acLabel = effectiveAcFilter || 'Todos os assessores';
 
+  const subTabs = (
+    <div className="inline-flex items-center gap-1 rounded-lg bg-muted p-1 self-start">
+      <button
+        onClick={() => setSubTab('conferencia')}
+        className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+          subTab === 'conferencia' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        Conferência automática
+      </button>
+      <button
+        onClick={() => setSubTab('card')}
+        className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+          subTab === 'card' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        Extrato do Card
+      </button>
+    </div>
+  );
+
+  if (subTab === 'card') {
+    return (
+      <div className="p-4 md:p-6 space-y-5 max-w-[1400px] mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <LineChart size={20} className="text-primary" />
+              Extrato do Card — A Vencer / Vencido
+            </h1>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+              Histórico das leituras diárias do card do Dashboard e região de lançamentos manuais para bater a variação entre duas datas.
+            </p>
+          </div>
+          {subTabs}
+        </div>
+        <ExtratoCardTab />
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-[1400px] mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -222,6 +267,8 @@ export default function ExtratoConferenciaPage() {
             Movimentações da carteira com saldo corrido. O saldo de fechamento de cada dia é conferido com a Carteira Total do Dashboard — a diferença deve ser zero.
           </p>
         </div>
+        <div className="flex flex-col items-start sm:items-end gap-2">
+          {subTabs}
         <PeriodFilter
           mode={periodMode}
           setMode={setPeriodMode}
@@ -230,6 +277,7 @@ export default function ExtratoConferenciaPage() {
           weekIdx={weekIdx}
           setWeekIdx={setWeekIdx}
         />
+        </div>
       </div>
 
       {/* Filtros: data de entrada + assessor */}

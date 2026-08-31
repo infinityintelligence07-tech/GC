@@ -5,7 +5,7 @@ import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 import DashDateFilter, { DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
 import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity, FileText, AlertTriangle } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
@@ -20,6 +20,7 @@ import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancel
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
 import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { fetchKaminoDashboardForecastTotals, type KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
+import { upsertCarteiraCardSnapshot } from '@/lib/carteiraCardExtrato';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import {
   isCancellationCaseInRange,
@@ -60,6 +61,7 @@ export default function DashboardPage() {
   const [paymentDetailModal, setPaymentDetailModal] = useState<null | 'pago' | 'recebido'>(null);
   const [kpiModalKey, setKpiModalKey] = useState<KpiModalKey | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const lastCardSnapshotRef = useRef<string | null>(null);
 
   // ── Evolução Mensal (filtro exclusivo do bloco) ───────────────────────────
   // Presets: 3m, 6m (default), 12m, custom (datepickers de mês)
@@ -736,6 +738,36 @@ export default function DashboardPage() {
   const carteiraTotalValue = forecastTotais.aVencer;
   const carteiraTotalAlunos = forecastTotais.qtdAlunosAVencer;
 
+  // ── Leitura diária do card (Extrato do Card) ──────────────────────────────
+  // Grava o valor do card "A Vencer / Vencido" uma vez por dia por empresa
+  // (atualizando o fechamento a cada leitura), SOMENTE quando o card está na
+  // visão canônica: Todos, base vencimento, sem filtros. Alimenta a aba
+  // "Extrato do Card" na página Extrato de Conferência.
+  const isCanonicalCardView =
+    mode === 'performance' &&
+    forecastIndex === 0 &&
+    dateBasis === 'vencimento' &&
+    !acFilter &&
+    !productFilter &&
+    tagFilters.length === 0 &&
+    scoreFilter === null;
+
+  useEffect(() => {
+    if (!activeCompanyId || !isCanonicalCardView || kaminoTotalsPending) return;
+    if (students.length === 0) return;
+    const today = getTodayBrasilia().toISOString().slice(0, 10);
+    const key = `${activeCompanyId}|${today}|${carteiraTotalValue.toFixed(2)}|${forecastTotais.pago.toFixed(2)}`;
+    if (lastCardSnapshotRef.current === key) return;
+    lastCardSnapshotRef.current = key;
+    void upsertCarteiraCardSnapshot({
+      companyId: activeCompanyId,
+      snapshotDate: today,
+      aVencer: carteiraTotalValue,
+      pago: forecastTotais.pago,
+      qtdAlunos: carteiraTotalAlunos,
+    }).catch((err) => console.warn('[extrato-card] snapshot:', err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompanyId, isCanonicalCardView, kaminoTotalsPending, carteiraTotalValue, forecastTotais.pago, carteiraTotalAlunos, students.length]);
 
   // ── Score distribution ────────────────────────────────────────────────────
   // Calculado sobre o MESMO universo que os KPIs/tabela exibem por padrão
