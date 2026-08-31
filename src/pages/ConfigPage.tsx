@@ -295,7 +295,13 @@ export default function ConfigPage() {
 
   const handleDeleteAC = (ac: AC) => {
     const hasStudents = students.some((s) => s.ac === ac.name);
-    if (hasStudents) {
+    const hasActiveCases = useAppStore.getState().cancellationCases.some(
+      (c) =>
+        c.ac === ac.name &&
+        c.funnelStage !== 'Finalizado' &&
+        !['Cancelado', 'Recuperado', 'Negativação Efetivada', 'Negativação Retirada'].includes(c.stage),
+    );
+    if (hasStudents || hasActiveCases) {
       setTransferAC(ac);
     } else {
       deleteAC(ac.id);

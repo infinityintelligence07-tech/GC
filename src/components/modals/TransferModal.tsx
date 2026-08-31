@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AC, Student } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
+import { updateCancellationCaseDb, updateStudentDb } from '@/lib/supabaseMutations';
 import { X } from 'lucide-react';
 
 interface Props {
@@ -35,6 +36,7 @@ export default function TransferModal({ ac, onClose }: Props) {
     setRunning(true);
     const targetACs = availableACs.filter((g) => selectedACs.includes(g.id));
     const targetByStudentId = new Map<string, string>();
+    const persistenceJobs: Promise<unknown>[] = [];
 
     // Distribui proporcionalmente DENTRO de cada status, mas considerando TODOS os status
     const byStatus = new Map<string, Student[]>();
@@ -48,17 +50,20 @@ export default function TransferModal({ ac, onClose }: Props) {
       group.forEach((student, idx) => {
         const targetAC = targetACs[idx % targetACs.length];
         targetByStudentId.set(student.id, targetAC.name);
+        const history = [
+          ...student.history,
+          {
+            date: new Date().toISOString(),
+            type: 'Sistema' as const,
+            text: `Carteira transferida de ${ac.name} para ${targetAC.name}.`,
+          },
+        ];
         updateStudent(student.id, {
           ac: targetAC.name,
-          history: [
-            ...student.history,
-            {
-              date: new Date().toISOString(),
-              type: 'Sistema' as const,
-              text: `Carteira transferida de ${ac.name} para ${targetAC.name}.`,
-            },
-          ],
+          history,
         });
+        // Aguarda a gravação real antes de remover o AC de origem.
+        persistenceJobs.push(updateStudentDb(student.id, { ac: targetAC.name, history }));
       });
     });
 
@@ -70,13 +75,22 @@ export default function TransferModal({ ac, onClose }: Props) {
         c.funnelStage !== 'Finalizado' &&
         !['Cancelado', 'Recuperado', 'Negativação Efetivada', 'Negativação Retirada'].includes(c.stage),
       )
-      .forEach((c) => {
-        const targetName = c.studentId ? targetByStudentId.get(c.studentId) : undefined;
-        if (targetName) updateCancellationCase(c.id, { ac: targetName });
+      .forEach((c, idx) => {
+        const linkedStudent = students.find(
+          (student) =>
+            student.id === c.studentId ||
+            student.cancellationCaseId === c.id ||
+            (student.ac === ac.name && student.name === c.studentName),
+        );
+        const targetName =
+          (linkedStudent ? targetByStudentId.get(linkedStudent.id) : undefined) ??
+          targetACs[idx % targetACs.length]?.name;
+        if (!targetName) return;
+        updateCancellationCase(c.id, { ac: targetName });
+        persistenceJobs.push(updateCancellationCaseDb(c.id, { ac: targetName }));
       });
 
-    // Pequeno atraso pra garantir que os updates entrem na fila antes do delete
-    await new Promise((r) => setTimeout(r, 300));
+    await Promise.all(persistenceJobs);
     deleteAC(ac.id);
     onClose();
   };
