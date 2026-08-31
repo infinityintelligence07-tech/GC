@@ -103,7 +103,8 @@ export default function ComissoesPage() {
     const pago = active.filter((c) => c.status === 'paga').reduce((s, c) => s + c.value, 0);
     const awaitingList = filtered.filter((c) => c.pendingApproval && c.status !== 'cancelada');
     const awaiting = awaitingList.reduce((s, c) => s + c.value, 0);
-    // Visão total do assessor: conciliadas + aguardando conciliação.
+    // Saldo definitivo só considera comissões liberadas pela conciliação.
+    // As demais ficam disponíveis como previsão, sem entrar no saldo.
     const totalGeral = total + awaiting;
     return { count: active.length + awaitingList.length, total, totalGeral, pend, pago, awaiting };
   }, [filtered]);
@@ -132,13 +133,16 @@ export default function ComissoesPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <KpiCard label="Total geral" value={formatCurrency(kpis.totalGeral)} icon={<DollarSign size={14} />} tone="neutral" />
-        <KpiCard label="Conciliado" value={formatCurrency(kpis.total)} icon={<CheckCircle2 size={14} />} tone="neutral" />
-        <KpiCard label="Aguardando conciliação" value={formatCurrency(kpis.awaiting)} icon={<Clock size={14} />} tone="neutral" />
-        <KpiCard label="Pendente" value={formatCurrency(kpis.pend)} icon={<Clock size={14} />} tone="amber" />
+        <KpiCard label="Saldo definitivo" value={formatCurrency(kpis.total)} icon={<CheckCircle2 size={14} />} tone="neutral" />
+        <KpiCard label="Possível comissão" value={formatCurrency(kpis.awaiting)} icon={<Clock size={14} />} tone="neutral" />
+        <KpiCard label="Total projetado" value={formatCurrency(kpis.totalGeral)} icon={<DollarSign size={14} />} tone="neutral" />
+        <KpiCard label="Pendente de pagamento" value={formatCurrency(kpis.pend)} icon={<Clock size={14} />} tone="amber" />
         <KpiCard label="Paga" value={formatCurrency(kpis.pago)} icon={<CheckCircle2 size={14} />} tone="emerald" />
         <KpiCard label="Reversões" value={String(kpis.count)} icon={<Trophy size={14} />} tone="neutral" />
       </div>
+      <p className="text-[10px] text-muted-foreground -mt-3">
+        A possível comissão é uma prévia e só entra no saldo definitivo após a conciliação da reversão.
+      </p>
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
@@ -352,6 +356,12 @@ export function ACMetricsRanking({ metrics }: { metrics: AcMetric[] }) {
                 </div>
                 <div className="text-right">
                   <div className="text-xs font-bold text-emerald-700 tabular-nums">{formatCurrency(m.comissaoValor)}</div>
+                  <div className="text-[10px] text-emerald-700/80 tabular-nums">saldo definitivo</div>
+                  {m.comissaoPossivelValor > 0 && (
+                    <div className="text-[10px] font-medium text-violet-700 tabular-nums">
+                      + {formatCurrency(m.comissaoPossivelValor)} possível
+                    </div>
+                  )}
                   <div className="text-[10px] text-muted-foreground tabular-nums">
                     {m.reversalPercent.toFixed(1).replace('.', ',')}% de reversão
                   </div>
@@ -385,8 +395,9 @@ export function ACMetricsRanking({ metrics }: { metrics: AcMetric[] }) {
                   {m.casos} {m.casos === 1 ? 'caso' : 'casos'}
                 </span>
               </div>
-              <div className="mt-3">
-                <MetricTile label="Comissão gerada" value={formatCurrency(m.comissaoValor)} tone="amber" />
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <MetricTile label="Saldo definitivo" value={formatCurrency(m.comissaoValor)} tone="emerald" />
+                <MetricTile label="Possível comissão" value={formatCurrency(m.comissaoPossivelValor)} tone="indigo" />
               </div>
             </div>
           ))}

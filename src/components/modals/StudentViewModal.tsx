@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Student, canEditTab } from '@/types';
-import { formatCurrency, calcularScoreComportamento, calcularMediaDiasPagamento } from '@/store/useAppStore';
+import { calculateAutoStatus, formatCurrency, calcularScoreComportamento, calcularMediaDiasPagamento } from '@/store/useAppStore';
 import { statusColors } from '@/lib/statusColors';
 import { X, User, Phone, Mail, MapPin, FileText, CreditCard, Calendar, TrendingUp, Star, Tag, Hash, Info, Plus, Check, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
@@ -119,6 +119,23 @@ export default function StudentViewModal({ student, onClose, extraSections, head
       ],
     });
   };
+  const handleRevertNegativadoToAutomatic = () => {
+    const restoredStatus = calculateAutoStatus(currentStudent.installments);
+    if (!window.confirm(`Deseja tirar este aluno de "Negativado" e voltar para o status automático "${restoredStatus}"?`)) return;
+    const now = new Date().toISOString();
+    updateStudent(currentStudent.id, {
+      status: restoredStatus,
+      statusMode: 'Automático',
+      history: [
+        ...currentStudent.history,
+        {
+          date: now,
+          type: 'Sistema' as const,
+          text: `${currentUser?.name ?? 'Usuário'} reverteu "Negativado" para o status automático "${restoredStatus}".`,
+        },
+      ],
+    });
+  };
   const handleVoltarEmDia = async () => {
     const paid = await confirm({
       title: 'Voltar para "Em Dia"',
@@ -229,6 +246,17 @@ export default function StudentViewModal({ student, onClose, extraSections, head
                   >
                     <RotateCcw size={10} />
                     Reverter para À Negativar
+                  </button>
+                )}
+                {canEditAlunos && currentStudent.status === 'Negativado' && (
+                  <button
+                    type="button"
+                    onClick={handleRevertNegativadoToAutomatic}
+                    title="Voltar para o status automático de inadimplência"
+                    className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                  >
+                    <RotateCcw size={10} />
+                    Voltar para inadimplência
                   </button>
                 )}
                 {canEditAlunos && ['Negativado', 'À Negativar', 'Vencido 1', 'Vencido 2'].includes(currentStudent.status) && (

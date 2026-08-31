@@ -29,6 +29,7 @@ export interface RefundLogEntry {
 interface RefundRow {
   caseId: string;
   studentName: string;
+  cpf?: string;
   ac?: string;
   product?: string;
   quantidadeInscricoes?: number;
@@ -185,6 +186,7 @@ export default function EstornosPage() {
         list.push({
           caseId: c.id,
           studentName: overrides.studentName ?? c.studentName,
+          cpf: st?.cpf ?? '',
           ac: overrides.ac ?? c.ac,
           product: overrides.product ?? st?.product ?? (c as any).treinamento ?? undefined,
           quantidadeInscricoes: overrides.quantidadeInscricoes ?? c.quantidadeInscricoes,
@@ -616,7 +618,7 @@ export default function EstornosPage() {
     });
   };
 
-  const GRID = 'grid grid-cols-[100px_minmax(200px,2fr)_72px_minmax(130px,1.1fr)_minmax(140px,1.1fr)_72px_120px_minmax(300px,2.2fr)_minmax(200px,1.4fr)_130px_70px] gap-2';
+  const GRID = 'grid grid-cols-[100px_minmax(200px,2fr)_minmax(130px,1fr)_72px_minmax(130px,1.1fr)_minmax(140px,1.1fr)_72px_120px_minmax(300px,2.2fr)_minmax(200px,1.4fr)_130px_70px] gap-2';
 
   return (
     <div className="p-6 space-y-5">
@@ -725,6 +727,7 @@ export default function EstornosPage() {
           <div className={`${GRID} px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground bg-muted/40 border-b border-border`}>
             <span>Pagamento</span>
             <span>Aluno</span>
+            <span>CPF</span>
             <span className="text-center">Inscrições</span>
             <span>Treinamento</span>
             <span>Assessor</span>
@@ -753,6 +756,9 @@ export default function EstornosPage() {
                 >
                   {r.studentName}
                 </button>
+                <span className="py-1 text-muted-foreground whitespace-nowrap">
+                  {r.cpf || '—'}
+                </span>
                 <span className="text-center text-foreground font-semibold py-1">
                   {r.quantidadeInscricoes != null && r.quantidadeInscricoes > 0 ? r.quantidadeInscricoes : '—'}
                 </span>

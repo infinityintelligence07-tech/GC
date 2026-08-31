@@ -21,6 +21,7 @@ export type AcMetric = {
   financeiroCancelado: number;
   casos: number;
   comissaoValor: number;
+  comissaoPossivelValor: number;
   comissaoPercent: number;
   reversalPercent: number;
   meta1: number;
@@ -81,7 +82,7 @@ export function computeAcReversalMetrics({
       acName, acPhoto: acRef?.photo, inscricoesTotal: 0, financeiroTotal: 0,
       inscricoesRevertidas: 0, inscricoesCanceladas: 0,
       financeiroRevertido: 0, financeiroCancelado: 0, casos: 0,
-      comissaoValor: 0, comissaoPercent: 0, reversalPercent: 0,
+      comissaoValor: 0, comissaoPossivelValor: 0, comissaoPercent: 0, reversalPercent: 0,
       meta1: acRef?.meta1 ?? rules.metaReversao1 ?? rules.meta1,
       meta2: acRef?.meta2 ?? rules.metaReversao2 ?? rules.meta2,
       meta3: acRef?.meta3 ?? rules.metaReversao3 ?? rules.meta3,
@@ -104,7 +105,11 @@ export function computeAcReversalMetrics({
     if (acNameFilter && acName !== acNameFilter) continue;
     const cur = map.get(acName);
     if (!cur) continue;
-    cur.comissaoValor += com.value;
+    if (com.pendingApproval) {
+      cur.comissaoPossivelValor += com.value;
+    } else {
+      cur.comissaoValor += com.value;
+    }
     cur.financeiroRevertido += com.revertedValue || 0;
     const baseCaseId = String(com.cancellationCaseId ?? '').split('#')[0];
     if (baseCaseId) casosComComissao.add(baseCaseId);
