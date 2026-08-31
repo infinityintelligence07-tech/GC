@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AC, Student } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
-import { updateCancellationCaseDb, updateStudentDb } from '@/lib/supabaseMutations';
+import { createAC, updateCancellationCaseDb, updateStudentDb } from '@/lib/supabaseMutations';
 import { X } from 'lucide-react';
 
 interface Props {
@@ -10,12 +10,25 @@ interface Props {
 }
 
 export default function TransferModal({ ac, onClose }: Props) {
-  const { acs, students, cancellationCases, updateStudent, updateCancellationCase, deleteAC } = useAppStore();
+  const {
+    acs,
+    students,
+    cancellationCases,
+    appUsers,
+    updateStudent,
+    updateCancellationCase,
+    deleteAC,
+  } = useAppStore();
   const availableACs = acs.filter((g) => g.id !== ac.id && g.active);
   const acStudents = students.filter((s) => s.ac === ac.name);
+  const unlinkedAcUsers = appUsers.filter(
+    (user) =>
+      (user.role === 'ac' || user.role === 'acn2') &&
+      !acs.some((candidate) => candidate.name.trim().toLowerCase() === user.name.trim().toLowerCase()),
+  );
 
   // Distribution: selected ACs to receive
-  const [selectedACs, setSelectedACs] = useState<string[]>(availableACs.map((g) => g.id));
+  const [selectedACs, setSelectedACs] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
 
   const toggleAC = (id: string) => {
@@ -34,65 +47,89 @@ export default function TransferModal({ ac, onClose }: Props) {
   const handleTransfer = async () => {
     if (selectedACs.length === 0 || running) return;
     setRunning(true);
-    const targetACs = availableACs.filter((g) => selectedACs.includes(g.id));
-    const targetByStudentId = new Map<string, string>();
-    const persistenceJobs: Promise<unknown>[] = [];
+    try {
+      const selectedExistingACs = availableACs.filter((g) => selectedACs.includes(g.id));
+      const selectedUsers = unlinkedAcUsers.filter((user) => selectedACs.includes(`user:${user.id}`));
+      const createdACs = await Promise.all(
+        selectedUsers.map(async (user) => {
+          const row = await createAC({ name: user.name, active: true, photo: user.photo });
+          return { id: row.id, name: row.name, active: row.active, photo: row.photo ?? undefined };
+        }),
+      );
+      const targetACs = [...selectedExistingACs, ...createdACs];
+      if (targetACs.length === 0) return;
 
-    // Distribui proporcionalmente DENTRO de cada status, mas considerando TODOS os status
-    const byStatus = new Map<string, Student[]>();
-    acStudents.forEach((s) => {
-      const arr = byStatus.get(s.status) ?? [];
-      arr.push(s);
-      byStatus.set(s.status, arr);
-    });
+      useAppStore.setState((state) => ({
+        acs: [
+          ...state.acs,
+          ...createdACs.filter((created) => !state.acs.some((item) => item.id === created.id)),
+        ],
+      }));
 
-    byStatus.forEach((group) => {
-      group.forEach((student, idx) => {
-        const targetAC = targetACs[idx % targetACs.length];
-        targetByStudentId.set(student.id, targetAC.name);
-        const history = [
-          ...student.history,
-          {
-            date: new Date().toISOString(),
-            type: 'Sistema' as const,
-            text: `Carteira transferida de ${ac.name} para ${targetAC.name}.`,
-          },
-        ];
-        updateStudent(student.id, {
-          ac: targetAC.name,
-          history,
+      const targetByStudentId = new Map<string, string>();
+      const persistenceJobs: Promise<unknown>[] = [];
+
+      // Distribui proporcionalmente DENTRO de cada status, mas considerando TODOS os status
+      const byStatus = new Map<string, Student[]>();
+      acStudents.forEach((s) => {
+        const arr = byStatus.get(s.status) ?? [];
+        arr.push(s);
+        byStatus.set(s.status, arr);
+      });
+
+      byStatus.forEach((group) => {
+        group.forEach((student, idx) => {
+          const targetAC = targetACs[idx % targetACs.length];
+          targetByStudentId.set(student.id, targetAC.name);
+          const history = [
+            ...student.history,
+            {
+              date: new Date().toISOString(),
+              type: 'Sistema' as const,
+              text: `Carteira transferida de ${ac.name} para ${targetAC.name}.`,
+            },
+          ];
+          updateStudent(student.id, {
+            ac: targetAC.name,
+            history,
+          });
+          // Aguarda a gravação real antes de remover o AC de origem.
+          persistenceJobs.push(updateStudentDb(student.id, { ac: targetAC.name, history }));
         });
-        // Aguarda a gravação real antes de remover o AC de origem.
-        persistenceJobs.push(updateStudentDb(student.id, { ac: targetAC.name, history }));
-      });
-    });
-
-    // Casos ativos acompanham o aluno. Comissões e casos finalizados permanecem
-    // com o assessor original para preservar o histórico operacional/contábil.
-    cancellationCases
-      .filter((c) =>
-        c.ac === ac.name &&
-        c.funnelStage !== 'Finalizado' &&
-        !['Cancelado', 'Recuperado', 'Negativação Efetivada', 'Negativação Retirada'].includes(c.stage),
-      )
-      .forEach((c, idx) => {
-        const linkedStudent = students.find(
-          (student) =>
-            student.id === c.studentId ||
-            student.cancellationCaseId === c.id ||
-            (student.ac === ac.name && student.name === c.studentName),
-        );
-        const targetName =
-          (linkedStudent ? targetByStudentId.get(linkedStudent.id) : undefined) ??
-          targetACs[idx % targetACs.length]?.name;
-        if (!targetName) return;
-        updateCancellationCase(c.id, { ac: targetName });
-        persistenceJobs.push(updateCancellationCaseDb(c.id, { ac: targetName }));
       });
 
-    await Promise.all(persistenceJobs);
-    deleteAC(ac.id);
-    onClose();
+      // Casos ativos acompanham o aluno. Comissões e casos finalizados permanecem
+      // com o assessor original para preservar o histórico operacional/contábil.
+      cancellationCases
+        .filter((c) =>
+          c.ac === ac.name &&
+          c.funnelStage !== 'Finalizado' &&
+          !['Cancelado', 'Recuperado', 'Negativação Efetivada', 'Negativação Retirada'].includes(c.stage),
+        )
+        .forEach((c, idx) => {
+          const linkedStudent = students.find(
+            (student) =>
+              student.id === c.studentId ||
+              student.cancellationCaseId === c.id ||
+              (student.ac === ac.name && student.name === c.studentName),
+          );
+          const targetName =
+            (linkedStudent ? targetByStudentId.get(linkedStudent.id) : undefined) ??
+            targetACs[idx % targetACs.length]?.name;
+          if (!targetName) return;
+          updateCancellationCase(c.id, { ac: targetName });
+          persistenceJobs.push(updateCancellationCaseDb(c.id, { ac: targetName }));
+        });
+
+      await Promise.all(persistenceJobs);
+      deleteAC(ac.id);
+      onClose();
+    } catch (error) {
+      console.error('Falha ao transferir carteira:', error);
+      window.alert('Não foi possível concluir a transferência. Tente novamente.');
+    } finally {
+      setRunning(false);
+    }
   };
 
   return (
@@ -137,6 +174,22 @@ export default function TransferModal({ ac, onClose }: Props) {
                   <span className="text-sm text-foreground">{g.name}</span>
                 </label>
               ))
+            )}
+            {unlinkedAcUsers.map((user) => (
+              <label key={user.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedACs.includes(`user:${user.id}`)}
+                  onChange={() => toggleAC(`user:${user.id}`)}
+                  className="rounded"
+                />
+                <span className="text-sm text-foreground">
+                  {user.name} <span className="text-[10px] text-muted-foreground">(criar como assessora)</span>
+                </span>
+              </label>
+            ))}
+            {availableACs.length === 0 && unlinkedAcUsers.length === 0 && (
+              <p className="text-xs text-destructive">Cadastre a Bianca como usuária AC antes de transferir.</p>
             )}
           </div>
         </div>
