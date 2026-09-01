@@ -10,6 +10,8 @@ import { useConfirm } from '@/hooks/useConfirm';
 interface StatusBadgeManualProps {
   student: Student;
   status: StudentStatus;
+  /** Quando true, o badge fica estático (sem menu de alteração). */
+  readOnly?: boolean;
 }
 
 /**
@@ -26,7 +28,7 @@ interface StatusBadgeManualProps {
  * Ela acontece automaticamente quando o aluno é conciliado em
  * "Conciliar Exclusão" na aba Renda Extra.
  */
-export default function StatusBadgeManual({ student, status }: StatusBadgeManualProps) {
+export default function StatusBadgeManual({ student, status, readOnly = false }: StatusBadgeManualProps) {
   const [open, setOpen] = useState(false);
   const [showFinancial, setShowFinancial] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -35,12 +37,12 @@ export default function StatusBadgeManual({ student, status }: StatusBadgeManual
   const currentUser = useAppStore((s) => s.currentUser);
   const confirm = useConfirm();
   const isAdmin = currentUser?.role === 'admin';
-  const canEditAlunos = canEditTab(currentUser, 'alunos');
-  const canConciliar = canEditTab(currentUser, 'conciliacao') || currentUser?.role === 'admin' || currentUser?.role === 'conciliacao';
+  const canEditAlunos = !readOnly && canEditTab(currentUser, 'alunos');
+  const canConciliar = !readOnly && (canEditTab(currentUser, 'conciliacao') || currentUser?.role === 'admin' || currentUser?.role === 'conciliacao');
 
   // Opções de promoção disponíveis a partir do status atual
   const options: { key: string; label: React.ReactNode; variant?: 'default' | 'success'; action: () => void }[] = [];
-  if (status === 'À Negativar') {
+  if (!readOnly && status === 'À Negativar') {
     options.push({
       key: 'negativado',
       label: 'Negativado',
@@ -54,7 +56,7 @@ export default function StatusBadgeManual({ student, status }: StatusBadgeManual
       },
     });
   }
-  if (status === 'Negativado' && isAdmin) {
+  if (!readOnly && status === 'Negativado' && isAdmin) {
     options.push({
       key: 'a-negativar',
       label: 'À Negativar',
@@ -195,6 +197,7 @@ export default function StatusBadgeManual({ student, status }: StatusBadgeManual
           student={student}
           onClose={() => setShowFinancial(false)}
           immediateApply={canConciliar}
+          readOnly={readOnly}
         />
       )}
     </div>

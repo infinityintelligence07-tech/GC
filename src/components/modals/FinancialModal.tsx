@@ -23,6 +23,8 @@ interface Props {
   // aba Conciliação. Usado na aba Alunos quando o usuário é admin ou tem
   // permissão de edição em Conciliação.
   immediateApply?: boolean;
+  /** Bloqueia qualquer mutação (visualização de carteira de outro AC). */
+  readOnly?: boolean;
   // Reversão parcial COM ajuste: total sugerido para o somatório de parcelas
   // pendentes (saldo remanescente + multa contratual + encargos). Ao abrir o
   // modal, as parcelas pendentes existentes são redistribuídas igualmente para
@@ -128,7 +130,7 @@ class FinancialModalErrorBoundary extends Component<{ onClose: () => void; child
   }
 }
 
-function FinancialModalInner({ student: studentProp, onClose, banner, immediateApply, suggestedPendingTotal }: Props) {
+function FinancialModalInner({ student: studentProp, onClose, banner, immediateApply, readOnly = false, suggestedPendingTotal }: Props) {
   const { updateStudent, rules, currentUser, studentTags } = useAppStore();
   const confirm = useConfirm();
 
@@ -187,12 +189,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     if (!embeddedEntrada) return student.installments;
     return student.installments.filter((i) => i.number !== embeddedEntrada.number);
   }, [student.installments, embeddedEntrada]);
-  const podeConfirmarPagto = canConfirmarPagamento(currentUser);
+  const podeConfirmarPagto = !readOnly && canConfirmarPagamento(currentUser);
   // Confirmar Ajuste Financeiro (data/valor) — liberado para qualquer usuário
   // que tenha permissão de edição nas abas de Alunos ou Equipe (assessores
   // inclusos). Pagamentos efetivos continuam restritos a podeConfirmarPagto.
   const podeAjustarFinanceiro =
-    canEditTab(currentUser, 'alunos') || canEditTab(currentUser, 'equipe');
+    !readOnly && (canEditTab(currentUser, 'alunos') || canEditTab(currentUser, 'equipe'));
 
   // Wrapper local: quando o modal é aberto em modo `immediateApply` (aba
   // Alunos por admin / setor de conciliação), o usuário escolhe entre
@@ -563,7 +565,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   // por registrarConc (executaImediatamente=true via wrapper local), que
   // aplica `paid: true` no aluno e grava item já conciliado p/ auditoria.
   const handleQuickMarkPaid = async (inst: Installment, paidDate: string) => {
-    if (!immediateApply || !isImmediate) return;
+    if (readOnly || !immediateApply || !isImmediate) return;
     const charges = calculateCharges(inst.value, inst.dueDate, inst.number);
     const extra = !showCharges ? getExtra(inst.number) : 0;
     const paidAmount = showCharges ? charges.total : inst.value + extra;
@@ -624,6 +626,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
 
   const handlePaySelected = async () => {
+    if (readOnly) return;
     // ─── Validação no momento do "Confirmar Ajuste Financeiro":
     // a soma das parcelas pendentes atuais (sem encargos) deve bater com o
     // saldo ORIGINAL capturado na abertura do modal. Isso garante que ajustes
@@ -902,6 +905,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const quitacaoValue = Math.max(0, totalPending - descontoValor);
 
   const handleConfirmRenegotiate = () => {
+    if (readOnly) return;
     // ⚠️ Renegociação agora vira RASCUNHO: NÃO altera o aluno aqui.
     // Apenas envia o novo plano para a aba Conciliação. As alterações só
     // são efetivadas quando o setor de Conciliação aprovar+conciliar.
@@ -985,6 +989,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
 
   const handleQuitacao = () => {
+    if (readOnly) return;
     // ⚠️ NÃO baixa o pagamento na carteira aqui. Apenas registra a SOLICITAÇÃO
     // de quitação como pendência na aba Conciliação. A baixa só ocorre quando
     // o setor de Conciliação aprovar o item (ver ConciliacaoPage).
@@ -1030,6 +1035,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   // quando o usuário tem permissão de imediato. O AC pode editar o valor pago
   // (ex.: desconto pontual) antes de enviar; o sistema avisa se diverge.
   const handleQuitacaoParcelas = async () => {
+    if (readOnly) return;
     if (quitParcSel.length === 0) {
       toast.error('Selecione pelo menos uma parcela.');
       return;
@@ -1120,6 +1126,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
 
   const handleEditInstallment = (inst: Installment) => {
+    if (readOnly) return;
     setEditingInstallment(inst.number);
     setEditValue(inst.value);
     setEditDueDate(inst.dueDate);
@@ -1133,6 +1140,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   // em Configurações (maxParcelasCadastro) e o aluno fica com uma parcela
   // a mais para ajustar manualmente os valores depois.
   const handleDuplicateInstallment = (inst: Installment) => {
+    if (readOnly) return;
     const limite = Math.max(
       rules.maxParcelasRenegociacao ?? 24,
       rules.maxParcelasCadastro ?? 24,
@@ -1176,6 +1184,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   // Conciliação. A validação final em "Confirmar Ajuste Financeiro" garante
   // que o saldo total não seja perdido — se sobrar valor, o sistema acusa.
   const handleDeleteInstallment = async (inst: Installment) => {
+    if (readOnly) return;
     const ok = await confirm({
       title: `Excluir parcela ${inst.number}?`,
       description: `Vencimento: ${formatDateBR(inst.dueDate)} • Valor: ${formatCurrency(inst.value)}\n\nO valor será removido do fluxo. Lembre-se de redistribuir o saldo entre as outras parcelas para não perder valor — o sistema acusa se sobrar diferença na hora de confirmar.`,
@@ -1194,7 +1203,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   };
 
   const handleSaveInstallmentEdit = () => {
-    if (editingInstallment === null) return;
+    if (readOnly || editingInstallment === null) return;
     const updated = student.installments.map((i) =>
       i.number === editingInstallment ? { ...i, value: editValue, dueDate: editDueDate } : i
     );
@@ -1238,6 +1247,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   };
 
   const handleAttemptClose = async () => {
+    if (readOnly) {
+      onClose();
+      return;
+    }
     // Renegociação em andamento → oferece rascunho (stand-by) em vez de perder o progresso
     if (renegMode !== 'none') {
       const ok = await confirm({
@@ -1306,6 +1319,15 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           </div>
           <button onClick={handleAttemptClose} className="p-1 rounded-lg hover:bg-muted transition-colors"><X size={18} /></button>
         </div>
+
+        {readOnly && (
+          <div className="mx-6 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-center gap-2.5">
+            <Lock size={14} className="text-amber-700 shrink-0" />
+            <p className="text-xs text-amber-900 font-medium">
+              Somente visualização — alterações só são permitidas na sua própria carteira.
+            </p>
+          </div>
+        )}
 
         {banner && bannerVisible && (
           <div className="mx-6 mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 flex items-start gap-2.5 fade-in shadow-sm">
@@ -1798,15 +1820,17 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   >
                     <div className="flex items-center gap-3">
                     <div
-                      onClick={() => toggleParcel(inst.number)}
-                      className={`w-4 h-4 rounded-md border-2 flex items-center justify-center cursor-pointer ${
+                      onClick={() => { if (!readOnly) toggleParcel(inst.number); }}
+                      className={`w-4 h-4 rounded-md border-2 flex items-center justify-center ${
+                        readOnly ? 'cursor-default opacity-40' : 'cursor-pointer'
+                      } ${
                         selectedParcels.includes(inst.number) ? 'border-primary bg-primary' : 'border-border'
                       }`}
                     >
                       {selectedParcels.includes(inst.number) && <span className="text-primary-foreground text-[10px]">✓</span>}
                     </div>
-                    <div className="flex-1" onClick={() => !isEditing && toggleParcel(inst.number)}>
-                      <span className="text-xs font-medium text-foreground cursor-pointer">Parcela {displayParcelLabel(inst.number)}</span>
+                    <div className="flex-1" onClick={() => !readOnly && !isEditing && toggleParcel(inst.number)}>
+                      <span className={`text-xs font-medium text-foreground ${readOnly ? '' : 'cursor-pointer'}`}>Parcela {displayParcelLabel(inst.number)}</span>
                       <span className={`ml-2 text-[10px] ${isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                         {formatDateBR(inst.dueDate)}
                       </span>
@@ -1868,7 +1892,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                             +{formatCurrency(getExtra(inst.number))}
                           </span>
                         )}
-                        {immediateApply && isImmediate && (
+                        {immediateApply && isImmediate && !readOnly && (
                           quickPayDraft?.number === inst.number ? (
                             <div className="flex items-center gap-1">
                               <input
@@ -1910,6 +1934,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                             </button>
                           )
                         )}
+                        {!readOnly && (
+                          <>
                         <button onClick={() => handleEditInstallment(inst)} className="action-btn !w-5 !h-5" title="Editar valor, vencimento e encargo">
                           <Edit2 size={9} />
                         </button>
@@ -1927,10 +1953,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         >
                           <Trash2 size={9} />
                         </button>
+                          </>
+                        )}
                       </div>
                     )}
                     </div>
-                    {selectedParcels.includes(inst.number) && !isEditing && (
+                    {selectedParcels.includes(inst.number) && !isEditing && !readOnly && (
                       <div className="mt-2 ml-7 flex items-center gap-2">
                         <label className="text-[10px] font-medium text-muted-foreground shrink-0">
                           Data do pagamento
@@ -1957,7 +1985,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           </div>
 
           {/* Parcelas Pagas — possibilidade de desconciliar (somente admin/conciliação) */}
-          {student.installments.some((i) => i.paid) && (currentUser?.role === 'admin' || currentUser?.role === 'conciliacao') && (
+          {!readOnly && student.installments.some((i) => i.paid) && (currentUser?.role === 'admin' || currentUser?.role === 'conciliacao') && (
             <div className="space-y-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Parcelas Pagas</h3>
               <div className="space-y-2 max-h-40 overflow-auto no-scrollbar">
@@ -2190,6 +2218,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
 
           {/* Botões de ação principais */}
+          {!readOnly && (
           <div className="grid grid-cols-3 gap-3">
             <div>
               <button
@@ -2248,6 +2277,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               </button>
             </div>
           </div>
+          )}
 
           {/* Painel de Quitação Total */}
           {quitacaoMode && (
@@ -2926,7 +2956,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           <button onClick={handleAttemptClose} className="px-4 py-2 rounded-lg text-sm font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors">
             Sair
           </button>
-          {renegMode === 'none' && !quitacaoMode && !quitParcelasMode && (
+          {renegMode === 'none' && !quitacaoMode && !quitParcelasMode && !readOnly && (
             <button
               onClick={handlePaySelected}
               disabled={!podeAjustarFinanceiro || !deltaResolvido}

@@ -5,7 +5,7 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import { useAuth } from '@/hooks/useAuth';
 import { TabKey, PermissionTab, canViewTab, canManageUsers } from '@/types';
 import logoIamWhite from '@/assets/logo-iam-white.png';
-import { BarChart3, GraduationCap, Users, DollarSign, Settings, User, ChevronDown, XCircle, LogOut, Trophy, ClipboardCheck, X, ScrollText, Award, Wallet, MessageSquareText, Landmark, ShieldCheck } from 'lucide-react';
+import { BarChart3, GraduationCap, Users, DollarSign, Settings, User, ChevronDown, XCircle, LogOut, Trophy, ClipboardCheck, X, ScrollText, Award, Wallet, MessageSquareText, Landmark, ShieldCheck, Eye } from 'lucide-react';
 
 interface SidebarProps {
   /** Quando true, mostra a sidebar em mobile (drawer). Em desktop é sempre visível. */
@@ -92,11 +92,9 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
     item.permissionTab === 'always' ? true : canViewTab(currentUser, item.permissionTab)
   );
 
-  // Vínculo opcional com AC: se o usuário tem acId, restringe Equipe à carteira dele.
+  // AC vinculado: vê todas as carteiras no menu; edição só na própria (página).
   const isACScoped = !!currentUser?.acId;
-  const activeACs = acs
-    .filter((g) => g.active)
-    .filter((g) => !isACScoped || g.id === currentUser?.acId);
+  const activeACs = acs.filter((g) => g.active);
 
   const handleNavClick = (key: TabKey | 'sair') => {
     if (key === 'sair') {
@@ -343,10 +341,12 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
                 <div className="ml-4 mt-1 space-y-0.5 slide-in">
                   {activeACs.map((ac) => {
                     const isACActive = activeTab === 'ac' && selectedACId === ac.id;
+                    const isOwn = !isACScoped || ac.id === currentUser?.acId;
                     return (
                       <button
                         key={ac.id}
                         onClick={() => handleACClick(ac.id)}
+                        title={isOwn ? ac.name : `${ac.name} (somente visualização)`}
                         className={`w-full flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-lg text-[12px] font-medium transition-all duration-200 ${
                           isACActive
                             ? 'bg-sidebar-accent/70 text-sidebar-primary-foreground'
@@ -362,7 +362,10 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
                             {ac.name.charAt(0)}
                           </div>
                         )}
-                        <span className="truncate">{ac.name}</span>
+                        <span className="truncate flex-1 text-left">{ac.name}</span>
+                        {!isOwn && (
+                          <Eye size={11} className="opacity-50 shrink-0" aria-label="Somente visualização" />
+                        )}
                       </button>
                     );
                   })}

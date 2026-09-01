@@ -25,6 +25,8 @@ interface Props {
   extraSections?: React.ReactNode;
   /** Optional badge shown next to status in the header (e.g. funnel stage). */
   headerBadge?: React.ReactNode;
+  /** Bloqueia mutações (ex.: visualização de carteira de outro AC). */
+  readOnly?: boolean;
 }
 
 function Field({ icon: Icon, label, value }: { icon?: any; label: string; value: React.ReactNode }) {
@@ -63,7 +65,7 @@ function formatDateOnlyBR(value?: string | null) {
   return d.toLocaleDateString('pt-BR');
 }
 
-export default function StudentViewModal({ student, onClose, extraSections, headerBadge }: Props) {
+export default function StudentViewModal({ student, onClose, extraSections, headerBadge, readOnly = false }: Props) {
   const { studentTags, students, updateStudent, currentUser, cancellationCases } = useAppStore();
   const latestCancellationCase = getLatestCancellationCaseForStudent(
     student.id,
@@ -81,9 +83,9 @@ export default function StudentViewModal({ student, onClose, extraSections, head
   const qtdInscricoes = latestCancellationCase?.quantidadeInscricoes;
   const pagoAteMomentoKamino = latestCancellationCase?.totalPagoAteMomento;
   const confirm = useConfirm();
-  const canManageTags = canEditTab(currentUser, 'alunos');
-  const canEditAlunos = canEditTab(currentUser, 'alunos');
-  const canConciliar = canEditTab(currentUser, 'conciliacao') || currentUser?.role === 'admin' || currentUser?.role === 'conciliacao';
+  const canManageTags = !readOnly && canEditTab(currentUser, 'alunos');
+  const canEditAlunos = !readOnly && canEditTab(currentUser, 'alunos');
+  const canConciliar = !readOnly && (canEditTab(currentUser, 'conciliacao') || currentUser?.role === 'admin' || currentUser?.role === 'conciliacao');
   const isAdmin = currentUser?.role === 'admin';
   const currentStudent = students.find((s) => s.id === student.id) ?? student;
   const [showFinancial, setShowFinancial] = useState(false);
@@ -465,6 +467,7 @@ export default function StudentViewModal({ student, onClose, extraSections, head
           student={currentStudent}
           onClose={() => setShowFinancial(false)}
           immediateApply={canConciliar}
+          readOnly={readOnly}
         />
       )}
     </div>

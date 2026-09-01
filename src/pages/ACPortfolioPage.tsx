@@ -136,24 +136,22 @@ export default function ACPortfolioPage() {
   const [historicoStart, setHistoricoStart] = useState(currentMonthStart);
   const [historicoEnd, setHistoricoEnd] = useState(currentMonthEnd);
 
-  // Trava de carteira: se o usuário tem acId vinculado, ele só enxerga a própria.
-  // Se houver tentativa (manual ou estado persistido) de abrir outro AC, força o vínculo.
-  const isACScoped = !!currentUser?.acId;
+  // AC vinculado: pode abrir qualquer carteira, mas só edita a própria.
+  const ownACId = currentUser?.acId ?? null;
+  const isACScoped = !!ownACId;
   useEffect(() => {
-    if (isACScoped && selectedACId !== currentUser!.acId) {
-      setSelectedACId(currentUser!.acId!);
-    }
-  }, [isACScoped, selectedACId, currentUser, setSelectedACId]);
+    // Garante que, ao entrar na aba Equipe, há uma carteira selecionada.
+    if (!selectedACId && ownACId) setSelectedACId(ownACId);
+  }, [selectedACId, ownACId, setSelectedACId]);
 
-  const effectiveACId = isACScoped ? currentUser!.acId! : selectedACId;
+  const effectiveACId = selectedACId ?? ownACId;
   const ac = acs.find((g) => g.id === effectiveACId);
+  const isOwnPortfolio = !isACScoped || effectiveACId === ownACId;
+  const canMutatePortfolio = isOwnPortfolio;
 
-  // Bloqueio defensivo: se mesmo assim a página renderizar com AC errado, não mostra dados
-  const accessDenied = isACScoped && selectedACId !== null && selectedACId !== currentUser!.acId;
-
-  // Auto-update statuses via useEffect
+  // Auto-update statuses via useEffect (somente na própria carteira)
   useEffect(() => {
-    if (!ac) return;
+    if (!ac || !canMutatePortfolio) return;
     students
       .filter((s) => s.ac === ac.name)
       .forEach((s) => {
@@ -175,7 +173,7 @@ export default function ACPortfolioPage() {
           }
         }
       });
-  }, [students, ac, updateStudent]);
+  }, [students, ac, updateStudent, canMutatePortfolio]);
 
   // Alunos com caso na coluna "PROCON ou Judicial" ou "Finalizado" saem da
   // carteira do assessor (continuam visíveis na aba Alunos).
@@ -728,7 +726,9 @@ export default function ACPortfolioPage() {
           )}
           <div className="min-w-0">
             <h1 className="text-lg font-bold text-foreground truncate">{ac.name}</h1>
-            <p className="text-[11px] text-muted-foreground">Carteira do Assessor de Conta</p>
+            <p className="text-[11px] text-muted-foreground">
+              {canMutatePortfolio ? 'Carteira do Assessor de Conta' : 'Somente visualização — carteira de outro assessor'}
+            </p>
           </div>
         </div>
 
@@ -750,8 +750,23 @@ export default function ACPortfolioPage() {
           </div>
         </div>
 
-        <NotificationBell acId={ac.id} onOpenStudent={handleOpenStudentFromNotif} />
+        {canMutatePortfolio ? (
+          <NotificationBell acId={ac.id} onOpenStudent={handleOpenStudentFromNotif} />
+        ) : (
+          <div className="shrink-0 px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-[10px] font-semibold text-amber-800">
+            Somente leitura
+          </div>
+        )}
       </div>
+
+      {!canMutatePortfolio && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-900">
+          <Eye size={14} className="shrink-0" />
+          <span>
+            Você está visualizando a carteira de <strong>{ac.name}</strong>. Alterações só são permitidas na sua própria carteira.
+          </span>
+        </div>
+      )}
 
       {/* ── 1. Modo de Análise ──────────────────────────────────────────────────── */}
       <DashDateFilter
@@ -1474,7 +1489,7 @@ export default function ACPortfolioPage() {
                               ) : (
                                 <>
                                   <div className="flex items-center gap-1.5">
-                                    <StatusBadgeManual student={student} status={tableStatus} />
+                                    <StatusBadgeManual student={student} status={tableStatus} readOnly={!canMutatePortfolio} />
                                     {tableStatus !== 'Em Dia' && tableStatus !== 'Pago' && tableStatus !== 'Pendente' && (() => {
                                       const dias = calcularDiasVencido(student.installments);
                                       const due = nextDueDateUi(student);
@@ -1546,13 +1561,24 @@ export default function ACPortfolioPage() {
                           >
                             <Info size={12} />
                           </button>
-                          <button
-                            onClick={() => { setFinancialBanner(null); setFinancialStudent(student); }}
-                            className="action-btn !border-emerald-300 !text-emerald-600 hover:!bg-emerald-50"
-                            title="Pagamento"
-                          >
-                            <DollarSign size={12} />
-                          </button>
+                          {canMutatePortfolio ? (
+                            <button
+                              onClick={() => { setFinancialBanner(null); setFinancialStudent(student); }}
+                              className="action-btn !border-emerald-300 !text-emerald-600 hover:!bg-emerald-50"
+                              title="Pagamento"
+                            >
+                              <DollarSign size={12} />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => { setFinancialBanner(null); setFinancialStudent(student); }}
+                              className="action-btn !border-muted-foreground/30 !text-muted-foreground hover:!bg-muted"
+                              title="Ver financeiro (somente visualização)"
+                            >
+                              <DollarSign size={12} />
+                            </button>
+                          )}
                           <button onClick={() => setHistoryStudent(student)} className="action-btn" title="Histórico">
                             <Clock size={12} />
                           </button>
@@ -1605,7 +1631,7 @@ export default function ACPortfolioPage() {
                               )}
                             </div>
                           )}
-                          {(!student.statusCancelamento || student.statusCancelamento === 'nenhum' || student.statusCancelamento === 'revertido') && (
+                          {canMutatePortfolio && (!student.statusCancelamento || student.statusCancelamento === 'nenhum' || student.statusCancelamento === 'revertido') && (
                             <button onClick={() => setCancellationStudent(student)} className="action-btn text-amber-600" title="Cancelar">
                               <X size={12} />
                             </button>
@@ -1630,6 +1656,7 @@ export default function ACPortfolioPage() {
           student={financialStudent}
           onClose={() => { setFinancialStudent(null); setFinancialBanner(null); }}
           banner={financialBanner ?? undefined}
+          readOnly={!canMutatePortfolio}
         />
       )}
       {historyStudent && (
@@ -1639,9 +1666,9 @@ export default function ACPortfolioPage() {
         <FlowModal student={flowStudent} onClose={() => setFlowStudent(null)} />
       )}
       {viewStudent && (
-        <StudentViewModal student={viewStudent} onClose={() => setViewStudent(null)} />
+        <StudentViewModal student={viewStudent} onClose={() => setViewStudent(null)} readOnly={!canMutatePortfolio} />
       )}
-      {deleteId && (
+      {deleteId && canMutatePortfolio && (
         <DeleteModal
           onConfirm={() => { deleteStudent(deleteId); setDeleteId(null); }}
           onClose={() => setDeleteId(null)}
@@ -1649,7 +1676,7 @@ export default function ACPortfolioPage() {
       )}
 
       {/* Cancellation Modal — mesma questionário completo da aba Alunos */}
-      {cancellationStudent && (
+      {cancellationStudent && canMutatePortfolio && (
         <CancelStudentFlowModal
           student={cancellationStudent}
           onClose={() => { setCancellationStudent(null); setSelectedMotivo(''); }}
