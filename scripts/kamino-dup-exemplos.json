@@ -1,0 +1,1602 @@
+[
+ {
+  "pessoa": "Gabriely Fofano de Carvalho",
+  "produto": "Trainer",
+  "venc": "2025-01-25",
+  "valor": 223.16,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 29,
+    "id": "9748",
+    "comp": "2024-06-16",
+    "receb": "2025-02-05",
+    "pago": true,
+    "recebido": 223.16,
+    "forma": "Legado",
+    "detalhe": "Trainer - Conf_Cps_28 | (8/24) Fev24 | Cartão - Boleto - | Academy | Venda | Trainer_24 | Renegociado| Importa"
+   },
+   {
+    "linhaExcel": 8294,
+    "id": "40618",
+    "comp": "2024-06-16",
+    "receb": "2025-02-05",
+    "pago": true,
+    "recebido": 223.16,
+    "forma": "Legado",
+    "detalhe": "Trainer - Conf_Cps_28 | (8/24) Fev24 | Cartão - Boleto - | Academy | Venda | Trainer_24 | Renegociado| Importa"
+   }
+  ]
+ },
+ {
+  "pessoa": "Luana dos Santos",
+  "produto": "Pmr",
+  "venc": "2025-03-20",
+  "valor": 301.46,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 87,
+    "id": "11048",
+    "comp": "2023-04-21",
+    "receb": "2025-02-19",
+    "pago": true,
+    "recebido": 301.46,
+    "forma": "Legado",
+    "detalhe": "Pmr - Zero_Paper | (24/24) Boleto | Renegociou | Michelle Sikorra || Importação Sense"
+   },
+   {
+    "linhaExcel": 207,
+    "id": "13200",
+    "comp": "2023-04-21",
+    "receb": "2025-03-11",
+    "pago": true,
+    "recebido": 301.46,
+    "forma": "Legado",
+    "detalhe": "Pmr - Zero_Paper | (23/24) Boleto | Renegociou | Michelle Sikorra || Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Luana dos Santos",
+  "produto": "Confronto",
+  "venc": "2025-03-20",
+  "valor": 262.16,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 89,
+    "id": "11066",
+    "comp": "2024-06-09",
+    "receb": "2025-02-19",
+    "pago": true,
+    "recebido": 262.16,
+    "forma": "Legado",
+    "detalhe": "Confronto - Sucessoaluno_Out23 | (11/24) Out23 | Boleto - Link - | Djeniffer | Venda | Conf2_02 | Renegociação|"
+   },
+   {
+    "linhaExcel": 205,
+    "id": "13169",
+    "comp": "2024-06-09",
+    "receb": "2025-03-11",
+    "pago": true,
+    "recebido": 262.16,
+    "forma": "Legado",
+    "detalhe": "Confronto - Sucessoaluno_Out23 | (10/24) Out23 | Boleto - Link - | Djeniffer | Venda | Conf2_02 | Renegociação|"
+   }
+  ]
+ },
+ {
+  "pessoa": "Adrielly Cristine Colombo Cruz",
+  "produto": "Missão Governar",
+  "venc": "2025-12-15",
+  "valor": 529,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 100,
+    "id": "11131",
+    "comp": "2025-05-04",
+    "receb": "2024-12-16",
+    "pago": true,
+    "recebido": 529,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Sucessoaluno_Set24 | (3/16) Set24 | Link - Boleto - | Joao Victor | Venda | Mp_08 || Importação Sens"
+   },
+   {
+    "linhaExcel": 8244,
+    "id": "40472",
+    "comp": "2025-05-04",
+    "receb": "2026-02-27",
+    "pago": true,
+    "recebido": 529,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Sucessoaluno_Set24 | (5/16) Set24 | Link - Boleto - | Joao Victor | Venda | Mp_08 || Importação Sens"
+   }
+  ]
+ },
+ {
+  "pessoa": "Kilvia Segatto",
+  "produto": "Missão Governar",
+  "venc": "2026-01-15",
+  "valor": 806.67,
+  "copias": 2,
+  "tipo": "COM PARCELA ABERTA",
+  "mesmaParcela": false,
+  "abertoTotal": 806.67,
+  "linhas": [
+   {
+    "linhaExcel": 134,
+    "id": "11981",
+    "comp": "2025-08-24",
+    "receb": "2025-02-26",
+    "pago": true,
+    "recebido": 806.67,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Vix_37 | (12/13) Fev25 | Boleto - Qr_Code - | Academy | Venda | Mp_Am_09 || Importação Sense"
+   },
+   {
+    "linhaExcel": 11164,
+    "id": "46341",
+    "comp": "2025-08-24",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Vix_37 | (12/13) Fev25 | Boleto - Qr_Code - | Academy | Venda | Mp_Am_09 || Importação Sense -"
+   }
+  ]
+ },
+ {
+  "pessoa": "Nicolas de Oliveira Bittencourt",
+  "produto": "Missão Governar",
+  "venc": "2025-02-28",
+  "valor": 215.03,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 157,
+    "id": "12139",
+    "comp": "2023-09-03",
+    "receb": "2025-02-27",
+    "pago": true,
+    "recebido": 215.03,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Set24 | (6/21) Boleto | Michelle Sikorra | Renegociou | Mp_04_ | Renegociação| Importação Sense | Ni"
+   },
+   {
+    "linhaExcel": 8498,
+    "id": "40882",
+    "comp": "2023-09-03",
+    "receb": "2025-02-27",
+    "pago": true,
+    "recebido": 215.03,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Set24 | (6/21) Boleto | Michelle Sikorra | Renegociou | Mp_04_ | Renegociação| Importação Sense | Ni"
+   }
+  ]
+ },
+ {
+  "pessoa": "Hugo Yan Nicodemos Moreno",
+  "produto": "Confronto",
+  "venc": "2025-04-15",
+  "valor": 447.21,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 217,
+    "id": "13276",
+    "comp": "2024-10-20",
+    "receb": "2025-03-13",
+    "pago": true,
+    "recebido": 447.21,
+    "forma": "Legado",
+    "detalhe": "Confronto - Asm_Lon_169 | (7/15) Out24 | Cartão - Boleto - | Academy | Venda | Conf_Lon_35 || Importação Sense"
+   },
+   {
+    "linhaExcel": 794,
+    "id": "17137",
+    "comp": "2024-10-20",
+    "receb": "2025-04-09",
+    "pago": true,
+    "recebido": 447.21,
+    "forma": "Legado",
+    "detalhe": "Confronto - Asm_Lon_169 | (6/15) Out24 | Cartão - Boleto - | Academy | Venda | Conf_Lon_35 || Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Julio Cesar Gaioto",
+  "produto": "Imersão Prosperar",
+  "venc": "2025-01-22",
+  "valor": 0.01,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 246,
+    "id": "13527",
+    "comp": "2025-02-09",
+    "receb": "2025-01-22",
+    "pago": true,
+    "recebido": 0.01,
+    "forma": "Legado",
+    "detalhe": "Imersão Prosperar - Mc_Lon_Ourinhos/Sp | Jan25 | Qr_Code - | Academy | Venda | Asm_Lon_177 || Importação Sense"
+   },
+   {
+    "linhaExcel": 247,
+    "id": "13529",
+    "comp": "2025-02-09",
+    "receb": "2025-01-22",
+    "pago": true,
+    "recebido": 0.01,
+    "forma": "Legado",
+    "detalhe": "Imersão Prosperar - Mc_Lon_Ourinhos/Sp | Jan25 | Qr_Code - | Academy | Venda | Asm_Lon_177 || Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Edmar Batista Gonçalves Junior",
+  "produto": "Imersão Prosperar",
+  "venc": "2025-08-13",
+  "valor": 397,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 922,
+    "id": "18139",
+    "comp": "2025-09-14",
+    "receb": "2025-08-13",
+    "pago": true,
+    "recebido": 397,
+    "forma": "Legado",
+    "detalhe": "Imersão Prosperar - Mc_Lon_Bauru/Sp | Ago25 | Cartão - | Academy | Venda | Ipr_Lon_198 || Importação Sense"
+   },
+   {
+    "linhaExcel": 923,
+    "id": "18147",
+    "comp": "2025-09-14",
+    "receb": "2025-08-13",
+    "pago": true,
+    "recebido": 397,
+    "forma": "Legado",
+    "detalhe": "Imersão Prosperar - Mc_Lon_Bauru/Sp | Ago25 | Cartão - | Academy | Venda | Ipr_Lon_198 || Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Walmor Gomes Serrafim Junior",
+  "produto": "Confronto",
+  "venc": "2025-10-15",
+  "valor": 1377.33,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 1008,
+    "id": "18713",
+    "comp": "2025-07-13",
+    "receb": "2025-10-14",
+    "pago": true,
+    "recebido": 1377.33,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Bc_183 | (7/14) Abr25 | Cartão - Boleto - | Academy | Venda | Conf_Bc_41 || Importação Sense"
+   },
+   {
+    "linhaExcel": 3192,
+    "id": "29797",
+    "comp": "2025-07-13",
+    "receb": "2025-09-12",
+    "pago": true,
+    "recebido": 1377.33,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Bc_183 | (8/14) Abr25 | Cartão - Boleto - | Academy | Venda | Conf_Bc_41 || Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Guilherme David Souza Neves",
+  "produto": "Confronto",
+  "venc": "2026-06-15",
+  "valor": 830.83,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 1434,
+    "id": "21050",
+    "comp": "2025-09-28",
+    "receb": "2025-12-29",
+    "pago": true,
+    "recebido": 830.83,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Am_191 | (13/13) Jun25 | Boleto - Pix - | Academy | Venda | Conf_Am_45 || Importação Sense"
+   },
+   {
+    "linhaExcel": 11160,
+    "id": "46320",
+    "comp": "2025-09-28",
+    "receb": "2026-06-10",
+    "pago": true,
+    "recebido": 373.87,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Am_191 | (13/13) Jun25 | Boleto - Pix - | Academy | Venda | Conf_Am_45 || Importação Sense - Cóp"
+   }
+  ]
+ },
+ {
+  "pessoa": "Marta Teresinha Schulz Henz",
+  "produto": "Confronto",
+  "venc": "2026-06-15",
+  "valor": 1661.66,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 1569,
+    "id": "21686",
+    "comp": "2025-07-20",
+    "receb": "2025-12-29",
+    "pago": true,
+    "recebido": 1661.66,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Poa_189 | (14/14) Jun25 | Boleto - Qr_Code - | Academy | Venda | Conf_Poa_42 || Importação Sense"
+   },
+   {
+    "linhaExcel": 11171,
+    "id": "46363",
+    "comp": "2025-07-20",
+    "receb": "2026-06-11",
+    "pago": true,
+    "recebido": 913.88,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Poa_189 | (14/14) Jun25 | Boleto - Qr_Code - | Academy | Venda | Conf_Poa_42 || Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Erik Ryuichi Nishi Sakuma",
+  "produto": "Confronto",
+  "venc": "2025-10-15",
+  "valor": 500,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 2273,
+    "id": "25734",
+    "comp": "2025-09-15",
+    "receb": "2025-10-27",
+    "pago": true,
+    "recebido": 500,
+    "forma": "Legado",
+    "detalhe": "Confronto - Out25 | Jun25 | Boleto - Qr_Code - | Academy | Venda | Conf_Am_45 || Importação Sense"
+   },
+   {
+    "linhaExcel": 2276,
+    "id": "25753",
+    "comp": "2025-09-15",
+    "receb": "2025-10-27",
+    "pago": true,
+    "recebido": 500,
+    "forma": "Legado",
+    "detalhe": "Confronto - Out25 | Jun25 | Boleto - Qr_Code - | Academy | Venda | Conf_Am_45 || Entrada de Renegociação| Import"
+   }
+  ]
+ },
+ {
+  "pessoa": "Anna Paola Mascarenhas Travensoli",
+  "produto": "Outras Receitas Financeiras",
+  "venc": "2025-11-25",
+  "valor": 399.89,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 2616,
+    "id": "27535",
+    "comp": "2025-05-05",
+    "receb": "2025-11-04",
+    "pago": true,
+    "recebido": 399.89,
+    "forma": "Legado",
+    "detalhe": "Outras Receitas Financeiras - Maio25 | (7/11) Boleto | Renegociou | João Casavecchia Junior || Importação Sense"
+   },
+   {
+    "linhaExcel": 3842,
+    "id": "32965",
+    "comp": "2025-05-05",
+    "receb": "2025-11-21",
+    "pago": true,
+    "recebido": 399.89,
+    "forma": "Legado",
+    "detalhe": "Outras Receitas Financeiras - Maio25 | (6/11) Boleto | Renegociou | João Casavecchia Junior || Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Thaise Santos Cunha",
+  "produto": "Imersão Prosperar",
+  "venc": "2025-11-18",
+  "valor": 150,
+  "copias": 3,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 3549,
+    "id": "31102",
+    "comp": "2025-12-07",
+    "receb": "2025-11-18",
+    "pago": true,
+    "recebido": 150,
+    "forma": "Legado",
+    "detalhe": "Imersão Prosperar - Guerreiro_05 | Nov25 | Link - | Academy | Venda | Desativado| Importação Sense"
+   },
+   {
+    "linhaExcel": 3596,
+    "id": "31397",
+    "comp": "2025-12-07",
+    "receb": "2025-11-18",
+    "pago": true,
+    "recebido": 150,
+    "forma": "Legado",
+    "detalhe": "Imersão Prosperar - Guerreiro_05 | Nov25 | Link - | Academy | Venda | Desativado| Importação Sense"
+   },
+   {
+    "linhaExcel": 3724,
+    "id": "32388",
+    "comp": "2025-12-07",
+    "receb": "2025-11-18",
+    "pago": true,
+    "recebido": 150,
+    "forma": "Legado",
+    "detalhe": "Imersão Prosperar - Guerreiro_05 | Nov25 | Pix - | Academy | Venda | Desativado| Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Canidia da Silva Araujo Santos",
+  "produto": "Imersão Prosperar",
+  "venc": "2025-11-18",
+  "valor": 150,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 3577,
+    "id": "31279",
+    "comp": "2025-12-07",
+    "receb": "2025-11-18",
+    "pago": true,
+    "recebido": 150,
+    "forma": "Legado",
+    "detalhe": "Imersão Prosperar - Guerreiro_05 | Nov25 | Link - | Academy | Venda | Ipr_Cps_205 || Importação Sense"
+   },
+   {
+    "linhaExcel": 3588,
+    "id": "31342",
+    "comp": "2025-12-07",
+    "receb": "2025-11-18",
+    "pago": true,
+    "recebido": 150,
+    "forma": "Legado",
+    "detalhe": "Imersão Prosperar - Guerreiro_05 | Nov25 | Link - | Academy | Venda | Ipr_Cps_205 || Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Eugenia Vitoria Ferreira Anastacio",
+  "produto": "Pmr",
+  "venc": "2026-07-15",
+  "valor": 737,
+  "copias": 2,
+  "tipo": "COM PARCELA ABERTA",
+  "mesmaParcela": false,
+  "abertoTotal": 737,
+  "linhas": [
+   {
+    "linhaExcel": 4045,
+    "id": "34417",
+    "comp": "2026-06-28",
+    "receb": "2025-10-05",
+    "pago": true,
+    "recebido": 737,
+    "forma": "Legado",
+    "detalhe": "Pmr - Conf_Am_46 | (10/11) Out25 | Boleto - Qr_Code - | Academy | Venda | Pmr_Am_23 || Importação Sense"
+   },
+   {
+    "linhaExcel": 12914,
+    "id": "50172",
+    "comp": "2026-06-28",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Legado",
+    "detalhe": "Pmr - Jul26 | Conf_Am_46 | Out25 | Boleto - Qr_Code - | Academy | Venda | Pmr_Am_23 || Tmf Recompra"
+   }
+  ]
+ },
+ {
+  "pessoa": "Marcos Vinícius de Assis",
+  "produto": "Missão Governar",
+  "venc": "2026-03-01",
+  "valor": 2000,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 4177,
+    "id": "34873",
+    "comp": "2026-03-29",
+    "receb": "2026-03-01",
+    "pago": true,
+    "recebido": 2000,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Am_52 | (1/11) Mar26 | Boleto - Qr_Code - | Academy | Venda | Mg_Am_11_Ca || Importação Sense |"
+   },
+   {
+    "linhaExcel": 4178,
+    "id": "34874",
+    "comp": "2026-03-29",
+    "receb": "2026-03-01",
+    "pago": true,
+    "recebido": 2000,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Am_52 | (1/11) Mar26 | Boleto - Link - | Academy | Venda | Mg_Am_11_Ca || Importação Sense | Ma"
+   }
+  ]
+ },
+ {
+  "pessoa": "Gabriela Dias da Silva",
+  "produto": "Confronto",
+  "venc": "2026-06-10",
+  "valor": 1495,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 4288,
+    "id": "35049",
+    "comp": "2026-02-01",
+    "receb": "2026-03-05",
+    "pago": true,
+    "recebido": 1495,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Cps_205 | (8/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense"
+   },
+   {
+    "linhaExcel": 11172,
+    "id": "46364",
+    "comp": "2026-02-01",
+    "receb": "2026-06-10",
+    "pago": true,
+    "recebido": 1121.25,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Cps_205 | (8/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense - Có"
+   }
+  ]
+ },
+ {
+  "pessoa": "Bianca Maria Rezende Soares",
+  "produto": "Confronto",
+  "venc": "2026-02-15",
+  "valor": 834.29,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 4307,
+    "id": "35068",
+    "comp": "2025-10-22",
+    "receb": "2026-03-05",
+    "pago": true,
+    "recebido": 834.29,
+    "forma": "Legado",
+    "detalhe": "Confronto - Out25 | Ago25 | Cartão - Boleto - | Academy | Venda | Conf_Am_47 | | Renegociação| Importação Sense"
+   },
+   {
+    "linhaExcel": 4308,
+    "id": "35069",
+    "comp": "2025-10-22",
+    "receb": "2026-03-05",
+    "pago": true,
+    "recebido": 834.29,
+    "forma": "Legado",
+    "detalhe": "Confronto - Out25 | Ago25 | Cartão - Boleto - | Academy | Venda | Conf_Am_47 | | Renegociação| Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Eládio José Ochner",
+  "produto": "Missão Governar",
+  "venc": "2026-07-15",
+  "valor": 1506.1,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 4480,
+    "id": "35255",
+    "comp": "2026-05-31",
+    "receb": "2026-03-05",
+    "pago": true,
+    "recebido": 1506.1,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Am_50 | (8/12) Jan26 | Cartão - Boleto - Qr_Code - | Academy | Venda | Mg_Am_12 || Importação S"
+   },
+   {
+    "linhaExcel": 12098,
+    "id": "48501",
+    "comp": "2026-05-31",
+    "receb": "2026-07-20",
+    "pago": true,
+    "recebido": 1506.1,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Am_50 | (8/12) Jan26 | Cartão - Boleto - Qr_Code - | Academy | Venda | Mg_Am_12 || Importação S"
+   }
+  ]
+ },
+ {
+  "pessoa": "Gabriely Fofano de Carvalho",
+  "produto": "Confronto",
+  "venc": "2026-06-25",
+  "valor": 375.82,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 5258,
+    "id": "36236",
+    "comp": "2024-02-04",
+    "receb": "2026-06-26",
+    "pago": true,
+    "recebido": 375.82,
+    "forma": "Legado",
+    "detalhe": "Confronto - Sucessoaluno_Jun23 | (3/6) Jun23 | Pix - Boleto | Evelise | Venda | Conf_Cps_28 | Renegociação| Impo"
+   },
+   {
+    "linhaExcel": 5259,
+    "id": "36237",
+    "comp": "2024-02-04",
+    "receb": "2026-06-26",
+    "pago": true,
+    "recebido": 375.82,
+    "forma": "Legado",
+    "detalhe": "Confronto - Sucessoaluno_Jun23 | (4/6) Jun23 | Pix - Boleto | Evelise | Venda | Conf_Cps_28 | Renegociação| Impo"
+   }
+  ]
+ },
+ {
+  "pessoa": "Gabriely Fofano de Carvalho",
+  "produto": "Trainer",
+  "venc": "2026-06-25",
+  "valor": 223.16,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 5260,
+    "id": "36238",
+    "comp": "2024-06-16",
+    "receb": "2026-06-26",
+    "pago": true,
+    "recebido": 223.16,
+    "forma": "Legado",
+    "detalhe": "Trainer - Conf_Cps_28 | (2/24) Fev24 | Cartão - Boleto - | Academy | Venda | Trainer_24 | Renegociado| Importa"
+   },
+   {
+    "linhaExcel": 5261,
+    "id": "36239",
+    "comp": "2024-06-16",
+    "receb": "2026-06-26",
+    "pago": true,
+    "recebido": 223.16,
+    "forma": "Legado",
+    "detalhe": "Trainer - Conf_Cps_28 | (4/24) Fev24 | Cartão - Boleto - | Academy | Venda | Trainer_24 | Renegociado| Importa"
+   }
+  ]
+ },
+ {
+  "pessoa": "Gabriely Fofano de Carvalho",
+  "produto": "Missão Governar",
+  "venc": "2026-06-25",
+  "valor": 493.42,
+  "copias": 3,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 5263,
+    "id": "36241",
+    "comp": "2024-05-05",
+    "receb": "2026-06-25",
+    "pago": true,
+    "recebido": 493.42,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Cps_28 | (2/24) Fev24 | Cartão - Boleto - | Academy | Venda | Mp_06 | Renegociação| Importação"
+   },
+   {
+    "linhaExcel": 5264,
+    "id": "36242",
+    "comp": "2024-05-05",
+    "receb": "2026-06-25",
+    "pago": true,
+    "recebido": 493.42,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Cps_28 | (3/24) Fev24 | Cartão - Boleto - | Academy | Venda | Mp_06 | Renegociação| Importação"
+   },
+   {
+    "linhaExcel": 12099,
+    "id": "48503",
+    "comp": "2024-05-05",
+    "receb": "2026-06-25",
+    "pago": true,
+    "recebido": 493.42,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Cps_28 | (3/24) Fev24 | Cartão - Boleto - | Academy | Venda | Mp_06 | Renegociação| Importação"
+   }
+  ]
+ },
+ {
+  "pessoa": "Sofia de Cássia Dametto Alves",
+  "produto": "Confronto",
+  "venc": "2026-03-15",
+  "valor": 830.33,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 5594,
+    "id": "36704",
+    "comp": "2026-01-25",
+    "receb": "2026-04-15",
+    "pago": true,
+    "recebido": 811.62,
+    "forma": "Legado",
+    "detalhe": "Confronto - Sucessoaluno_Out25 | Out25 | Link - Boleto - | Yan Nicodemos | Venda | Conf_Am_50 || Importação Sens"
+   },
+   {
+    "linhaExcel": 9878,
+    "id": "43767",
+    "comp": "2026-01-25",
+    "receb": "2026-03-17",
+    "pago": true,
+    "recebido": 831.17,
+    "forma": "Legado",
+    "detalhe": "Confronto - Sucessoaluno_Out25 | Out25 | Link - Boleto - | Yan Nicodemos | Venda | Conf_Am_50 || Importação Sens"
+   }
+  ]
+ },
+ {
+  "pessoa": "Genira Soares da Silva",
+  "produto": "Missão Governar",
+  "venc": "2026-04-15",
+  "valor": 300,
+  "copias": 2,
+  "tipo": "COM PARCELA ABERTA",
+  "mesmaParcela": true,
+  "abertoTotal": 300,
+  "linhas": [
+   {
+    "linhaExcel": 5751,
+    "id": "36893",
+    "comp": "2026-02-12",
+    "receb": "2026-04-16",
+    "pago": true,
+    "recebido": 300.42,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Fev26 | Set24 | Boleto - Qr_Code - | Academy | Venda | Mp_07 | Renegociação| Importação Sense | Geni"
+   },
+   {
+    "linhaExcel": 8701,
+    "id": "41428",
+    "comp": "2026-02-12",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Manual",
+    "detalhe": "Missão Governar - Fev26 | Set24 | Boleto - Qr_Code - | Academy | Venda | Mp_07 | Renegociação| Importação Sense | Geni"
+   }
+  ]
+ },
+ {
+  "pessoa": "Neile dos Santos Tangerino",
+  "produto": "Confronto",
+  "venc": "2026-04-15",
+  "valor": 830.33,
+  "copias": 2,
+  "tipo": "COM PARCELA ABERTA",
+  "mesmaParcela": true,
+  "abertoTotal": 1660.66,
+  "linhas": [
+   {
+    "linhaExcel": 5862,
+    "id": "37033",
+    "comp": "2026-01-25",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Legado",
+    "detalhe": "Confronto - Sucessoaluno_Out25 | Out25 | Link - Boleto - | Yan Nicodemos | Venda | Conf_Am_50 || Importação Sens"
+   },
+   {
+    "linhaExcel": 5863,
+    "id": "37034",
+    "comp": "2026-01-25",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Legado",
+    "detalhe": "Confronto - Sucessoaluno_Out25 | Out25 | Link - Boleto - | Yan Nicodemos | Venda | Conf_Am_50 || Importação Sens"
+   }
+  ]
+ },
+ {
+  "pessoa": "Silmara Brito Melo dos Santos",
+  "produto": "Missão Governar",
+  "venc": "2026-05-15",
+  "valor": 349.5,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 6130,
+    "id": "37369",
+    "comp": "2025-11-02",
+    "receb": "2026-05-15",
+    "pago": true,
+    "recebido": 349.5,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Am_45 | Set25 | Boleto - Qr_Code - | Academy | Venda | Mg_Am_10 | Renegociação"
+   },
+   {
+    "linhaExcel": 10918,
+    "id": "45790",
+    "comp": "2025-11-02",
+    "receb": "2026-05-15",
+    "pago": true,
+    "recebido": 349.5,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Conf_Am_45 | Set25 | Boleto - Qr_Code - | Academy | Venda | Mg_Am_10 | Renegociação - Cópia"
+   }
+  ]
+ },
+ {
+  "pessoa": "Luiz Felipe do Nascimento Figueira",
+  "produto": "Confronto",
+  "venc": "2026-06-20",
+  "valor": 750,
+  "copias": 2,
+  "tipo": "COM PARCELA ABERTA",
+  "mesmaParcela": false,
+  "abertoTotal": 750,
+  "linhas": [
+   {
+    "linhaExcel": 6376,
+    "id": "37678",
+    "comp": "2026-03-01",
+    "receb": "2026-02-26",
+    "pago": true,
+    "recebido": 750,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Am_211 | (5/11) Fev26 | Boleto - Qr_Code - | Academy | Venda | Conf_Am_52 || Importação Sense |"
+   },
+   {
+    "linhaExcel": 12912,
+    "id": "50167",
+    "comp": "2026-03-01",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Legado",
+    "detalhe": "Confronto - Jun26 | Ipr_Am_211 | Fev26 | Boleto - Qr_Code - | Academy | Venda | Conf_Am_52 || Tmf Recompra"
+   }
+  ]
+ },
+ {
+  "pessoa": "Benedito Alírio da Costa",
+  "produto": "Confronto",
+  "venc": "2026-08-15",
+  "valor": 897,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 6517,
+    "id": "37862",
+    "comp": "2026-02-01",
+    "receb": "2026-08-18",
+    "pago": true,
+    "recebido": 897,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Cps_205 | (8/11) Dez25 | Cartão - Boleto - | Academy | Venda | Conf_Am_50 || Importação Sense"
+   },
+   {
+    "linhaExcel": 6746,
+    "id": "38156",
+    "comp": "2026-02-01",
+    "receb": "2026-07-17",
+    "pago": true,
+    "recebido": 897,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Cps_205 | (9/11) Dez25 | Cartão - Boleto - | Academy | Venda | Conf_Am_50 || Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Jucilene Rodrigues",
+  "produto": "Missão Governar",
+  "venc": "2026-07-20",
+  "valor": 1054.16,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 6614,
+    "id": "37987",
+    "comp": "2026-03-29",
+    "receb": "2026-03-26",
+    "pago": true,
+    "recebido": 1054.16,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Sucessoaluno_Out25 | Out25 | Pix - Boleto - | Matheus Reis | Venda | Mg_Am_11 || Importação Sense |"
+   },
+   {
+    "linhaExcel": 12100,
+    "id": "48504",
+    "comp": "2026-03-29",
+    "receb": "2026-07-22",
+    "pago": true,
+    "recebido": 1159.92,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Sucessoaluno_Out25 | Out25 | Pix - Boleto - | Matheus Reis | Venda | Mg_Am_11 || Recompra"
+   }
+  ]
+ },
+ {
+  "pessoa": "Rosemeire Aparecida Rosa",
+  "produto": "Missão Governar",
+  "venc": "2026-07-20",
+  "valor": 1330.08,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 6617,
+    "id": "37992",
+    "comp": "2025-11-02",
+    "receb": "2026-03-26",
+    "pago": true,
+    "recebido": 1330.08,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Sucessoaluno_Out25 | Out25 | Link - Boleto - | Matheus Reis | Venda | Mg_Am_10 || Importação Sense"
+   },
+   {
+    "linhaExcel": 12101,
+    "id": "48505",
+    "comp": "2025-11-02",
+    "receb": "2026-07-22",
+    "pago": true,
+    "recebido": 1463.52,
+    "forma": "Legado",
+    "detalhe": "Missão Governar - Sucessoaluno_Out25 | Out25 | Link - Boleto - | Matheus Reis | Venda | Mg_Am_10 || Recompra Sicoob"
+   }
+  ]
+ },
+ {
+  "pessoa": "Felipe de Oliveira Padilha",
+  "produto": "Confronto",
+  "venc": "2026-09-14",
+  "valor": 2200,
+  "copias": 3,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 6965,
+    "id": "38433",
+    "comp": "2026-03-01",
+    "receb": "2026-03-18",
+    "pago": true,
+    "recebido": 1980,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Am_207 | (10/12) Jan26 | Cartão - Boleto - | Academy | Venda | Conf_Am_52 || Importação Sense"
+   },
+   {
+    "linhaExcel": 7195,
+    "id": "38730",
+    "comp": "2026-03-01",
+    "receb": "2026-03-18",
+    "pago": true,
+    "recebido": 1980,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Am_207 | (11/12) Jan26 | Cartão - Boleto - | Academy | Venda | Conf_Am_52 || Importação Sense"
+   },
+   {
+    "linhaExcel": 7389,
+    "id": "38983",
+    "comp": "2026-03-01",
+    "receb": "2026-03-18",
+    "pago": true,
+    "recebido": 1980,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Am_207 | (12/12) Jan26 | Cartão - Boleto - | Academy | Venda | Conf_Am_52 || Importação Sense"
+   }
+  ]
+ },
+ {
+  "pessoa": "Bruna Caroline Pereira Siqueira",
+  "produto": "Confronto",
+  "venc": "2026-03-15",
+  "valor": 2000,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 8301,
+    "id": "40649",
+    "comp": "2026-05-17",
+    "receb": "2026-03-16",
+    "pago": true,
+    "recebido": 1776.29,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Am_212| (1/14) Mar26 | Cartão | Academy | Venda | Conf_Am_55_Ca |"
+   },
+   {
+    "linhaExcel": 8302,
+    "id": "40650",
+    "comp": "2026-05-17",
+    "receb": "2026-03-16",
+    "pago": true,
+    "recebido": 2000,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Am_212| (1/14) Mar26 | Qr_Code -  | Academy | Venda | Conf_Am_55_Ca |"
+   }
+  ]
+ },
+ {
+  "pessoa": "Carolina Fantinatti Delavalle",
+  "produto": "Confronto",
+  "venc": "2026-03-15",
+  "valor": 1000,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 8307,
+    "id": "40657",
+    "comp": "2026-04-19",
+    "receb": "2026-03-16",
+    "pago": true,
+    "recebido": 1000,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Am_212| (1/11) Mar26 | Cartão  | Academy | Venda | Conf_Am_53_Ca |"
+   },
+   {
+    "linhaExcel": 8308,
+    "id": "40658",
+    "comp": "2026-04-19",
+    "receb": "2026-03-16",
+    "pago": true,
+    "recebido": 1000,
+    "forma": "Legado",
+    "detalhe": "Confronto - Ipr_Am_212| (1/11) Mar26 | Qr_Code -  | Academy | Venda | Conf_Am_53_Ca |"
+   }
+  ]
+ },
+ {
+  "pessoa": "Aline Kruger",
+  "produto": "Confronto",
+  "venc": "2026-04-29",
+  "valor": 1890,
+  "copias": 5,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 8902,
+    "id": "41776",
+    "comp": "2026-06-21",
+    "receb": "2026-04-29",
+    "pago": true,
+    "recebido": 1890,
+    "forma": "Manual",
+    "detalhe": "Confronto - (7/11) Abr26 | Cartão - Boleto - Qr_Code -  | Academy | Venda | Conf_Am_55 |"
+   },
+   {
+    "linhaExcel": 8933,
+    "id": "41813",
+    "comp": "2026-06-21",
+    "receb": "2026-04-29",
+    "pago": true,
+    "recebido": 1890,
+    "forma": "Manual",
+    "detalhe": "Confronto - (8/11) Abr26 | Cartão - Boleto - Qr_Code -  | Academy | Venda | Conf_Am_55 |"
+   },
+   {
+    "linhaExcel": 8964,
+    "id": "41850",
+    "comp": "2026-06-21",
+    "receb": "2026-04-29",
+    "pago": true,
+    "recebido": 1890,
+    "forma": "Manual",
+    "detalhe": "Confronto - (9/11) Abr26 | Cartão - Boleto - Qr_Code -  | Academy | Venda | Conf_Am_55 |"
+   },
+   {
+    "linhaExcel": 8995,
+    "id": "41887",
+    "comp": "2026-06-21",
+    "receb": "2026-04-29",
+    "pago": true,
+    "recebido": 1890,
+    "forma": "Manual",
+    "detalhe": "Confronto - (10/11) Abr26 | Cartão - Boleto - Qr_Code -  | Academy | Venda | Conf_Am_55 |"
+   },
+   {
+    "linhaExcel": 9025,
+    "id": "41923",
+    "comp": "2026-06-21",
+    "receb": "2026-04-29",
+    "pago": true,
+    "recebido": 1890,
+    "forma": "Manual",
+    "detalhe": "Confronto - (11/11) Abr26 | Cartão - Boleto - Qr_Code -  | Academy | Venda | Conf_Am_55 |"
+   }
+  ]
+ },
+ {
+  "pessoa": "Daniela dos Santos Borba",
+  "produto": "Missão Governar",
+  "venc": "2026-04-23",
+  "valor": 1550,
+  "copias": 10,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": true,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 9387,
+    "id": "42856",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 900,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - Conf_Am_53 Abr26 | Pix - | Academy | Venda | Mg_Am_12 | Quitação"
+   },
+   {
+    "linhaExcel": 9404,
+    "id": "42876",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 900,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - Conf_Am_53 Abr26 | Pix - | Academy | Venda | Mg_Am_12 | Quitação"
+   },
+   {
+    "linhaExcel": 9426,
+    "id": "42902",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 900,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - Conf_Am_53 Abr26 | Pix - | Academy | Venda | Mg_Am_12 | Quitação"
+   },
+   {
+    "linhaExcel": 9449,
+    "id": "42929",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 900,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - Conf_Am_53 Abr26 | Pix - | Academy | Venda | Mg_Am_12 | Quitação"
+   },
+   {
+    "linhaExcel": 9471,
+    "id": "42956",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 900,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - Conf_Am_53 Abr26 | Pix - | Academy | Venda | Mg_Am_12 | Quitação"
+   },
+   {
+    "linhaExcel": 9492,
+    "id": "42983",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 900,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - Conf_Am_53 Abr26 | Pix - | Academy | Venda | Mg_Am_12 | Quitação"
+   },
+   {
+    "linhaExcel": 9513,
+    "id": "43010",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 900,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - Conf_Am_53 Abr26 | Pix - | Academy | Venda | Mg_Am_12 | Quitação"
+   },
+   {
+    "linhaExcel": 9534,
+    "id": "43037",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 900,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - Conf_Am_53 Abr26 | Pix - | Academy | Venda | Mg_Am_12 | Quitação"
+   },
+   {
+    "linhaExcel": 9555,
+    "id": "43064",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 900,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - Conf_Am_53 Abr26 | Pix - | Academy | Venda | Mg_Am_12 | Quitação"
+   },
+   {
+    "linhaExcel": 9576,
+    "id": "43091",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 900,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - Conf_Am_53 Abr26 | Pix - | Academy | Venda | Mg_Am_12 | Quitação"
+   }
+  ]
+ },
+ {
+  "pessoa": "Flavia Palma Gonçalves",
+  "produto": "Missão Governar",
+  "venc": "2026-04-23",
+  "valor": 1350,
+  "copias": 4,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 9516,
+    "id": "43013",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 950,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - (8/11) Conf_Am_53 Abr26 | Cartão - Boleto -  | Academy | Venda | Mg_Am_12 |"
+   },
+   {
+    "linhaExcel": 9537,
+    "id": "43040",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 950,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - (9/11) Conf_Am_53 Abr26 | Cartão - Boleto -  | Academy | Venda | Mg_Am_12 |"
+   },
+   {
+    "linhaExcel": 9558,
+    "id": "43067",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 950,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - (10/11) Conf_Am_53 Abr26 | Cartão - Boleto -  | Academy | Venda | Mg_Am_12 |"
+   },
+   {
+    "linhaExcel": 9579,
+    "id": "43094",
+    "comp": "2026-05-31",
+    "receb": "2026-04-23",
+    "pago": true,
+    "recebido": 950,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - (11/11) Conf_Am_53 Abr26 | Cartão - Boleto -  | Academy | Venda | Mg_Am_12 |"
+   }
+  ]
+ },
+ {
+  "pessoa": "Edson Roberto Messias da Silva",
+  "produto": "Confronto",
+  "venc": "2026-06-26",
+  "valor": 850.96,
+  "copias": 2,
+  "tipo": "baixas em datas diferentes",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 9665,
+    "id": "43467",
+    "comp": "2026-05-17",
+    "receb": "2026-06-15",
+    "pago": true,
+    "recebido": 940.86,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Confronto - (2/13) Ipr_Vix_216 Abr26 | Boleto - Qr_Code -  | Academy | Venda | Conf_Am_54 |"
+   },
+   {
+    "linhaExcel": 9678,
+    "id": "43481",
+    "comp": "2026-05-17",
+    "receb": "2026-06-25",
+    "pago": true,
+    "recebido": 850.96,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Confronto - (3/13) Ipr_Vix_216 Abr26 | Boleto - Qr_Code -  | Academy | Venda | Conf_Am_54 |"
+   }
+  ]
+ },
+ {
+  "pessoa": "Claudia Ribeiro Fernandes Soares",
+  "produto": "Confronto 2",
+  "venc": "2026-05-31",
+  "valor": 2000,
+  "copias": 2,
+  "tipo": "quitado no mesmo dia",
+  "mesmaParcela": false,
+  "abertoTotal": 0,
+  "linhas": [
+   {
+    "linhaExcel": 10926,
+    "id": "45896",
+    "comp": "2026-07-26",
+    "receb": "2026-06-01",
+    "pago": true,
+    "recebido": 2000,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Confronto 2 - (1/11) Mg_Am_12 Maio26 | Cartão -  | Academy | Venda | Conf2_Am_04 |"
+   },
+   {
+    "linhaExcel": 10927,
+    "id": "45897",
+    "comp": "2026-07-26",
+    "receb": "2026-06-01",
+    "pago": true,
+    "recebido": 2000,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Confronto 2 - (1/11) Mg_Am_12 Maio26 | - Qr_Code -  | Academy | Venda | Conf2_Am_04 |"
+   }
+  ]
+ },
+ {
+  "pessoa": "Patricia Nakamura",
+  "produto": "Confronto",
+  "venc": "2026-09-10",
+  "valor": 596.25,
+  "copias": 2,
+  "tipo": "COM PARCELA ABERTA",
+  "mesmaParcela": false,
+  "abertoTotal": 596.25,
+  "linhas": [
+   {
+    "linhaExcel": 11011,
+    "id": "46149",
+    "comp": "2026-07-12",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Confronto - (3/11) Ipr_Poa_220 Jun26 | Cartão - Boleto -  | Academy | Venda | Conf_Am_56 |"
+   },
+   {
+    "linhaExcel": 11026,
+    "id": "46166",
+    "comp": "2026-07-12",
+    "receb": "2026-08-11",
+    "pago": true,
+    "recebido": 596.25,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Confronto - (4/11) Ipr_Poa_220 Jun26 | Cartão - Boleto -  | Academy | Venda | Conf_Am_56 |"
+   }
+  ]
+ },
+ {
+  "pessoa": "Maiara Maria dos Santos",
+  "produto": "Fundo - Receita (Recompra)",
+  "venc": "2026-06-15",
+  "valor": 2416.67,
+  "copias": 2,
+  "tipo": "COM PARCELA ABERTA",
+  "mesmaParcela": true,
+  "abertoTotal": 4833.34,
+  "linhas": [
+   {
+    "linhaExcel": 11295,
+    "id": "46723",
+    "comp": "2026-05-31",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Legado",
+    "detalhe": "Fundo - Receita (Recompra) - Jun26 | Conf_Am_51 | Jan26 | Cartão - Boleto - Qr_Code - | Academy | Venda | Mg_Am_12 || Recompra Si"
+   },
+   {
+    "linhaExcel": 11747,
+    "id": "47691",
+    "comp": "2026-05-31",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Legado",
+    "detalhe": "Fundo - Receita (Recompra) - Jun26 | Conf_Am_51 | Jan26 | Cartão - Boleto - Qr_Code - | Academy | Venda | Mg_Am_12 || Recompra Si"
+   }
+  ]
+ },
+ {
+  "pessoa": "Valerio Alves dos Santos",
+  "produto": "Missão Governar",
+  "venc": "2026-08-25",
+  "valor": 1215.71,
+  "copias": 2,
+  "tipo": "COM PARCELA ABERTA",
+  "mesmaParcela": false,
+  "abertoTotal": 2431.42,
+  "linhas": [
+   {
+    "linhaExcel": 11333,
+    "id": "46786",
+    "comp": "2026-11-29",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - (3/15) Conf_Am_55 Jun26 | Boleto - Pix -  | Academy | Venda | Mg_Am_14 |"
+   },
+   {
+    "linhaExcel": 11334,
+    "id": "46787",
+    "comp": "2026-11-29",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - (15/15) Conf_Am_55 Jun26 | Boleto - Pix -  | Academy | Venda | Mg_Am_14 |"
+   }
+  ]
+ },
+ {
+  "pessoa": "Vinicius de Borba Oliveira",
+  "produto": "Pmr",
+  "venc": "2027-04-21",
+  "valor": 852.87,
+  "copias": 2,
+  "tipo": "COM PARCELA ABERTA",
+  "mesmaParcela": false,
+  "abertoTotal": 1705.74,
+  "linhas": [
+   {
+    "linhaExcel": 11430,
+    "id": "46895",
+    "comp": "2026-11-04",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Manual",
+    "detalhe": "Pmr - (10/13) Conf_Am_55 Jun26 | Cartão - Boleto -  | Academy | Venda | Pmr_Am_04 |"
+   },
+   {
+    "linhaExcel": 11444,
+    "id": "46911",
+    "comp": "2026-11-04",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Manual",
+    "detalhe": "Pmr - (11/13) Conf_Am_55 Jun26 | Cartão - Boleto -  | Academy | Venda | Pmr_Am_04 |"
+   }
+  ]
+ },
+ {
+  "pessoa": "Jardel Silva de Moura",
+  "produto": "Missão Governar",
+  "venc": "2027-07-10",
+  "valor": 1365.45,
+  "copias": 2,
+  "tipo": "COM PARCELA ABERTA",
+  "mesmaParcela": false,
+  "abertoTotal": 2730.9,
+  "linhas": [
+   {
+    "linhaExcel": 11472,
+    "id": "46945",
+    "comp": "2026-08-30",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - (13/14) Conf_Am_55 Jun26 | Cartão - Boleto -  | Academy | Venda | Mg_Am_13 |"
+   },
+   {
+    "linhaExcel": 11473,
+    "id": "46946",
+    "comp": "2026-08-30",
+    "receb": null,
+    "pago": false,
+    "recebido": 0,
+    "forma": "Boletos - Iam - Sicoob 2",
+    "detalhe": "Missão Governar - (14/14) Conf_Am_55 Jun26 | Cartão - Boleto -  | Academy | Venda | Mg_Am_13 |"
+   }
+  ]
+ }
+]

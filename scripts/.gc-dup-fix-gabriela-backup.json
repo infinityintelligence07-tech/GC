@@ -1,0 +1,189 @@
+{
+  "geradoEm": "2026-09-01T18:51:22.923Z",
+  "ficha": {
+    "id": "47d46177-aca9-491b-b0e0-34c6e4524e6c",
+    "name": "Gabriela Dias da Silva",
+    "whatsapp": "(19) 98164-8891",
+    "email": "gabrielaads_@hotmail.com",
+    "cpf": "",
+    "address": "",
+    "numero": "",
+    "cidade": "",
+    "estado": "",
+    "cep": "",
+    "status": "Em Dia",
+    "status_mode": "Automático",
+    "ac": "Luana dos Santos",
+    "product": "Confronto",
+    "enrollment_date": "2026-02-01",
+    "data_treinamento_origem": "2026-02-01",
+    "due_day": 7,
+    "sale_value": "25435",
+    "down_payment": "0",
+    "total_installments": 14,
+    "paid_installments": 13,
+    "installment_value": "1816.7857142857142",
+    "installments": [
+      {
+        "paid": true,
+        "value": 6000,
+        "number": 1,
+        "dueDate": "2025-12-07",
+        "paidDate": "2025-12-07"
+      },
+      {
+        "paid": true,
+        "value": 1495,
+        "number": 2,
+        "dueDate": "2026-01-07",
+        "paidDate": "2026-01-12"
+      },
+      {
+        "paid": true,
+        "value": 1495,
+        "number": 3,
+        "dueDate": "2026-02-10",
+        "paidDate": "2026-02-16"
+      },
+      {
+        "paid": true,
+        "value": 1495,
+        "number": 4,
+        "dueDate": "2026-03-10",
+        "paidDate": "2026-03-11"
+      },
+      {
+        "paid": true,
+        "tags": [
+          "87e96ab4-bba7-4b76-95d8-f63098555638"
+        ],
+        "value": 1495,
+        "number": 5,
+        "dueDate": "2026-04-10",
+        "paidDate": "2026-04-14"
+      },
+      {
+        "paid": true,
+        "value": 1495,
+        "number": 6,
+        "dueDate": "2026-05-10",
+        "paidDate": "2026-03-05"
+      },
+      {
+        "paid": true,
+        "value": 1495,
+        "number": 7,
+        "dueDate": "2026-06-10",
+        "paidDate": "2026-03-05"
+      },
+      {
+        "paid": true,
+        "tags": [
+          "87e96ab4-bba7-4b76-95d8-f63098555638"
+        ],
+        "value": 1495,
+        "number": 8,
+        "dueDate": "2026-06-10",
+        "paidDate": "2026-06-10"
+      },
+      {
+        "paid": true,
+        "value": 1495,
+        "number": 9,
+        "dueDate": "2026-07-10",
+        "paidDate": "2026-03-05"
+      },
+      {
+        "paid": true,
+        "value": 1495,
+        "number": 10,
+        "dueDate": "2026-08-10",
+        "paidDate": "2026-03-05"
+      },
+      {
+        "paid": true,
+        "tags": [
+          "6198b672-02ed-420c-8b63-ad7ac784926c",
+          "55db7beb-5999-419d-b829-136f1c35d34a",
+          "87e96ab4-bba7-4b76-95d8-f63098555638"
+        ],
+        "value": 1495,
+        "number": 11,
+        "dueDate": "2026-09-10",
+        "paidDate": "2026-05-21"
+      },
+      {
+        "paid": true,
+        "tags": [
+          "6198b672-02ed-420c-8b63-ad7ac784926c",
+          "55db7beb-5999-419d-b829-136f1c35d34a",
+          "87e96ab4-bba7-4b76-95d8-f63098555638"
+        ],
+        "value": 1495,
+        "number": 12,
+        "dueDate": "2026-10-10",
+        "paidDate": "2026-05-21"
+      },
+      {
+        "paid": true,
+        "tags": [
+          "6198b672-02ed-420c-8b63-ad7ac784926c",
+          "55db7beb-5999-419d-b829-136f1c35d34a",
+          "87e96ab4-bba7-4b76-95d8-f63098555638"
+        ],
+        "value": 1495,
+        "number": 13,
+        "dueDate": "2026-11-10",
+        "paidDate": "2026-05-21"
+      },
+      {
+        "paid": false,
+        "value": 1495,
+        "number": 14,
+        "dueDate": "2026-12-10"
+      }
+    ],
+    "history": [
+      {
+        "date": "2026-08-28T06:54:08.654Z",
+        "text": "Importado via planilha Kamino",
+        "type": "Sistema"
+      },
+      {
+        "date": "2026-08-28T15:46:33.256Z",
+        "text": "Importação Kamino: ficha atualizada — 14 parcela(s) substituída(s) pela planilha (13 paga(s)).",
+        "type": "Sistema"
+      }
+    ],
+    "is_renda_extra": false,
+    "renda_extra_status": null,
+    "renda_extra_ac": null,
+    "renda_extra_ac_assigned_at": null,
+    "renda_extra_inclusion_date": null,
+    "renda_extra_inscription_date": null,
+    "renda_extra_acordo_value": null,
+    "renda_extra_directed_at": null,
+    "renda_extra_value_at_direction": null,
+    "status_cancelamento": "nenhum",
+    "cancellation_case_id": null,
+    "tags": [],
+    "product_history": [],
+    "detalhes": "Confronto - Ipr_Cps_205 | (1/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51_Ca || Importação Sense | Confronto - Ipr_Cps_205 | (3/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (4/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (5/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (6/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (7/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (8/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (8/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense - Có | Confronto - Ipr_Cps_205 | (9/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (10/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (11/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (12/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (13/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense | Confronto - Ipr_Cps_205 | (14/14) Dez25 | Boleto - Link - | Academy | Venda | Conf_Am_51 || Importação Sense",
+    "created_at": "2026-08-28T06:54:12.473Z",
+    "updated_at": "2026-08-28T15:46:35.330Z",
+    "renda_extra_payment_date": null,
+    "renda_extra_payment_method": null,
+    "company_id": "00000000-0000-0000-0000-0000000a1a11",
+    "ciclo": null,
+    "status_antes_cancelamento": null,
+    "iam_control_aluno_id": null,
+    "iam_control_synced_at": null,
+    "cpf_digits": "",
+    "iam_control_contrato_id": null,
+    "iam_control_contrato_status": null,
+    "iam_control_pendente_tipo": null,
+    "iam_control_pendente_link": null,
+    "iam_gc_conciliado_at": null,
+    "recompra_treinamento": null
+  }
+}

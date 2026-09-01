@@ -294,9 +294,16 @@ function analyzeCentroCusto(cc: string): {
   return { hasAntecipacao, hasCancelamento, hasNegativacao, hasTmf, unknownLabel, assessorCandidates };
 }
 
+// A conta "Boletos - Liberty - Sicoob" está com o nome errado na Kamino: é o
+// Sicoob da própria IAM e não tem relação com a empresa Liberty. Sem esta
+// correção a tag sugerida ao operador apontaria a empresa errada.
+function fixNomeContaKamino(v: string): string {
+  return v.replace(/boletos\s*[-–—]\s*liberty\s*[-–—]\s*sicoob/gi, 'Boletos - Iam - Sicoob');
+}
+
 function extractTagFromContaRecebimento(cr: string): string | null {
   // Remove a redundância "- Academy" / " Academy" no final do texto.
-  let v = cr.trim();
+  let v = fixNomeContaKamino(cr.trim());
   v = v.replace(/\s*[-–—]\s*Academy\s*$/i, '').replace(/\s+Academy\s*$/i, '').trim();
   return v || null;
 }
@@ -304,7 +311,7 @@ function extractTagFromContaRecebimento(cr: string): string | null {
 // ─── Kamino: tag a partir da Forma de Recebimento (coluna I) ─────────────────
 // "Legado" e "Manual" são ignorados. Outros valores viram candidatos a tag.
 function extractTagFromFormaRecebimento(fr: string): string | null {
-  const v = fr.trim();
+  const v = fixNomeContaKamino(fr.trim());
   if (!v) return null;
   const lower = v.toLowerCase();
   if (FORMA_RECEBIMENTO_IGNORE.some((w) => lower === w)) return null;

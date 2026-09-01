@@ -1,0 +1,3151 @@
+{
+ "mapaPrefixo": {
+  "ASM": "Confronto",
+  "CONF": "Confronto",
+  "IPR": "Confronto",
+  "LIFE": "Life Coach",
+  "MG": "Missão Governar",
+  "MP": "Missão Governar",
+  "PMR": "Pmr",
+  "PMRR": "Pnl",
+  "PNL": "Pmr",
+  "WKS": "Imersão Prosperar",
+  "XP": "Trainer"
+ },
+ "multi": [
+  {
+   "pessoa": "Leonardo Milton de Souza Lima",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Daniella Teixeira Fernandes",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 2,
+   "alvosSugeridos": [],
+   "abertoRec": 0,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Graciela da Silva Lunelli",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 3,
+   "alvosSugeridos": [],
+   "abertoRec": 4515.18,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Gustavo Pedral Marques Grama",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     4
+    ]
+   ],
+   "abertoRec": 3983.96,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Nilva Brandão de Almeida Novaes",
+   "treinamentos": [
+    "Missão Governar",
+    "Pmr"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Micheli Aparecida Botelho Prieto",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Outras Receitas Financeiras"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 6,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 845.73,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Jeisy Favarão Marques",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 17,
+   "semCodigo": 16,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     1
+    ]
+   ],
+   "abertoRec": 1910.08,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Jeniffer Ferreira de Oliveira Prates",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     1
+    ]
+   ],
+   "abertoRec": 890.37,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Jean Michel de Moura",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 11,
+   "semCodigo": 11,
+   "alvosSugeridos": [],
+   "abertoRec": 6100.89,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Luana da Silva Bezerra",
+   "treinamentos": [
+    "Confronto",
+    "Outras Receitas Financeiras",
+    "Missão Governar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     4
+    ]
+   ],
+   "abertoRec": 3984.28,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Jose Ailton dos Santos",
+   "treinamentos": [
+    "Pmr",
+    "Liberty",
+    "Trainer"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 1,
+   "semCodigo": 1,
+   "alvosSugeridos": [],
+   "abertoRec": 921.78,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Allan Roberto Alves",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 13,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     13
+    ]
+   ],
+   "abertoRec": 9489.3,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Miguel Kelson Gomes de Melo",
+   "treinamentos": [
+    "Missão Governar",
+    "Receita Outros",
+    "Receita Serviço"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 12,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     12
+    ]
+   ],
+   "abertoRec": 4684.78,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Luana Pereira de Camargo",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 11,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     9
+    ],
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 9573.6,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Maite de Aguiar Coutinho Miranda",
+   "treinamentos": [
+    "Pmr",
+    "Trainer",
+    "Confronto",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 5,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Pmr",
+     2
+    ]
+   ],
+   "abertoRec": 4030.5,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Clayton Costa Santana",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 8,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     10
+    ]
+   ],
+   "abertoRec": 1243.74,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Samuel da Silva Cardoso",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 1941,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Gabriela de Souza Maia",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 7,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     12
+    ]
+   ],
+   "abertoRec": 9641.31,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Dayane Roberta Carreio Rodrigues",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     1
+    ]
+   ],
+   "abertoRec": 2309.1,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Luiz Diego da Cruz",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Giulianno Loghan Lima Marques",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto",
+    "Receita de Vendas"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     5
+    ]
+   ],
+   "abertoRec": 1929.35,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Júlio Eduardo Costa Palacine",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 1938.67,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Douglas Diego Vasques",
+   "treinamentos": [
+    "Confronto",
+    "Pmr"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 9,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     18
+    ]
+   ],
+   "abertoRec": 3642.66,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "André Luis dos Santos Brito",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto",
+    "Missão Governar",
+    "Outras Receitas Financeiras",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 5,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Paulo Cesar dos Santos",
+   "treinamentos": [
+    "Confronto",
+    "Pmr"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ],
+    [
+     "Pmr",
+     4
+    ]
+   ],
+   "abertoRec": 3388,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Debora Marinho Nascimento",
+   "treinamentos": [
+    "Confronto",
+    "Confronto 2",
+    "Trainer"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ]
+   ],
+   "abertoRec": 2154,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Deolinda Aparecida Novaes de Freitas",
+   "treinamentos": [
+    "Receita Outros",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     5
+    ]
+   ],
+   "abertoRec": 2990,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Matheus Lorram da Luz Andrade",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 5484.99,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Pedro Henrique Macchia",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto",
+    "Receita Outros",
+    "Pmr"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 894.74,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Cintia Aparecida Juares Campos",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     7
+    ]
+   ],
+   "abertoRec": 1744.4,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Denielson dos Santos Sobral",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 1692.51,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Maysa Valdirene Dias Viana",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "André Matheus Cornélio Sampaio",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     8
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Ricardo Raphael Meira de Carvalho",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ],
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 2700,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Caio Henrique de Farias Arantes",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Elisandra Aparecida de Oliveira Cruz",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 2617.5,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Leandro de Lavor Viciana",
+   "treinamentos": [
+    "Confronto",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 2492.49,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Rafael Abreu de Sousa",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 4984.98,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Francisca Jessica Rodrigues",
+   "treinamentos": [
+    "Confronto",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 1283.58,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Alessandro Cordeiro de Oliveira",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ],
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Adrian de Oliveira Teixeira",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 891.76,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Maria Tais da Silva",
+   "treinamentos": [
+    "Outras Receitas Financeiras",
+    "Imersão Prosperar",
+    "Confronto",
+    "Pmr"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 11,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     11
+    ]
+   ],
+   "abertoRec": 1355.46,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Bruno Costa da Cruz",
+   "treinamentos": [
+    "Pmr",
+    "Confronto",
+    "Trainer",
+    "Receita Outros",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 5,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 904.4,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Jorge Luiz Milaré Filho",
+   "treinamentos": [
+    "Missão Governar",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 3795,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Beatriz Verissimo da Silva",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ],
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 2330,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Robert Dias de Jesus",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Pmr"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 5682,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Guilherme do Couto Cembranelli",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 785.79,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Vitor Quintino Licks",
+   "treinamentos": [
+    "Confronto",
+    "Pmr"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Pmr",
+     2
+    ]
+   ],
+   "abertoRec": 582.46,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Erik Ryuichi Nishi Sakuma",
+   "treinamentos": [
+    "Trainer",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 3256.68,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Cláudio Márcio Neves da Trindade",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 6,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     11
+    ]
+   ],
+   "abertoRec": 4382.01,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Lucimeia Brito Silva",
+   "treinamentos": [
+    "Missão Governar",
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ]
+   ],
+   "abertoRec": 1329.32,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Roberto Luiz Stutz Filho",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     7
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 6084,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Tainara Carvalho Soares",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 1668.58,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Jardelino Martins dos Santos",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     5
+    ]
+   ],
+   "abertoRec": 3323.34,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Silvania Gloger de Melo",
+   "treinamentos": [
+    "Confronto",
+    "Trainer",
+    "Pmr"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ]
+   ],
+   "abertoRec": 1745,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Henrique Pereira de Souza",
+   "treinamentos": [
+    "Missão Governar",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 8,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     8
+    ]
+   ],
+   "abertoRec": 5775.44,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Erika Barbosa Matheus",
+   "treinamentos": [
+    "Confronto",
+    "Pmr"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 6,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Pmr",
+     3
+    ],
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 2051.79,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Esequiel Silva Rodrigues",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 11,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     11
+    ],
+    [
+     "Missão Governar",
+     11
+    ]
+   ],
+   "abertoRec": 4306.26,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Thaise Santos Cunha",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 2059.26,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Geovane Nunes Matos",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Jessica Rodrigues de Campos Novaes Barbosa",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 6,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     6
+    ]
+   ],
+   "abertoRec": 6296.34,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Carla Danielle Morandi",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Gabriela de Matos Esteves",
+   "treinamentos": [
+    "Confronto",
+    "Outras Receitas Financeiras",
+    "Imersão Prosperar",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     4
+    ],
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 4660,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Priscila Fernanda Ferreira Naves",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 6313.32,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Gustavo Andrade Nonato",
+   "treinamentos": [
+    "Confronto",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 3411.87,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Rafael Fernando Valim",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ],
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Mikelline Nunes de Oliveira",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     1
+    ],
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 1028.05,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Claudia Ribeiro Fernandes Soares",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Pmr",
+    "Juros e Multas",
+    "Trainer",
+    "Confronto 2"
+   ],
+   "nTreinamentos": 6,
+   "recompraLinhas": 6,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     9
+    ],
+    [
+     "Pmr",
+     3
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Rodrigo Aguilar Mamani",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 2833.32,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Yuri Henrique Palomino Pinheiro",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     5
+    ],
+    [
+     "Missão Governar",
+     5
+    ]
+   ],
+   "abertoRec": 13500,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Rui David da Silva",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 3499.98,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Renan Schwinden",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     7
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 6144,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Eládio José Ochner",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ],
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Anderson Corassini Schulz",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     1
+    ],
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Daniel Figueiro",
+   "treinamentos": [
+    "Missão Governar",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 10,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     10
+    ],
+    [
+     "Missão Governar",
+     10
+    ]
+   ],
+   "abertoRec": 8400,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Julia Facincani",
+   "treinamentos": [
+    "Missão Governar",
+    "Pmr",
+    "Confronto"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 9,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     9
+    ],
+    [
+     "Pmr",
+     9
+    ]
+   ],
+   "abertoRec": 3552.27,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Gerfeson Souza de Oliveira",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ]
+   ],
+   "abertoRec": 2100,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Ana Julia Rezende",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Gilson Gomes Raposo",
+   "treinamentos": [
+    "Missão Governar",
+    "Pnl"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Grazielle Yone da Silva Carvalho",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 875,
+   "renegociacao": false
+  }
+ ],
+ "resolvivel": [
+  {
+   "pessoa": "Gabriela de Souza Maia",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 7,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     12
+    ]
+   ],
+   "abertoRec": 9641.31,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Allan Roberto Alves",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 13,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     13
+    ]
+   ],
+   "abertoRec": 9489.3,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Daniel Figueiro",
+   "treinamentos": [
+    "Missão Governar",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 10,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     10
+    ],
+    [
+     "Missão Governar",
+     10
+    ]
+   ],
+   "abertoRec": 8400,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Priscila Fernanda Ferreira Naves",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 6313.32,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Jessica Rodrigues de Campos Novaes Barbosa",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 6,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     6
+    ]
+   ],
+   "abertoRec": 6296.34,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Henrique Pereira de Souza",
+   "treinamentos": [
+    "Missão Governar",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 8,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     8
+    ]
+   ],
+   "abertoRec": 5775.44,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Robert Dias de Jesus",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Pmr"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 5682,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Matheus Lorram da Luz Andrade",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 5484.99,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Rafael Abreu de Sousa",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 4984.98,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Miguel Kelson Gomes de Melo",
+   "treinamentos": [
+    "Missão Governar",
+    "Receita Outros",
+    "Receita Serviço"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 12,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     12
+    ]
+   ],
+   "abertoRec": 4684.78,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Cláudio Márcio Neves da Trindade",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 6,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     11
+    ]
+   ],
+   "abertoRec": 4382.01,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Maite de Aguiar Coutinho Miranda",
+   "treinamentos": [
+    "Pmr",
+    "Trainer",
+    "Confronto",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 5,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Pmr",
+     2
+    ]
+   ],
+   "abertoRec": 4030.5,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Luana da Silva Bezerra",
+   "treinamentos": [
+    "Confronto",
+    "Outras Receitas Financeiras",
+    "Missão Governar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     4
+    ]
+   ],
+   "abertoRec": 3984.28,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Gustavo Pedral Marques Grama",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     4
+    ]
+   ],
+   "abertoRec": 3983.96,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Jorge Luiz Milaré Filho",
+   "treinamentos": [
+    "Missão Governar",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 3795,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Douglas Diego Vasques",
+   "treinamentos": [
+    "Confronto",
+    "Pmr"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 9,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     18
+    ]
+   ],
+   "abertoRec": 3642.66,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Gustavo Andrade Nonato",
+   "treinamentos": [
+    "Confronto",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 3411.87,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Jardelino Martins dos Santos",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     5
+    ]
+   ],
+   "abertoRec": 3323.34,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Erik Ryuichi Nishi Sakuma",
+   "treinamentos": [
+    "Trainer",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 3256.68,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Deolinda Aparecida Novaes de Freitas",
+   "treinamentos": [
+    "Receita Outros",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     5
+    ]
+   ],
+   "abertoRec": 2990,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Rodrigo Aguilar Mamani",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 2833.32,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Elisandra Aparecida de Oliveira Cruz",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 2617.5,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Leandro de Lavor Viciana",
+   "treinamentos": [
+    "Confronto",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 2492.49,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Dayane Roberta Carreio Rodrigues",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     1
+    ]
+   ],
+   "abertoRec": 2309.1,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Debora Marinho Nascimento",
+   "treinamentos": [
+    "Confronto",
+    "Confronto 2",
+    "Trainer"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ]
+   ],
+   "abertoRec": 2154,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Gerfeson Souza de Oliveira",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ]
+   ],
+   "abertoRec": 2100,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Thaise Santos Cunha",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 2059.26,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Samuel da Silva Cardoso",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 1941,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Giulianno Loghan Lima Marques",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto",
+    "Receita de Vendas"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     5
+    ]
+   ],
+   "abertoRec": 1929.35,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Jeisy Favarão Marques",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 17,
+   "semCodigo": 16,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     1
+    ]
+   ],
+   "abertoRec": 1910.08,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Silvania Gloger de Melo",
+   "treinamentos": [
+    "Confronto",
+    "Trainer",
+    "Pmr"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ]
+   ],
+   "abertoRec": 1745,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Cintia Aparecida Juares Campos",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     7
+    ]
+   ],
+   "abertoRec": 1744.4,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Denielson dos Santos Sobral",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 1692.51,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Tainara Carvalho Soares",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 1668.58,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Maria Tais da Silva",
+   "treinamentos": [
+    "Outras Receitas Financeiras",
+    "Imersão Prosperar",
+    "Confronto",
+    "Pmr"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 11,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     11
+    ]
+   ],
+   "abertoRec": 1355.46,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Lucimeia Brito Silva",
+   "treinamentos": [
+    "Missão Governar",
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ]
+   ],
+   "abertoRec": 1329.32,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Francisca Jessica Rodrigues",
+   "treinamentos": [
+    "Confronto",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 1283.58,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Clayton Costa Santana",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 8,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     10
+    ]
+   ],
+   "abertoRec": 1243.74,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Bruno Costa da Cruz",
+   "treinamentos": [
+    "Pmr",
+    "Confronto",
+    "Trainer",
+    "Receita Outros",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 5,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 904.4,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Pedro Henrique Macchia",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto",
+    "Receita Outros",
+    "Pmr"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 894.74,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Adrian de Oliveira Teixeira",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 891.76,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Jeniffer Ferreira de Oliveira Prates",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     1
+    ]
+   ],
+   "abertoRec": 890.37,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Grazielle Yone da Silva Carvalho",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 875,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Guilherme do Couto Cembranelli",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 785.79,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Vitor Quintino Licks",
+   "treinamentos": [
+    "Confronto",
+    "Pmr"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Pmr",
+     2
+    ]
+   ],
+   "abertoRec": 582.46,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Leonardo Milton de Souza Lima",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Nilva Brandão de Almeida Novaes",
+   "treinamentos": [
+    "Missão Governar",
+    "Pmr"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Luiz Diego da Cruz",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Maysa Valdirene Dias Viana",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "André Matheus Cornélio Sampaio",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     8
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Caio Henrique de Farias Arantes",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Geovane Nunes Matos",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Carla Danielle Morandi",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     6
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Ana Julia Rezende",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Gilson Gomes Raposo",
+   "treinamentos": [
+    "Missão Governar",
+    "Pnl"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  }
+ ],
+ "ambiguo": [
+  {
+   "pessoa": "Yuri Henrique Palomino Pinheiro",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     5
+    ],
+    [
+     "Missão Governar",
+     5
+    ]
+   ],
+   "abertoRec": 13500,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Luana Pereira de Camargo",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 11,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     9
+    ],
+    [
+     "Confronto",
+     2
+    ]
+   ],
+   "abertoRec": 9573.6,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Renan Schwinden",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     7
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 6144,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Roberto Luiz Stutz Filho",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 5,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     7
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 6084,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Gabriela de Matos Esteves",
+   "treinamentos": [
+    "Confronto",
+    "Outras Receitas Financeiras",
+    "Imersão Prosperar",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 4,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Missão Governar",
+     4
+    ],
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 4660,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Esequiel Silva Rodrigues",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 11,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     11
+    ],
+    [
+     "Missão Governar",
+     11
+    ]
+   ],
+   "abertoRec": 4306.26,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Julia Facincani",
+   "treinamentos": [
+    "Missão Governar",
+    "Pmr",
+    "Confronto"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 9,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     9
+    ],
+    [
+     "Pmr",
+     9
+    ]
+   ],
+   "abertoRec": 3552.27,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Rui David da Silva",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 3499.98,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Paulo Cesar dos Santos",
+   "treinamentos": [
+    "Confronto",
+    "Pmr"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 4,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     4
+    ],
+    [
+     "Pmr",
+     4
+    ]
+   ],
+   "abertoRec": 3388,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Ricardo Raphael Meira de Carvalho",
+   "treinamentos": [
+    "Confronto",
+    "Imersão Prosperar",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ],
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 2700,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Beatriz Verissimo da Silva",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ],
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 2330,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Erika Barbosa Matheus",
+   "treinamentos": [
+    "Confronto",
+    "Pmr"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 6,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Pmr",
+     3
+    ],
+    [
+     "Confronto",
+     3
+    ]
+   ],
+   "abertoRec": 2051.79,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Júlio Eduardo Costa Palacine",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Imersão Prosperar"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 1938.67,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Mikelline Nunes de Oliveira",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     1
+    ],
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 1028.05,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Micheli Aparecida Botelho Prieto",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Outras Receitas Financeiras"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 6,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     3
+    ]
+   ],
+   "abertoRec": 845.73,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "André Luis dos Santos Brito",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Confronto",
+    "Missão Governar",
+    "Outras Receitas Financeiras",
+    "Receita Outros"
+   ],
+   "nTreinamentos": 5,
+   "recompraLinhas": 3,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     3
+    ],
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Alessandro Cordeiro de Oliveira",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ],
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Rafael Fernando Valim",
+   "treinamentos": [
+    "Imersão Prosperar",
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ],
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Claudia Ribeiro Fernandes Soares",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar",
+    "Pmr",
+    "Juros e Multas",
+    "Trainer",
+    "Confronto 2"
+   ],
+   "nTreinamentos": 6,
+   "recompraLinhas": 6,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     9
+    ],
+    [
+     "Pmr",
+     3
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Eládio José Ochner",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     2
+    ],
+    [
+     "Missão Governar",
+     2
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  },
+  {
+   "pessoa": "Anderson Corassini Schulz",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 1,
+   "semCodigo": 0,
+   "alvosSugeridos": [
+    [
+     "Confronto",
+     1
+    ],
+    [
+     "Missão Governar",
+     1
+    ]
+   ],
+   "abertoRec": 0,
+   "renegociacao": false
+  }
+ ],
+ "semPista": [
+  {
+   "pessoa": "Daniella Teixeira Fernandes",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 2,
+   "semCodigo": 2,
+   "alvosSugeridos": [],
+   "abertoRec": 0,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Graciela da Silva Lunelli",
+   "treinamentos": [
+    "Confronto",
+    "Missão Governar"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 3,
+   "semCodigo": 3,
+   "alvosSugeridos": [],
+   "abertoRec": 4515.18,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Jean Michel de Moura",
+   "treinamentos": [
+    "Missão Governar",
+    "Confronto"
+   ],
+   "nTreinamentos": 2,
+   "recompraLinhas": 11,
+   "semCodigo": 11,
+   "alvosSugeridos": [],
+   "abertoRec": 6100.89,
+   "renegociacao": true
+  },
+  {
+   "pessoa": "Jose Ailton dos Santos",
+   "treinamentos": [
+    "Pmr",
+    "Liberty",
+    "Trainer"
+   ],
+   "nTreinamentos": 3,
+   "recompraLinhas": 1,
+   "semCodigo": 1,
+   "alvosSugeridos": [],
+   "abertoRec": 921.78,
+   "renegociacao": true
+  }
+ ]
+}

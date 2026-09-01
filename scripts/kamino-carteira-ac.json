@@ -1,0 +1,50 @@
+{
+ "porContrato": {
+  "Paula Passini": {
+   "contratos": 264,
+   "saldo": 1866705.19
+  },
+  "Elaine Valadares": {
+   "contratos": 231,
+   "saldo": 1761199.36
+  },
+  "Luana dos Santos": {
+   "contratos": 295,
+   "saldo": 2197903.74
+  }
+ },
+ "porParcela": {
+  "Paula Passini": {
+   "contratos": 264,
+   "saldo": 1866705.19
+  },
+  "Elaine Valadares": {
+   "contratos": 231,
+   "saldo": 1761199.36
+  },
+  "Luana dos Santos": {
+   "contratos": 295,
+   "saldo": 2197903.74
+  }
+ },
+ "saldoTotalPlanilha": 5825808.29,
+ "semAc": [],
+ "multiAc": [
+  {
+   "pessoa": "Luciano Tiago Gomes Velho",
+   "produto": "Missão Governar",
+   "saldo": 0,
+   "candidatos": [
+    [
+     "Elaine Valadares",
+     13
+    ],
+    [
+     "Luana dos Santos",
+     1
+    ]
+   ]
+  }
+ ],
+ "contratosPartidos": []
+}

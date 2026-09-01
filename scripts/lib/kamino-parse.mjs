@@ -142,20 +142,19 @@ export function parseKaminoFile(filePath, acNames = []) {
       continue;
     }
     const key = studentKey(nome, produto);
-    if (!groups.has(key)) groups.set(key, { nome, produto, rows: [], recompraRows: [] });
+    if (!groups.has(key)) groups.set(key, { nome, produto, rows: [] });
     groups.get(key).rows.push(row);
   }
 
+  // Recompra (renegociação / fundo por antecipação) é ficha à parte, igual ao
+  // ImportStudentsModal: nunca é fundida no contrato principal. O vínculo com o
+  // treinamento de origem é decidido na fila Conciliação > Recompras, porque o
+  // código de turma no campo Detalhe não identifica o produto de forma confiável.
   for (const [nameKey, recompraRows] of recompraPending) {
-    const sheetCandidates = Array.from(groups.values()).filter((g) => g.nome.toLowerCase() === nameKey);
     for (const row of recompraRows) {
-      const produto = normalizeString(row.Classificação) || 'Recompra';
-      if (sheetCandidates.length === 1) {
-        sheetCandidates[0].recompraRows.push(row);
-        continue;
-      }
+      const produto = normalizeString(row.Classificação) || 'Fundo - Receita (Recompra)';
       const key = studentKey(nameKey, produto);
-      if (!groups.has(key)) groups.set(key, { nome: normalizeString(row.Pessoa) || nameKey, produto, rows: [], recompraRows: [] });
+      if (!groups.has(key)) groups.set(key, { nome: normalizeString(row.Pessoa) || nameKey, produto, rows: [] });
       groups.get(key).rows.push(row);
     }
   }
@@ -163,7 +162,7 @@ export function parseKaminoFile(filePath, acNames = []) {
   const students = [];
 
   for (const [key, group] of groups) {
-    const rowGroup = [...group.rows, ...group.recompraRows];
+    const rowGroup = group.rows;
     if (rowGroup.length === 0) continue;
 
     const first = rowGroup[0];

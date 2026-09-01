@@ -1,0 +1,5034 @@
+{
+ "parcelasFaltando": {
+  "totalComSaldo": 363,
+  "entradaSemEtiqueta": {
+   "n": 0,
+   "saldo": 0
+  },
+  "lacunaReal": {
+   "n": 292,
+   "saldo": 2960113.15,
+   "todos": [
+    {
+     "chave": "RODRIGO KRUGER||MISSAO GOVERNAR",
+     "pessoa": "Rodrigo Krüger",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 35040,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ALEX PERES VASQUES||MISSAO GOVERNAR",
+     "pessoa": "Alex Peres Vasques",
+     "produto": "Missão Governar",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 32040,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ANA BEATRIZ OLIVEIRA ANDRADE||MISSAO GOVERNAR",
+     "pessoa": "Ana Beatriz Oliveira Andrade",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 32040,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "JUARES ANTONIO BORGA||CONFRONTO",
+     "pessoa": "Juares Antonio Borga",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 30708.26,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JOSE ANTONIO PEREIRA||MISSAO GOVERNAR",
+     "pessoa": "José Antonio Pereira",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 30673.5,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "GIZELLY RUANNY DA SILVA OLIVEIRA||MISSAO GOVERNAR",
+     "pessoa": "Gizelly Ruanny da Silva Oliveira",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 29460,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ALVARO REZENDE DE OLIVEIRA||MISSAO GOVERNAR",
+     "pessoa": "Alvaro Rezende de Oliveira",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 29000,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "NASCIMENTO & CURTI LTDA||MISSAO GOVERNAR",
+     "pessoa": "Nascimento & Curti Ltda",
+     "produto": "Missão Governar",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 25000,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "DAIANE CARDOSO LEAO||MISSAO GOVERNAR",
+     "pessoa": "Daiane Cardoso Leão",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 24026.64,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "GUSTAVO COLPAERT CORREIA||CONFRONTO",
+     "pessoa": "Gustavo Colpaert Correia",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 23448.72,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ANNALISE KRUGER||MISSAO GOVERNAR",
+     "pessoa": "Annalise Kruger",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 23360,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "IORRANE CASTRO MAGEDANZ||MISSAO GOVERNAR",
+     "pessoa": "Iorrane Castro Magedanz",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 23249.97,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "WILLIAN ANDRE DA SILVA VIEIRA||FUNDO - RECEITA (RECOMPRA)",
+     "pessoa": "Willian Andre da Silva Vieira",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      11,
+      12
+     ],
+     "semLabel": 9,
+     "aberto": 23108.3,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JOAO AMADEU DA SILVA||CONFRONTO",
+     "pessoa": "João Amadeu da Silva",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 23000.04,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "MICHEL BILLER MOREIRA SILVA GARCIA||CONFRONTO",
+     "pessoa": "Michel Biller Moreira Silva Garcia",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 22474.32,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ANDERSON CLEITON FONSECA||CONFRONTO",
+     "pessoa": "Anderson Cleiton Fonseca",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 22206.7,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "PABLO FONTOURA||CONFRONTO",
+     "pessoa": "Pablo Fontoura",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 21999.96,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "VALTER BATISTA FERNANDES JUNIOR||CONFRONTO",
+     "pessoa": "Valter Batista Fernandes Júnior",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 21935.88,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "KELLY REIS DA SILVA||CONFRONTO",
+     "pessoa": "Kelly Reis da Silva",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 21431.6,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "YURI HENRIQUE PALOMINO PINHEIRO||CONFRONTO",
+     "pessoa": "Yuri Henrique Palomino Pinheiro",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 21000,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ANGELICA LEA SERVICOS AMBULATORIAIS||MISSAO GOVERNAR",
+     "pessoa": "Angelica Lea Serviços Ambulatoriais",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 20589.25,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JOYCE DANTAS OLIVEIRA||MISSAO GOVERNAR",
+     "pessoa": "Joyce Dantas Oliveira",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 20279.97,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JEAN DAVI SANTOS||CONFRONTO",
+     "pessoa": "Jean Davi Santos",
+     "produto": "Confronto",
+     "lancamentos": 15,
+     "declarado": 16,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 20086.04,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ANA CLAUDIA DE SOUZA E SILVA||CONFRONTO",
+     "pessoa": "Ana Claudia de Souza e Silva",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 20085.67,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "VAGNER BARBOSA PIRES MARTINS||CONFRONTO",
+     "pessoa": "Vagner Barbosa Pires Martins",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 19250,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "LUEHY LEMES CALHEIROS NASCIMENTO||CONFRONTO",
+     "pessoa": "Luehy Lemes Calheiros Nascimento",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 18333.26,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JOSE ANTONIO PEREIRA||CONFRONTO",
+     "pessoa": "José Antonio Pereira",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 18279.9,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ALEXANDRE DE SOUZA SCATOLIN||CONFRONTO",
+     "pessoa": "Alexandre de Souza Scatolin",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 18278.26,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JAMES VANDRE ALVES PEREIRA||MISSAO GOVERNAR",
+     "pessoa": "James Vandré Alves Pereira",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 18020.04,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "VIVIANE ROVEDA MARIN DE ANDRADE||MISSAO GOVERNAR",
+     "pessoa": "Viviane Rovêda Marin de Andrade",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 18020.04,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "FABIO JOSE TREVIZAN SILVA||MISSAO GOVERNAR",
+     "pessoa": "Fabio Jose Trevizan Silva",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 18020.04,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "GRAZIELLE YONE DA SILVA CARVALHO||MISSAO GOVERNAR",
+     "pessoa": "Grazielle Yone da Silva Carvalho",
+     "produto": "Missão Governar",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 18020,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JAMES VANDRE ALVES PEREIRA||CONFRONTO",
+     "pessoa": "James Vandré Alves Pereira",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 17500,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "WENDY MOREIRA DE MACEDO||MISSAO GOVERNAR",
+     "pessoa": "Wendy Moreira de Macedo",
+     "produto": "Missão Governar",
+     "lancamentos": 15,
+     "declarado": 16,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 17020.05,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "PATRICIA NAKAMURA||MISSAO GOVERNAR",
+     "pessoa": "Patricia Nakamura",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 17019.96,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "VALERIO ALVES DOS SANTOS||MISSAO GOVERNAR",
+     "pessoa": "Valerio Alves dos Santos",
+     "produto": "Missão Governar",
+     "lancamentos": 14,
+     "declarado": 15,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 17019.94,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "PRISCILA ELAINE BIGHETI||MISSAO GOVERNAR",
+     "pessoa": "Priscila Elaine Bigheti",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16976.63,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "MAIARA MARIA DOS SANTOS||MISSAO GOVERNAR",
+     "pessoa": "Maiara Maria dos Santos",
+     "produto": "Missão Governar",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 16916.69,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "FABIO DA SILVA BILLER||MISSAO GOVERNAR",
+     "pessoa": "Fabio da Silva Biller",
+     "produto": "Missão Governar",
+     "lancamentos": 14,
+     "declarado": 15,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16732.82,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "MOACIR DE SOUZA PEREIRA||MISSAO GOVERNAR",
+     "pessoa": "Moacir de Souza Pereira",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16518.37,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ALESSANDRO CLAYTON ANTONIO||MISSAO GOVERNAR",
+     "pessoa": "Alessandro Clayton Antonio",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16518.37,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "DAVI PEREIRA DA SILVA||CONFRONTO",
+     "pessoa": "Davi Pereira da Silva",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16499.97,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "JONATHAS LEANDRO DE ARAUJO||CONFRONTO",
+     "pessoa": "Jonathas Leandro de Araujo",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16451.91,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "SAMUEL TONY DE LIMA PAIVA||MISSAO GOVERNAR",
+     "pessoa": "Samuel Tony de Lima Paiva",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16230.5,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ELIAS JACO DE OLIVEIRA||MISSAO GOVERNAR",
+     "pessoa": "Elias Jaco de Oliveira",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16218,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "VICTOR GUEDES WAIANDT||MISSAO GOVERNAR",
+     "pessoa": "Victor Guedes Waiandt",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16218,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ALBERT SANTOS PENELUC||CONFRONTO",
+     "pessoa": "Albert Santos Peneluc",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 16146,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "HILTON MARCELIO DA SILVA||CONFRONTO",
+     "pessoa": "Hilton Marcelio da Silva",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16061.58,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "LUCIANE MARONI CALDAS||MISSAO GOVERNAR",
+     "pessoa": "Luciane Maroni Caldas",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16060,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ANA PAULA AMARAL DA VEIGA||MISSAO GOVERNAR",
+     "pessoa": "Ana Paula Amaral da Veiga",
+     "produto": "Missão Governar",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16020,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JARDEL SILVA DE MOURA||MISSAO GOVERNAR",
+     "pessoa": "Jardel Silva de Moura",
+     "produto": "Missão Governar",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 16019.95,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JONATAS ALVES DE SOUZA||CONFRONTO",
+     "pessoa": "Jonatas Alves de Souza",
+     "produto": "Confronto",
+     "lancamentos": 15,
+     "declarado": 16,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 16000,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ALEX PERES VASQUES||CONFRONTO",
+     "pessoa": "Alex Peres Vasques",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 15750,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "VALERIO ALVES DOS SANTOS||CONFRONTO",
+     "pessoa": "Valerio Alves dos Santos",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 15583.26,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "GUSTAVO ROSA BRANDAO||MISSAO GOVERNAR",
+     "pessoa": "Gustavo Rosa Brandão",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 15500.04,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "DIEGO VINICIUS DE OLIVEIRA||MISSAO GOVERNAR",
+     "pessoa": "Diego Vinícius de Oliveira",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 15500,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "WILLIAM BARROS DOS SANTOS||CONFRONTO",
+     "pessoa": "William Barros dos Santos",
+     "produto": "Confronto",
+     "lancamentos": 15,
+     "declarado": 16,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 15400,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ALEXCIONE ANTUNES DE SA||MISSAO GOVERNAR",
+     "pessoa": "Alexcione Antunes de Sa",
+     "produto": "Missão Governar",
+     "lancamentos": 14,
+     "declarado": 15,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 15340,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JULIANA DEAMO ALBIM||CONFRONTO",
+     "pessoa": "Juliana Deamo Albim",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 15317.28,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "SILMARA ALVES LIMA DE SOUZA||MISSAO GOVERNAR",
+     "pessoa": "Silmara Alves Lima de Souza",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 15089.25,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "GILMARA DA SILVA FERNANDES||MISSAO GOVERNAR",
+     "pessoa": "Gilmara da Silva Fernandes",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 15016.7,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "GILMARA BAGNHUR DA TRINDADE||CONFRONTO",
+     "pessoa": "Gilmara Bagnhur da Trindade",
+     "produto": "Confronto",
+     "lancamentos": 9,
+     "declarado": 10,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 15000,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "RENATO ROSARIO DOS SANTOS||CONFRONTO",
+     "pessoa": "Renato Rosario dos Santos",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 14954.94,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MAYARA KETLLYN DOS SANTOS GALIARDI||CONFRONTO",
+     "pessoa": "Mayara Ketllyn dos Santos Galiardi",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 14,
+     "faltando": [
+      2,
+      3,
+      4,
+      5
+     ],
+     "semLabel": 0,
+     "aberto": 14949,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "EDNA SANTOS DE JESUS||MISSAO GOVERNAR",
+     "pessoa": "Edna Santos de Jesus",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 14685,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JAQUELINE TAIS ALVES PEREIRA||MISSAO GOVERNAR",
+     "pessoa": "Jaqueline Tais Alves Pereira",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 14685,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "DIRCE BATISTA VIEIRA||MISSAO GOVERNAR",
+     "pessoa": "Dirce Batista Vieira",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 14685,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "DANIELE GREGORIO MONZANI||MISSAO GOVERNAR",
+     "pessoa": "Daniele Gregorio Monzani",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 14685,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "SIRLENE APARECIDA DOS SANTOS||MISSAO GOVERNAR",
+     "pessoa": "Sirlene Aparecida dos Santos",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 14685,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "KELLY REIS DA SILVA||MISSAO GOVERNAR",
+     "pessoa": "Kelly Reis da Silva",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 14685,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "GISELI MESSA TREIESLEBEN||MISSAO GOVERNAR",
+     "pessoa": "Giseli Messa Treiesleben",
+     "produto": "Missão Governar",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 14583.31,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "RAFAEL FERNANDO VALIM||MISSAO GOVERNAR",
+     "pessoa": "Rafael Fernando Valim",
+     "produto": "Missão Governar",
+     "lancamentos": 15,
+     "declarado": 16,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 14500.01,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "BARBARA MIDORI SASAKI||MISSAO GOVERNAR",
+     "pessoa": "Barbara Midori Sasaki",
+     "produto": "Missão Governar",
+     "lancamentos": 14,
+     "declarado": 15,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 14499.96,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "JAMES AMBROISE||MISSAO GOVERNAR",
+     "pessoa": "James Ambroise",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 14183.3,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "RICARDO PEREIRA DA COSTA FILHO||CONFRONTO",
+     "pessoa": "Ricardo Pereira da Costa Filho",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 14000,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "LEONARDO FERREIRA||MISSAO GOVERNAR",
+     "pessoa": "Leonardo Ferreira",
+     "produto": "Missão Governar",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 13968.8,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ADRIANI FERREIRA TERRES BORGA||PMR",
+     "pessoa": "Adriani Ferreira Terres Borga",
+     "produto": "Pmr",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 13940.04,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "OSANA DE SOUZA PEREIRA||MISSAO GOVERNAR",
+     "pessoa": "Osana de Souza Pereira",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 13666.5,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "WELISON DOS SANTOS SANTANA||CONFRONTO",
+     "pessoa": "Welison dos Santos Santana",
+     "produto": "Confronto",
+     "lancamentos": 7,
+     "declarado": 8,
+     "faltando": [
+      2,
+      3
+     ],
+     "semLabel": 0,
+     "aberto": 13617.6,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "MARCIANA COELHO DOS SANTOS LIMA||CONFRONTO",
+     "pessoa": "Marciana Coelho dos Santos Lima",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 13426.64,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "GHEYSA WEINBERGER CARUSO||MISSAO GOVERNAR",
+     "pessoa": "Gheysa Weinberger Caruso",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 13350,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "EVERSON DA CONCEICAO||MISSAO GOVERNAR",
+     "pessoa": "Everson da Conceiçao",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 13350,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "VALDIRENE TAMOS DAS MERCES||MISSAO GOVERNAR",
+     "pessoa": "Valdirene Tamos das Mercês",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 13300,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "LEONARDO FURLAN||MISSAO GOVERNAR",
+     "pessoa": "Leonardo Furlan",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 13291.63,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ANA CLAUDIA MARIANO ALVES||CONFRONTO",
+     "pessoa": "Ana Claudia Mariano Alves",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 12833.31,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ANDRESSA MARIA FRAPORTI||CONFRONTO",
+     "pessoa": "Andressa Maria Fraporti",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 12770.8,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "CINTIA MARIA SOARES TREVIZAN||CONFRONTO",
+     "pessoa": "Cintia Maria Soares Trevizan",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 12737.16,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JONATHAN BONI||CONFRONTO",
+     "pessoa": "Jonathan Boni",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 12666.64,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "GILSON FARIA DO CARMO||CONFRONTO",
+     "pessoa": "Gilson Faria do Carmo",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 12170.88,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "YEDA MARIA DE MELO BALEEIRO||MISSAO GOVERNAR",
+     "pessoa": "Yêda Maria de Melo Baleeiro",
+     "produto": "Missão Governar",
+     "lancamentos": 9,
+     "declarado": 11,
+     "faltando": [
+      2,
+      3
+     ],
+     "semLabel": 0,
+     "aberto": 12000,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "SILVANA DA SILVA PEROSA||CONFRONTO",
+     "pessoa": "Silvana da Silva Perosa",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 11781.77,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "LUIS HENRIQUE DA SILVA||CONFRONTO",
+     "pessoa": "Luís Henrique da Silva",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 11757.36,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "RAYANE STEFANY DE JESUS||CONFRONTO",
+     "pessoa": "Rayane Stefany de Jesus",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 11724.36,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "DAISON JARDEL FALKENBERG GOULART||CONFRONTO",
+     "pessoa": "Daison Jardel Falkenberg Goulart",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 11724.36,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "DARCI OTMAR THIESEN||CONFRONTO",
+     "pessoa": "Darci Otmar Thiesen",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 11500,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "WILLIAM SANTOS||CONFRONTO",
+     "pessoa": "William Santos",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 11500,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "FABIO JOSE TREVIZAN SILVA||CONFRONTO",
+     "pessoa": "Fabio Jose Trevizan Silva",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 11437.2,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "CAMILA DA COSTA||CONFRONTO",
+     "pessoa": "Camila da Costa",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1,
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 11375,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "VICTOR GUEDES WAIANDT||CONFRONTO",
+     "pessoa": "Victor Guedes Waiandt",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 11328,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "LEA SERVICOS AMBULATORIAIS LTDA||CONFRONTO",
+     "pessoa": "Lea Serviços Ambulatoriais Ltda",
+     "produto": "Confronto",
+     "lancamentos": 16,
+     "declarado": 17,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 11250,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "CAMILA SUNAS BARBOSA||MISSAO GOVERNAR",
+     "pessoa": "Camila Sunas Barbosa",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 11230.5,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "LUIS GUILHERME ASTUN GUEDINE||CONFRONTO",
+     "pessoa": "Luis Guilherme Astun Guedine",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10982.4,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "MATHEUS LORRAM DA LUZ ANDRADE||CONFRONTO",
+     "pessoa": "Matheus Lorram da Luz Andrade",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 10969.98,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "CARLOS THIAGO SANTANA ANDRADE||CONFRONTO",
+     "pessoa": "Carlos Thiago Santana Andrade",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10955.76,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "MARY DAVALOS BERNAL||MISSAO GOVERNAR",
+     "pessoa": "Mary Davalos Bernal",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10850,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JAVIER ACUNA ORELLANA||MISSAO GOVERNAR",
+     "pessoa": "Javier Acuna Orellana",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10800,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "DENISE VIEGAS DA CRUZ DE OLIVEIRA||CONFRONTO",
+     "pessoa": "Denise Viegas da Cruz de Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10758.99,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JOCELIA VIEIRA SANTOS||CONFRONTO",
+     "pessoa": "Jocelia Vieira Santos",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10747.33,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "JULIO HECTOR MAMANI MAMANI CHOQUE||CONFRONTO",
+     "pessoa": "Julio Hector Mamani Mamani Choque",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10700.04,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "GILBERTO ELIZEU DA COSTA OURIQUES||CONFRONTO",
+     "pessoa": "Gilberto Elizeu da Costa Ouriques",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10689,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "KEVIN PIRES DE OLIVEIRA||CONFRONTO",
+     "pessoa": "Kevin Pires de Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10599.96,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ALINE DIAS GODOI||CONFRONTO",
+     "pessoa": "Aline Dias Godoi",
+     "produto": "Confronto",
+     "lancamentos": 9,
+     "declarado": 10,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10500.03,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "WESLLEY SANTOS ABREU||CONFRONTO",
+     "pessoa": "Weslley Santos Abreu",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10500,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ROSIMEIRE SILVA OLIVEIRA GOMES||CONFRONTO",
+     "pessoa": "Rosimeire Silva Oliveira Gomes",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10500,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JULIO CESAR DE OLIVEIRA||CONFRONTO",
+     "pessoa": "Julio Cesar de Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10500,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "VICTOR HUGO DE SOUZA DOS SANTOS||CONFRONTO",
+     "pessoa": "Victor Hugo de Souza dos Santos",
+     "produto": "Confronto",
+     "lancamentos": 9,
+     "declarado": 13,
+     "faltando": [
+      1,
+      11,
+      12,
+      13
+     ],
+     "semLabel": 0,
+     "aberto": 10499.94,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "PRISCILA ELAINE BIGHETI||CONFRONTO",
+     "pessoa": "Priscila Elaine Bigheti",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10400.6,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ALEXANDRE SCMITT||CONFRONTO",
+     "pessoa": "Alexandre Scmitt",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10300.73,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "EDERSON DAL MAGRO||CONFRONTO",
+     "pessoa": "Ederson Dal Magro",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10300.73,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "LUCAS GABRIEL RAMOS DA SILVA||CONFRONTO",
+     "pessoa": "Lucas Gabriel Ramos da Silva",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10300.73,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "FABIANO SILVEIRA||CONFRONTO",
+     "pessoa": "Fabiano Silveira",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10083.26,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JACKSELANE DA COSTA RANGEL ASSUMPCAO||CONFRONTO",
+     "pessoa": "Jackselane da Costa Rangel Assumpção",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10042.78,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MAURA FERREIRA DOS PASSOS DE JESUS||MISSAO GOVERNAR",
+     "pessoa": "Maura Ferreira dos Passos de Jesus",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10016.7,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "PATRICIA DA SILVA SOUZA||CONFRONTO",
+     "pessoa": "Patricia da Silva Souza",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10000,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "MARCOS VINICIUS DE ASSIS||CONFRONTO",
+     "pessoa": "Marcos Vinícius de Assis",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 10000,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "BRUNO DOS SANTOS OLIVEIRA||CONFRONTO",
+     "pessoa": "Bruno dos Santos Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9770.3,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "RODRIGO BAZILIO MARQUES||CONFRONTO",
+     "pessoa": "Rodrigo Bazilio Marques",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9770.3,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "DEBORAH CRUZ DOS SANTOS||CONFRONTO",
+     "pessoa": "Déborah Cruz dos Santos",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9770.3,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "GIOVANE GABRIEL DOS SANTOS PIETRO||CONFRONTO",
+     "pessoa": "Giovane Gabriel dos Santos Pietro",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9770.3,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "FABIO DA SILVA BILLER||CONFRONTO",
+     "pessoa": "Fabio da Silva Biller",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9770.3,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "PATRICIA DE ANDRADE||CONFRONTO",
+     "pessoa": "Patricia de Andrade",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9770.3,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "GABRIELA CHIELE||CONFRONTO",
+     "pessoa": "Gabriela Chiele",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9770.3,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "DAYANE CONCEICAO ALENCAR RABELO||CONFRONTO",
+     "pessoa": "Dayane Conceição Alencar Rabelo",
+     "produto": "Confronto",
+     "lancamentos": 1,
+     "declarado": 2,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9662.5,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ANA LIDIA COSTA DA SILVA||CONFRONTO",
+     "pessoa": "Ana Lidia Costa da Silva",
+     "produto": "Confronto",
+     "lancamentos": 14,
+     "declarado": 15,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9631.92,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ISAAC AUGUSTO PIEDADE DA SILVEIRO||CONFRONTO",
+     "pessoa": "Isaac Augusto Piedade da Silveiro",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9625,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "DANIEL HEIL||CONFRONTO",
+     "pessoa": "Daniel Heil",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9625,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ROSELI APARECIDA DE MATTOS||CONFRONTO",
+     "pessoa": "Roseli Aparecida de Mattos",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9625,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "VERONICA CRISTINA OLIVEIRA DA CUNHA||MISSAO GOVERNAR",
+     "pessoa": "Veronica Cristina Oliveira da Cunha",
+     "produto": "Missão Governar",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 9562.7,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "BRIAN WILSON RAMOS MITA||CONFRONTO",
+     "pessoa": "Brian Wilson Ramos Mita",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 9498,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "PRISCILA FERNANDA FERREIRA NAVES||CONFRONTO",
+     "pessoa": "Priscila Fernanda Ferreira Naves",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 9469.98,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "DEBORAH SANTANA DA SILVA||CONFRONTO",
+     "pessoa": "Deborah Santana da Silva",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9380.76,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JORGE EDUARDO DA SILVA BILLER||CONFRONTO",
+     "pessoa": "Jorge Eduardo da Silva Biller",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9360.54,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "PATRICK FERRARI COLLODORO||CONFRONTO",
+     "pessoa": "Patrick Ferrari Collodoro",
+     "produto": "Confronto",
+     "lancamentos": 9,
+     "declarado": 10,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9333.28,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ANA CASSIA DO NASCIMENTO BARROS||FUNDO - RECEITA (RECOMPRA)",
+     "pessoa": "Ana Cassia do Nascimento Barros",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 11,
+     "declarado": 14,
+     "faltando": [
+      10,
+      12,
+      13,
+      14
+     ],
+     "semLabel": 1,
+     "aberto": 9311.04,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "KEILA SILVA CAMPOS SOARES||MISSAO GOVERNAR",
+     "pessoa": "Keila Silva Campos Soares",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9300,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "PRISCILA REGINA DE OLIVEIRA MARQUES||CONFRONTO",
+     "pessoa": "Priscila Regina de Oliveira Marques",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9262.77,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "RODRIGO DE OLIVEIRA||CONFRONTO",
+     "pessoa": "Rodrigo de Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9262.77,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "RENATA DE OLIVEIRA LUZ||CONFRONTO",
+     "pessoa": "Renata de Oliveira Luz",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 9166.65,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "GEISIANE NAYARA FRATI||CONFRONTO",
+     "pessoa": "Geisiane Nayara Frati",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9166.63,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "RANKINI NASCIMENTO CAJAZEIRA||CONFRONTO",
+     "pessoa": "Rankini Nascimento Cajazeira",
+     "produto": "Confronto",
+     "lancamentos": 14,
+     "declarado": 15,
+     "faltando": [
+      2,
+      6
+     ],
+     "semLabel": 0,
+     "aberto": 9140.02,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "FRANCIELLY NASCIMENTO CABRAL||CONFRONTO",
+     "pessoa": "Francielly Nascimento Cabral",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9011.04,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ADROALDO EMANUEL RAISK||CONFRONTO",
+     "pessoa": "Adroaldo Emanuel Raisk",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 9000,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "GENI DAL MAGRO SIMONI||CONFRONTO",
+     "pessoa": "Geni Dal Magro Simoni",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8989.76,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ALTHIERES FABIANO FANTINI||CONFRONTO",
+     "pessoa": "Althieres Fabiano Fantini",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8883.49,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "DOUGLAS BIRCHLER TOTOLA ALVES||CONFRONTO",
+     "pessoa": "Douglas Birchler Tôtola Alves",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8793.27,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MIGUEL DOS SANTOS GASPAR ESPINDOLA||CONFRONTO",
+     "pessoa": "Miguel dos Santos Gaspar Espindola",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8793.27,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ZOLAIR REGINA NARCIZO||CONFRONTO",
+     "pessoa": "Zolair Regina Narcizo",
+     "produto": "Confronto",
+     "lancamentos": 14,
+     "declarado": 15,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 8750,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "RAMAO ALMEIDA GONCALVES||CONFRONTO",
+     "pessoa": "Ramão Almeida Gonçalves",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8750,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "RAFAEL LUIZ DE ANDRADE||CONFRONTO",
+     "pessoa": "Rafael Luiz de Andrade",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8750,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ALEXANDRE RODRIGUES KUNRATH||CONFRONTO",
+     "pessoa": "Alexandre Rodrigues Kunrath",
+     "produto": "Confronto",
+     "lancamentos": 6,
+     "declarado": 7,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8661,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ROSILENE DE SOUZA PEREIRA||MISSAO GOVERNAR",
+     "pessoa": "Rosilene de Souza Pereira",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8511,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "FABIANO SILVEIRA||PMR",
+     "pessoa": "Fabiano Silveira",
+     "produto": "Pmr",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8470,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "PAULO ROBERTO MOREIRA JUNIOR||CONFRONTO",
+     "pessoa": "Paulo Roberto Moreira Junior",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8469.96,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "DANIEL FIGUEIRO||FUNDO - RECEITA (RECOMPRA)",
+     "pessoa": "Daniel Figueiro",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1,
+      2,
+      3,
+      4,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "semLabel": 8,
+     "aberto": 8400,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ALVARO REZENDE DE OLIVEIRA||CONFRONTO",
+     "pessoa": "Alvaro Rezende de Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 17,
+     "declarado": 18,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 8339.37,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "TAINARA ALVES||CONFRONTO",
+     "pessoa": "Tainara Alves",
+     "produto": "Confronto",
+     "lancamentos": 15,
+     "declarado": 16,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8169.12,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JENNIFER NAYARA PONTES||PMR",
+     "pessoa": "Jennifer Nayara Pontes",
+     "produto": "Pmr",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8135.04,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "TIAGO JOSE SCHONS||MISSAO GOVERNAR",
+     "pessoa": "Tiago Jose Schons",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8115.24,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JESUS REMIGIO||MISSAO GOVERNAR",
+     "pessoa": "Jesus Remigio",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 8100,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "RAFAEL ABREU DE SOUSA||CONFRONTO",
+     "pessoa": "Rafael Abreu de Sousa",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 14,
+     "faltando": [
+      2,
+      6,
+      7
+     ],
+     "semLabel": 0,
+     "aberto": 7975.96,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "RAFAEL DE OLIVEIRA DOS SANTOS||CONFRONTO",
+     "pessoa": "Rafael de Oliveira dos Santos",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7940.57,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "VICTORIA MIRANDA HAUPENTHAL||CONFRONTO",
+     "pessoa": "Victoria Miranda Haupenthal",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 7916.65,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "GISELI MESSA TREIESLEBEN||CONFRONTO",
+     "pessoa": "Giseli Messa Treiesleben",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 7916.65,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ANA CLAUDIA ZAPPELINI||CONFRONTO",
+     "pessoa": "Ana Claudia Zappelini",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7916.65,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "CATIA SADLOVSKI DA SILVA||CONFRONTO",
+     "pessoa": "Cátia Sadlovski da Silva",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7875,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ISIS KAUANI DE OLIVEIRA PIRES MINCHAO||CONFRONTO",
+     "pessoa": "Isis Kauani de Oliveira Pires Minchão",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7875,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "SUELEN ARAUJO VIEIRA CRUS||CONFRONTO",
+     "pessoa": "Suelen Araujo Vieira Crus",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7816.24,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "HUGO CHAGUA VENTURA||CONFRONTO 2",
+     "pessoa": "Hugo Chagua Ventura",
+     "produto": "Confronto 2",
+     "lancamentos": 1,
+     "declarado": 2,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7800,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "NILVANI FERREIRA TERRES||CONFRONTO",
+     "pessoa": "Nilvani Ferreira Terres",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7666.64,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "DANIELLA DE OLIVEIRA PASSIGATI||CONFRONTO",
+     "pessoa": "Daniella de Oliveira Passigati",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7658.64,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "LAURIENE SILVA NASCIMENTO||CONFRONTO",
+     "pessoa": "Lauriene Silva Nascimento",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7658.64,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "EDSON ROBERTO MESSIAS DA SILVA||CONFRONTO",
+     "pessoa": "Edson Roberto Messias da Silva",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7658.64,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "VINICIUS DE BORBA OLIVEIRA||PMR",
+     "pessoa": "Vinicius de Borba Oliveira",
+     "produto": "Pmr",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7570.09,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "CAMILA FRANCISCO BONFIM SILVA||CONFRONTO",
+     "pessoa": "Camila Francisco Bonfim Silva",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7500.9,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "STUDIO DE PILATES MOVLIFE - TAMIRIS J S DE ARAUJO PILATES||MISSAO GOVERNAR",
+     "pessoa": "Studio de Pilates Movlife - Tamiris J S de Araujo Pilates",
+     "produto": "Missão Governar",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 7500,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JOSE AILTON DOS SANTOS||LIBERTY",
+     "pessoa": "Jose Ailton dos Santos",
+     "produto": "Liberty",
+     "lancamentos": 15,
+     "declarado": 18,
+     "faltando": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      12,
+      15,
+      16,
+      17,
+      18
+     ],
+     "semLabel": 9,
+     "aberto": 7374.24,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MIRIA ANACLETO||CONFRONTO",
+     "pessoa": "Miriã Anacleto",
+     "produto": "Confronto",
+     "lancamentos": 9,
+     "declarado": 13,
+     "faltando": [
+      2,
+      3,
+      4,
+      5
+     ],
+     "semLabel": 0,
+     "aberto": 7313.28,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "MARCIA CRISTINA SOARES LISBOA||CONFRONTO",
+     "pessoa": "Márcia Cristina Soares Lisboa",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 13,
+     "faltando": [
+      1,
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 7192.22,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "FILIPE MONTE ALTO VIEIRA||CONFRONTO",
+     "pessoa": "Filipe Monte Alto Vieira",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 7176,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "LUIZ DIEGO DA CRUZ||CONFRONTO",
+     "pessoa": "Luiz Diego da Cruz",
+     "produto": "Confronto",
+     "lancamentos": 15,
+     "declarado": 16,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 7121.4,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MARCO ANTONIO PINHEIRO||CONFRONTO",
+     "pessoa": "Marco Antonio Pinheiro",
+     "produto": "Confronto",
+     "lancamentos": 2,
+     "declarado": 3,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 7000,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "THEYLOR EREDIA ASSUNCAO||CONFRONTO",
+     "pessoa": "Theylor Eredia Assunção",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 7000,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "RENAN DE AGUIAR CUSTODIO||CONFRONTO",
+     "pessoa": "Renan de Aguiar Custódio",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 15,
+     "faltando": [
+      2,
+      4,
+      5,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "semLabel": 10,
+     "aberto": 6990.6,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ANA PAULA CARVALHO SILVA ADAO||CONFRONTO",
+     "pessoa": "Ana Paula Carvalho Silva Adao",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6966.24,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MIGUEL DOS SANTOS GASPAR ESPINDOLA||MISSAO GOVERNAR",
+     "pessoa": "Miguel dos Santos Gaspar Espindola",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6857.18,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "RONALDO BEDA DA SILVA||MISSAO GOVERNAR",
+     "pessoa": "Ronaldo Beda da Silva",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6857.18,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ANDRE LUIZ EUGENIO||CONFRONTO",
+     "pessoa": "Andre Luiz Eugênio",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6794.01,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "SINDHY CAROLINE BIANCHI BRITTO||MISSAO GOVERNAR",
+     "pessoa": "Sindhy Caroline Bianchi Britto",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 6750,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JOSE ALEXANDRE B. JUNQUEIRA||CONFRONTO",
+     "pessoa": "José Alexandre B. Junqueira",
+     "produto": "Confronto",
+     "lancamentos": 1,
+     "declarado": 2,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6750,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "WILLIAM ALEXANDRE LUCAS||CONFRONTO 2",
+     "pessoa": "William Alexandre Lucas",
+     "produto": "Confronto 2",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6717.5,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "LEANDRO OLIVEIRA DO NASCIMENTO||CONFRONTO",
+     "pessoa": "Leandro Oliveira do Nascimento",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6524.01,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "NILMARA LIMA REZENDE SOARES||MISSAO GOVERNAR",
+     "pessoa": "Nilmara Lima Rezende Soares",
+     "produto": "Missão Governar",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 6499.98,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "SERGIO EMILIO DALTO||CONFRONTO",
+     "pessoa": "Sergio Emilio Dalto",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 13,
+     "faltando": [
+      4,
+      5
+     ],
+     "semLabel": 0,
+     "aberto": 6487.64,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "LAILA DARE FIM||CONFRONTO",
+     "pessoa": "Laila Dare Fim",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 15,
+     "faltando": [
+      2,
+      6
+     ],
+     "semLabel": 0,
+     "aberto": 6480,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JOSE ISRAEL VIEIRA DO NASCIMENTO||PMR",
+     "pessoa": "Jose Israel Vieira do Nascimento",
+     "produto": "Pmr",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6389.13,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JEAN MICHEL DE MOURA||FUNDO - RECEITA (RECOMPRA)",
+     "pessoa": "Jean Michel de Moura",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      3
+     ],
+     "semLabel": 0,
+     "aberto": 6100.89,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MAYARA BESERRA DA SILVA||CONFRONTO",
+     "pessoa": "Mayara Beserra da Silva",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6061.37,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "LUIZ OTAVIO SOARES||CONFRONTO",
+     "pessoa": "Luiz Otavio Soares",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6050.8,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "PS CONTROLE DE PRAGAS LTDA||CONFRONTO",
+     "pessoa": "Ps Controle de Pragas Ltda",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6050.8,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "MAITE DE AGUIAR COUTINHO MIRANDA||CONFRONTO",
+     "pessoa": "Maite de Aguiar Coutinho Miranda",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 15,
+     "faltando": [
+      2,
+      3,
+      8
+     ],
+     "semLabel": 1,
+     "aberto": 6045.75,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MARIA CLARA REGO||CONFRONTO",
+     "pessoa": "Maria Clara Rego",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6007.28,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "NIDIACRIS DE CAMPOS||CONFRONTO",
+     "pessoa": "Nídiacris de Campos",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 6007.28,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "WENDY MOREIRA DE MACEDO||CONFRONTO",
+     "pessoa": "Wendy Moreira de Macedo",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5988.2,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "LUCIANA GOMES||CONFRONTO",
+     "pessoa": "Luciana Gomes",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5968,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "PAMELA RAFAELA DENOVARO||CONFRONTO",
+     "pessoa": "Pamela Rafaela Denovaro",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5968,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "DOUGLAS DIEGO VASQUES||PMR",
+     "pessoa": "Douglas Diego Vasques",
+     "produto": "Pmr",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      4
+     ],
+     "semLabel": 0,
+     "aberto": 5813.91,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "GUSTAVO ALVES DE OLIVEIRA||CONFRONTO",
+     "pessoa": "Gustavo Alves de Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5799.12,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "CAROLINA FANTINATTI DELAVALLE||PMR",
+     "pessoa": "Carolina Fantinatti Delavalle",
+     "produto": "Pmr",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5661,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "PAULO CESAR OLIVEIRA PADILHA||CONFRONTO",
+     "pessoa": "Paulo Cesar Oliveira Padilha",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      3
+     ],
+     "semLabel": 0,
+     "aberto": 5615.06,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "MARY SAVAZAKI KUGA||CONFRONTO",
+     "pessoa": "Mary Savazaki Kuga",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5552.1,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "BRUNO HENRIQUE GIOVENARDI GUIMARAES||CONFRONTO",
+     "pessoa": "Bruno Henrique Giovenardi Guimarães",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5398.4,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "OSANA DE SOUZA PEREIRA||CONFRONTO",
+     "pessoa": "Osana de Souza Pereira",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5389.38,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "WALTER LOPES||CONFRONTO 2",
+     "pessoa": "Walter Lopes",
+     "produto": "Confronto 2",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5364.9,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MARCELA PEREIRA DA SILVA||CONFRONTO",
+     "pessoa": "Marcela Pereira da Silva",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5328.8,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "CARLOS ROBERTO BARBOSA CARVALHO JUNIOR||CONFRONTO",
+     "pessoa": "Carlos Roberto Barbosa Carvalho Junior",
+     "produto": "Confronto",
+     "lancamentos": 9,
+     "declarado": 10,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5277.75,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "GRAZIELLE YONE DA SILVA CARVALHO||CONFRONTO",
+     "pessoa": "Grazielle Yone da Silva Carvalho",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5250,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JHON CRISTHIAN ACUNA ORELLANA||CONFRONTO",
+     "pessoa": "Jhon Cristhian Acuna Orellana",
+     "produto": "Confronto",
+     "lancamentos": 6,
+     "declarado": 7,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5131.55,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MARCELO SEGOBIA DE LIMA||CONFRONTO",
+     "pessoa": "Marcelo Segobia de Lima",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5105.76,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "MIGUEL ANGEL DAVALOS||CONFRONTO",
+     "pessoa": "Miguel Angel Davalos",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 5014.13,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "LUIZ FERNANDO DE OLIVEIRA||CONFRONTO",
+     "pessoa": "Luiz Fernando de Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4806.6,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JAMES AMBROISE||CONFRONTO",
+     "pessoa": "James Ambroise",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4806.6,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "PATRICIA NAKAMURA||CONFRONTO",
+     "pessoa": "Patricia Nakamura",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4770,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "JULIA CARDOSO DA SILVA||CONFRONTO",
+     "pessoa": "Julia Cardoso da Silva",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4727.6,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "NATHALIA PINHEIRO||CONFRONTO",
+     "pessoa": "Nathalia Pinheiro",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4707.3,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "THIAGO ROSA MARCONDES GUEDES||CONFRONTO",
+     "pessoa": "Thiago Rosa Marcondes Guedes",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 4604.88,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "CINTIA DOS SANTOS||CONFRONTO",
+     "pessoa": "Cintia dos Santos",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4500,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "GABRIEL STEINERT OLIVEIRA||PMR",
+     "pessoa": "Gabriel Steinert Oliveira",
+     "produto": "Pmr",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4482,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "RICARDO LUVIZETO DO ESPIRITO SANTO||MISSAO GOVERNAR",
+     "pessoa": "Ricardo Luvizeto do Espirito Santo",
+     "produto": "Missão Governar",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4464,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "DAVI PEREIRA DA SILVA||TRAINER",
+     "pessoa": "Davi Pereira da Silva",
+     "produto": "Trainer",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4444.92,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ANDERSON CORASSINI SCHULZ||MISSAO GOVERNAR",
+     "pessoa": "Anderson Corassini Schulz",
+     "produto": "Missão Governar",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 4285.5,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ISMAR JUSTINO SENA||CONFRONTO",
+     "pessoa": "Ismar Justino Sena",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4207.7,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "DOUGLAS WILLIAM APARECIDO DOS CAMPOS||CONFRONTO",
+     "pessoa": "Douglas William Aparecido dos Campos",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4166.65,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "LILLIAN KAREN DA SILVA BULLA DE SA||MISSAO GOVERNAR",
+     "pessoa": "Lillian Karen da Silva Bulla de Sá",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 4050,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "INGRID DOMINGOS FERREIRA SOUZA||CONFRONTO",
+     "pessoa": "Ingrid Domingos Ferreira Souza",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 3988,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "CAMILA RETAMIRO MORENO POLESE||MISSAO GOVERNAR",
+     "pessoa": "Camila Retamiro Moreno Polese",
+     "produto": "Missão Governar",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 3780.48,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "IGOR CARUSO DE OLIVEIRA||CONFRONTO",
+     "pessoa": "Igor Caruso de Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 9,
+     "declarado": 10,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 3777.78,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "MARCOS WILLIAN SALVADOR||CONFRONTO",
+     "pessoa": "Marcos Willian Salvador",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 3574,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "VINICIUS GABRIEL MACHADO MARINHO||MISSAO GOVERNAR",
+     "pessoa": "Vinicius Gabriel Machado Marinho",
+     "produto": "Missão Governar",
+     "lancamentos": 6,
+     "declarado": 11,
+     "faltando": [
+      4,
+      5,
+      6,
+      7,
+      8
+     ],
+     "semLabel": 0,
+     "aberto": 3495,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ERICK FREDERICO DA SILVA||CONFRONTO",
+     "pessoa": "Erick Frederico da Silva",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 3490,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "MAYSA VALDIRENE DIAS VIANA||CONFRONTO",
+     "pessoa": "Maysa Valdirene Dias Viana",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 3490,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "GERSON MESSIAS DA SILVA||CONFRONTO",
+     "pessoa": "Gerson Messias da Silva",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 3430.5,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MICHELLE APARECIDA RISSATO CERNICIUTI||CONFRONTO 2",
+     "pessoa": "Michelle Aparecida Rissato Cerniciuti",
+     "produto": "Confronto 2",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 3414.64,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "BRENDO MIRA CHAVES||CONFRONTO",
+     "pessoa": "Brendo Mira Chaves",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 3388,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MARIA DE LOURDES AVELAR||CONFRONTO",
+     "pessoa": "Maria de Lourdes Avelar",
+     "produto": "Confronto",
+     "lancamentos": 4,
+     "declarado": 5,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 3000,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "LUCAS SOUZA SILVEIRO MIGUEL||CONFRONTO",
+     "pessoa": "Lucas Souza Silveiro Miguel",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 19,
+     "faltando": [
+      1,
+      4,
+      13,
+      14,
+      15,
+      16
+     ],
+     "semLabel": 0,
+     "aberto": 2994.95,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "MARIA LIDIA SILVESTRINI CESAR||CONFRONTO",
+     "pessoa": "Maria Lidia Silvestrini Cesar",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 2990,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "LUCIRENE DA SILVA RIBEIRA||MISSAO GOVERNAR",
+     "pessoa": "Lucirene da Silva Ribeira",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 13,
+     "faltando": [
+      1,
+      2,
+      3
+     ],
+     "semLabel": 0,
+     "aberto": 2960,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "AMANDA KAUANA PEREIRA AMARAL||CONFRONTO",
+     "pessoa": "Amanda Kauana Pereira Amaral",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 2921.32,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "CARLOS ROBERTO DOS SANTOS||CONFRONTO",
+     "pessoa": "Carlos Roberto dos Santos",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 2721.82,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "EMANUEL DA SILVA BROCARDO||FUNDO - RECEITA (RECOMPRA)",
+     "pessoa": "Emanuel da Silva Brocardo",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      10,
+      11
+     ],
+     "semLabel": 9,
+     "aberto": 2632.8,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "ELESSANDRO CAMPONEZ DO NASCIMENTO||CONFRONTO",
+     "pessoa": "Elessandro Camponez do Nascimento",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 2590.26,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "FELIPE DE OLIVEIRA COSTA||CONFRONTO",
+     "pessoa": "Felipe de Oliveira Costa",
+     "produto": "Confronto",
+     "lancamentos": 9,
+     "declarado": 10,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 2555.55,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "MARCOS DIAS GODOI||MISSAO GOVERNAR",
+     "pessoa": "Marcos Dias Godoi",
+     "produto": "Missão Governar",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 2553.69,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JOSE LUIZ FERRAGUT||CONFRONTO",
+     "pessoa": "José Luiz Ferragut",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 2477.72,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MONICA PEREIRA DE SOUZA||CONFRONTO",
+     "pessoa": "Monica Pereira de Souza",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 2449.98,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "MATHEUS LUCAS MOTA MAIA||PMR",
+     "pessoa": "Matheus Lucas Mota Maia",
+     "produto": "Pmr",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 2300,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "WILLIAM DA CONCEICAO ROCHA||CONFRONTO",
+     "pessoa": "William da Conceicao Rocha",
+     "produto": "Confronto",
+     "lancamentos": 6,
+     "declarado": 7,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 2275,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "DARLENE DE OLIVEIRA||CONFRONTO",
+     "pessoa": "Darlene de Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 8,
+     "declarado": 9,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 2256,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "SIVANILDO DE JESUS SOARES||CONFRONTO",
+     "pessoa": "Sivanildo de Jesus Soares",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 2094,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "LUANA PEREIRA DE CAMARGO||CONFRONTO",
+     "pessoa": "Luana Pereira de Camargo",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 13,
+     "faltando": [
+      3,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13
+     ],
+     "semLabel": 8,
+     "aberto": 2016.2,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ALESSANDRO CLAYTON ANTONIO||CONFRONTO",
+     "pessoa": "Alessandro Clayton Antonio",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 1996.92,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "JULIANO COUTINHO DE OLIVEIRA||CONFRONTO",
+     "pessoa": "Juliano Coutinho de Oliveira",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 1990,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "JOAO PAULO OLIVEIRA COSTA||CONFRONTO",
+     "pessoa": "João Paulo Oliveira Costa",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 1794,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ELIANE DE FATIMA BARBOSA CARVALHO||CONFRONTO",
+     "pessoa": "Eliane de Fatima Barbosa Carvalho",
+     "produto": "Confronto",
+     "lancamentos": 9,
+     "declarado": 10,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 1670.31,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "GABRIELA FONSECA DE SOUZA||CONFRONTO",
+     "pessoa": "Gabriela Fonseca de Souza",
+     "produto": "Confronto",
+     "lancamentos": 2,
+     "declarado": 3,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 1662.5,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "RAFAEL HILARIO DE MORAES SOARES||CONFRONTO",
+     "pessoa": "Rafael Hilário de Moraes Soares",
+     "produto": "Confronto",
+     "lancamentos": 2,
+     "declarado": 3,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 1662.5,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "CAIO AUGUSTO SIQUEIRA AMATO DE E SANTO||CONFRONTO",
+     "pessoa": "Caio Augusto Siqueira Amato de e Santo",
+     "produto": "Confronto",
+     "lancamentos": 11,
+     "declarado": 13,
+     "faltando": [
+      10,
+      11
+     ],
+     "semLabel": 0,
+     "aberto": 1661.66,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JULIANA BENTO DE OLIVEIRA ZAPAROLI||TRAINER",
+     "pessoa": "Juliana Bento de Oliveira Zaparoli",
+     "produto": "Trainer",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 1652.7,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ALBERTO ANTONIO DE AVILA JUNIOR||MISSAO GOVERNAR",
+     "pessoa": "Alberto Antonio de Avila Junior",
+     "produto": "Missão Governar",
+     "lancamentos": 3,
+     "declarado": 4,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 1633.33,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "AMANDA SOARES GONCALVES||PMR",
+     "pessoa": "Amanda Soares Gonçalves",
+     "produto": "Pmr",
+     "lancamentos": 11,
+     "declarado": 13,
+     "faltando": [
+      4,
+      5
+     ],
+     "semLabel": 0,
+     "aberto": 1429.2,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "CLAYTON NATHANAEL SOUZA FONSECA||CONFRONTO",
+     "pessoa": "Clayton Nathanael Souza Fonseca",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 1393.5,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "JULIANA BENTO DE OLIVEIRA ZAPAROLI||CONFRONTO",
+     "pessoa": "Juliana Bento de Oliveira Zaparoli",
+     "produto": "Confronto",
+     "lancamentos": 9,
+     "declarado": 10,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 1166.67,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "FERNANDA TESSARI DE MELLO||TRAINER",
+     "pessoa": "Fernanda Tessari de Mello",
+     "produto": "Trainer",
+     "lancamentos": 2,
+     "declarado": 3,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 1042,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "LAUCINEIA STORARI||CONFRONTO",
+     "pessoa": "Laucineia Storari",
+     "produto": "Confronto",
+     "lancamentos": 18,
+     "declarado": 24,
+     "faltando": [
+      1,
+      2,
+      3,
+      7,
+      8,
+      9
+     ],
+     "semLabel": 0,
+     "aberto": 1041.15,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "ALLAN ROBERTO ALVES||MISSAO GOVERNAR",
+     "pessoa": "Allan Roberto Alves",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13
+     ],
+     "semLabel": 10,
+     "aberto": 948.93,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "chave": "MARIVANIA S S GOMES DA ROCHA||MISSAO GOVERNAR",
+     "pessoa": "Marivania S S Gomes da Rocha",
+     "produto": "Missão Governar",
+     "lancamentos": 2,
+     "declarado": 3,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 900,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "ISABELE GREICE DEUD FRITSHE||MISSAO GOVERNAR",
+     "pessoa": "Isabele Greice Deud Fritshe",
+     "produto": "Missão Governar",
+     "lancamentos": 1,
+     "declarado": 2,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 900,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "SAMUEL CIDES DA SILVA||CONFRONTO",
+     "pessoa": "Samuel Cides da Silva",
+     "produto": "Confronto",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 863.41,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "TAMIRIS JESUS SANTOS ARAUJO||TRAINER",
+     "pessoa": "Tamiris Jesus Santos Araujo",
+     "produto": "Trainer",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 839.4,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "MATHEUS BATISTA DOS SANTOS||CONFRONTO",
+     "pessoa": "Matheus Batista dos Santos",
+     "produto": "Confronto",
+     "lancamentos": 1,
+     "declarado": 2,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 661,
+     "ac": "Paula Passini"
+    },
+    {
+     "chave": "EILSON LIMA DA SILVA||CONFRONTO",
+     "pessoa": "Eilson Lima da Silva",
+     "produto": "Confronto",
+     "lancamentos": 10,
+     "declarado": 13,
+     "faltando": [
+      10,
+      11,
+      12,
+      13
+     ],
+     "semLabel": 0,
+     "aberto": 429.57,
+     "ac": "Luana Santos"
+    },
+    {
+     "chave": "NICOLAS DE OLIVEIRA BITTENCOURT||MISSAO GOVERNAR",
+     "pessoa": "Nicolas de Oliveira Bittencourt",
+     "produto": "Missão Governar",
+     "lancamentos": 18,
+     "declarado": 21,
+     "faltando": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "semLabel": 0,
+     "aberto": 237.97,
+     "ac": "Paula Passini"
+    }
+   ],
+   "top": [
+    {
+     "pessoa": "Rodrigo Krüger",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 35040,
+     "ac": "Luana Santos"
+    },
+    {
+     "pessoa": "Alex Peres Vasques",
+     "produto": "Missão Governar",
+     "lancamentos": 13,
+     "declarado": 14,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 32040,
+     "ac": "Luana Santos"
+    },
+    {
+     "pessoa": "Ana Beatriz Oliveira Andrade",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 32040,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "pessoa": "Juares Antonio Borga",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 30708.26,
+     "ac": "Luana Santos"
+    },
+    {
+     "pessoa": "José Antonio Pereira",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 30673.5,
+     "ac": "Luana Santos"
+    },
+    {
+     "pessoa": "Gizelly Ruanny da Silva Oliveira",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 29460,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "pessoa": "Alvaro Rezende de Oliveira",
+     "produto": "Missão Governar",
+     "lancamentos": 10,
+     "declarado": 11,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 29000,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "Nascimento & Curti Ltda",
+     "produto": "Missão Governar",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      2
+     ],
+     "semLabel": 0,
+     "aberto": 25000,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "Daiane Cardoso Leão",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 24026.64,
+     "ac": "Luana Santos"
+    },
+    {
+     "pessoa": "Gustavo Colpaert Correia",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 23448.72,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "Annalise Kruger",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 23360,
+     "ac": "Luana Santos"
+    },
+    {
+     "pessoa": "Iorrane Castro Magedanz",
+     "produto": "Missão Governar",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 23249.97,
+     "ac": "Luana Santos"
+    },
+    {
+     "pessoa": "Willian Andre da Silva Vieira",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 11,
+     "declarado": 12,
+     "faltando": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      11,
+      12
+     ],
+     "semLabel": 9,
+     "aberto": 23108.3,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "João Amadeu da Silva",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 23000.04,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "pessoa": "Michel Biller Moreira Silva Garcia",
+     "produto": "Confronto",
+     "lancamentos": 12,
+     "declarado": 13,
+     "faltando": [
+      1
+     ],
+     "semLabel": 0,
+     "aberto": 22474.32,
+     "ac": "Luana Santos"
+    }
+   ]
+  },
+  "exportacaoParcial": {
+   "n": 71,
+   "saldo": 250039.4,
+   "top": [
+    {
+     "pessoa": "Dayane Roberta Carreio Rodrigues",
+     "produto": "Missão Governar",
+     "lancamentos": 14,
+     "declarado": 17,
+     "aberto": 23091,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "Yuri Henrique Palomino Pinheiro",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 5,
+     "declarado": 12,
+     "aberto": 13500,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "Maiara Maria dos Santos",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 4,
+     "declarado": 14,
+     "aberto": 9666.68,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "Priscila Fernanda Ferreira Naves",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 5,
+     "declarado": 14,
+     "aberto": 6313.32,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "Pedro Henrique de Campos Duarte",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 4,
+     "declarado": 14,
+     "aberto": 6313.32,
+     "ac": "Luana Santos"
+    },
+    {
+     "pessoa": "Sivanildo de Jesus Soares",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 3,
+     "declarado": 12,
+     "aberto": 6282,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "Renan Schwinden",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 5,
+     "declarado": 11,
+     "aberto": 6144,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "Roberto Luiz Stutz Filho",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 5,
+     "declarado": 11,
+     "aberto": 6084,
+     "ac": "Elaine Valadares"
+    },
+    {
+     "pessoa": "Robert Dias de Jesus",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 3,
+     "declarado": 12,
+     "aberto": 5682,
+     "ac": "Paula Passini"
+    },
+    {
+     "pessoa": "Gabriela de Souza Maia",
+     "produto": "Fundo - Receita (Recompra)",
+     "lancamentos": 4,
+     "declarado": 14,
+     "aberto": 5509.32,
+     "ac": "Luana Santos"
+    }
+   ]
+  }
+ },
+ "daniela": {
+  "linhas": 21,
+  "detalhe": [
+   {
+    "id": "41036",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2026-03-22",
+    "receb": "2026-03-27",
+    "aReceber": 6000,
+    "recebido": 6000,
+    "label": true
+   },
+   {
+    "id": "41056",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2026-04-20",
+    "receb": "2026-04-03",
+    "aReceber": 501.1,
+    "recebido": 501.1,
+    "label": true
+   },
+   {
+    "id": "41071",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2026-05-20",
+    "receb": "2026-04-03",
+    "aReceber": 501.1,
+    "recebido": 501.1,
+    "label": true
+   },
+   {
+    "id": "41083",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2026-06-20",
+    "receb": "2026-04-03",
+    "aReceber": 501.1,
+    "recebido": 501.1,
+    "label": true
+   },
+   {
+    "id": "41095",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2026-07-20",
+    "receb": "2026-04-03",
+    "aReceber": 501.1,
+    "recebido": 501.1,
+    "label": true
+   },
+   {
+    "id": "41107",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2026-08-20",
+    "receb": "2026-04-03",
+    "aReceber": 501.1,
+    "recebido": 501.1,
+    "label": true
+   },
+   {
+    "id": "41119",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2026-09-20",
+    "receb": "2026-04-03",
+    "aReceber": 501.1,
+    "recebido": 501.1,
+    "label": true
+   },
+   {
+    "id": "41131",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2026-10-20",
+    "receb": "2026-04-03",
+    "aReceber": 501.1,
+    "recebido": 501.1,
+    "label": true
+   },
+   {
+    "id": "41143",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2026-11-20",
+    "receb": "2026-04-03",
+    "aReceber": 501.1,
+    "recebido": 501.1,
+    "label": true
+   },
+   {
+    "id": "41155",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2026-12-20",
+    "receb": "2026-04-03",
+    "aReceber": 501.1,
+    "recebido": 501.1,
+    "label": true
+   },
+   {
+    "id": "41167",
+    "produto": "Confronto",
+    "forma": "Boletos - Liberty - Sicoob",
+    "venc": "2027-01-20",
+    "receb": "2026-04-03",
+    "aReceber": 501.1,
+    "recebido": 501.1,
+    "label": true
+   },
+   {
+    "id": "42856",
+    "produto": "Missão Governar",
+    "forma": "Boletos - Iam - Sicoob 2",
+    "venc": "2026-04-23",
+    "receb": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "label": false
+   },
+   {
+    "id": "42876",
+    "produto": "Missão Governar",
+    "forma": "Boletos - Iam - Sicoob 2",
+    "venc": "2026-04-23",
+    "receb": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "label": false
+   },
+   {
+    "id": "42902",
+    "produto": "Missão Governar",
+    "forma": "Boletos - Iam - Sicoob 2",
+    "venc": "2026-04-23",
+    "receb": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "label": false
+   },
+   {
+    "id": "42929",
+    "produto": "Missão Governar",
+    "forma": "Boletos - Iam - Sicoob 2",
+    "venc": "2026-04-23",
+    "receb": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "label": false
+   },
+   {
+    "id": "42956",
+    "produto": "Missão Governar",
+    "forma": "Boletos - Iam - Sicoob 2",
+    "venc": "2026-04-23",
+    "receb": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "label": false
+   },
+   {
+    "id": "42983",
+    "produto": "Missão Governar",
+    "forma": "Boletos - Iam - Sicoob 2",
+    "venc": "2026-04-23",
+    "receb": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "label": false
+   },
+   {
+    "id": "43010",
+    "produto": "Missão Governar",
+    "forma": "Boletos - Iam - Sicoob 2",
+    "venc": "2026-04-23",
+    "receb": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "label": false
+   },
+   {
+    "id": "43037",
+    "produto": "Missão Governar",
+    "forma": "Boletos - Iam - Sicoob 2",
+    "venc": "2026-04-23",
+    "receb": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "label": false
+   },
+   {
+    "id": "43064",
+    "produto": "Missão Governar",
+    "forma": "Boletos - Iam - Sicoob 2",
+    "venc": "2026-04-23",
+    "receb": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "label": false
+   },
+   {
+    "id": "43091",
+    "produto": "Missão Governar",
+    "forma": "Boletos - Iam - Sicoob 2",
+    "venc": "2026-04-23",
+    "receb": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "label": false
+   }
+  ]
+ },
+ "duplicidade": {
+  "grupos": 45,
+  "gruposCom3Mais": 6,
+  "linhasEnvolvidas": 106,
+  "valorAbertoEnvolvido": 16551.98,
+  "top": [
+   {
+    "chave": "DANIELA DOS SANTOS BORBA||MISSAO GOVERNAR|2026-04-23|1550",
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "valor": 1550,
+    "n": 10,
+    "abertas": 0,
+    "pagas": 10,
+    "ids": [
+     "42856",
+     "42876",
+     "42902",
+     "42929",
+     "42956",
+     "42983",
+     "43010",
+     "43037",
+     "43064",
+     "43091"
+    ]
+   },
+   {
+    "chave": "ALINE KRUGER||CONFRONTO|2026-04-29|1890",
+    "pessoa": "Aline Kruger",
+    "produto": "Confronto",
+    "venc": "2026-04-29",
+    "valor": 1890,
+    "n": 5,
+    "abertas": 0,
+    "pagas": 5,
+    "ids": [
+     "41776",
+     "41813",
+     "41850",
+     "41887",
+     "41923"
+    ]
+   },
+   {
+    "chave": "FLAVIA PALMA GONCALVES||MISSAO GOVERNAR|2026-04-23|1350",
+    "pessoa": "Flavia Palma Gonçalves",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "valor": 1350,
+    "n": 4,
+    "abertas": 0,
+    "pagas": 4,
+    "ids": [
+     "43013",
+     "43040",
+     "43067",
+     "43094"
+    ]
+   },
+   {
+    "chave": "THAISE SANTOS CUNHA||IMERSAO PROSPERAR|2025-11-18|150",
+    "pessoa": "Thaise Santos Cunha",
+    "produto": "Imersão Prosperar",
+    "venc": "2025-11-18",
+    "valor": 150,
+    "n": 3,
+    "abertas": 0,
+    "pagas": 3,
+    "ids": [
+     "31102",
+     "31397",
+     "32388"
+    ]
+   },
+   {
+    "chave": "GABRIELY FOFANO DE CARVALHO||MISSAO GOVERNAR|2026-06-25|493.42",
+    "pessoa": "Gabriely Fofano de Carvalho",
+    "produto": "Missão Governar",
+    "venc": "2026-06-25",
+    "valor": 493.42,
+    "n": 3,
+    "abertas": 0,
+    "pagas": 3,
+    "ids": [
+     "36241",
+     "36242",
+     "48503"
+    ]
+   },
+   {
+    "chave": "FELIPE DE OLIVEIRA PADILHA||CONFRONTO|2026-09-14|2200",
+    "pessoa": "Felipe de Oliveira Padilha",
+    "produto": "Confronto",
+    "venc": "2026-09-14",
+    "valor": 2200,
+    "n": 3,
+    "abertas": 0,
+    "pagas": 3,
+    "ids": [
+     "38433",
+     "38730",
+     "38983"
+    ]
+   },
+   {
+    "chave": "GABRIELY FOFANO DE CARVALHO||TRAINER|2025-01-25|223.16",
+    "pessoa": "Gabriely Fofano de Carvalho",
+    "produto": "Trainer",
+    "venc": "2025-01-25",
+    "valor": 223.16,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "9748",
+     "40618"
+    ]
+   },
+   {
+    "chave": "LUANA DOS SANTOS||PMR|2025-03-20|301.46",
+    "pessoa": "Luana dos Santos",
+    "produto": "Pmr",
+    "venc": "2025-03-20",
+    "valor": 301.46,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "11048",
+     "13200"
+    ]
+   },
+   {
+    "chave": "LUANA DOS SANTOS||CONFRONTO|2025-03-20|262.16",
+    "pessoa": "Luana dos Santos",
+    "produto": "Confronto",
+    "venc": "2025-03-20",
+    "valor": 262.16,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "11066",
+     "13169"
+    ]
+   },
+   {
+    "chave": "ADRIELLY CRISTINE COLOMBO CRUZ||MISSAO GOVERNAR|2025-12-15|529",
+    "pessoa": "Adrielly Cristine Colombo Cruz",
+    "produto": "Missão Governar",
+    "venc": "2025-12-15",
+    "valor": 529,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "11131",
+     "40472"
+    ]
+   },
+   {
+    "chave": "KILVIA SEGATTO||MISSAO GOVERNAR|2026-01-15|806.67",
+    "pessoa": "Kilvia Segatto",
+    "produto": "Missão Governar",
+    "venc": "2026-01-15",
+    "valor": 806.67,
+    "n": 2,
+    "abertas": 1,
+    "pagas": 1,
+    "ids": [
+     "11981",
+     "46341"
+    ]
+   },
+   {
+    "chave": "NICOLAS DE OLIVEIRA BITTENCOURT||MISSAO GOVERNAR|2025-02-28|215.03",
+    "pessoa": "Nicolas de Oliveira Bittencourt",
+    "produto": "Missão Governar",
+    "venc": "2025-02-28",
+    "valor": 215.03,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "12139",
+     "40882"
+    ]
+   },
+   {
+    "chave": "HUGO YAN NICODEMOS MORENO||CONFRONTO|2025-04-15|447.21",
+    "pessoa": "Hugo Yan Nicodemos Moreno",
+    "produto": "Confronto",
+    "venc": "2025-04-15",
+    "valor": 447.21,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "13276",
+     "17137"
+    ]
+   },
+   {
+    "chave": "JULIO CESAR GAIOTO||IMERSAO PROSPERAR|2025-01-22|0.01",
+    "pessoa": "Julio Cesar Gaioto",
+    "produto": "Imersão Prosperar",
+    "venc": "2025-01-22",
+    "valor": 0.01,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "13527",
+     "13529"
+    ]
+   },
+   {
+    "chave": "EDMAR BATISTA GONCALVES JUNIOR||IMERSAO PROSPERAR|2025-08-13|397",
+    "pessoa": "Edmar Batista Gonçalves Junior",
+    "produto": "Imersão Prosperar",
+    "venc": "2025-08-13",
+    "valor": 397,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "18139",
+     "18147"
+    ]
+   },
+   {
+    "chave": "WALMOR GOMES SERRAFIM JUNIOR||CONFRONTO|2025-10-15|1377.33",
+    "pessoa": "Walmor Gomes Serrafim Junior",
+    "produto": "Confronto",
+    "venc": "2025-10-15",
+    "valor": 1377.33,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "18713",
+     "29797"
+    ]
+   },
+   {
+    "chave": "GUILHERME DAVID SOUZA NEVES||CONFRONTO|2026-06-15|830.83",
+    "pessoa": "Guilherme David Souza Neves",
+    "produto": "Confronto",
+    "venc": "2026-06-15",
+    "valor": 830.83,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "21050",
+     "46320"
+    ]
+   },
+   {
+    "chave": "MARTA TERESINHA SCHULZ HENZ||CONFRONTO|2026-06-15|1661.66",
+    "pessoa": "Marta Teresinha Schulz Henz",
+    "produto": "Confronto",
+    "venc": "2026-06-15",
+    "valor": 1661.66,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "21686",
+     "46363"
+    ]
+   },
+   {
+    "chave": "ERIK RYUICHI NISHI SAKUMA||CONFRONTO|2025-10-15|500",
+    "pessoa": "Erik Ryuichi Nishi Sakuma",
+    "produto": "Confronto",
+    "venc": "2025-10-15",
+    "valor": 500,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "25734",
+     "25753"
+    ]
+   },
+   {
+    "chave": "ANNA PAOLA MASCARENHAS TRAVENSOLI||OUTRAS RECEITAS FINANCEIRAS|2025-11-25|399.89",
+    "pessoa": "Anna Paola Mascarenhas Travensoli",
+    "produto": "Outras Receitas Financeiras",
+    "venc": "2025-11-25",
+    "valor": 399.89,
+    "n": 2,
+    "abertas": 0,
+    "pagas": 2,
+    "ids": [
+     "27535",
+     "32965"
+    ]
+   }
+  ]
+ },
+ "negativacao": {
+  "contratos": 22,
+  "comSaldo": 0,
+  "saldo": 0,
+  "top": []
+ },
+ "recompra": {
+  "contratos": 156,
+  "comSaldo": 117,
+  "saldo": 392384.72,
+  "top": [
+   {
+    "pessoa": "Willian Andre da Silva Vieira",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 23108.3,
+    "lancamentos": 11
+   },
+   {
+    "pessoa": "Yuri Henrique Palomino Pinheiro",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 13500,
+    "lancamentos": 5
+   },
+   {
+    "pessoa": "Maiara Maria dos Santos",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 9666.68,
+    "lancamentos": 4
+   },
+   {
+    "pessoa": "Luana Pereira de Camargo",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 9573.6,
+    "lancamentos": 11
+   },
+   {
+    "pessoa": "Allan Roberto Alves",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 9489.3,
+    "lancamentos": 13
+   },
+   {
+    "pessoa": "Ana Cassia do Nascimento Barros",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 9311.04,
+    "lancamentos": 11
+   },
+   {
+    "pessoa": "Daniel Figueiro",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 8400,
+    "lancamentos": 10
+   },
+   {
+    "pessoa": "Priscila Fernanda Ferreira Naves",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 6313.32,
+    "lancamentos": 5
+   },
+   {
+    "pessoa": "Pedro Henrique de Campos Duarte",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 6313.32,
+    "lancamentos": 4
+   },
+   {
+    "pessoa": "Jessica Rodrigues de Campos Novaes Barbosa",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 6296.34,
+    "lancamentos": 6
+   },
+   {
+    "pessoa": "Sivanildo de Jesus Soares",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 6282,
+    "lancamentos": 3
+   },
+   {
+    "pessoa": "Renan Schwinden",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 6144,
+    "lancamentos": 5
+   }
+  ]
+ },
+ "abandonados": {
+  "total": 218,
+  "saldo": 1566019.91,
+  "top": [
+   {
+    "pessoa": "Simoni Rother",
+    "produto": "Missão Governar",
+    "aberto": 30999.96,
+    "abertas": 12,
+    "atrasoDias": 104,
+    "ultimoRecebimento": "2026-04-20",
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Gizelly Ruanny da Silva Oliveira",
+    "produto": "Missão Governar",
+    "aberto": 29460,
+    "abertas": 10,
+    "atrasoDias": 105,
+    "ultimoRecebimento": null,
+    "ac": "Elaine Valadares",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Alvaro Rezende de Oliveira",
+    "produto": "Missão Governar",
+    "aberto": 29000,
+    "abertas": 10,
+    "atrasoDias": 119,
+    "ultimoRecebimento": null,
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Nascimento & Curti Ltda",
+    "produto": "Missão Governar",
+    "aberto": 25000,
+    "abertas": 10,
+    "atrasoDias": 153,
+    "ultimoRecebimento": "2026-03-01",
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Willian Andre da Silva Vieira",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 23108.3,
+    "abertas": 11,
+    "atrasoDias": 234,
+    "ultimoRecebimento": null,
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "João Amadeu da Silva",
+    "produto": "Confronto",
+    "aberto": 23000.04,
+    "abertas": 12,
+    "atrasoDias": 112,
+    "ultimoRecebimento": null,
+    "ac": "Elaine Valadares",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Pablo Fontoura",
+    "produto": "Confronto",
+    "aberto": 21999.96,
+    "abertas": 12,
+    "atrasoDias": 134,
+    "ultimoRecebimento": "2026-03-23",
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Marcelo Garbeloppo",
+    "produto": "Confronto",
+    "aberto": 21999.96,
+    "abertas": 12,
+    "atrasoDias": 132,
+    "ultimoRecebimento": "2026-03-25",
+    "ac": "Luana Santos",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Yuri Henrique Palomino Pinheiro",
+    "produto": "Confronto",
+    "aberto": 21000,
+    "abertas": 12,
+    "atrasoDias": 202,
+    "ultimoRecebimento": "2026-01-11",
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Maria Ester Pinto Climeni",
+    "produto": "Confronto",
+    "aberto": 20166.63,
+    "abertas": 11,
+    "atrasoDias": 170,
+    "ultimoRecebimento": "2026-02-19",
+    "ac": "Luana Santos",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Vagner Barbosa Pires Martins",
+    "produto": "Confronto",
+    "aberto": 19250,
+    "abertas": 11,
+    "atrasoDias": 104,
+    "ultimoRecebimento": "2026-04-28",
+    "ac": "Elaine Valadares",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Luehy Lemes Calheiros Nascimento",
+    "produto": "Confronto",
+    "aberto": 18333.26,
+    "abertas": 11,
+    "atrasoDias": 104,
+    "ultimoRecebimento": "2026-04-16",
+    "ac": "Luana Santos",
+    "negativacao": false
+   }
+  ]
+ },
+ "nuncaPagou": {
+  "total": 195,
+  "saldo": 1633436.4,
+  "top": [
+   {
+    "pessoa": "Rodrigo Krüger",
+    "produto": "Missão Governar",
+    "aberto": 35040,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-08-05",
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Ana Beatriz Oliveira Andrade",
+    "produto": "Missão Governar",
+    "aberto": 32040,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-08-25",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Gizelly Ruanny da Silva Oliveira",
+    "produto": "Missão Governar",
+    "aberto": 29460,
+    "lancamentos": 10,
+    "primeiroVenc": "2026-05-19",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Alvaro Rezende de Oliveira",
+    "produto": "Missão Governar",
+    "aberto": 29000,
+    "lancamentos": 10,
+    "primeiroVenc": "2026-05-05",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Suate Imoveis",
+    "produto": "Confronto",
+    "aberto": 26474.42,
+    "lancamentos": 14,
+    "primeiroVenc": "2026-09-08",
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Raphael de Jesus Lima",
+    "produto": "Confronto",
+    "aberto": 25474.35,
+    "lancamentos": 15,
+    "primeiroVenc": "2026-09-02",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Bruno Novais de Aquino",
+    "produto": "Confronto",
+    "aberto": 25474.32,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-09-08",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Eli Vieira",
+    "produto": "Confronto",
+    "aberto": 25474.32,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-09-20",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Erica Rocha dos Santos",
+    "produto": "Confronto",
+    "aberto": 24474.4,
+    "lancamentos": 10,
+    "primeiroVenc": "2026-09-15",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Clodoaldo Brandolise",
+    "produto": "Confronto",
+    "aberto": 24474.33,
+    "lancamentos": 9,
+    "primeiroVenc": "2026-09-08",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Antônia Eliane Silva de Sousa",
+    "produto": "Confronto",
+    "aberto": 23474.4,
+    "lancamentos": 10,
+    "primeiroVenc": "2026-09-15",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Gustavo Colpaert Correia",
+    "produto": "Confronto",
+    "aberto": 23448.72,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-07-25",
+    "ac": "Paula Passini"
+   }
+  ]
+ }
+}

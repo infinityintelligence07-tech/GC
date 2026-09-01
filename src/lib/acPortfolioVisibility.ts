@@ -1,5 +1,8 @@
 import type { CancellationCase, ConciliacaoItem, Student, StatusCancelamento } from '@/types';
-import { needsIamGcConciliacaoApproval } from '@/lib/iamPendenteConciliacao';
+import {
+  isIamConciliadoQuitadoAvista,
+  needsIamGcConciliacaoApproval,
+} from '@/lib/iamPendenteConciliacao';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import {
   caseHasCancelamentoFinalPending,
@@ -73,7 +76,11 @@ function isUniqueStudentName(name: string, students: Student[]): boolean {
 /** Contrato quitado: todas as parcelas marcadas como pagas. */
 export function isStudentFullyPaid(student: Student): boolean {
   const inst = student.installments ?? [];
-  if (inst.length === 0) return false;
+  // Quitado à vista/cartão integral chega sem parcelas: a venda inteira vira
+  // entrada. Sem este caso o contrato ficaria na carteira ativa como "Em Dia",
+  // divergindo do card Pago, que soma o mesmo valor pela entrada. Array vazio
+  // sozinho não basta — cadastro incompleto também tem zero parcelas.
+  if (inst.length === 0) return isIamConciliadoQuitadoAvista(student);
   return inst.every((i) => i.paid);
 }
 

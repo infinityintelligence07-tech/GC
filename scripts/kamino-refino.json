@@ -1,0 +1,1529 @@
+{
+ "parcial": {
+  "realCount": 81,
+  "realValorFaltante": 24655.33,
+  "taxaCount": 212,
+  "taxaValorTotal": 2273.1,
+  "topReal": [
+   {
+    "pessoa": "Barbara Hemmer Rietter",
+    "produto": "Fundo - Receita (Recompra)",
+    "venc": "2026-06-15",
+    "aReceber": 1740.14,
+    "recebido": 614.91,
+    "falta": 1125.23
+   },
+   {
+    "pessoa": "Luiz Augusto Campanha",
+    "produto": "Confronto",
+    "venc": "2026-08-15",
+    "aReceber": 1765.28,
+    "recebido": 794.38,
+    "falta": 970.9
+   },
+   {
+    "pessoa": "Marta Teresinha Schulz Henz",
+    "produto": "Confronto",
+    "venc": "2026-06-15",
+    "aReceber": 1661.66,
+    "recebido": 913.88,
+    "falta": 747.78
+   },
+   {
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "falta": 650
+   },
+   {
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "falta": 650
+   },
+   {
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "falta": 650
+   },
+   {
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "falta": 650
+   },
+   {
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "falta": 650
+   },
+   {
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "falta": 650
+   },
+   {
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "falta": 650
+   },
+   {
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "falta": 650
+   },
+   {
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "falta": 650
+   },
+   {
+    "pessoa": "Daniela dos Santos Borba",
+    "produto": "Missão Governar",
+    "venc": "2026-04-23",
+    "aReceber": 1550,
+    "recebido": 900,
+    "falta": 650
+   },
+   {
+    "pessoa": "Simone Silva da Costa de Mello",
+    "produto": "Pmr",
+    "venc": "2026-08-15",
+    "aReceber": 1000,
+    "recebido": 450,
+    "falta": 550
+   },
+   {
+    "pessoa": "Guilherme David Souza Neves",
+    "produto": "Confronto",
+    "venc": "2026-06-15",
+    "aReceber": 830.83,
+    "recebido": 373.87,
+    "falta": 456.96
+   }
+  ]
+ },
+ "parcelasFaltando": {
+  "comSaldoAberto": 363,
+  "jaQuitados": 252,
+  "saldoEnvolvido": 3210152.55,
+  "top": [
+   {
+    "pessoa": "Rodrigo Krüger",
+    "produto": "Missão Governar",
+    "lancamentos": 12,
+    "declarado": 13,
+    "faltando": [
+     1
+    ],
+    "aberto": 35040,
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Alex Peres Vasques",
+    "produto": "Missão Governar",
+    "lancamentos": 13,
+    "declarado": 14,
+    "faltando": [
+     1
+    ],
+    "aberto": 32040,
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Ana Beatriz Oliveira Andrade",
+    "produto": "Missão Governar",
+    "lancamentos": 12,
+    "declarado": 13,
+    "faltando": [
+     1
+    ],
+    "aberto": 32040,
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Juares Antonio Borga",
+    "produto": "Confronto",
+    "lancamentos": 12,
+    "declarado": 13,
+    "faltando": [
+     1
+    ],
+    "aberto": 30708.26,
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "José Antonio Pereira",
+    "produto": "Missão Governar",
+    "lancamentos": 12,
+    "declarado": 13,
+    "faltando": [
+     1
+    ],
+    "aberto": 30673.5,
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Gizelly Ruanny da Silva Oliveira",
+    "produto": "Missão Governar",
+    "lancamentos": 10,
+    "declarado": 11,
+    "faltando": [
+     1
+    ],
+    "aberto": 29460,
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Alvaro Rezende de Oliveira",
+    "produto": "Missão Governar",
+    "lancamentos": 10,
+    "declarado": 11,
+    "faltando": [
+     1
+    ],
+    "aberto": 29000,
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Nascimento & Curti Ltda",
+    "produto": "Missão Governar",
+    "lancamentos": 11,
+    "declarado": 12,
+    "faltando": [
+     2
+    ],
+    "aberto": 25000,
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Daiane Cardoso Leão",
+    "produto": "Missão Governar",
+    "lancamentos": 12,
+    "declarado": 13,
+    "faltando": [
+     1
+    ],
+    "aberto": 24026.64,
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Gustavo Colpaert Correia",
+    "produto": "Confronto",
+    "lancamentos": 12,
+    "declarado": 13,
+    "faltando": [
+     1
+    ],
+    "aberto": 23448.72,
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Annalise Kruger",
+    "produto": "Missão Governar",
+    "lancamentos": 12,
+    "declarado": 13,
+    "faltando": [
+     1
+    ],
+    "aberto": 23360,
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Iorrane Castro Magedanz",
+    "produto": "Missão Governar",
+    "lancamentos": 12,
+    "declarado": 13,
+    "faltando": [
+     1
+    ],
+    "aberto": 23249.97,
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Willian Andre da Silva Vieira",
+    "produto": "Fundo - Receita (Recompra)",
+    "lancamentos": 11,
+    "declarado": 12,
+    "faltando": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     11,
+     12
+    ],
+    "aberto": 23108.3,
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Dayane Roberta Carreio Rodrigues",
+    "produto": "Missão Governar",
+    "lancamentos": 14,
+    "declarado": 17,
+    "faltando": [
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17
+    ],
+    "aberto": 23091,
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "João Amadeu da Silva",
+    "produto": "Confronto",
+    "lancamentos": 12,
+    "declarado": 13,
+    "faltando": [
+     1
+    ],
+    "aberto": 23000.04,
+    "ac": "Elaine Valadares"
+   }
+  ]
+ },
+ "duplicidade": {
+  "total": 62,
+  "abertas": 9,
+  "pagas": 53,
+  "valorAbertas": 9274.7,
+  "top": [
+   {
+    "pessoa": "Neile dos Santos Tangerino",
+    "produto": "Confronto",
+    "venc": "2026-04-15",
+    "valor": 830.33
+   },
+   {
+    "pessoa": "Genira Soares da Silva",
+    "produto": "Missão Governar",
+    "venc": "2026-04-15",
+    "valor": 300
+   },
+   {
+    "pessoa": "Kilvia Segatto",
+    "produto": "Missão Governar",
+    "venc": "2026-01-15",
+    "valor": 806.67
+   },
+   {
+    "pessoa": "Valerio Alves dos Santos",
+    "produto": "Missão Governar",
+    "venc": "2026-08-25",
+    "valor": 1215.71
+   },
+   {
+    "pessoa": "Vinicius de Borba Oliveira",
+    "produto": "Pmr",
+    "venc": "2027-04-21",
+    "valor": 852.87
+   },
+   {
+    "pessoa": "Jardel Silva de Moura",
+    "produto": "Missão Governar",
+    "venc": "2027-07-10",
+    "valor": 1365.45
+   },
+   {
+    "pessoa": "Maiara Maria dos Santos",
+    "produto": "Fundo - Receita (Recompra)",
+    "venc": "2026-06-15",
+    "valor": 2416.67
+   },
+   {
+    "pessoa": "Luiz Felipe do Nascimento Figueira",
+    "produto": "Confronto",
+    "venc": "2026-06-20",
+    "valor": 750
+   },
+   {
+    "pessoa": "Eugenia Vitoria Ferreira Anastacio",
+    "produto": "Pmr",
+    "venc": "2026-07-15",
+    "valor": 737
+   }
+  ]
+ },
+ "centavos": {
+  "total": 45,
+  "abertos": 0,
+  "amostra": [
+   {
+    "pessoa": "Gerson Luis da Silva",
+    "produto": "Confronto",
+    "venc": "2025-02-02",
+    "valor": 0.02,
+    "pago": true
+   },
+   {
+    "pessoa": "Elaine Elizabete S. Moura Santana",
+    "produto": "Imersão Prosperar",
+    "venc": "2025-02-04",
+    "valor": 0.01,
+    "pago": true
+   },
+   {
+    "pessoa": "Ildefonso da Silva Lopes",
+    "produto": "Confronto",
+    "venc": "2025-02-09",
+    "valor": 0.02,
+    "pago": true
+   },
+   {
+    "pessoa": "Caio Eduardo Carvalho de Oliveira",
+    "produto": "Confronto",
+    "venc": "2025-02-09",
+    "valor": 0.02,
+    "pago": true
+   },
+   {
+    "pessoa": "Paullus Atila Figueiredo Alcantara",
+    "produto": "Imersão Prosperar",
+    "venc": "2025-01-09",
+    "valor": 0.01,
+    "pago": true
+   },
+   {
+    "pessoa": "Paulo Cesar Oliveira Padilha",
+    "produto": "Imersão Prosperar",
+    "venc": "2025-02-25",
+    "valor": 0.01,
+    "pago": true
+   },
+   {
+    "pessoa": "Altiene da Silva",
+    "produto": "Imersão Prosperar",
+    "venc": "2025-02-25",
+    "valor": 0.01,
+    "pago": true
+   },
+   {
+    "pessoa": "Jeisy Favarão Marques",
+    "produto": "Imersão Prosperar",
+    "venc": "2025-01-14",
+    "valor": 0.01,
+    "pago": true
+   },
+   {
+    "pessoa": "Jeniffer Ferreira de Oliveira Prates",
+    "produto": "Imersão Prosperar",
+    "venc": "2025-02-27",
+    "valor": 0.01,
+    "pago": true
+   },
+   {
+    "pessoa": "Salatiel Wilsan Oliveira Pedroso",
+    "produto": "Confronto",
+    "venc": "2025-03-02",
+    "valor": 0.02,
+    "pago": true
+   }
+  ]
+ },
+ "labelDuplicado": {
+  "total": 31,
+  "amostra": [
+   {
+    "pessoa": "Nilton Cesar Oliveira",
+    "produto": "Confronto",
+    "labels": [
+     "(1/15)",
+     "(1/14)"
+    ],
+    "venc": "2025-02-13",
+    "pago": true
+   },
+   {
+    "pessoa": "Barbara Hemmer Rietter",
+    "produto": "Missão Governar",
+    "labels": [
+     "(1/17)",
+     "(17/17)"
+    ],
+    "venc": "2025-02-15",
+    "pago": true
+   },
+   {
+    "pessoa": "Nilton Cesar Oliveira",
+    "produto": "Confronto",
+    "labels": [
+     "(2/15)",
+     "(1/14)"
+    ],
+    "venc": "2025-03-10",
+    "pago": true
+   },
+   {
+    "pessoa": "Barbara Hemmer Rietter",
+    "produto": "Missão Governar",
+    "labels": [
+     "(2/17)",
+     "(17/17)"
+    ],
+    "venc": "2025-03-15",
+    "pago": true
+   },
+   {
+    "pessoa": "Barbara Hemmer Rietter",
+    "produto": "Missão Governar",
+    "labels": [
+     "(9/17)",
+     "(17/17)"
+    ],
+    "venc": "2025-10-15",
+    "pago": true
+   },
+   {
+    "pessoa": "Barbara Hemmer Rietter",
+    "produto": "Missão Governar",
+    "labels": [
+     "(11/17)",
+     "(17/17)"
+    ],
+    "venc": "2025-12-15",
+    "pago": true
+   },
+   {
+    "pessoa": "Barbara Hemmer Rietter",
+    "produto": "Missão Governar",
+    "labels": [
+     "(3/17)",
+     "(17/17)"
+    ],
+    "venc": "2025-04-15",
+    "pago": true
+   },
+   {
+    "pessoa": "Nilton Cesar Oliveira",
+    "produto": "Confronto",
+    "labels": [
+     "(3/15)",
+     "(1/14)"
+    ],
+    "venc": "2025-04-10",
+    "pago": true
+   },
+   {
+    "pessoa": "Nilton Cesar Oliveira",
+    "produto": "Confronto",
+    "labels": [
+     "(7/15)",
+     "(1/14)"
+    ],
+    "venc": "2025-06-15",
+    "pago": true
+   },
+   {
+    "pessoa": "Nilton Cesar Oliveira",
+    "produto": "Confronto",
+    "labels": [
+     "(13/15)",
+     "(1/14)"
+    ],
+    "venc": "2025-12-15",
+    "pago": true
+   }
+  ]
+ },
+ "negativacao": {
+  "contratos": 22,
+  "comSaldo": 0,
+  "saldo": 0,
+  "top": []
+ },
+ "recompra": {
+  "contratos": 156,
+  "comSaldo": 117,
+  "saldo": 392384.72,
+  "top": [
+   {
+    "pessoa": "Willian Andre da Silva Vieira",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 23108.3,
+    "lancamentos": 11
+   },
+   {
+    "pessoa": "Yuri Henrique Palomino Pinheiro",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 13500,
+    "lancamentos": 5
+   },
+   {
+    "pessoa": "Maiara Maria dos Santos",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 9666.68,
+    "lancamentos": 4
+   },
+   {
+    "pessoa": "Luana Pereira de Camargo",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 9573.6,
+    "lancamentos": 11
+   },
+   {
+    "pessoa": "Allan Roberto Alves",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 9489.3,
+    "lancamentos": 13
+   },
+   {
+    "pessoa": "Ana Cassia do Nascimento Barros",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 9311.04,
+    "lancamentos": 11
+   },
+   {
+    "pessoa": "Daniel Figueiro",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 8400,
+    "lancamentos": 10
+   },
+   {
+    "pessoa": "Priscila Fernanda Ferreira Naves",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 6313.32,
+    "lancamentos": 5
+   },
+   {
+    "pessoa": "Pedro Henrique de Campos Duarte",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 6313.32,
+    "lancamentos": 4
+   },
+   {
+    "pessoa": "Jessica Rodrigues de Campos Novaes Barbosa",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 6296.34,
+    "lancamentos": 6
+   },
+   {
+    "pessoa": "Sivanildo de Jesus Soares",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 6282,
+    "lancamentos": 3
+   },
+   {
+    "pessoa": "Renan Schwinden",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 6144,
+    "lancamentos": 5
+   }
+  ]
+ },
+ "abandonados": {
+  "total": 218,
+  "saldo": 1566019.91,
+  "top": [
+   {
+    "pessoa": "Simoni Rother",
+    "produto": "Missão Governar",
+    "aberto": 30999.96,
+    "abertas": 12,
+    "atrasoDias": 104,
+    "ultimoRecebimento": "2026-04-20",
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Gizelly Ruanny da Silva Oliveira",
+    "produto": "Missão Governar",
+    "aberto": 29460,
+    "abertas": 10,
+    "atrasoDias": 105,
+    "ultimoRecebimento": null,
+    "ac": "Elaine Valadares",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Alvaro Rezende de Oliveira",
+    "produto": "Missão Governar",
+    "aberto": 29000,
+    "abertas": 10,
+    "atrasoDias": 119,
+    "ultimoRecebimento": null,
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Nascimento & Curti Ltda",
+    "produto": "Missão Governar",
+    "aberto": 25000,
+    "abertas": 10,
+    "atrasoDias": 153,
+    "ultimoRecebimento": "2026-03-01",
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Willian Andre da Silva Vieira",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 23108.3,
+    "abertas": 11,
+    "atrasoDias": 234,
+    "ultimoRecebimento": null,
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "João Amadeu da Silva",
+    "produto": "Confronto",
+    "aberto": 23000.04,
+    "abertas": 12,
+    "atrasoDias": 112,
+    "ultimoRecebimento": null,
+    "ac": "Elaine Valadares",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Pablo Fontoura",
+    "produto": "Confronto",
+    "aberto": 21999.96,
+    "abertas": 12,
+    "atrasoDias": 134,
+    "ultimoRecebimento": "2026-03-23",
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Marcelo Garbeloppo",
+    "produto": "Confronto",
+    "aberto": 21999.96,
+    "abertas": 12,
+    "atrasoDias": 132,
+    "ultimoRecebimento": "2026-03-25",
+    "ac": "Luana Santos",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Yuri Henrique Palomino Pinheiro",
+    "produto": "Confronto",
+    "aberto": 21000,
+    "abertas": 12,
+    "atrasoDias": 202,
+    "ultimoRecebimento": "2026-01-11",
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Maria Ester Pinto Climeni",
+    "produto": "Confronto",
+    "aberto": 20166.63,
+    "abertas": 11,
+    "atrasoDias": 170,
+    "ultimoRecebimento": "2026-02-19",
+    "ac": "Luana Santos",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Vagner Barbosa Pires Martins",
+    "produto": "Confronto",
+    "aberto": 19250,
+    "abertas": 11,
+    "atrasoDias": 104,
+    "ultimoRecebimento": "2026-04-28",
+    "ac": "Elaine Valadares",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Luehy Lemes Calheiros Nascimento",
+    "produto": "Confronto",
+    "aberto": 18333.26,
+    "abertas": 11,
+    "atrasoDias": 104,
+    "ultimoRecebimento": "2026-04-16",
+    "ac": "Luana Santos",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Alexandre de Souza Scatolin",
+    "produto": "Confronto",
+    "aberto": 18278.26,
+    "abertas": 11,
+    "atrasoDias": 321,
+    "ultimoRecebimento": "2025-09-30",
+    "ac": "Luana Santos",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Gustavo Andrade Nonato",
+    "produto": "Confronto",
+    "aberto": 18196.64,
+    "abertas": 16,
+    "atrasoDias": 139,
+    "ultimoRecebimento": "2026-03-23",
+    "ac": "Luana Santos",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Grazielle Yone da Silva Carvalho",
+    "produto": "Missão Governar",
+    "aberto": 18020,
+    "abertas": 13,
+    "atrasoDias": 92,
+    "ultimoRecebimento": null,
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Valerio Alves dos Santos",
+    "produto": "Missão Governar",
+    "aberto": 17019.94,
+    "abertas": 14,
+    "atrasoDias": 99,
+    "ultimoRecebimento": null,
+    "ac": "Elaine Valadares",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Maiara Maria dos Santos",
+    "produto": "Missão Governar",
+    "aberto": 16916.69,
+    "abertas": 7,
+    "atrasoDias": 139,
+    "ultimoRecebimento": "2026-03-19",
+    "ac": "Paula Passini",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Samuel Tony de Lima Paiva",
+    "produto": "Missão Governar",
+    "aberto": 16230.5,
+    "abertas": 10,
+    "atrasoDias": 105,
+    "ultimoRecebimento": null,
+    "ac": "Elaine Valadares",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Albert Santos Peneluc",
+    "produto": "Confronto",
+    "aberto": 16146,
+    "abertas": 9,
+    "atrasoDias": 321,
+    "ultimoRecebimento": "2025-09-24",
+    "ac": "Luana Santos",
+    "negativacao": false
+   },
+   {
+    "pessoa": "Edmar Batista Gonçalves Junior",
+    "produto": "Confronto",
+    "aberto": 15675.06,
+    "abertas": 12,
+    "atrasoDias": 198,
+    "ultimoRecebimento": "2026-01-15",
+    "ac": "Elaine Valadares",
+    "negativacao": false
+   }
+  ]
+ },
+ "nuncaPagou": {
+  "total": 195,
+  "saldo": 1633436.4,
+  "top": [
+   {
+    "pessoa": "Rodrigo Krüger",
+    "produto": "Missão Governar",
+    "aberto": 35040,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-08-05",
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Ana Beatriz Oliveira Andrade",
+    "produto": "Missão Governar",
+    "aberto": 32040,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-08-25",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Gizelly Ruanny da Silva Oliveira",
+    "produto": "Missão Governar",
+    "aberto": 29460,
+    "lancamentos": 10,
+    "primeiroVenc": "2026-05-19",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Alvaro Rezende de Oliveira",
+    "produto": "Missão Governar",
+    "aberto": 29000,
+    "lancamentos": 10,
+    "primeiroVenc": "2026-05-05",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Suate Imoveis",
+    "produto": "Confronto",
+    "aberto": 26474.42,
+    "lancamentos": 14,
+    "primeiroVenc": "2026-09-08",
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Raphael de Jesus Lima",
+    "produto": "Confronto",
+    "aberto": 25474.35,
+    "lancamentos": 15,
+    "primeiroVenc": "2026-09-02",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Bruno Novais de Aquino",
+    "produto": "Confronto",
+    "aberto": 25474.32,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-09-08",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Eli Vieira",
+    "produto": "Confronto",
+    "aberto": 25474.32,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-09-20",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Erica Rocha dos Santos",
+    "produto": "Confronto",
+    "aberto": 24474.4,
+    "lancamentos": 10,
+    "primeiroVenc": "2026-09-15",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Clodoaldo Brandolise",
+    "produto": "Confronto",
+    "aberto": 24474.33,
+    "lancamentos": 9,
+    "primeiroVenc": "2026-09-08",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Antônia Eliane Silva de Sousa",
+    "produto": "Confronto",
+    "aberto": 23474.4,
+    "lancamentos": 10,
+    "primeiroVenc": "2026-09-15",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Gustavo Colpaert Correia",
+    "produto": "Confronto",
+    "aberto": 23448.72,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-07-25",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Jennifer Reis Marques",
+    "produto": "Confronto",
+    "aberto": 23237.16,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-09-08",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Willian Andre da Silva Vieira",
+    "produto": "Fundo - Receita (Recompra)",
+    "aberto": 23108.3,
+    "lancamentos": 11,
+    "primeiroVenc": "2026-01-10",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "João Amadeu da Silva",
+    "produto": "Confronto",
+    "aberto": 23000.04,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-05-12",
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Jose Israel Vieira do Nascimento",
+    "produto": "Confronto",
+    "aberto": 22488.48,
+    "lancamentos": 24,
+    "primeiroVenc": "2026-08-25",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Michel Biller Moreira Silva Garcia",
+    "produto": "Confronto",
+    "aberto": 22474.32,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-07-28",
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Valter Batista Fernandes Júnior",
+    "produto": "Confronto",
+    "aberto": 21935.88,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-06-10",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Eliedson Souza de Oliveira",
+    "produto": "Confronto",
+    "aberto": 20325,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-09-15",
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "James Vandré Alves Pereira",
+    "produto": "Missão Governar",
+    "aberto": 18020.04,
+    "lancamentos": 12,
+    "primeiroVenc": "2026-06-20",
+    "ac": "Elaine Valadares"
+   }
+  ]
+ },
+ "multiContrato": {
+  "pessoas": 136,
+  "saldo": 1913519.9,
+  "top": [
+   {
+    "pessoa": "José Antonio Pereira",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 48953.4
+   },
+   {
+    "pessoa": "Alex Peres Vasques",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 47790
+   },
+   {
+    "pessoa": "Rogerio Wunderlich",
+    "contratos": 2,
+    "produtos": [
+     "Missão Governar",
+     "Confronto"
+    ],
+    "saldo": 44625
+   },
+   {
+    "pessoa": "Daiane Cardoso Leão",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 44099.99
+   },
+   {
+    "pessoa": "Alvaro Rezende de Oliveira",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 37339.37
+   },
+   {
+    "pessoa": "Kelly Reis da Silva",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 36116.6
+   },
+   {
+    "pessoa": "James Vandré Alves Pereira",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 35520.04
+   },
+   {
+    "pessoa": "Yuri Henrique Palomino Pinheiro",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Fundo - Receita (Recompra)"
+    ],
+    "saldo": 34500
+   },
+   {
+    "pessoa": "Valerio Alves dos Santos",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 32603.2
+   },
+   {
+    "pessoa": "Miriam Caroline Baião Santos",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 29475
+   },
+   {
+    "pessoa": "Fabio Jose Trevizan Silva",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 29457.24
+   },
+   {
+    "pessoa": "Jose Israel Vieira do Nascimento",
+    "contratos": 2,
+    "produtos": [
+     "Pmr",
+     "Confronto"
+    ],
+    "saldo": 28877.61
+   },
+   {
+    "pessoa": "Victor Guedes Waiandt",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 27546
+   },
+   {
+    "pessoa": "Priscila Elaine Bigheti",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 27377.23
+   },
+   {
+    "pessoa": "Ana Paula Amaral da Veiga",
+    "contratos": 2,
+    "produtos": [
+     "Confronto",
+     "Missão Governar"
+    ],
+    "saldo": 26767.33
+   }
+  ]
+ },
+ "quitados": {
+  "total": 821,
+  "avista": {
+   "contratos": 340,
+   "valor": 1169931.85
+  },
+  "cartaoPixLink": {
+   "contratos": 438,
+   "valor": 4466216.5
+  },
+  "boleto": {
+   "contratos": 43,
+   "valor": 448610.35
+  },
+  "porMetodo": {
+   "Cartão": {
+    "contratos": 417,
+    "valor": 3662046.58
+   },
+   "Boleto": {
+    "contratos": 14,
+    "valor": 77398.39
+   },
+   "QrCode (Pix)": {
+    "contratos": 153,
+    "valor": 1369711.63
+   },
+   "Link": {
+    "contratos": 106,
+    "valor": 477349.22
+   },
+   "Pix": {
+    "contratos": 126,
+    "valor": 471957.43
+   },
+   "Não identificado": {
+    "contratos": 5,
+    "valor": 26295.45
+   }
+  },
+  "topAvista": [
+   {
+    "pessoa": "Marcos Willian Salvador",
+    "produto": "Missão Governar",
+    "valor": 28561,
+    "metodos": [
+     "Cartão"
+    ],
+    "ac": "Paula Passini",
+    "recebimento": "2026-03-01"
+   },
+   {
+    "pessoa": "Luiz Diego da Cruz",
+    "produto": "Missão Governar",
+    "valor": 24000,
+    "metodos": [
+     "QrCode"
+    ],
+    "ac": "Luana Santos",
+    "recebimento": "2026-02-01"
+   },
+   {
+    "pessoa": "Eliel Freitas Mauch",
+    "produto": "Confronto",
+    "valor": 22022,
+    "metodos": [
+     "Cartão"
+    ],
+    "ac": "Luana Santos",
+    "recebimento": "2026-01-11"
+   },
+   {
+    "pessoa": "Brendon Andreus Bernardinelis",
+    "produto": "Confronto",
+    "valor": 20722,
+    "metodos": [
+     "Cartão"
+    ],
+    "ac": "Paula Passini",
+    "recebimento": "2025-10-12"
+   },
+   {
+    "pessoa": "Eládio José Ochner",
+    "produto": "Confronto",
+    "valor": 20722,
+    "metodos": [
+     "Cartão",
+     "Link"
+    ],
+    "ac": "Elaine Valadares",
+    "recebimento": "2025-11-23"
+   },
+   {
+    "pessoa": "Anderson Corassini Schulz",
+    "produto": "Confronto",
+    "valor": 20722,
+    "metodos": [
+     "Cartão"
+    ],
+    "ac": "Elaine Valadares",
+    "recebimento": "2025-11-23"
+   },
+   {
+    "pessoa": "Clovis Rocha",
+    "produto": "Confronto",
+    "valor": 18122,
+    "metodos": [
+     "Cartão",
+     "QrCode"
+    ],
+    "ac": "Elaine Valadares",
+    "recebimento": "2025-04-27"
+   },
+   {
+    "pessoa": "Rodrigo Wataru Sakuma",
+    "produto": "Confronto",
+    "valor": 18122,
+    "metodos": [
+     "Cartão"
+    ],
+    "ac": "Elaine Valadares",
+    "recebimento": "2025-05-25"
+   },
+   {
+    "pessoa": "Gustavo Di Raimo",
+    "produto": "Confronto",
+    "valor": 16000,
+    "metodos": [
+     "QrCode"
+    ],
+    "ac": "Luana Santos",
+    "recebimento": "2025-03-30"
+   },
+   {
+    "pessoa": "José Luiz Ferragut",
+    "produto": "Missão Governar",
+    "valor": 14280.5,
+    "metodos": [
+     "Cartão"
+    ],
+    "ac": "Luana Santos",
+    "recebimento": "2026-01-25"
+   },
+   {
+    "pessoa": "Amanda Nunes Batista",
+    "produto": "Missão Governar",
+    "valor": 14280.5,
+    "metodos": [
+     "Cartão"
+    ],
+    "ac": "Paula Passini",
+    "recebimento": "2026-02-01"
+   },
+   {
+    "pessoa": "Cronos Negocios e Consultoria Ltda",
+    "produto": "Missão Governar",
+    "valor": 14280.5,
+    "metodos": [
+     "QrCode"
+    ],
+    "ac": "Luana Santos",
+    "recebimento": "2026-03-30"
+   },
+   {
+    "pessoa": "Franciele Carvalho",
+    "produto": "Confronto 2",
+    "valor": 14122,
+    "metodos": [],
+    "ac": "Paula Passini",
+    "recebimento": "2026-06-29"
+   },
+   {
+    "pessoa": "Antonio Freitas dos Santos",
+    "produto": "Confronto",
+    "valor": 13500,
+    "metodos": [
+     "Cartão",
+     "QrCode"
+    ],
+    "ac": "Paula Passini",
+    "recebimento": "2026-05-05"
+   },
+   {
+    "pessoa": "Dieniffer Lionel",
+    "produto": "Missão Governar",
+    "valor": 12980.5,
+    "metodos": [
+     "Link"
+    ],
+    "ac": "Luana Santos",
+    "recebimento": "2025-09-01"
+   }
+  ],
+  "topCartao": [
+   {
+    "pessoa": "Alberto Sousa da Silva",
+    "produto": "Missão Governar",
+    "valor": 41287.97,
+    "parcelas": 13,
+    "metodos": [
+     "Cartão",
+     "Boleto"
+    ],
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Yuri Henrique Palomino Pinheiro",
+    "produto": "Missão Governar",
+    "valor": 33000,
+    "parcelas": 11,
+    "metodos": [
+     "Cartão",
+     "Boleto"
+    ],
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Cleverson Adolpho da Silva",
+    "produto": "Missão Governar",
+    "valor": 29541.54,
+    "parcelas": 11,
+    "metodos": [
+     "QrCode",
+     "Boleto"
+    ],
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Willian Andre da Silva Vieira",
+    "produto": "Missão Governar",
+    "valor": 29300,
+    "parcelas": 11,
+    "metodos": [
+     "QrCode",
+     "Boleto"
+    ],
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Michel Leonardo Bridi",
+    "produto": "Missão Governar",
+    "valor": 28443.66,
+    "parcelas": 11,
+    "metodos": [
+     "Cartão",
+     "QrCode",
+     "Boleto"
+    ],
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Veronica Cristina Oliveira da Cunha",
+    "produto": "Confronto",
+    "valor": 28318.62,
+    "parcelas": 3,
+    "metodos": [
+     "Cartão",
+     "Boleto"
+    ],
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Roberta de Oliveira Luz",
+    "produto": "Missão Governar",
+    "valor": 27449.96,
+    "parcelas": 13,
+    "metodos": [
+     "QrCode",
+     "Boleto"
+    ],
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Michel Leonardo Bridi",
+    "produto": "Confronto",
+    "valor": 27183,
+    "parcelas": 2,
+    "metodos": [
+     "Cartão",
+     "QrCode"
+    ],
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Andressa Cilene Ribeiro",
+    "produto": "Missão Governar",
+    "valor": 26970.01,
+    "parcelas": 4,
+    "metodos": [
+     "Cartão",
+     "Boleto"
+    ],
+    "ac": "Paula Passini"
+   },
+   {
+    "pessoa": "Marta Teresinha Schulz Henz",
+    "produto": "Missão Governar",
+    "valor": 26302.25,
+    "parcelas": 14,
+    "metodos": [
+     "QrCode",
+     "Boleto"
+    ],
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Paullus Atila Figueiredo Alcantara",
+    "produto": "Missão Governar",
+    "valor": 26222.2,
+    "parcelas": 11,
+    "metodos": [
+     "Cartão",
+     "Boleto"
+    ],
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Ana Paula de Almeida",
+    "produto": "Missão Governar",
+    "valor": 25961,
+    "parcelas": 12,
+    "metodos": [
+     "Cartão",
+     "Boleto"
+    ],
+    "ac": "Elaine Valadares"
+   },
+   {
+    "pessoa": "Marta Teresinha Schulz Henz",
+    "produto": "Confronto",
+    "valor": 25601.4,
+    "parcelas": 14,
+    "metodos": [
+     "QrCode",
+     "Boleto"
+    ],
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "André Luis dos Santos Brito",
+    "produto": "Missão Governar",
+    "valor": 25361.95,
+    "parcelas": 12,
+    "metodos": [
+     "Link",
+     "Boleto"
+    ],
+    "ac": "Luana Santos"
+   },
+   {
+    "pessoa": "Felipe de Oliveira Padilha",
+    "produto": "Confronto",
+    "valor": 25220.73,
+    "parcelas": 11,
+    "metodos": [
+     "Cartão",
+     "Boleto"
+    ],
+    "ac": "Elaine Valadares"
+   }
+  ]
+ }
+}

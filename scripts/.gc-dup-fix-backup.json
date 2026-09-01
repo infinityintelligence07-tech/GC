@@ -1,0 +1,267 @@
+{
+  "geradoEm": "2026-09-01T18:44:42.518Z",
+  "fichas": [
+    {
+      "id": "2ea807dd-d088-4b93-a170-536a959e27d3",
+      "name": "Neile dos Santos Tangerino",
+      "whatsapp": "(19) 99872-3778",
+      "email": "neiletangerinoarq@gmail.com",
+      "cpf": "",
+      "address": "",
+      "numero": "",
+      "cidade": "",
+      "estado": "",
+      "cep": "",
+      "status": "À Negativar",
+      "status_mode": "Automático",
+      "ac": "Elaine Valadares",
+      "product": "Confronto",
+      "enrollment_date": "2026-01-25",
+      "data_treinamento_origem": "2026-01-25",
+      "due_day": 28,
+      "sale_value": "13139.119999999999",
+      "down_payment": "0",
+      "total_installments": 14,
+      "paid_installments": 3,
+      "installment_value": "938.5085714285714",
+      "installments": [
+        {
+          "paid": true,
+          "value": 2000,
+          "number": 1,
+          "dueDate": "2025-10-28",
+          "paidDate": "2025-10-28"
+        },
+        {
+          "paid": true,
+          "value": 499,
+          "number": 2,
+          "dueDate": "2026-01-15",
+          "paidDate": "2026-01-19"
+        },
+        {
+          "paid": true,
+          "value": 916.68,
+          "number": 3,
+          "dueDate": "2026-02-15",
+          "paidDate": "2026-02-27"
+        },
+        {
+          "paid": false,
+          "value": 830.33,
+          "number": 4,
+          "dueDate": "2026-03-15"
+        },
+        {
+          "paid": false,
+          "value": 830.33,
+          "number": 5,
+          "dueDate": "2026-04-15"
+        },
+        {
+          "paid": false,
+          "value": 830.33,
+          "number": 6,
+          "dueDate": "2026-04-15"
+        },
+        {
+          "paid": false,
+          "value": 830.33,
+          "number": 7,
+          "dueDate": "2026-05-15"
+        },
+        {
+          "paid": false,
+          "value": 830.33,
+          "number": 8,
+          "dueDate": "2026-06-15"
+        },
+        {
+          "paid": false,
+          "value": 830.33,
+          "number": 9,
+          "dueDate": "2026-07-15"
+        },
+        {
+          "paid": false,
+          "value": 830.33,
+          "number": 10,
+          "dueDate": "2026-08-15"
+        },
+        {
+          "paid": false,
+          "value": 830.33,
+          "number": 11,
+          "dueDate": "2026-09-15"
+        },
+        {
+          "paid": false,
+          "value": 830.33,
+          "number": 12,
+          "dueDate": "2026-10-15"
+        },
+        {
+          "paid": false,
+          "value": 830.33,
+          "number": 13,
+          "dueDate": "2026-11-15"
+        },
+        {
+          "paid": false,
+          "value": 1420.14,
+          "number": 14,
+          "dueDate": "2026-12-15"
+        }
+      ],
+      "history": [
+        {
+          "date": "2026-08-28T06:54:08.657Z",
+          "text": "Importado via planilha Kamino",
+          "type": "Sistema"
+        }
+      ],
+      "is_renda_extra": false,
+      "renda_extra_status": null,
+      "renda_extra_ac": null,
+      "renda_extra_ac_assigned_at": null,
+      "renda_extra_inclusion_date": null,
+      "renda_extra_inscription_date": null,
+      "renda_extra_acordo_value": null,
+      "renda_extra_directed_at": null,
+      "renda_extra_value_at_direction": null,
+      "status_cancelamento": "nenhum",
+      "cancellation_case_id": null,
+      "tags": [],
+      "product_history": [],
+      "detalhes": "Confronto - Sucessoaluno_Out25 | Out25 | Link - Boleto - | Yan Nicodemos | Venda | Conf_Am_50_Ca || Importação S | Confronto - Sucessoaluno_Out25 | Out25 | Link - Boleto - | Yan Nicodemos | Venda | Conf_Am_50 || Importação Sens",
+      "created_at": "2026-08-28T06:54:16.243Z",
+      "updated_at": "2026-08-28T06:54:16.243Z",
+      "renda_extra_payment_date": null,
+      "renda_extra_payment_method": null,
+      "company_id": "00000000-0000-0000-0000-0000000a1a11",
+      "ciclo": null,
+      "status_antes_cancelamento": null,
+      "iam_control_aluno_id": null,
+      "iam_control_synced_at": null,
+      "cpf_digits": "",
+      "iam_control_contrato_id": null,
+      "iam_control_contrato_status": null,
+      "iam_control_pendente_tipo": null,
+      "iam_control_pendente_link": null,
+      "iam_gc_conciliado_at": null,
+      "recompra_treinamento": null
+    },
+    {
+      "id": "e68e1cda-b2ce-4272-b580-c30a0fa0424c",
+      "name": "Maiara Maria dos Santos",
+      "whatsapp": "(35) 99269-2903",
+      "email": "maiara.ribeiro@faex.edu.br",
+      "cpf": "",
+      "address": "",
+      "numero": "",
+      "cidade": "",
+      "estado": "",
+      "cep": "",
+      "status": "Aluno Novo",
+      "status_mode": "Automático",
+      "ac": "Bianca Alarcon",
+      "product": "Fundo - Receita (Recompra)",
+      "enrollment_date": "2026-05-15",
+      "data_treinamento_origem": null,
+      "due_day": 15,
+      "sale_value": "9666.68",
+      "down_payment": "0",
+      "total_installments": 4,
+      "paid_installments": 0,
+      "installment_value": "2416.67",
+      "installments": [
+        {
+          "paid": false,
+          "tags": [
+            "6198b672-02ed-420c-8b63-ad7ac784926c",
+            "55db7beb-5999-419d-b829-136f1c35d34a",
+            "391d9ecc-9103-495f-b6b4-08ca05f8bafe"
+          ],
+          "value": 2416.67,
+          "number": 1,
+          "dueDate": "2026-05-15"
+        },
+        {
+          "paid": false,
+          "tags": [
+            "6198b672-02ed-420c-8b63-ad7ac784926c",
+            "55db7beb-5999-419d-b829-136f1c35d34a",
+            "391d9ecc-9103-495f-b6b4-08ca05f8bafe"
+          ],
+          "value": 2416.67,
+          "number": 2,
+          "dueDate": "2026-06-15"
+        },
+        {
+          "paid": false,
+          "tags": [
+            "6198b672-02ed-420c-8b63-ad7ac784926c",
+            "55db7beb-5999-419d-b829-136f1c35d34a",
+            "391d9ecc-9103-495f-b6b4-08ca05f8bafe"
+          ],
+          "value": 2416.67,
+          "number": 3,
+          "dueDate": "2026-06-15"
+        },
+        {
+          "paid": false,
+          "tags": [
+            "6198b672-02ed-420c-8b63-ad7ac784926c",
+            "55db7beb-5999-419d-b829-136f1c35d34a",
+            "391d9ecc-9103-495f-b6b4-08ca05f8bafe"
+          ],
+          "value": 2416.67,
+          "number": 4,
+          "dueDate": "2026-07-15"
+        }
+      ],
+      "history": [
+        {
+          "date": "2026-08-28T20:19:47.397Z",
+          "text": "Ficha de Recompra criada — parcelas separadas do contrato Missão Governar para vínculo de treinamento na Conciliação.",
+          "type": "Sistema"
+        },
+        {
+          "date": "2026-08-31T19:32:08.270Z",
+          "text": "Carteira transferida de Paula Passini para Bianca Alarcon.",
+          "type": "Sistema"
+        }
+      ],
+      "is_renda_extra": false,
+      "renda_extra_status": null,
+      "renda_extra_ac": null,
+      "renda_extra_ac_assigned_at": null,
+      "renda_extra_inclusion_date": null,
+      "renda_extra_inscription_date": null,
+      "renda_extra_acordo_value": null,
+      "renda_extra_directed_at": null,
+      "renda_extra_value_at_direction": null,
+      "status_cancelamento": "nenhum",
+      "cancellation_case_id": null,
+      "tags": [],
+      "product_history": [],
+      "detalhes": null,
+      "created_at": "2026-08-28T20:19:47.397Z",
+      "updated_at": "2026-08-31T19:32:14.269Z",
+      "renda_extra_payment_date": null,
+      "renda_extra_payment_method": null,
+      "company_id": "00000000-0000-0000-0000-0000000a1a11",
+      "ciclo": null,
+      "status_antes_cancelamento": null,
+      "iam_control_aluno_id": null,
+      "iam_control_synced_at": null,
+      "cpf_digits": "",
+      "iam_control_contrato_id": null,
+      "iam_control_contrato_status": null,
+      "iam_control_pendente_tipo": null,
+      "iam_control_pendente_link": null,
+      "iam_gc_conciliado_at": null,
+      "recompra_treinamento": null
+    }
+  ]
+}

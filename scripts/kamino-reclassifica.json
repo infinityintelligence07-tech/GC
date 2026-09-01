@@ -1,0 +1,794 @@
+{
+ "recebidoAMenos": {
+  "total": 293,
+  "descontoFormalizado": {
+   "linhas": 293,
+   "valor": 26928.5
+  },
+  "descontoComSobra": {
+   "linhas": 0,
+   "valor": 0
+  },
+  "semDescontoLote": {
+   "linhas": 0,
+   "valor": 0
+  },
+  "semDescontoIsolado": {
+   "linhas": 0,
+   "valor": 0,
+   "casos": []
+  },
+  "tarifa": {
+   "linhas": 0,
+   "valor": 0
+  }
+ },
+ "duplicidade": {
+  "grupos": 45,
+  "quitacaoLote": 20,
+  "reemissao": {
+   "grupos": 15,
+   "valor": 26279.08,
+   "casos": [
+    {
+     "pessoa": "Luana dos Santos",
+     "produto": "Pmr",
+     "venc": "2025-03-20",
+     "valor": 301.46,
+     "n": 2,
+     "datas": [
+      "2025-02-19",
+      "2025-03-11"
+     ],
+     "ids": [
+      "11048",
+      "13200"
+     ]
+    },
+    {
+     "pessoa": "Luana dos Santos",
+     "produto": "Confronto",
+     "venc": "2025-03-20",
+     "valor": 262.16,
+     "n": 2,
+     "datas": [
+      "2025-02-19",
+      "2025-03-11"
+     ],
+     "ids": [
+      "11066",
+      "13169"
+     ]
+    },
+    {
+     "pessoa": "Adrielly Cristine Colombo Cruz",
+     "produto": "Missão Governar",
+     "venc": "2025-12-15",
+     "valor": 529,
+     "n": 2,
+     "datas": [
+      "2024-12-16",
+      "2026-02-27"
+     ],
+     "ids": [
+      "11131",
+      "40472"
+     ]
+    },
+    {
+     "pessoa": "Hugo Yan Nicodemos Moreno",
+     "produto": "Confronto",
+     "venc": "2025-04-15",
+     "valor": 447.21,
+     "n": 2,
+     "datas": [
+      "2025-03-13",
+      "2025-04-09"
+     ],
+     "ids": [
+      "13276",
+      "17137"
+     ]
+    },
+    {
+     "pessoa": "Walmor Gomes Serrafim Junior",
+     "produto": "Confronto",
+     "venc": "2025-10-15",
+     "valor": 1377.33,
+     "n": 2,
+     "datas": [
+      "2025-10-14",
+      "2025-09-12"
+     ],
+     "ids": [
+      "18713",
+      "29797"
+     ]
+    },
+    {
+     "pessoa": "Guilherme David Souza Neves",
+     "produto": "Confronto",
+     "venc": "2026-06-15",
+     "valor": 830.83,
+     "n": 2,
+     "datas": [
+      "2025-12-29",
+      "2026-06-10"
+     ],
+     "ids": [
+      "21050",
+      "46320"
+     ]
+    },
+    {
+     "pessoa": "Marta Teresinha Schulz Henz",
+     "produto": "Confronto",
+     "venc": "2026-06-15",
+     "valor": 1661.66,
+     "n": 2,
+     "datas": [
+      "2025-12-29",
+      "2026-06-11"
+     ],
+     "ids": [
+      "21686",
+      "46363"
+     ]
+    },
+    {
+     "pessoa": "Anna Paola Mascarenhas Travensoli",
+     "produto": "Outras Receitas Financeiras",
+     "venc": "2025-11-25",
+     "valor": 399.89,
+     "n": 2,
+     "datas": [
+      "2025-11-04",
+      "2025-11-21"
+     ],
+     "ids": [
+      "27535",
+      "32965"
+     ]
+    },
+    {
+     "pessoa": "Gabriela Dias da Silva",
+     "produto": "Confronto",
+     "venc": "2026-06-10",
+     "valor": 1495,
+     "n": 2,
+     "datas": [
+      "2026-03-05",
+      "2026-06-10"
+     ],
+     "ids": [
+      "35049",
+      "46364"
+     ]
+    },
+    {
+     "pessoa": "Eládio José Ochner",
+     "produto": "Missão Governar",
+     "venc": "2026-07-15",
+     "valor": 1506.1,
+     "n": 2,
+     "datas": [
+      "2026-03-05",
+      "2026-07-20"
+     ],
+     "ids": [
+      "35255",
+      "48501"
+     ]
+    },
+    {
+     "pessoa": "Sofia de Cássia Dametto Alves",
+     "produto": "Confronto",
+     "venc": "2026-03-15",
+     "valor": 830.33,
+     "n": 2,
+     "datas": [
+      "2026-04-15",
+      "2026-03-17"
+     ],
+     "ids": [
+      "36704",
+      "43767"
+     ]
+    },
+    {
+     "pessoa": "Benedito Alírio da Costa",
+     "produto": "Confronto",
+     "venc": "2026-08-15",
+     "valor": 897,
+     "n": 2,
+     "datas": [
+      "2026-08-18",
+      "2026-07-17"
+     ],
+     "ids": [
+      "37862",
+      "38156"
+     ]
+    },
+    {
+     "pessoa": "Jucilene Rodrigues",
+     "produto": "Missão Governar",
+     "venc": "2026-07-20",
+     "valor": 1054.16,
+     "n": 2,
+     "datas": [
+      "2026-03-26",
+      "2026-07-22"
+     ],
+     "ids": [
+      "37987",
+      "48504"
+     ]
+    },
+    {
+     "pessoa": "Rosemeire Aparecida Rosa",
+     "produto": "Missão Governar",
+     "venc": "2026-07-20",
+     "valor": 1330.08,
+     "n": 2,
+     "datas": [
+      "2026-03-26",
+      "2026-07-22"
+     ],
+     "ids": [
+      "37992",
+      "48505"
+     ]
+    },
+    {
+     "pessoa": "Edson Roberto Messias da Silva",
+     "produto": "Confronto",
+     "venc": "2026-06-26",
+     "valor": 850.96,
+     "n": 2,
+     "datas": [
+      "2026-06-15",
+      "2026-06-25"
+     ],
+     "ids": [
+      "43467",
+      "43481"
+     ]
+    }
+   ]
+  },
+  "comAberta": {
+   "grupos": 10,
+   "valor": 16551.98,
+   "casos": [
+    {
+     "pessoa": "Kilvia Segatto",
+     "produto": "Missão Governar",
+     "venc": "2026-01-15",
+     "valor": 806.67,
+     "n": 2,
+     "abertas": 1,
+     "ids": [
+      "11981",
+      "46341"
+     ]
+    },
+    {
+     "pessoa": "Eugenia Vitoria Ferreira Anastacio",
+     "produto": "Pmr",
+     "venc": "2026-07-15",
+     "valor": 737,
+     "n": 2,
+     "abertas": 1,
+     "ids": [
+      "34417",
+      "50172"
+     ]
+    },
+    {
+     "pessoa": "Genira Soares da Silva",
+     "produto": "Missão Governar",
+     "venc": "2026-04-15",
+     "valor": 300,
+     "n": 2,
+     "abertas": 1,
+     "ids": [
+      "36893",
+      "41428"
+     ]
+    },
+    {
+     "pessoa": "Neile dos Santos Tangerino",
+     "produto": "Confronto",
+     "venc": "2026-04-15",
+     "valor": 830.33,
+     "n": 2,
+     "abertas": 2,
+     "ids": [
+      "37033",
+      "37034"
+     ]
+    },
+    {
+     "pessoa": "Luiz Felipe do Nascimento Figueira",
+     "produto": "Confronto",
+     "venc": "2026-06-20",
+     "valor": 750,
+     "n": 2,
+     "abertas": 1,
+     "ids": [
+      "37678",
+      "50167"
+     ]
+    },
+    {
+     "pessoa": "Patricia Nakamura",
+     "produto": "Confronto",
+     "venc": "2026-09-10",
+     "valor": 596.25,
+     "n": 2,
+     "abertas": 1,
+     "ids": [
+      "46149",
+      "46166"
+     ]
+    },
+    {
+     "pessoa": "Maiara Maria dos Santos",
+     "produto": "Fundo - Receita (Recompra)",
+     "venc": "2026-06-15",
+     "valor": 2416.67,
+     "n": 2,
+     "abertas": 2,
+     "ids": [
+      "46723",
+      "47691"
+     ]
+    },
+    {
+     "pessoa": "Valerio Alves dos Santos",
+     "produto": "Missão Governar",
+     "venc": "2026-08-25",
+     "valor": 1215.71,
+     "n": 2,
+     "abertas": 2,
+     "ids": [
+      "46786",
+      "46787"
+     ]
+    },
+    {
+     "pessoa": "Vinicius de Borba Oliveira",
+     "produto": "Pmr",
+     "venc": "2027-04-21",
+     "valor": 852.87,
+     "n": 2,
+     "abertas": 2,
+     "ids": [
+      "46895",
+      "46911"
+     ]
+    },
+    {
+     "pessoa": "Jardel Silva de Moura",
+     "produto": "Missão Governar",
+     "venc": "2027-07-10",
+     "valor": 1365.45,
+     "n": 2,
+     "abertas": 2,
+     "ids": [
+      "46945",
+      "46946"
+     ]
+    }
+   ]
+  }
+ },
+ "quitacoesEmLote": {
+  "eventos": 293,
+  "recebido": 1934641.72,
+  "desconto": 15210.54,
+  "maiores": [
+   {
+    "pessoa": "Yuri Henrique Palomino Pinheiro",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 10,
+    "devido": 33000,
+    "recebido": 33000,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Luciano Tiago Gomes Velho",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 13,
+    "antecipadas": 11,
+    "devido": 31795,
+    "recebido": 31795,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Willian Andre da Silva Vieira",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 10,
+    "devido": 29300,
+    "recebido": 29300,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Esequiel Silva Rodrigues",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 10,
+    "devido": 23940,
+    "recebido": 23940,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Fernanda Alves Pizon Melo",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 14,
+    "antecipadas": 12,
+    "devido": 21527.97,
+    "recebido": 21527.97,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Gabriela de Souza Maia",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 13,
+    "antecipadas": 12,
+    "devido": 21527.96,
+    "recebido": 21527.96,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Jeisy Favarão Marques",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 13,
+    "antecipadas": 12,
+    "devido": 21527.92,
+    "recebido": 21527.92,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Andressa Cilene Ribeiro",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 3,
+    "antecipadas": 3,
+    "devido": 20970.01,
+    "recebido": 20970.01,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Camila Nogueira de Oliveira",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 24,
+    "antecipadas": 24,
+    "devido": 20439.96,
+    "recebido": 20439.96,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Joice Ellen Bento",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 12,
+    "antecipadas": 12,
+    "devido": 19382.16,
+    "recebido": 19382.16,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Patricia Bolonha Valverde Areias",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 12,
+    "antecipadas": 12,
+    "devido": 18999.96,
+    "recebido": 18999.96,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Aline Kruger",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 10,
+    "antecipadas": 5,
+    "devido": 18900,
+    "recebido": 18900,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Henrique Douglas Correia da Silva",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 10,
+    "antecipadas": 10,
+    "devido": 17940,
+    "recebido": 17940,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Gilberto Elizeu da Costa Ouriques",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 12,
+    "antecipadas": 12,
+    "devido": 16020,
+    "recebido": 16020,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Bianca Freitas dos Santos",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 12,
+    "antecipadas": 12,
+    "devido": 15528,
+    "recebido": 15528,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Marcos Vinicius da Cruz Silva",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 11,
+    "devido": 15315.85,
+    "recebido": 15315.85,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Gabriela de Matos Esteves",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 10,
+    "devido": 14650,
+    "recebido": 14650,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Franciene dos Santos Souza",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 10,
+    "devido": 14650,
+    "recebido": 14650,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Leila Souza de Oliveira",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 6,
+    "antecipadas": 6,
+    "devido": 14580,
+    "recebido": 14580,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Luana Pereira de Camargo",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 10,
+    "devido": 14000,
+    "recebido": 14000,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Nathalia Fernanda de Oliveira Totti",
+    "produto": "Pnl",
+    "data": "",
+    "linhas": 7,
+    "antecipadas": 7,
+    "devido": 12999.98,
+    "recebido": 12999.98,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Gerfeson Souza de Oliveira",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 10,
+    "devido": 12500,
+    "recebido": 12500,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Cileiva Cristina Gabriel de Moraes",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 10,
+    "devido": 11970,
+    "recebido": 11970,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Jefferson Silva Barbosa Junior",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 10,
+    "devido": 11970,
+    "recebido": 11970,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Maria Tais da Silva",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 11,
+    "antecipadas": 10,
+    "devido": 11970,
+    "recebido": 11970,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Deolinda Aparecida Novaes de Freitas",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 13,
+    "antecipadas": 12,
+    "devido": 11970,
+    "recebido": 11970,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Lucimeia Brito Silva",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 16,
+    "antecipadas": 15,
+    "devido": 11969.9,
+    "recebido": 11969.9,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Douglas Emanuel de Oliveira Campos",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 12,
+    "antecipadas": 12,
+    "devido": 11724.36,
+    "recebido": 11724.36,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Miguel Kelson Gomes de Melo",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 13,
+    "antecipadas": 12,
+    "devido": 11680,
+    "recebido": 11680,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Roseli de Oliveira",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 9,
+    "antecipadas": 8,
+    "devido": 11555.52,
+    "recebido": 11555.52,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Aline Maria Moreira dos Santos",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 6,
+    "antecipadas": 6,
+    "devido": 11364,
+    "recebido": 11364,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Cesar Francisco da Silva",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 6,
+    "antecipadas": 6,
+    "devido": 11364,
+    "recebido": 11364,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Douglas Henrique Ramos",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 6,
+    "antecipadas": 6,
+    "devido": 10969.98,
+    "recebido": 10969.98,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Nilmara Lima Rezende Soares",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 5,
+    "antecipadas": 4,
+    "devido": 10833.3,
+    "recebido": 10833.3,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Leticia dos Santos Xavier",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 13,
+    "antecipadas": 12,
+    "devido": 10764,
+    "recebido": 10764,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Allan Roberto Alves",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 13,
+    "antecipadas": 12,
+    "devido": 10764,
+    "recebido": 10764,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Yêda Maria de Melo Baleeiro",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 13,
+    "antecipadas": 12,
+    "devido": 10764,
+    "recebido": 10764,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Filipe Monte Alto Vieira",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 6,
+    "antecipadas": 6,
+    "devido": 10764,
+    "recebido": 10764,
+    "desconto": 0
+   },
+   {
+    "pessoa": "João Paulo Oliveira Costa",
+    "produto": "Confronto",
+    "data": "",
+    "linhas": 6,
+    "antecipadas": 6,
+    "devido": 10764,
+    "recebido": 10764,
+    "desconto": 0
+   },
+   {
+    "pessoa": "Leonardo Marchi Lins",
+    "produto": "Missão Governar",
+    "data": "",
+    "linhas": 10,
+    "antecipadas": 10,
+    "devido": 10673.64,
+    "recebido": 10673.64,
+    "desconto": 0
+   }
+  ]
+ }
+}

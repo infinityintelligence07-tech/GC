@@ -1,6 +1,9 @@
 import type { Student, StudentStatus, StatusCancelamento, Installment } from '@/types';
 import { calculateAutoStatus } from '@/store/useAppStore';
-import { cancelamentoOverridesFinancialStatus } from '@/lib/acPortfolioVisibility';
+import {
+  cancelamentoOverridesFinancialStatus,
+  isStudentFullyPaid,
+} from '@/lib/acPortfolioVisibility';
 import { isAwaitingIamGcApproval } from '@/lib/iamPendenteConciliacao';
 
 /** Etapas do funil em que o status financeiro (Vencido, Em Dia…) não deve aparecer. */
@@ -110,6 +113,9 @@ export function resolveStudentDisplayStatus(student: Student): StudentStatus {
   // Pendência IAM / Manual não é sobrescrita por Em Dia/Vencido.
   if (isOperationalPendente(student)) return 'Pendente';
   if (student.statusMode === 'Automático') {
+    // Quitado à vista não tem parcelas, e calculateAutoStatus só recebe o array:
+    // sem esta linha o contrato pago integralmente sairia como "Em Dia".
+    if (isStudentFullyPaid(student)) return 'Pago';
     return calculateAutoStatus(student.installments);
   }
   return student.status;
