@@ -266,8 +266,15 @@ export default function StudentsPage() {
 
 
   const filtered = processedStudents.filter((s) => {
-    // Search filter: apenas nome do aluno
-    if (search && !normalizeSearch(s.name).includes(normalizeSearch(search))) return false;
+    // Busca por nome ou CPF (com/sem máscara)
+    if (search) {
+      const q = normalizeSearch(search);
+      const qDigits = search.replace(/\D/g, '');
+      const nameHit = normalizeSearch(s.name).includes(q);
+      const cpfDigits = (s.cpf || '').replace(/\D/g, '');
+      const cpfHit = qDigits.length >= 3 && cpfDigits.includes(qDigits);
+      if (!nameHit && !cpfHit) return false;
+    }
 
     // Assessor filter: apenas AC
     if (acFilter && (s.ac || '') !== acFilter) return false;
@@ -478,7 +485,7 @@ export default function StudentsPage() {
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               className="input-field pl-8 w-full"
-              placeholder="Buscar aluno..."
+              placeholder="Buscar por nome ou CPF..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

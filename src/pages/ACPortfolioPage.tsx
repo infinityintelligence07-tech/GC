@@ -240,6 +240,7 @@ export default function ACPortfolioPage() {
   const acStudents = useMemo(() => {
     if (!ac) return [];
     const revertidosMode = kpiCardFilter === 'revertidos';
+    const searching = search.trim().length > 0;
     return students
       .filter((s) => s.ac === ac.name)
       .filter((s) => {
@@ -247,7 +248,8 @@ export default function ACPortfolioPage() {
         return !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students);
       })
       .filter((s) => {
-        if (statusFilter === 'Pago' || isStudentInAcPortfolio(s)) return true;
+        // Carteira ativa exclui quitados; busca ou filtro "Pago" inclui para achar o aluno.
+        if (statusFilter === 'Pago' || searching || isStudentInAcPortfolio(s)) return true;
         if (revertidosMode && revertidosStudentIds.has(s.id)) return true;
         return false;
       })
@@ -256,7 +258,7 @@ export default function ACPortfolioPage() {
         const withStatus = { ...s, status: resolveStudentDisplayStatus(s) } as Student;
         return tagFilters.length > 0 ? applyTagFilterToStudent(withStatus, tagFilters) : withStatus;
       });
-  }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey, statusFilter, kpiCardFilter, revertidosIdsKey, revertidosStudentIds]);
+  }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey, statusFilter, search, kpiCardFilter, revertidosIdsKey, revertidosStudentIds]);
 
 
   // ── KPI students (mode-dependent) ─────────────────────────────────────────
@@ -488,8 +490,24 @@ export default function ACPortfolioPage() {
     }
   };
 
-  const filtered = filteredByDue.filter((s) => {
-    if (!normalizeSearch(s.name).includes(normalizeSearch(search))) return false;
+  const pagosOcultosCount = useMemo(() => {
+    if (!ac || statusFilter === 'Pago' || search.trim()) return 0;
+    return students.filter(
+      (s) =>
+        s.ac === ac.name &&
+        s.status === 'Pago' &&
+        !isSolicCancel(s) &&
+        !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students),
+    ).length;
+  }, [ac, students, statusFilter, search, hiddenIdsKey, hiddenNamesKey]);
+    if (search.trim()) {
+      const q = normalizeSearch(search);
+      const qDigits = search.replace(/\D/g, '');
+      const nameHit = normalizeSearch(s.name).includes(q);
+      const cpfDigits = (s.cpf || '').replace(/\D/g, '');
+      const cpfHit = qDigits.length >= 3 && cpfDigits.includes(qDigits);
+      if (!nameHit && !cpfHit) return false;
+    }
     if (scoreFilter !== null && calcularScoreComportamento(s.installments) !== scoreFilter) return false;
     if (productFilter && s.product !== productFilter) return false;
 
@@ -519,14 +537,22 @@ export default function ACPortfolioPage() {
       if (statusFilter === 'Renda Extra') {
         if (!(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')) return false;
       } else if (!['cancelado', 'cancelamento_solicitado', 'Pago'].includes(statusFilter) && (s.status !== statusFilter || isSolicCancel(s))) return false;
-    } else {
-      // By default, hide fully canceled, pagos e Renda Extra já conciliada
+    } else if (!search.trim()) {
+      // Sem busca: carteira ativa oculta quitados / cancelados / renda extra conciliada
       if (s.statusCancelamento === 'cancelado') return false;
       if (s.status === 'Pago' && !isSolicCancel(s)) return false;
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão') return false;
     }
-    // Hide pagos unless explicitly filtering for them
-    if (statusFilter !== 'Pago' && statusFilter !== 'cancelamento_solicitado' && s.status === 'Pago' && !isSolicCancel(s)) return false;
+    // Com busca ativa, Pagos aparecem no resultado para o AC localizar o aluno
+    if (
+      !search.trim() &&
+      statusFilter !== 'Pago' &&
+      statusFilter !== 'cancelamento_solicitado' &&
+      s.status === 'Pago' &&
+      !isSolicCancel(s)
+    ) {
+      return false;
+    }
     return true;
   });
 
@@ -1347,11 +1373,17 @@ export default function ACPortfolioPage() {
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input
           className="input-field pl-8 w-full"
-          placeholder="Buscar aluno..."
+          placeholder="Buscar por nome ou CPF..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
+      {pagosOcultosCount > 0 && (
+        <p className="text-[11px] text-muted-foreground -mt-2">
+          {pagosOcultosCount} aluno(s) com status <strong>Pago</strong> ficam ocultos na carteira ativa.
+          Busque pelo nome/CPF ou filtre por status <button type="button" className="underline font-semibold text-foreground" onClick={() => setStatusFilter('Pago')}>Pago</button>.
+        </p>
+      )}
 
       {/* ── Students Table ────────────────────────────────────────────────────── */}
       <div ref={studentsTableRef} className="bg-card border border-border rounded-2xl overflow-hidden saas-shadow scroll-mt-4">
