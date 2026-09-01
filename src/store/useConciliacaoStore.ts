@@ -17,6 +17,7 @@ import {
   conciliarItemDb,
   reprovarItemDb,
   deleteConciliacaoItemDb,
+  deleteConciliacaoItemsByCaseIdDb,
   updateConciliacaoImportErrorDb,
   deleteConciliacaoImportErrorDb,
 } from '@/lib/supabaseMutations';
@@ -286,12 +287,14 @@ export const useConciliacaoStore = create<ConciliacaoState>()((set, get) => ({
         item.relatedCaseId === caseId &&
         (item.status === 'pendente' || item.status === 'aprovado'),
     );
-    if (!targets.length) return;
     const ids = new Set(targets.map((item) => item.id));
-    set((state) => ({ items: state.items.filter((item) => !ids.has(item.id)) }));
-    targets.forEach((item) =>
-      deleteConciliacaoItemDb(item.id).catch(reportDbError('remover conciliação pendente')),
-    );
+    // Remove do estado local imediatamente (mesmo se a lista estiver vazia) e
+    // sempre apaga no banco por related_case_id — evita card preso em Finalizado
+    // quando o item pendente não estava carregado no store no momento da reativação.
+    if (ids.size > 0) {
+      set((state) => ({ items: state.items.filter((item) => !ids.has(item.id)) }));
+    }
+    deleteConciliacaoItemsByCaseIdDb(caseId).catch(reportDbError('remover conciliação pendente'));
   },
 
   importErrors: [],

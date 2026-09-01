@@ -12,6 +12,8 @@ import {
   fetchCarteiraExtratoLancamentos,
   createCarteiraExtratoLancamento,
   deleteCarteiraExtratoLancamento,
+  lancamentoSign,
+  LANCAMENTO_TIPOS,
   type CarteiraCardSnapshot,
   type CarteiraExtratoLancamento,
   type ExtratoLancamentoTipo,
@@ -82,7 +84,7 @@ export default function ExtratoCardTab() {
   // Form de novo lançamento
   const [novoData, setNovoData] = useState(todayISO);
   const [novoDescricao, setNovoDescricao] = useState('');
-  const [novoTipo, setNovoTipo] = useState<ExtratoLancamentoTipo>('debito');
+  const [novoTipo, setNovoTipo] = useState<ExtratoLancamentoTipo>('pagamento');
   const [novoValor, setNovoValor] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -146,11 +148,31 @@ export default function ExtratoCardTab() {
   const saldoFinal = parseValorBR(saldoFinalStr);
   const saldosValidos = Number.isFinite(saldoInicial) && Number.isFinite(saldoFinal);
 
-  const totalCreditos = lancamentos.filter((l) => l.tipo === 'credito').reduce((a, l) => a + l.valor, 0);
-  const totalDebitos = lancamentos.filter((l) => l.tipo === 'debito').reduce((a, l) => a + l.valor, 0);
-  const saldoEsperado = saldosValidos ? saldoInicial + totalCreditos - totalDebitos : NaN;
+  const somaPorTipo = useMemo(() => {
+    const acc: Record<ExtratoLancamentoTipo, number> = {
+      pagamento: 0,
+      entrada_aberto: 0,
+      saida_desconto: 0,
+      cancelamento: 0,
+    };
+    for (const l of lancamentos) acc[l.tipo] += l.valor;
+    return acc;
+  }, [lancamentos]);
+
+  const totalEntradas = somaPorTipo.entrada_aberto;
+  const totalSaidas = somaPorTipo.pagamento + somaPorTipo.saida_desconto + somaPorTipo.cancelamento;
+  const saldoEsperado = saldosValidos ? saldoInicial + totalEntradas - totalSaidas : NaN;
   const diferenca = saldosValidos ? saldoFinal - saldoEsperado : NaN;
   const bateu = saldosValidos && Math.abs(diferenca) < 0.01;
+
+  // Saldo corrido linha a linha (coluna "Total do Saldo" da planilha)
+  const linhasComSaldo = useMemo(() => {
+    let saldo = Number.isFinite(saldoInicial) ? saldoInicial : NaN;
+    return lancamentos.map((l) => {
+      saldo = Number.isFinite(saldo) ? saldo + lancamentoSign(l.tipo) * l.valor : NaN;
+      return { ...l, saldoCorrido: saldo };
+    });
+  }, [lancamentos, saldoInicial]);
 
   const addLancamento = async () => {
     setFormError('');
@@ -254,7 +276,7 @@ export default function ExtratoCardTab() {
             <tbody>
               <tr>
                 <td className="py-1.5 text-xs text-foreground">
-                  Saldo inicial <span className="text-[10px] text-muted-foreground">(card em {formatDateBR(dataInicial)})</span>
+                  Saldo anterior <span className="text-[10px] text-muted-foreground">(card em {formatDateBR(dataInicial)})</span>
                 </td>
                 <td className="py-1.5 text-right">
                   <input
@@ -268,26 +290,38 @@ export default function ExtratoCardTab() {
                 </td>
               </tr>
               <tr>
-                <td className="py-1.5 text-xs text-emerald-700">(+) Entradas lançadas no período</td>
-                <td className="py-1.5 text-xs text-right tabular-nums font-semibold text-emerald-700 pr-2">
-                  {formatCurrency(totalCreditos)}
+                <td className="py-1.5 text-xs text-rose-700">(−) Pagamento / Juros pagos</td>
+                <td className="py-1.5 text-xs text-right tabular-nums font-semibold text-rose-700 pr-2">
+                  {formatCurrency(somaPorTipo.pagamento)}
                 </td>
               </tr>
               <tr>
-                <td className="py-1.5 text-xs text-rose-700">(−) Saídas lançadas no período</td>
+                <td className="py-1.5 text-xs text-emerald-700">(+) Entrada valor em aberto</td>
+                <td className="py-1.5 text-xs text-right tabular-nums font-semibold text-emerald-700 pr-2">
+                  {formatCurrency(somaPorTipo.entrada_aberto)}
+                </td>
+              </tr>
+              <tr>
+                <td className="py-1.5 text-xs text-rose-700">(−) Saída / Desconto</td>
                 <td className="py-1.5 text-xs text-right tabular-nums font-semibold text-rose-700 pr-2">
-                  {formatCurrency(totalDebitos)}
+                  {formatCurrency(somaPorTipo.saida_desconto)}
+                </td>
+              </tr>
+              <tr>
+                <td className="py-1.5 text-xs text-rose-700">(−) Cancelamento</td>
+                <td className="py-1.5 text-xs text-right tabular-nums font-semibold text-rose-700 pr-2">
+                  {formatCurrency(somaPorTipo.cancelamento)}
                 </td>
               </tr>
               <tr className="border-t border-border">
-                <td className="py-1.5 text-xs font-semibold text-foreground">(=) Saldo esperado</td>
+                <td className="py-1.5 text-xs font-semibold text-foreground">(=) Total do Saldo</td>
                 <td className="py-1.5 text-xs text-right tabular-nums font-bold text-foreground pr-2">
                   {saldosValidos ? formatCurrency(saldoEsperado) : '—'}
                 </td>
               </tr>
               <tr>
                 <td className="py-1.5 text-xs text-foreground">
-                  Saldo final <span className="text-[10px] text-muted-foreground">(card em {formatDateBR(dataFinal)})</span>
+                  Saldo Atual GC <span className="text-[10px] text-muted-foreground">(card em {formatDateBR(dataFinal)})</span>
                 </td>
                 <td className="py-1.5 text-right">
                   <input
@@ -317,10 +351,10 @@ export default function ExtratoCardTab() {
               {!saldosValidos
                 ? 'Preencha os saldos para conferir'
                 : bateu
-                  ? 'Bateu! Saldo final = saldo esperado'
+                  ? 'Bateu! Saldo Atual GC = Total do Saldo'
                   : diferenca > 0
-                    ? 'Sobra a explicar (falta lançar entrada)'
-                    : 'Falta a explicar (falta lançar saída)'}
+                    ? 'Sobra a explicar (falta lançar entrada em aberto)'
+                    : 'Falta a explicar (falta lançar pagamento/saída/cancelamento)'}
             </div>
             <span className={`text-sm font-bold tabular-nums ${
               !saldosValidos ? 'text-muted-foreground' : bateu ? 'text-emerald-900' : 'text-amber-900'
@@ -362,14 +396,15 @@ export default function ExtratoCardTab() {
               />
             </div>
             <div>
-              <label className="text-[10px] font-semibold uppercase text-muted-foreground block mb-1">Tipo</label>
+              <label className="text-[10px] font-semibold uppercase text-muted-foreground block mb-1">Categoria</label>
               <select
                 value={novoTipo}
-                onChange={(e) => setNovoTipo(e.target.value === 'credito' ? 'credito' : 'debito')}
+                onChange={(e) => setNovoTipo(e.target.value as ExtratoLancamentoTipo)}
                 className="input-field text-xs"
               >
-                <option value="debito">Saída (− diminui o card)</option>
-                <option value="credito">Entrada (+ aumenta o card)</option>
+                {LANCAMENTO_TIPOS.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -397,55 +432,80 @@ export default function ExtratoCardTab() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px]">
+          <table className="w-full min-w-[900px]">
             <thead>
               <tr className="bg-muted/20 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <th className="px-3 py-2 text-left">Data</th>
                 <th className="px-3 py-2 text-left">Descrição</th>
-                <th className="px-3 py-2 text-right">Entrada (+)</th>
-                <th className="px-3 py-2 text-right">Saída (−)</th>
+                <th className="px-3 py-2 text-right">Pagamento / Juros</th>
+                <th className="px-3 py-2 text-right">Entrada em aberto</th>
+                <th className="px-3 py-2 text-right">Saída / Desc.</th>
+                <th className="px-3 py-2 text-right">Cancelamento</th>
+                <th className="px-3 py-2 text-right">Total do Saldo</th>
                 <th className="px-3 py-2 text-left">Autor</th>
                 <th className="px-3 py-2 text-center w-10"></th>
               </tr>
             </thead>
             <tbody>
-              {lancamentos.length === 0 ? (
+              {linhasComSaldo.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={9} className="px-4 py-6 text-center text-sm text-muted-foreground">
                     Nenhum lançamento no período. Use o formulário acima para registrar as movimentações do card.
                   </td>
                 </tr>
               ) : (
-                lancamentos.map((l) => (
-                  <tr key={l.id} className="border-t border-border/60 hover:bg-muted/30">
-                    <td className="px-3 py-2 text-[11px] text-muted-foreground whitespace-nowrap">{formatDateBR(l.data)}</td>
-                    <td className="px-3 py-2 text-xs text-foreground">{l.descricao}</td>
-                    <td className="px-3 py-2 text-xs text-right tabular-nums text-emerald-700 font-medium">
-                      {l.tipo === 'credito' ? formatCurrency(l.valor) : ''}
+                <>
+                  <tr className="border-t border-border/60 bg-muted/20">
+                    <td className="px-3 py-2 text-[11px] text-muted-foreground whitespace-nowrap">{formatDateBR(dataInicial)}</td>
+                    <td className="px-3 py-2 text-xs font-semibold text-foreground" colSpan={5}>SALDO ANTERIOR</td>
+                    <td className="px-3 py-2 text-xs text-right tabular-nums font-bold text-foreground">
+                      {Number.isFinite(saldoInicial) ? formatCurrency(saldoInicial) : '—'}
                     </td>
-                    <td className="px-3 py-2 text-xs text-right tabular-nums text-rose-700 font-medium">
-                      {l.tipo === 'debito' ? formatCurrency(l.valor) : ''}
-                    </td>
-                    <td className="px-3 py-2 text-[11px] text-muted-foreground">{l.autorNome ?? '—'}</td>
-                    <td className="px-3 py-2 text-center">
-                      <button
-                        onClick={() => void removeLancamento(l.id)}
-                        className="text-muted-foreground hover:text-rose-600 transition-colors"
-                        title="Excluir lançamento"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </td>
+                    <td colSpan={2}></td>
                   </tr>
-                ))
-              )}
-              {lancamentos.length > 0 && (
-                <tr className="border-t border-border bg-muted/30 font-semibold">
-                  <td className="px-3 py-2 text-xs text-foreground" colSpan={2}>Total</td>
-                  <td className="px-3 py-2 text-xs text-right tabular-nums text-emerald-800">{formatCurrency(totalCreditos)}</td>
-                  <td className="px-3 py-2 text-xs text-right tabular-nums text-rose-800">{formatCurrency(totalDebitos)}</td>
-                  <td colSpan={2}></td>
-                </tr>
+                  {linhasComSaldo.map((l) => (
+                    <tr key={l.id} className="border-t border-border/60 hover:bg-muted/30">
+                      <td className="px-3 py-2 text-[11px] text-muted-foreground whitespace-nowrap">{formatDateBR(l.data)}</td>
+                      <td className="px-3 py-2 text-xs text-foreground">{l.descricao}</td>
+                      <td className="px-3 py-2 text-xs text-right tabular-nums text-rose-700 font-medium">
+                        {l.tipo === 'pagamento' ? formatCurrency(l.valor) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-right tabular-nums text-emerald-700 font-medium">
+                        {l.tipo === 'entrada_aberto' ? formatCurrency(l.valor) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-right tabular-nums text-rose-700 font-medium">
+                        {l.tipo === 'saida_desconto' ? formatCurrency(l.valor) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-right tabular-nums text-rose-700 font-medium">
+                        {l.tipo === 'cancelamento' ? formatCurrency(l.valor) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-right tabular-nums font-semibold text-foreground">
+                        {Number.isFinite(l.saldoCorrido) ? formatCurrency(l.saldoCorrido) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-[11px] text-muted-foreground">{l.autorNome ?? '—'}</td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          onClick={() => void removeLancamento(l.id)}
+                          className="text-muted-foreground hover:text-rose-600 transition-colors"
+                          title="Excluir lançamento"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t border-border bg-muted/30 font-semibold">
+                    <td className="px-3 py-2 text-xs text-foreground" colSpan={2}>Total</td>
+                    <td className="px-3 py-2 text-xs text-right tabular-nums text-rose-800">{formatCurrency(somaPorTipo.pagamento)}</td>
+                    <td className="px-3 py-2 text-xs text-right tabular-nums text-emerald-800">{formatCurrency(somaPorTipo.entrada_aberto)}</td>
+                    <td className="px-3 py-2 text-xs text-right tabular-nums text-rose-800">{formatCurrency(somaPorTipo.saida_desconto)}</td>
+                    <td className="px-3 py-2 text-xs text-right tabular-nums text-rose-800">{formatCurrency(somaPorTipo.cancelamento)}</td>
+                    <td className="px-3 py-2 text-xs text-right tabular-nums font-bold text-foreground">
+                      {saldosValidos ? formatCurrency(saldoEsperado) : '—'}
+                    </td>
+                    <td colSpan={2}></td>
+                  </tr>
+                </>
               )}
             </tbody>
           </table>

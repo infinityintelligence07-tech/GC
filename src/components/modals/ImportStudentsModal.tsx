@@ -2477,17 +2477,21 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
         setProgressDetail(`${mirrorIndexByKey.size} caso(s)`);
         await new Promise((r) => setTimeout(r, 800));
         const freshStudents = useAppStore.getState().students;
-        const existingMirrorIds = new Set(
+        // Um aluno com a tag "Cancelamento" não pode gerar um segundo caso
+        // quando já existe qualquer caso vinculado (formal ou espelho).
+        // Antes a checagem considerava apenas espelhos e criava duplicatas
+        // após uma importação posterior.
+        const existingCaseStudentIds = new Set(
           useAppStore.getState().cancellationCases
-            .filter((c) => c.isMirror)
             .map((c) => c.studentId)
+            .filter(Boolean),
         );
         for (const [key] of mirrorIndexByKey) {
           const matches = freshStudents.filter(
             (s) => `${s.name.toLowerCase()}||${s.product.toLowerCase()}` === key
           );
           for (const stud of matches) {
-            if (existingMirrorIds.has(stud.id)) continue;
+            if (existingCaseStudentIds.has(stud.id)) continue;
             const now = new Date().toISOString();
             const valorAberto = stud.installments
               .filter((i) => !i.paid)
@@ -2509,6 +2513,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
               isMirror: true,
             };
             addCancellationCase(mirrorCase);
+            existingCaseStudentIds.add(stud.id);
           }
         }
       }

@@ -2853,7 +2853,9 @@ export default function CancelamentosPage() {
     const targetStage: CancellationStage = isFinanceiro ? 'Ajustes em Geral / Boleto' : 'Confeccionar Termo';
     const targetAction: CancellationAction = isFinanceiro ? 'Conversa WhatsApp' : 'Iniciar Tratativa';
     const targetStatus: CancellationOperationalStatus = isFinanceiro ? 'Negociando' : 'Jurídico';
-    const targetCancellationStatus = isFinanceiro ? 'em_tratamento' as const : 'juridico' as const;
+    // Na aba Alunos o status principal deve continuar "Solicitação Cancelamento".
+    // O destino (Financeiro/Jurídico) fica no funil do card, não no badge do aluno.
+    const targetCancellationStatus = 'solicitado' as const;
 
     // A conciliação formal guarda o estado do aluno antes da baixa em
     // `antes._snapshot`. Esse é o único estado confiável para devolver
@@ -3275,11 +3277,14 @@ export default function CancelamentosPage() {
   };
   const isAguardandoConciliacao = (c: CancellationCase): boolean => {
     if (hasReversaoParcialPendente(c)) return false;
+    // Caso reativado (ou ainda em fluxo) deve respeitar a coluna salva.
+    // Sem isso, um item de conciliação antigo deixado para trás prende o card
+    // em Finalizado mesmo após "Reativar caso" → Distrato/Tratativas.
+    if (isActiveCancellationWorkflow(c)) return false;
     // Uma conciliação formal pendente comprova que o cancelamento já foi
     // concluído pelo Jurídico. A ação exibida no card pode ter sido alterada
     // depois (ex.: "Em Tratativa") e não deve devolver o caso ao Distrato.
     if (pendingConciliacaoCaseIds.has(c.id)) return true;
-    if (isActiveCancellationWorkflow(c)) return false;
     const st = students.find((s) => s.id === c.studentId) ?? (c.studentId ? undefined : students.find((s) => s.cancellationCaseId === c.id));
     return st?.statusCancelamento === 'aguardando_conciliacao';
   };
@@ -3378,8 +3383,16 @@ export default function CancelamentosPage() {
     });
     if (fs !== 'Finalizado') return list;
     const q = finalizadoSearch.trim().toLowerCase();
+    // A busca do Finalizado também consulta o histórico arquivado. Assim um
+    // caso antigo não parece ter desaparecido só porque saiu dos 30 dias
+    // exibidos por padrão na coluna.
+    const searchableFinalized = q
+      ? displayCases
+        .filter((c) => isFinalizadoHistorico(c) || isFinalizadoRecente(c))
+        .filter((c) => matchesSearch(c) && matchesColumnAction(c, fs))
+      : list;
     const filtered = q
-      ? list.filter((c) => c.studentName.toLowerCase().includes(q))
+      ? searchableFinalized.filter((c) => c.studentName.toLowerCase().includes(q))
       : list;
     return filtered
       .sort((a, b) => finalizadoDateRef(b) - finalizadoDateRef(a))
@@ -3896,7 +3909,7 @@ export default function CancelamentosPage() {
                               type="text"
                               value={finalizadoSearch}
                               onChange={(e) => { setFinalizadoSearch(e.target.value); setFinalizadoLimit(10); }}
-                              placeholder="Pesquisar em Finalizado..."
+                              placeholder="Pesquisar em Finalizado e histórico..."
                               className="flex-1 bg-transparent outline-none text-[10px] text-foreground placeholder:text-muted-foreground"
                             />
                             {finalizadoSearch && (

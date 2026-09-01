@@ -826,6 +826,16 @@ export async function deleteConciliacaoItemDb(id: string) {
   if (error) throw error;
 }
 
+/** Remove pendências/aprovados de conciliação vinculados a um caso (ex.: reativação). */
+export async function deleteConciliacaoItemsByCaseIdDb(caseId: string) {
+  const { error } = await supabase
+    .from('conciliacao_items')
+    .delete()
+    .eq('related_case_id', caseId)
+    .in('status', ['pendente', 'aprovado']);
+  if (error) throw error;
+}
+
 // ─── Notificações por AC (Item 2 — Onda 2) ───────────────────────────────────
 export function rowToNotification(r: any): Notification {
   return {

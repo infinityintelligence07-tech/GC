@@ -18,7 +18,11 @@ export const CANCELAMENTO_BADGE_CONFIG: Record<string, { label: string; color: s
     color: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200',
   },
   em_tratamento: { label: 'Em Tratamento', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
-  juridico: { label: 'Jurídico', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
+  // Mantém o selo principal de solicitação; o destino jurídico fica no funil do card.
+  juridico: {
+    label: 'Solicitação Cancelamento',
+    color: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200',
+  },
   aguardando_conciliacao: { label: 'Conciliação Pendente', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
   pagamento_multa_pendente: {
     label: 'Pagamento Multa Pendente',

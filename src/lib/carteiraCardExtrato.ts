@@ -14,7 +14,26 @@ export interface CarteiraCardSnapshot {
   updatedAt: string;
 }
 
-export type ExtratoLancamentoTipo = 'credito' | 'debito';
+/**
+ * Categorias no modelo da planilha de conferência:
+ * - pagamento:      Pagamento / Juros pagos (diminui o card)
+ * - entrada_aberto: Entrada valor em aberto (aumenta o card — ex.: reversão de
+ *                   cancelamento, contrato novo aprovado)
+ * - saida_desconto: Saída / Desconto (diminui o card)
+ * - cancelamento:   Cancelamento concluído (diminui o card)
+ */
+export type ExtratoLancamentoTipo = 'pagamento' | 'entrada_aberto' | 'saida_desconto' | 'cancelamento';
+
+export const LANCAMENTO_TIPOS: Array<{ value: ExtratoLancamentoTipo; label: string; sign: 1 | -1 }> = [
+  { value: 'pagamento', label: 'Pagamento / Juros pagos (−)', sign: -1 },
+  { value: 'entrada_aberto', label: 'Entrada valor em aberto (+)', sign: 1 },
+  { value: 'saida_desconto', label: 'Saída / Desconto (−)', sign: -1 },
+  { value: 'cancelamento', label: 'Cancelamento (−)', sign: -1 },
+];
+
+export function lancamentoSign(tipo: ExtratoLancamentoTipo): 1 | -1 {
+  return tipo === 'entrada_aberto' ? 1 : -1;
+}
 
 export interface CarteiraExtratoLancamento {
   id: string;
@@ -40,13 +59,16 @@ function mapSnapshot(r: Record<string, unknown>): CarteiraCardSnapshot {
   };
 }
 
+const TIPOS_VALIDOS = new Set<string>(['pagamento', 'entrada_aberto', 'saida_desconto', 'cancelamento']);
+
 function mapLancamento(r: Record<string, unknown>): CarteiraExtratoLancamento {
+  const tipoRaw = String(r.tipo ?? '');
   return {
     id: String(r.id),
     companyId: String(r.company_id),
     data: String(r.data),
     descricao: String(r.descricao ?? ''),
-    tipo: (r.tipo === 'credito' ? 'credito' : 'debito'),
+    tipo: (TIPOS_VALIDOS.has(tipoRaw) ? tipoRaw : 'saida_desconto') as ExtratoLancamentoTipo,
     valor: Number(r.valor ?? 0),
     autorNome: r.autor_nome != null ? String(r.autor_nome) : undefined,
     createdAt: String(r.created_at ?? ''),
