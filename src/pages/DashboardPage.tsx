@@ -759,12 +759,26 @@ export default function DashboardPage() {
     const key = `${activeCompanyId}|${today}|${carteiraTotalValue.toFixed(2)}|${forecastTotais.pago.toFixed(2)}`;
     if (lastCardSnapshotRef.current === key) return;
     lastCardSnapshotRef.current = key;
+    // Detalhamento por aluno (carteira GC): mesmas regras do A Vencer do card.
+    // Alimenta o comparativo "O que mudou" na aba Extrato do Card.
+    const payload = forecastBase.flatMap((st) => {
+      if (isIamConciliadoQuitadoAvista(st)) return [];
+      let open = 0;
+      st.installments.forEach((i) => {
+        if (i.paid) return;
+        if (isInstallmentExcludedFromFinancialTotals(st, i)) return;
+        open += i.value;
+      });
+      if (open <= 0.005) return [];
+      return [{ id: st.id, name: st.name, open: Math.round(open * 100) / 100 }];
+    });
     void upsertCarteiraCardSnapshot({
       companyId: activeCompanyId,
       snapshotDate: today,
       aVencer: carteiraTotalValue,
       pago: forecastTotais.pago,
       qtdAlunos: carteiraTotalAlunos,
+      payload,
     }).catch((err) => console.warn('[extrato-card] snapshot:', err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompanyId, isCanonicalCardView, kaminoTotalsPending, carteiraTotalValue, forecastTotais.pago, carteiraTotalAlunos, students.length]);

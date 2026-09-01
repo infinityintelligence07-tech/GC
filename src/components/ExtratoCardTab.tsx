@@ -9,13 +9,18 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import {
   fetchCarteiraCardSnapshots,
+  fetchCarteiraCardSnapshotPayload,
   fetchCarteiraExtratoLancamentos,
+  fetchConciliacaoRegistrosPeriodo,
   createCarteiraExtratoLancamento,
   deleteCarteiraExtratoLancamento,
+  diffCardPayloads,
   lancamentoSign,
   LANCAMENTO_TIPOS,
   type CarteiraCardSnapshot,
   type CarteiraExtratoLancamento,
+  type CardDiffLinha,
+  type ConciliacaoRegistro,
   type ExtratoLancamentoTipo,
 } from '@/lib/carteiraCardExtrato';
 import {
@@ -29,6 +34,7 @@ import {
   ClipboardList,
   Scale,
   Info,
+  History,
 } from 'lucide-react';
 
 function formatDateBR(iso: string): string {
@@ -61,6 +67,36 @@ function firstDayOfMonthISO(): string {
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 }
 
+function formatDateTimeBR(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
+
+const REGISTRO_TIPO_LABEL: Record<string, string> = {
+  baixa_kamino: 'Baixa de parcela',
+  pagamento: 'Pagamento',
+  parcela_paga: 'Baixa de parcela',
+  correcao_contrato: 'Correção de contrato',
+  parcela_vencimento: 'Alteração de vencimento',
+  cancelamento: 'Cancelamento',
+  exclusao: 'Exclusão',
+  iam_pendente: 'Ficha IAM p/ conciliar',
+  quitacao: 'Quitação',
+  renegociacao: 'Renegociação',
+};
+
+const SITUACAO_LABEL: Record<CardDiffLinha['situacao'], { label: string; cls: string }> = {
+  saiu: { label: 'Saiu do card', cls: 'bg-rose-100 text-rose-800' },
+  entrou: { label: 'Entrou no card', cls: 'bg-emerald-100 text-emerald-800' },
+  alterado: { label: 'Valor alterado', cls: 'bg-amber-100 text-amber-800' },
+};
+
 export default function ExtratoCardTab() {
   const { currentUser } = useAppStore();
   const activeCompanyId = useCompanyStore((s) => s.activeCompanyId);
@@ -71,6 +107,8 @@ export default function ExtratoCardTab() {
 
   const [snapshots, setSnapshots] = useState<CarteiraCardSnapshot[]>([]);
   const [lancamentos, setLancamentos] = useState<CarteiraExtratoLancamento[]>([]);
+  const [diffLinhas, setDiffLinhas] = useState<CardDiffLinha[] | null>(null);
+  const [registros, setRegistros] = useState<ConciliacaoRegistro[]>([]);
   const [loading, setLoading] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -101,18 +139,25 @@ export default function ExtratoCardTab() {
     setLoading(true);
     (async () => {
       try {
-        const [snaps, lancs] = await Promise.all([
+        const [snaps, lancs, payloadIni, payloadFim, regs] = await Promise.all([
           fetchCarteiraCardSnapshots(activeCompanyId, dataInicial, dataFinal),
           fetchCarteiraExtratoLancamentos(activeCompanyId, dataInicial, dataFinal),
+          fetchCarteiraCardSnapshotPayload(activeCompanyId, dataInicial),
+          fetchCarteiraCardSnapshotPayload(activeCompanyId, dataFinal),
+          fetchConciliacaoRegistrosPeriodo(activeCompanyId, dataInicial, dataFinal),
         ]);
         if (cancelled) return;
         setSnapshots(snaps);
         setLancamentos(lancs);
+        setDiffLinhas(payloadIni && payloadFim ? diffCardPayloads(payloadIni, payloadFim) : null);
+        setRegistros(regs);
       } catch (err) {
         console.warn('[extrato-card] load:', err);
         if (!cancelled) {
           setSnapshots([]);
           setLancamentos([]);
+          setDiffLinhas(null);
+          setRegistros([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -173,6 +218,19 @@ export default function ExtratoCardTab() {
       return { ...l, saldoCorrido: saldo };
     });
   }, [lancamentos, saldoInicial]);
+
+  // Totais do comparativo aluno a aluno (O que mudou)
+  const diffResumo = useMemo(() => {
+    if (!diffLinhas) return null;
+    const soma = (s: CardDiffLinha['situacao']) =>
+      diffLinhas.filter((l) => l.situacao === s).reduce((acc, l) => acc + l.delta, 0);
+    return {
+      saiu: soma('saiu'),
+      entrou: soma('entrou'),
+      alterado: soma('alterado'),
+      total: diffLinhas.reduce((acc, l) => acc + l.delta, 0),
+    };
+  }, [diffLinhas]);
 
   const addLancamento = async () => {
     setFormError('');
@@ -362,6 +420,118 @@ export default function ExtratoCardTab() {
               {saldosValidos ? formatCurrency(diferenca) : '—'}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* O que mudou — histórico automático aluno a aluno */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
+          <History size={14} className="text-muted-foreground" />
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            O que mudou — {formatDateBR(dataInicial)} → {formatDateBR(dataFinal)}
+          </h2>
+        </div>
+
+        {diffLinhas === null ? (
+          <div className="p-4 text-xs text-muted-foreground flex items-start gap-1.5">
+            <Info size={13} className="mt-0.5 shrink-0" />
+            <span>
+              Sem detalhamento por aluno para uma das datas. O detalhamento passou a ser gravado junto
+              com a leitura diária do card — a partir de agora, cada dia com leitura permite comparar
+              aluno a aluno. Escolha datas que tenham leitura com detalhamento.
+            </span>
+          </div>
+        ) : diffLinhas.length === 0 ? (
+          <div className="p-4 text-xs text-muted-foreground">
+            Nenhuma mudança de valor por aluno entre as duas leituras.
+          </div>
+        ) : (
+          <>
+            {diffResumo && (
+              <div className="px-4 pt-3 pb-1 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 text-rose-800 px-2.5 py-1 text-[11px] font-semibold tabular-nums">
+                  Saíram do card: {formatCurrency(diffResumo.saiu)}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-1 text-[11px] font-semibold tabular-nums">
+                  Entraram: +{formatCurrency(diffResumo.entrou)}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2.5 py-1 text-[11px] font-semibold tabular-nums">
+                  Valores alterados: {diffResumo.alterado >= 0 ? '+' : ''}{formatCurrency(diffResumo.alterado)}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted text-foreground px-2.5 py-1 text-[11px] font-bold tabular-nums">
+                  Efeito total: {diffResumo.total >= 0 ? '+' : ''}{formatCurrency(diffResumo.total)}
+                </span>
+              </div>
+            )}
+            <div className="overflow-x-auto max-h-96 overflow-y-auto">
+              <table className="w-full min-w-[720px]">
+                <thead className="sticky top-0 bg-card">
+                  <tr className="bg-muted/20 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-3 py-2 text-left">Aluno</th>
+                    <th className="px-3 py-2 text-right">Aberto em {formatDateBR(dataInicial)}</th>
+                    <th className="px-3 py-2 text-right">Aberto em {formatDateBR(dataFinal)}</th>
+                    <th className="px-3 py-2 text-right">Diferença</th>
+                    <th className="px-3 py-2 text-left">Situação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diffLinhas.map((l) => {
+                    const sit = SITUACAO_LABEL[l.situacao];
+                    return (
+                      <tr key={l.id} className="border-t border-border/60 hover:bg-muted/30">
+                        <td className="px-3 py-2 text-xs text-foreground">{l.name}</td>
+                        <td className="px-3 py-2 text-xs text-right tabular-nums text-muted-foreground">{formatCurrency(l.openIni)}</td>
+                        <td className="px-3 py-2 text-xs text-right tabular-nums text-muted-foreground">{formatCurrency(l.openFim)}</td>
+                        <td className={`px-3 py-2 text-xs text-right tabular-nums font-semibold ${l.delta < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                          {l.delta > 0 ? '+' : ''}{formatCurrency(l.delta)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${sit.cls}`}>{sit.label}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* Registros da Conciliação no período (contexto do porquê) */}
+        <div className="border-t border-border">
+          <div className="px-4 py-2 bg-muted/20 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Registros na Conciliação no período ({registros.length})
+          </div>
+          {registros.length === 0 ? (
+            <div className="px-4 py-3 text-xs text-muted-foreground">
+              Nenhum registro conciliado no período. Mudanças sem registro aqui foram edições diretas
+              na ficha, importações de planilha ou vínculos do IAM Control (fichas que entram/saem da
+              fila de aprovação).
+            </div>
+          ) : (
+            <div className="overflow-x-auto max-h-72 overflow-y-auto">
+              <table className="w-full min-w-[720px]">
+                <thead className="sticky top-0 bg-card">
+                  <tr className="bg-muted/20 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-3 py-2 text-left whitespace-nowrap">Quando</th>
+                    <th className="px-3 py-2 text-left whitespace-nowrap">Tipo</th>
+                    <th className="px-3 py-2 text-left">Aluno</th>
+                    <th className="px-3 py-2 text-left">Detalhe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {registros.map((r) => (
+                    <tr key={r.id} className="border-t border-border/60 hover:bg-muted/30">
+                      <td className="px-3 py-2 text-[11px] text-muted-foreground whitespace-nowrap">{formatDateTimeBR(r.conciliadoAt)}</td>
+                      <td className="px-3 py-2 text-[11px] text-foreground whitespace-nowrap">{REGISTRO_TIPO_LABEL[r.tipo] ?? r.tipo}</td>
+                      <td className="px-3 py-2 text-xs text-foreground whitespace-nowrap">{r.studentName}</td>
+                      <td className="px-3 py-2 text-[11px] text-muted-foreground">{r.resumo}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

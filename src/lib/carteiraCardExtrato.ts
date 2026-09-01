@@ -14,6 +14,13 @@ export interface CarteiraCardSnapshot {
   updatedAt: string;
 }
 
+/** Um aluno dentro do payload da leitura diária (valor em aberto no card). */
+export interface CardSnapshotAluno {
+  id: string;
+  name: string;
+  open: number;
+}
+
 /**
  * Categorias no modelo da planilha de conferência:
  * - pagamento:      Pagamento / Juros pagos (diminui o card)
@@ -85,6 +92,7 @@ export async function upsertCarteiraCardSnapshot(input: {
   aVencer: number;
   pago: number;
   qtdAlunos: number;
+  payload?: CardSnapshotAluno[];
 }): Promise<void> {
   const { data: existing, error: selError } = await supabase
     .from('carteira_card_snapshots')
@@ -101,6 +109,7 @@ export async function upsertCarteiraCardSnapshot(input: {
         a_vencer: input.aVencer,
         pago: input.pago,
         qtd_alunos: input.qtdAlunos,
+        ...(input.payload ? { payload: input.payload } : {}),
         ...(existing.abertura_a_vencer == null ? { abertura_a_vencer: input.aVencer } : {}),
       })
       .eq('id', existing.id);
@@ -113,10 +122,15 @@ export async function upsertCarteiraCardSnapshot(input: {
       abertura_a_vencer: input.aVencer,
       pago: input.pago,
       qtd_alunos: input.qtdAlunos,
+      payload: input.payload ?? null,
     });
     if (error) throw error;
   }
 }
+
+// payload fica de fora da listagem (pode ter centenas de alunos por dia);
+// é buscado separadamente só para as datas comparadas.
+const SNAPSHOT_LIST_COLS = 'id, company_id, snapshot_date, a_vencer, abertura_a_vencer, pago, qtd_alunos, updated_at';
 
 export async function fetchCarteiraCardSnapshots(
   companyId: string,
@@ -125,13 +139,113 @@ export async function fetchCarteiraCardSnapshots(
 ): Promise<CarteiraCardSnapshot[]> {
   const { data, error } = await supabase
     .from('carteira_card_snapshots')
-    .select('*')
+    .select(SNAPSHOT_LIST_COLS)
     .eq('company_id', companyId)
     .gte('snapshot_date', from)
     .lte('snapshot_date', to)
     .order('snapshot_date', { ascending: true });
   if (error) throw error;
   return (data ?? []).map(mapSnapshot);
+}
+
+/** Payload (alunos + valores em aberto) da leitura de uma data específica. */
+export async function fetchCarteiraCardSnapshotPayload(
+  companyId: string,
+  snapshotDate: string,
+): Promise<CardSnapshotAluno[] | null> {
+  const { data, error } = await supabase
+    .from('carteira_card_snapshots')
+    .select('payload')
+    .eq('company_id', companyId)
+    .eq('snapshot_date', snapshotDate)
+    .maybeSingle();
+  if (error) throw error;
+  const raw = data?.payload;
+  if (!Array.isArray(raw)) return null;
+  return raw.map((a: Record<string, unknown>) => ({
+    id: String(a.id),
+    name: String(a.name ?? ''),
+    open: Number(a.open ?? 0),
+  }));
+}
+
+/** Uma linha do comparativo aluno a aluno entre duas leituras do card. */
+export interface CardDiffLinha {
+  id: string;
+  name: string;
+  openIni: number;
+  openFim: number;
+  delta: number;
+  situacao: 'saiu' | 'entrou' | 'alterado';
+}
+
+/**
+ * Compara os payloads de duas leituras e devolve só quem mudou,
+ * ordenado do maior impacto negativo para o positivo.
+ */
+export function diffCardPayloads(
+  ini: CardSnapshotAluno[],
+  fim: CardSnapshotAluno[],
+): CardDiffLinha[] {
+  const fimById = new Map(fim.map((a) => [a.id, a]));
+  const linhas: CardDiffLinha[] = [];
+  const vistos = new Set<string>();
+
+  for (const a of ini) {
+    vistos.add(a.id);
+    const depois = fimById.get(a.id);
+    if (!depois) {
+      if (a.open > 0.005) {
+        linhas.push({ id: a.id, name: a.name, openIni: a.open, openFim: 0, delta: -a.open, situacao: 'saiu' });
+      }
+      continue;
+    }
+    const delta = depois.open - a.open;
+    if (Math.abs(delta) > 0.005) {
+      linhas.push({ id: a.id, name: a.name, openIni: a.open, openFim: depois.open, delta, situacao: 'alterado' });
+    }
+  }
+  for (const b of fim) {
+    if (vistos.has(b.id) || b.open <= 0.005) continue;
+    linhas.push({ id: b.id, name: b.name, openIni: 0, openFim: b.open, delta: b.open, situacao: 'entrou' });
+  }
+  return linhas.sort((a, b) => a.delta - b.delta);
+}
+
+/** Registro da Conciliação exibido como histórico de apoio no extrato. */
+export interface ConciliacaoRegistro {
+  id: string;
+  conciliadoAt: string;
+  tipo: string;
+  studentName: string;
+  resumo: string;
+}
+
+/** Registros conciliados no período (contexto para o comparativo do card). */
+export async function fetchConciliacaoRegistrosPeriodo(
+  companyId: string,
+  fromDate: string, // YYYY-MM-DD (inclusive, horário de Brasília)
+  toDate: string,   // YYYY-MM-DD (inclusive)
+): Promise<ConciliacaoRegistro[]> {
+  // Converte os limites do período (dias em Brasília) para UTC.
+  const fromIso = `${fromDate}T03:00:00Z`;
+  const toIso = new Date(new Date(`${toDate}T03:00:00Z`).getTime() + 24 * 3600 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('conciliacao_items')
+    .select('id, conciliado_at, tipo, student_name, resumo')
+    .eq('company_id', companyId)
+    .eq('status', 'conciliado')
+    .gte('conciliado_at', fromIso)
+    .lt('conciliado_at', toIso)
+    .order('conciliado_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: String(r.id),
+    conciliadoAt: String(r.conciliado_at ?? ''),
+    tipo: String(r.tipo ?? ''),
+    studentName: String(r.student_name ?? ''),
+    resumo: String(r.resumo ?? ''),
+  }));
 }
 
 export async function fetchCarteiraExtratoLancamentos(
