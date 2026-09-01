@@ -35,18 +35,6 @@ export function isSolicitacaoCancelamento(s: Student): boolean {
 const FINALIZED_CANCEL_STAGES = new Set(['Cancelado', 'Negativação Efetivada', 'Recuperado']);
 
 /** Caso ainda em fluxo ativo — espelha a regra do funil Cancelamentos. */
-function isActiveCancellationWorkflow(c: CancellationCase): boolean {
-  const fs = c.funnelStage ?? (
-    c.stage === 'PROCON ou Judicial' ? 'Pendente'
-    : c.stage === 'Confeccionar Termo' || c.stage === 'Assinar Termo' ? 'Formalização'
-    : c.stage === 'Aguardando Contato' ? 'Entrada'
-    : 'Em Execução'
-  );
-  if (fs === 'Entrada' || fs === 'Em Execução' || fs === 'Pendente') return true;
-  if (fs === 'Formalização') return (c.acao ?? '').trim() !== 'Assinar Termo';
-  return false;
-}
-
 function findActiveCancellationCase(s: Student, cases: CancellationCase[]): CancellationCase | undefined {
   if (s.cancellationCaseId) {
     const byId = cases.find((c) => c.id === s.cancellationCaseId);
@@ -181,15 +169,17 @@ export function getHiddenFromAcPortfolioKeys(
     if (isRevertido) return;
 
     const casoFinalizado = c.funnelStage === 'Finalizado';
+    // Conciliação formal pendente/conciliada ganha da ação do card (ex.: "Em Tratativa"
+    // alterada depois da formalização não devolve o aluno à carteira do AC).
+    const temConciliacaoFormal =
+      caseHasCancelamentoFinalPending(c.id, conciliacaoItems) || conciliadoCaseIds.has(c.id);
     const aguardandoPosFormalizacao =
-      !reversaoParcialPendente &&
-      !isActiveCancellationWorkflow(c) &&
+      (!reversaoParcialPendente || temConciliacaoFormal) &&
       (caseHasCancelamentoFinalPending(c.id, conciliacaoItems) ||
         st?.statusCancelamento === 'aguardando_conciliacao' ||
         st?.statusCancelamento === 'pagamento_multa_pendente');
     const conciliado =
-      !reversaoParcialPendente &&
-      !isActiveCancellationWorkflow(c) &&
+      (!reversaoParcialPendente || temConciliacaoFormal) &&
       conciliadoCaseIds.has(c.id) &&
       !caseHasCancelamentoFinalPending(c.id, conciliacaoItems);
     const isFinalizado = casoFinalizado || aguardandoPosFormalizacao || conciliado;

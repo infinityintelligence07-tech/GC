@@ -3277,14 +3277,14 @@ export default function CancelamentosPage() {
   };
   const isAguardandoConciliacao = (c: CancellationCase): boolean => {
     if (hasReversaoParcialPendente(c)) return false;
-    // Caso reativado (ou ainda em fluxo) deve respeitar a coluna salva.
-    // Sem isso, um item de conciliação antigo deixado para trás prende o card
-    // em Finalizado mesmo após "Reativar caso" → Distrato/Tratativas.
-    if (isActiveCancellationWorkflow(c)) return false;
-    // Uma conciliação formal pendente comprova que o cancelamento já foi
-    // concluído pelo Jurídico. A ação exibida no card pode ter sido alterada
-    // depois (ex.: "Em Tratativa") e não deve devolver o caso ao Distrato.
+    // Conciliação formal pendente comprova que o Jurídico já concluiu o
+    // cancelamento. Tem prioridade sobre a ação exibida no card — alguém
+    // pode ter mudado a ação para "Em Tratativa" depois e isso NÃO pode
+    // devolver o caso ao Distrato (foi o que aconteceu com Fabiana Rech).
+    // Reativar caso remove a conciliação pendente; só então a coluna salva vale.
     if (pendingConciliacaoCaseIds.has(c.id)) return true;
+    // Sem item pendente: caso reativado / ainda em fluxo respeita a coluna salva.
+    if (isActiveCancellationWorkflow(c)) return false;
     const st = students.find((s) => s.id === c.studentId) ?? (c.studentId ? undefined : students.find((s) => s.cancellationCaseId === c.id));
     return st?.statusCancelamento === 'aguardando_conciliacao';
   };
