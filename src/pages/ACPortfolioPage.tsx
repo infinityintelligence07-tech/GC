@@ -498,6 +498,8 @@ export default function ACPortfolioPage() {
         !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students),
     ).length;
   }, [ac, students, statusFilter, search, hiddenIdsKey, hiddenNamesKey]);
+
+  const filtered = filteredByDue.filter((s) => {
     if (search.trim()) {
       const q = normalizeSearch(search);
       const qDigits = search.replace(/\D/g, '');
