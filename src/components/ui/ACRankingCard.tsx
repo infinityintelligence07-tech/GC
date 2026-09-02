@@ -23,12 +23,11 @@ interface ACRankingCardProps {
  * Pódio de Ranking dos Assessores.
  *
  * Regra alinhada à Taxa Em Dia da carteira do assessor:
- *   alunos "Em Dia" / (carteira − alunos novos) × 100
+ *   alunos "Em Dia" / (Novos + Em Dia + Inadimplentes) × 100
  *
  *   - numerador   = "Em Dia" (exclui solicitação de cancelamento)
- *   - carteira    = alunos ativos do AC (Pagos / cancelados / RE / judicial
- *                   / finalizado já filtrados pelo chamador)
- *   - alunos novos = "Aluno Novo" (exclui solicitação de cancelamento)
+ *   - denominador = Novos + Em Dia + Vencido 1/2 + À Negativar + Negativado
+ *                   (mesma base das % da carteira, que somam 100%)
  */
 export default function ACRankingCard({ acs, students, referenceDate: _referenceDate, renegByAc }: ACRankingCardProps) {
   const rules = useAppStore((s) => s.rules);
@@ -37,15 +36,21 @@ export default function ACRankingCard({ acs, students, referenceDate: _reference
     .filter((ac) => ac.active)
     .map((ac) => {
       const acStudents = students.filter((s) => s.ac === ac.name);
-      const carteiraTotal = acStudents.length;
       const alunosNovos = acStudents.filter(
         (s) => s.status === 'Aluno Novo' && !isSolicitacaoCancelamento(s),
       ).length;
       const emDia = acStudents.filter(
         (s) => s.status === 'Em Dia' && !isSolicitacaoCancelamento(s),
       ).length;
-      // Igual à Taxa Em Dia da carteira: total − novos (solicitações ficam no denom).
-      const denominador = carteiraTotal - alunosNovos;
+      const inadimplentes = acStudents.filter(
+        (s) =>
+          !isSolicitacaoCancelamento(s) &&
+          (s.status === 'Vencido 1' ||
+            s.status === 'Vencido 2' ||
+            s.status === 'À Negativar' ||
+            s.status === 'Negativado'),
+      ).length;
+      const denominador = alunosNovos + emDia + inadimplentes;
       const renegociado = renegByAc?.[ac.name] ?? 0;
       const liquidezRateExact = denominador > 0 ? (emDia / denominador) * 100 : 0;
       const liquidezRate = Math.round(liquidezRateExact * 10) / 10;
@@ -154,7 +159,7 @@ export default function ACRankingCard({ acs, students, referenceDate: _reference
 
       {/* Rodapé — fórmula */}
       <p className="mt-5 text-[10px] text-muted-foreground text-center">
-        Taxa Em Dia % = Alunos &quot;Em Dia&quot; ÷ (Carteira − Alunos Novos) — mesma regra da carteira do assessor
+        Taxa Em Dia % = Alunos &quot;Em Dia&quot; ÷ (Novos + Em Dia + Inadimplentes) — mesma regra da carteira do assessor
       </p>
     </div>
   );

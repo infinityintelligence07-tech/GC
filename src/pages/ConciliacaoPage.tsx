@@ -1708,6 +1708,8 @@ export default function ConciliacaoPage() {
           to: c.stage,
           operationalStatus: c.operationalStatus,
           note: `Conciliação REPROVADA por ${revisor}. Valores mantidos. Card retornou para "Em Tratativas" com a ação "Corrigir por Erro". Motivo: ${motivo}`,
+          byName: revisor,
+          byUserId: currentUser?.id,
         };
         updateCancellationCase(caseId, {
           funnelStage: targetFunnel,
@@ -3083,6 +3085,7 @@ export default function ConciliacaoPage() {
                 </div>
               </div>
 
+              {(ck.preenchidoAt || ck.cancelamentoBoleto !== undefined) && (
               <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-1.5 mb-4">
                 <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Checklist preenchido pelo Jurídico</h3>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
@@ -3102,6 +3105,7 @@ export default function ConciliacaoPage() {
                   </p>
                 )}
               </div>
+              )}
 
               {/* Termo de cancelamento — visualização */}
               {(termos.length > 0 || ck.termoUrl) && (

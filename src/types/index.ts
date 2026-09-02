@@ -414,6 +414,10 @@ export interface CancellationHistoryEntry {
   to: CancellationStage;
   operationalStatus?: CancellationOperationalStatus;
   note?: string;
+  /** Quem registrou a alteração (nome do usuário logado). */
+  byName?: string;
+  /** Id do usuário que registrou a alteração. */
+  byUserId?: string;
 }
 
 // ─── Checklist final (Distrato → Finalizado, respondido pelo Jurídico) ───────

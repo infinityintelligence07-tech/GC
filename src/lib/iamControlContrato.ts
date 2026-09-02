@@ -65,7 +65,10 @@ async function extrairErroInvoke(error: unknown, data: IamContratoResolveResult 
 }
 
 export async function resolveIamControlContrato(
-  student: Pick<Student, 'iamControlAlunoId' | 'product' | 'iamControlContratoId'>,
+  student: Pick<
+    Student,
+    'iamControlAlunoId' | 'product' | 'iamControlContratoId' | 'iamControlContratoStatus' | 'iamControlPendenteTipo'
+  >,
   opts?: { somenteMeta?: boolean },
 ): Promise<IamContratoResolveResult> {
   if (!student.iamControlAlunoId && !student.iamControlContratoId) {
@@ -77,6 +80,8 @@ export async function resolveIamControlContrato(
       iam_control_aluno_id: student.iamControlAlunoId,
       produto: student.product?.trim() || undefined,
       contrato_id: student.iamControlContratoId,
+      status_conciliacao: student.iamControlContratoStatus,
+      pendente_tipo: student.iamControlPendenteTipo,
       somente_meta: opts?.somenteMeta ?? false,
     },
   });
@@ -89,7 +94,10 @@ export async function resolveIamControlContrato(
 }
 
 export async function openIamControlContrato(
-  student: Pick<Student, 'iamControlAlunoId' | 'product' | 'name' | 'iamControlContratoId'>,
+  student: Pick<
+    Student,
+    'iamControlAlunoId' | 'product' | 'name' | 'iamControlContratoId' | 'iamControlContratoStatus' | 'iamControlPendenteTipo'
+  >,
 ) {
   const res = await resolveIamControlContrato(student);
   if (!res.ok) {
@@ -102,7 +110,8 @@ export async function openIamControlContrato(
     return res;
   }
 
-  if (String(res.status_conciliacao).toUpperCase().startsWith('PENDENTE')) {
+  const status = String(res.status_conciliacao ?? '').toUpperCase();
+  if (status === 'PENDENTE' || status.startsWith('PENDENTE_')) {
     return res;
   }
 
@@ -122,7 +131,15 @@ export function isIamContratoPendentePix(student: Pick<Student, 'iamControlContr
 }
 
 export async function fetchIamControlPaymentLink(
-  student: Pick<Student, 'iamControlAlunoId' | 'product' | 'iamControlContratoId' | 'iamControlPendenteLink'>,
+  student: Pick<
+    Student,
+    | 'iamControlAlunoId'
+    | 'product'
+    | 'iamControlContratoId'
+    | 'iamControlPendenteLink'
+    | 'iamControlContratoStatus'
+    | 'iamControlPendenteTipo'
+  >,
 ): Promise<string> {
   const cached = student.iamControlPendenteLink?.trim();
   if (cached) return cached;
@@ -139,7 +156,16 @@ export async function fetchIamControlPaymentLink(
 }
 
 export async function openIamControlPaymentLink(
-  student: Pick<Student, 'iamControlAlunoId' | 'product' | 'name' | 'iamControlContratoId' | 'iamControlPendenteLink'>,
+  student: Pick<
+    Student,
+    | 'iamControlAlunoId'
+    | 'product'
+    | 'name'
+    | 'iamControlContratoId'
+    | 'iamControlPendenteLink'
+    | 'iamControlContratoStatus'
+    | 'iamControlPendenteTipo'
+  >,
 ) {
   const link = await fetchIamControlPaymentLink(student);
   window.open(link, '_blank', 'noopener,noreferrer');

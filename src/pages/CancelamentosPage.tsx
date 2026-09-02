@@ -4,6 +4,7 @@ import {
   CancellationCase,
   CancellationStage,
   CancellationOperationalStatus,
+  CancellationHistoryEntry,
   MOTIVOS_CANCELAMENTO,
   MotivoCancelamento,
   Student,
@@ -235,6 +236,41 @@ function formatDateFull(iso: string): string {
     return new Date(y, m - 1, d).toLocaleDateString('pt-BR');
   }
   return new Date(iso).toLocaleDateString('pt-BR');
+}
+
+/** Data + horário local (para histórico de alterações). */
+function formatDateTime(iso: string): string {
+  if (!iso) return '';
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  if (dateOnly) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('pt-BR');
+  }
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function makeCaseHistoryEntry(
+  caseRef: Pick<CancellationCase, 'stage' | 'operationalStatus'>,
+  note: string,
+  author?: { id?: string; name?: string } | null,
+  overrides?: Partial<CancellationHistoryEntry>,
+): CancellationHistoryEntry {
+  return {
+    date: new Date().toISOString(),
+    from: caseRef.stage,
+    to: caseRef.stage,
+    operationalStatus: caseRef.operationalStatus,
+    note,
+    byName: author?.name || undefined,
+    byUserId: author?.id || undefined,
+    ...overrides,
+  };
 }
 
 // ─── Historical stage resolution ─────────────────────────────────────────────
@@ -909,7 +945,10 @@ function CaseHistoryModal({ c, onClose }: { c: CancellationCase; onClose: () => 
                   {i < c.history.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
                 </div>
                 <div className="pb-3">
-                  <p className="text-muted-foreground text-[10px]">{formatDateFull(entry.date)}</p>
+                  <p className="text-muted-foreground text-[10px]">
+                    {formatDateTime(entry.date)}
+                    {entry.byName ? ` · ${entry.byName}` : ''}
+                  </p>
                   <p className="text-foreground font-medium">
                     {entry.from !== entry.to ? `${entry.from} → ${entry.to}` : entry.to}
                   </p>
@@ -2774,7 +2813,6 @@ export default function CancelamentosPage() {
   const [historyStudent, setHistoryStudent] = useState<Student | null>(null);
   const [editStudentForCase, setEditStudentForCase] = useState<{ student: Student; caseRef: CancellationCase } | null>(null);
   const [finalizeAction, setFinalizeAction] = useState<{ caseRef: CancellationCase; type: 'reverter' | 'cancelar' } | null>(null);
-  const [checklistCase, setChecklistCase] = useState<CancellationCase | null>(null);
   const [concilConfirmCase, setConcilConfirmCase] = useState<CancellationCase | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'lista'>('kanban');
   const [revertChoice, setRevertChoice] = useState<CancellationCase | null>(null);
@@ -2880,13 +2918,12 @@ export default function CancelamentosPage() {
         .reduce((total, item) => total + getInstallmentOutstanding(item), 0)
       : liveCase.value;
 
-    const caseHistoryEntry = {
-      date: now,
-      from: liveCase.stage,
-      to: targetStage,
-      operationalStatus: targetStatus,
-      note: `Caso reativado e enviado para ${isFinanceiro ? 'Financeiro (Em Tratativas)' : 'Jurídico (Distrato do Contrato)'}. Comissão, estorno e conciliação pendente removidos.`,
-    };
+    const caseHistoryEntry = makeCaseHistoryEntry(
+      liveCase,
+      `Caso reativado e enviado para ${isFinanceiro ? 'Financeiro (Em Tratativas)' : 'Jurídico (Distrato do Contrato)'}. Comissão, estorno e conciliação pendente removidos.`,
+      currentUser,
+      { to: targetStage, operationalStatus: targetStatus },
+    );
     const updatedCase: Partial<CancellationCase> = {
       funnelStage: targetFunnel,
       stage: targetStage,
@@ -2993,24 +3030,19 @@ export default function CancelamentosPage() {
       return;
     }
     const now = new Date().toISOString();
-    const entry = {
-      date: now,
-      from: c.stage,
-      to: c.stage,
-      operationalStatus: c.operationalStatus,
-      note: `Ação alterada: ${c.acao ?? '—'} → ${acao}`,
-    };
+    const entry = makeCaseHistoryEntry(
+      c,
+      `Ação alterada: ${c.acao ?? '—'} → ${acao}`,
+      currentUser,
+    );
     updateCancellationCase(c.id, { acao, history: [...c.history, entry] });
   };
   const handleChangeResponsavel = (c: CancellationCase, responsavel: CancellationResponsavel) => {
-    const now = new Date().toISOString();
-    const entry = {
-      date: now,
-      from: c.stage,
-      to: c.stage,
-      operationalStatus: c.operationalStatus,
-      note: `Responsável alterado: ${c.responsavel ?? '—'} → ${responsavel}`,
-    };
+    const entry = makeCaseHistoryEntry(
+      c,
+      `Responsável alterado: ${c.responsavel ?? '—'} → ${responsavel}`,
+      currentUser,
+    );
     updateCancellationCase(c.id, { responsavel, history: [...c.history, entry] });
   };
 
@@ -3035,13 +3067,11 @@ export default function CancelamentosPage() {
     const prevFunnel = getFunnelStage(caseRef);
     if (prevFunnel === newFunnel) return;
 
-    const entry = {
-      date: now,
-      from: caseRef.stage,
-      to: caseRef.stage,
-      operationalStatus: caseRef.operationalStatus,
-      note: `Movido no funil: ${prevFunnel} → ${newFunnel}`,
-    };
+    const entry = makeCaseHistoryEntry(
+      caseRef,
+      `Movido no funil: ${prevFunnel} → ${newFunnel}`,
+      currentUser,
+    );
 
     // Ação padrão por coluna (setada automaticamente na chegada)
     const defaultAcaoByFunnel: Partial<Record<FunnelStage, CancellationAction>> = {
@@ -3094,12 +3124,7 @@ export default function CancelamentosPage() {
       setPendingMotivoCase({ caseRef, targetFunnel });
       return;
     }
-    // Distrato do Contrato → Finalizado: pedir checklist do Jurídico antes
     const prevFunnel = getFunnelStage(caseRef);
-    if (targetFunnel === 'Finalizado' && prevFunnel === 'Formalização' && !caseRef.finalChecklist?.preenchidoAt) {
-      setChecklistCase(caseRef);
-      return;
-    }
     // Em Tratativas → Distrato do Contrato: aciona o mesmo fluxo do botão
     // "Enviar para Jurídico" (abre modal de observações antes de mover).
     if (prevFunnel === 'Em Execução' && targetFunnel === 'Formalização') {
@@ -3491,13 +3516,7 @@ export default function CancelamentosPage() {
     const remaining = Math.max(0, total - newReverted);
     const noteHeader = `[Reversão parcial] ${qty} inscrição(ões) revertida(s) · ${remaining} remanescente(s) para o Jurídico.`;
     const fullNote = extraNote ? `${noteHeader} ${extraNote}` : noteHeader;
-    const entry = {
-      date: now,
-      from: caseRef.stage,
-      to: caseRef.stage,
-      operationalStatus: caseRef.operationalStatus,
-      note: fullNote,
-    };
+    const entry = makeCaseHistoryEntry(caseRef, fullNote, currentUser);
     const prevNotes = caseRef.notes ? `${caseRef.notes}\n\n` : '';
     updateCancellationCase(caseRef.id, {
       funnelStage: 'Formalização',
@@ -3531,13 +3550,11 @@ export default function CancelamentosPage() {
     const now = new Date().toISOString();
     // Marca o caso como Finalizado/Revertido no funil e registra histórico
     const total = caseRef.quantidadeInscricoes ?? 1;
-    const entry = {
-      date: now,
-      from: caseRef.stage,
-      to: caseRef.stage,
-      operationalStatus: caseRef.operationalStatus,
-      note: 'Reverter Sem Ajustes Financeiros — aluno em dia.',
-    };
+    const entry = makeCaseHistoryEntry(
+      caseRef,
+      'Reverter Sem Ajustes Financeiros — aluno em dia.',
+      currentUser,
+    );
     updateCancellationCase(caseRef.id, {
       funnelStage: 'Finalizado',
       acao: 'Revertido',
@@ -3982,13 +3999,11 @@ export default function CancelamentosPage() {
                                 movedToCurrentStageAt: now,
                                 history: [
                                   ...cc.history,
-                                  {
-                                    date: now,
-                                    from: cc.stage,
-                                    to: cc.stage,
-                                    operationalStatus: cc.operationalStatus,
-                                    note: 'Financeiro decidiu seguir com o cancelamento — devolvido ao Jurídico (Distrato do Contrato).',
-                                  },
+                                  makeCaseHistoryEntry(
+                                    cc,
+                                    'Financeiro decidiu seguir com o cancelamento — devolvido ao Jurídico (Distrato do Contrato).',
+                                    currentUser,
+                                  ),
                                 ],
                               });
                             }}
@@ -4077,10 +4092,6 @@ export default function CancelamentosPage() {
                                 // - abrir modal de finalização ao mover para "Finalizado"
                                 if (target !== 'Entrada' && !c.motivoCancelamento) {
                                   setPendingMotivoCase({ caseRef: c, targetFunnel: target });
-                                  return;
-                                }
-                                if (target === 'Finalizado' && funnelStage === 'Formalização' && !c.finalChecklist?.preenchidoAt) {
-                                  setChecklistCase(c);
                                   return;
                                 }
                                 if (target === 'Finalizado') {
@@ -4425,7 +4436,10 @@ export default function CancelamentosPage() {
                         .map((h, idx) => (
                           <li key={`${h.date}-${idx}`} className="border-l-2 border-slate-300 pl-3">
                             <p className="text-[10px] text-slate-600 font-semibold uppercase tracking-wider">
-                              {formatDateFull(h.date)} · {h.from} → {h.to}
+                              {formatDateTime(h.date)}
+                              {h.byName ? ` · ${h.byName}` : ''}
+                              {' · '}
+                              {h.from} → {h.to}
                             </p>
                             <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed mt-0.5">{translateFunnelNames(h.note ?? '')}</p>
                           </li>
@@ -4543,13 +4557,11 @@ export default function CancelamentosPage() {
                 inscricoesRevertidas: totalInsc,
                 history: [
                   ...revertChoice.history,
-                  {
-                    date: now,
-                    from: revertChoice.stage,
-                    to: revertChoice.stage,
-                    operationalStatus: revertChoice.operationalStatus,
-                    note: `Reverter SEM Ajustes (Com Alterações) — enviado para Conciliação. Obs.: ${observacoes}${trocaSuffix}`,
-                  },
+                  makeCaseHistoryEntry(
+                    revertChoice,
+                    `Reverter SEM Ajustes (Com Alterações) — enviado para Conciliação. Obs.: ${observacoes}${trocaSuffix}`,
+                    currentUser,
+                  ),
                 ],
                 movedToCurrentStageAt: now,
               });
@@ -4649,13 +4661,11 @@ export default function CancelamentosPage() {
                   responsavel: 'Jurídico',
                   history: [
                     ...revertChoice.history,
-                    {
-                      date: now,
-                      from: revertChoice.stage,
-                      to: revertChoice.stage,
-                      operationalStatus: revertChoice.operationalStatus,
-                      note: 'Reverter COM Ajustes Financeiros — movido para Em Tratativas (Renegociação Jurídico).',
-                    },
+                    makeCaseHistoryEntry(
+                      revertChoice,
+                      'Reverter COM Ajustes Financeiros — movido para Em Tratativas (Renegociação Jurídico).',
+                      currentUser,
+                    ),
                   ],
                   movedToCurrentStageAt: now,
                 });
@@ -4745,13 +4755,11 @@ export default function CancelamentosPage() {
                     inscricoesRevertidas: totalInsc,
                     history: [
                       ...srcCase.history,
-                      {
-                        date: nowIso,
-                        from: srcCase.stage,
-                        to: srcCase.stage,
-                        operationalStatus: srcCase.operationalStatus,
-                        note: 'Reverter COM Ajustes Financeiros — renegociação aplicada.',
-                      },
+                      makeCaseHistoryEntry(
+                        srcCase,
+                        'Reverter COM Ajustes Financeiros — renegociação aplicada.',
+                        currentUser,
+                      ),
                     ],
                   });
                 }
@@ -4798,28 +4806,6 @@ export default function CancelamentosPage() {
 
         );
       })()}
-      {checklistCase && (
-        <FinalChecklistModal
-          caseRef={checklistCase}
-          currentUserName={currentUser?.name}
-          currentUserId={currentUser?.id}
-          onClose={() => setChecklistCase(null)}
-          onSave={(checklist) => {
-            const now = new Date().toISOString();
-            const filled: typeof checklist = {
-              ...checklist,
-              preenchidoAt: now,
-              preenchidoPorId: currentUser?.id,
-              preenchidoPorNome: currentUser?.name,
-            };
-            updateCancellationCase(checklistCase.id, { finalChecklist: filled });
-            const updated = { ...checklistCase, finalChecklist: filled };
-            setChecklistCase(null);
-            // Continua para o fluxo padrão de finalização
-            setFinalizeAction({ caseRef: updated, type: 'cancelar' });
-          }}
-        />
-      )}
       {distratoMetricsOpen && (
         <DistratoMetricsModal metrics={distratoMetrics} onClose={() => setDistratoMetricsOpen(false)} />
       )}
@@ -4868,18 +4854,15 @@ export default function CancelamentosPage() {
             updateCancellationCase(caseRef.id, {
               history: [
                 ...caseRef.history,
-                {
-                  date: now,
-                  from: caseRef.stage,
-                  to: caseRef.stage,
-                  operationalStatus: caseRef.operationalStatus,
-                  note:
-                    `Aluno pagou a multa negativada: ${formatCurrency(valorPago)} em ${dataFmt}` +
+                makeCaseHistoryEntry(
+                  caseRef,
+                  `Aluno pagou a multa negativada: ${formatCurrency(valorPago)} em ${dataFmt}` +
                     (saldoRestante > 0.0049 ? ` (restam ${formatCurrency(saldoRestante)})` : ' (quitado)') +
                     `. Enviado à Conciliação — ${avisoRetirada}` +
                     (comprovanteNome ? ` Comprovante anexado: ${comprovanteNome}.` : '') +
                     (observacao ? ` Obs.: ${observacao}` : ''),
-                },
+                  currentUser,
+                ),
               ],
             });
 
@@ -4911,13 +4894,7 @@ export default function CancelamentosPage() {
             const noteText = (trimmed
               ? `Enviado ao Jurídico. Observações da tratativa: ${trimmed}`
               : 'Enviado ao Jurídico. Sem observações adicionais.') + parcialSuffix;
-            const entry = {
-              date: now,
-              from: caseRef.stage,
-              to: caseRef.stage,
-              operationalStatus: caseRef.operationalStatus,
-              note: noteText,
-            };
+            const entry = makeCaseHistoryEntry(caseRef, noteText, currentUser);
             const prevNotes = caseRef.notes ? `${caseRef.notes}\n\n` : '';
             const legalNote = `[${new Date(now).toLocaleString('pt-BR')}] Observações para o Jurídico:\n${trimmed || '(sem observações)'}${parcialSuffix}`;
             updateCancellationCase(caseRef.id, {
@@ -4984,13 +4961,11 @@ export default function CancelamentosPage() {
                   updateCancellationCase(c.id, {
                     acao: 'Ligação Agendada',
                     ligacaoAgendadaAt: scheduledIso,
-                    history: [...c.history, {
-                      date: nowIso,
-                      from: c.stage,
-                      to: c.stage,
-                      operationalStatus: c.operationalStatus,
-                      note: `Ligação agendada para ${new Date(scheduledIso).toLocaleString('pt-BR')}`,
-                    }],
+                    history: [...c.history, makeCaseHistoryEntry(
+                      c,
+                      `Ligação agendada para ${new Date(scheduledIso).toLocaleString('pt-BR')}`,
+                      currentUser,
+                    )],
                   });
                   setLigacaoPrompt(null);
                 }}
@@ -5012,159 +4987,6 @@ export default function CancelamentosPage() {
     </div>
   );
 }
-
-// ─── Final Checklist Modal (Jurídico responde ao mover Distrato → Finalizado) ─
-
-interface FinalChecklistModalProps {
-  caseRef: CancellationCase;
-  currentUserName?: string;
-  currentUserId?: string;
-  onClose: () => void;
-  onSave: (checklist: NonNullable<CancellationCase['finalChecklist']>) => void;
-}
-
-function FinalChecklistModal({ caseRef, onClose, onSave }: FinalChecklistModalProps) {
-  const initial = caseRef.finalChecklist ?? {};
-  const [cancelamentoBoleto, setCancelamentoBoleto] = useState<boolean | undefined>(initial.cancelamentoBoleto);
-  const [cancelamentoBonus, setCancelamentoBonus] = useState<boolean | undefined>(initial.cancelamentoBonus);
-  const [retirarAlunoTurma, setRetirarAlunoTurma] = useState<boolean>(initial.retirarAlunoTurma ?? true);
-  const [multaRecebida, setMultaRecebida] = useState<boolean | undefined>(initial.multaRecebida);
-  const [fazerEstorno, setFazerEstorno] = useState<boolean | undefined>(initial.fazerEstorno);
-  const [negativarAluno, setNegativarAluno] = useState<boolean | undefined>(initial.negativarAluno);
-  const [negativarValor, setNegativarValor] = useState<number>(initial.negativarValor ?? 0);
-  const [liberarTreinamentoOnline, setLiberarTreinamentoOnline] = useState<boolean | undefined>(initial.liberarTreinamentoOnline);
-  const [termoUrl, setTermoUrl] = useState<string>(initial.termoUrl ?? '');
-  const [observacoes, setObservacoes] = useState<string>(initial.observacoes ?? '');
-
-  const YesNo = ({ value, onChange, label, required }: { value: boolean | undefined; onChange: (v: boolean) => void; label: string; required?: boolean }) => (
-    <div className="flex items-center justify-between gap-3 py-1.5 border-b border-border/50 last:border-b-0">
-      <span className="text-xs text-foreground flex-1">
-        {label}
-        {required && <span className="text-destructive ml-0.5">*</span>}
-      </span>
-      <div className="flex gap-1">
-        <button
-          type="button"
-          onClick={() => onChange(true)}
-          className={`px-3 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
-            value === true ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-card text-muted-foreground border-border hover:bg-muted'
-          }`}
-        >
-          Sim
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange(false)}
-          className={`px-3 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
-            value === false ? 'bg-rose-500 text-white border-rose-500' : 'bg-card text-muted-foreground border-border hover:bg-muted'
-          }`}
-        >
-          Não
-        </button>
-      </div>
-    </div>
-  );
-
-  const requiredAnswered =
-    cancelamentoBoleto !== undefined &&
-    cancelamentoBonus !== undefined &&
-    multaRecebida !== undefined &&
-    fazerEstorno !== undefined &&
-    negativarAluno !== undefined &&
-    liberarTreinamentoOnline !== undefined;
-
-  const handleSave = () => {
-    if (!requiredAnswered) return;
-    onSave({
-      cancelamentoBoleto,
-      cancelamentoBonus,
-      retirarAlunoTurma,
-      multaRecebida,
-      fazerEstorno,
-      negativarAluno,
-      negativarValor: negativarAluno ? negativarValor : undefined,
-      liberarTreinamentoOnline,
-      termoUrl: termoUrl.trim() || undefined,
-      observacoes: observacoes.trim() || undefined,
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-lg saas-shadow-md max-h-[92vh] overflow-y-auto">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h2 className="text-sm font-bold text-foreground">Checklist do Jurídico — Distrato → Finalizado</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              <strong>{caseRef.studentName}</strong> — responda as perguntas antes de finalizar.
-            </p>
-          </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="space-y-1 mb-4">
-          <YesNo value={cancelamentoBoleto} onChange={setCancelamentoBoleto} label="Cancelamento de boleto?" required />
-          <YesNo value={cancelamentoBonus} onChange={setCancelamentoBonus} label="Cancelamento de bônus (tirar acesso)?" required />
-          <YesNo value={retirarAlunoTurma} onChange={setRetirarAlunoTurma} label="Retirar aluno da turma?" required />
-          <YesNo value={multaRecebida} onChange={setMultaRecebida} label="Multa recebida (conciliar)?" required />
-          <YesNo value={fazerEstorno} onChange={setFazerEstorno} label="Fazer estorno?" required />
-          <YesNo value={negativarAluno} onChange={setNegativarAluno} label="Negativar aluno pela multa?" required />
-          {negativarAluno && (
-            <div className="pl-3 py-2">
-              <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">Valor a negativar (R$)</label>
-              <CurrencyInput value={negativarValor} onChange={setNegativarValor} />
-            </div>
-          )}
-          <YesNo value={liberarTreinamentoOnline} onChange={setLiberarTreinamentoOnline} label="Liberar treinamento online (em vez de estorno total)?" required />
-        </div>
-
-        <div className="space-y-3 pt-3 border-t border-border">
-          <div>
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">
-              Termo de cancelamento — URL/link do arquivo (opcional)
-            </label>
-            <input
-              className="input-field w-full text-xs"
-              placeholder="Cole aqui o link do termo (Drive, Dropbox, ZapSign etc.)"
-              value={termoUrl}
-              onChange={(e) => setTermoUrl(e.target.value)}
-            />
-            <p className="text-[10px] text-muted-foreground mt-1">Fase 2: sincronização automática com ZapSign.</p>
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">Observações do Jurídico</label>
-            <textarea
-              className="input-field w-full text-xs resize-none"
-              rows={2}
-              value={observacoes}
-              onChange={(e) => setObservacoes(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
-          As respostas ficam disponíveis na aba <strong>Conciliação</strong>, que confirmará se todos os itens foram executados (incluindo o cancelamento dos boletos) e concluirá a baixa.
-        </div>
-
-        <div className="flex gap-2 mt-5">
-          <button
-            onClick={handleSave}
-            disabled={!requiredAnswered}
-            className="flex-1 py-2.5 rounded-xl text-sm font-medium iam-gradient text-primary-foreground shadow-md hover:shadow-lg transition-all disabled:opacity-50"
-          >
-            Salvar e continuar
-          </button>
-          <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors">
-            Cancelar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 
 // ─── Modal: Enviar para Jurídico (Em Tratativas → Distrato do Contrato) ─────
 

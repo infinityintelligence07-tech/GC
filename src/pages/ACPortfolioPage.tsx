@@ -36,7 +36,11 @@ import { statusColors } from '@/lib/statusColors';
 import { getTodayBrasilia, calcularDiasVencido, dueDateForDisplay } from '@/lib/brasiliaDate';
 import { getDisplayInstallmentValue, normalizeSearch } from '@/lib/utils';
 import { getTagStyle } from '@/lib/tagColors';
-import { computeTagKpis, getTagIdsForKpiGroup } from '@/lib/tagKpis';
+import {
+  computeTagKpis,
+  studentMatchesTagKpiGroup,
+  applyTagKpiGroupToStudent,
+} from '@/lib/tagKpis';
 import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagRefs } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
@@ -208,20 +212,6 @@ export default function ACPortfolioPage() {
     () => studentIdsFromRevertidosCases(revertidos, students, ac?.name),
     [revertidos, students, ac?.name],
   );
-  const boletosTagIds = useMemo(
-    () => getTagIdsForKpiGroup(studentTags, 'fundo_tmf_antecipacao'),
-    [studentTags],
-  );
-
-  useEffect(() => {
-    if (kpiCardFilter !== 'boletos_antecipados') return;
-    const active =
-      boletosTagIds.length > 0 &&
-      boletosTagIds.length === tagFilters.length &&
-      boletosTagIds.every((id) => tagFilters.includes(id));
-    if (!active) setKpiCardFilter('');
-  }, [tagFilters, boletosTagIds, kpiCardFilter]);
-
   const studentsTableRef = useRef<HTMLDivElement>(null);
   const scrollToStudentsTable = () => {
     window.setTimeout(() => {
@@ -518,15 +508,7 @@ export default function ACPortfolioPage() {
       return isOperationalPendente(s) && !isSolicCancel(s);
     }
     if (kpiCardFilter === 'boletos_antecipados') {
-      if (statusFilter) {
-        if (statusFilter === 'cancelado' && s.statusCancelamento !== 'cancelado') return false;
-        if (statusFilter === 'cancelamento_solicitado' && !matchesCancelamentoFilter(s, cancellationCases)) return false;
-        if (statusFilter === 'Pago' && s.status !== 'Pago') return false;
-        if (statusFilter === 'Renda Extra') {
-          if (!(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')) return false;
-        } else if (!['cancelado', 'cancelamento_solicitado', 'Pago'].includes(statusFilter) && (s.status !== statusFilter || isSolicCancel(s))) return false;
-      }
-      return true;
+      return studentMatchesTagKpiGroup(s, studentTags, 'fundo_tmf_antecipacao');
     }
 
     // Tag filter já aplicado na base acStudents — não filtra de novo aqui
@@ -557,8 +539,12 @@ export default function ACPortfolioPage() {
   });
 
   const sorted = (() => {
-    if (!sortBy) return filtered;
-    const arr = [...filtered];
+    const base =
+      kpiCardFilter === 'boletos_antecipados'
+        ? filtered.map((s) => applyTagKpiGroupToStudent(s, studentTags, 'fundo_tmf_antecipacao'))
+        : filtered;
+    if (!sortBy) return base;
+    const arr = [...base];
     arr.sort((a, b) => {
       let cmp = 0;
       if (sortBy === 'venc') {
@@ -659,15 +645,16 @@ export default function ACPortfolioPage() {
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
   const tagKpis = computeTagKpis(kpiStudentsScoped, studentTags, _instInRange);
 
-  const pct = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
+  // Novos + Em Dia + Inadimplentes usam a mesma base para as % fecharem em 100%.
+  // Cancelamento/Pendência ficam nos cards próprios e não entram nesta conta.
+  const totalComposicao = alunosNovos.length + emDia.length + inadimplentes;
+  const pct = (n: number) => totalComposicao > 0 ? ((n / totalComposicao) * 100).toFixed(1) : '0.0';
+  const pctCarteira = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
   const pctSolic = kpiStudents.length > 0
     ? ((solicitacaoCancelamento.length / kpiStudents.length) * 100).toFixed(1)
     : '0.0';
-  // Taxa Em Dia (regra item 9): exclui Aluno Novo do numerador e denominador.
-  const denominadorEmDia = total - alunosNovos.length;
-  const pctEmDia = denominadorEmDia > 0
-    ? ((emDia.length / denominadorEmDia) * 100).toFixed(1)
-    : '0.0';
+  const pctEmDia = pct(emDia.length);
+  const pctInadimplente = pct(inadimplentes);
   const paidCount = (s: Student) => s.installments.filter((i) => i.paid).length;
 
   const revertPct = acCases.length > 0 ? Math.round((revertidos.length / acCases.length) * 100) : 0;
@@ -996,7 +983,7 @@ export default function ACPortfolioPage() {
         <button
           type="button"
           onClick={() => { setStatusFilter(''); setKpiCardFilter(''); setTagFilters([]); }}
-          className={`min-w-0 text-left rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-primary transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 ${statusFilter === '' ? 'ring-2 ring-primary/50' : ''}`}
+          className={`min-w-0 text-left rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-primary transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 ${statusFilter === '' && !kpiCardFilter ? 'ring-2 ring-primary/50' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Carteira Total</p>
@@ -1111,7 +1098,7 @@ export default function ACPortfolioPage() {
             <TrendingUp size={16} className="text-white/50 shrink-0" />
           </div>
           <p className="kpi-value text-white">{pctEmDia}%</p>
-          <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {denominadorEmDia} (excl. novos)</p>
+          <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {totalComposicao}</p>
         </div>
       </div>
 
@@ -1167,8 +1154,8 @@ export default function ACPortfolioPage() {
             <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
             <TrendingDown size={16} className="text-white/50 shrink-0" />
           </div>
-          <p className="kpi-value text-white">{pct(inadimplentes)}%</p>
-          <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {total}</p>
+          <p className="kpi-value text-white">{pctInadimplente}%</p>
+          <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {totalComposicao}</p>
         </div>
       </div>
 
@@ -1227,7 +1214,7 @@ export default function ACPortfolioPage() {
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
             <p className="text-[11px] text-muted-foreground truncate">{pendentes.length} alunos</p>
-            <p className="text-[11px] font-semibold text-yellow-700 shrink-0">{pct(pendentes.length)}%</p>
+            <p className="text-[11px] font-semibold text-yellow-700 shrink-0">{pctCarteira(pendentes.length)}%</p>
           </div>
           {infoStatus === 'pendente' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
@@ -1283,11 +1270,10 @@ export default function ACPortfolioPage() {
             onClick={() => {
               if (kpiCardFilter === 'boletos_antecipados') {
                 setKpiCardFilter('');
-                setTagFilters([]);
               } else {
                 setKpiCardFilter('boletos_antecipados');
                 setStatusFilterRaw('');
-                setTagFilters(boletosTagIds);
+                setTagFilters([]);
                 scrollToStudentsTable();
               }
             }}

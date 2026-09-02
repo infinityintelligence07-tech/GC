@@ -572,13 +572,13 @@ export default function DashboardPage() {
     }
   })();
 
-  const pct = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
-  // Taxa Em Dia (regra item 9): considera SOMENTE alunos "Em Dia",
-  // exclui "Aluno Novo" do numerador E do denominador.
-  const denominadorEmDia = total - alunosNovos.length;
-  const pctEmDia = denominadorEmDia > 0
-    ? ((emDia.length / denominadorEmDia) * 100).toFixed(1)
-    : '0.0';
+  // Novos + Em Dia + Inadimplentes usam a mesma base para as % fecharem em 100%.
+  // Cancelamento/Pendência ficam nos cards próprios e não entram nesta conta.
+  const totalComposicao = alunosNovos.length + emDia.length + inadimplentes;
+  const pct = (n: number) => totalComposicao > 0 ? ((n / totalComposicao) * 100).toFixed(1) : '0.0';
+  const pctCarteira = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
+  const pctEmDia = pct(emDia.length);
+  const pctInadimplente = pct(inadimplentes);
 
   // ── Forecast (filtro isolado: só afeta este card) ─────────────────────────
   // Índices: 0=Todos, 1=Hoje, 2=Amanhã, 3=2Dias, 4=3Dias, 5=7Dias, 6=Personalizado
@@ -929,13 +929,13 @@ export default function DashboardPage() {
         {
           label: 'Taxa Em Dia',
           value: `${pctEmDia}%`,
-          detail: `${emDia.length} de ${denominadorEmDia} (excl. novos)`,
+          detail: `${emDia.length} de ${totalComposicao}`,
           tone: 'good',
         },
         {
           label: 'Taxa Inadimplente',
-          value: `${pct(inadimplentes)}%`,
-          detail: `${inadimplentes} de ${total}`,
+          value: `${pctInadimplente}%`,
+          detail: `${inadimplentes} de ${totalComposicao}`,
           tone: 'bad',
         },
       ],
@@ -1039,7 +1039,15 @@ export default function DashboardPage() {
       const list = rankingStudents.filter((s) => s.ac === ac.name);
       const novos = list.filter((s) => s.status === 'Aluno Novo' && !isSolicitacaoCancelamento(s)).length;
       const emDiaAc = list.filter((s) => s.status === 'Em Dia' && !isSolicitacaoCancelamento(s)).length;
-      const denom = list.length - novos;
+      const inadAc = list.filter(
+        (s) =>
+          !isSolicitacaoCancelamento(s) &&
+          (s.status === 'Vencido 1' ||
+            s.status === 'Vencido 2' ||
+            s.status === 'À Negativar' ||
+            s.status === 'Negativado'),
+      ).length;
+      const denom = novos + emDiaAc + inadAc;
       const rate = denom > 0 ? (emDiaAc / denom) * 100 : 0;
       return { name: ac.name, emDia: emDiaAc, denom, rate };
     })
@@ -1507,7 +1515,7 @@ export default function DashboardPage() {
             <TrendingUp size={16} className="text-white/50 shrink-0" />
           </div>
           <p className="kpi-value text-white">{pctEmDia}%</p>
-          <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {denominadorEmDia} (excl. novos)</p>
+          <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {totalComposicao}</p>
         </div>
       </div>
 
@@ -1563,8 +1571,8 @@ export default function DashboardPage() {
             <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
             <TrendingDown size={16} className="text-white/50 shrink-0" />
           </div>
-          <p className="kpi-value text-white">{pct(inadimplentes)}%</p>
-          <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {total}</p>
+          <p className="kpi-value text-white">{pctInadimplente}%</p>
+          <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {totalComposicao}</p>
         </div>
       </div>
 
@@ -1618,7 +1626,7 @@ export default function DashboardPage() {
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
             <p className="text-[11px] text-muted-foreground truncate">{pendentes.length} alunos</p>
-            <p className="text-[11px] font-semibold text-yellow-700 shrink-0">{pct(pendentes.length)}%</p>
+            <p className="text-[11px] font-semibold text-yellow-700 shrink-0">{pctCarteira(pendentes.length)}%</p>
           </div>
           {infoStatus === 'pendente' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">

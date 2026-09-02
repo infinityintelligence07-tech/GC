@@ -167,8 +167,17 @@ export default function StudentModal({ student, onClose }: Props) {
             ? `Contrato aberto: ${res.treinamento}`
             : 'Contrato aberto.',
         );
-      } else if (String(res.status_conciliacao).toUpperCase() === 'PENDENTE') {
-        toast.info('Contrato pendente no IAM Control — aguardando confirmação de pagamento.');
+      } else {
+        const status = String(res.status_conciliacao ?? '').toUpperCase();
+        const pendente = status === 'PENDENTE' || status.startsWith('PENDENTE_');
+        if (pendente || res.aviso) {
+          toast.info(
+            res.aviso
+              || (res.pendente_tipo === 'PIX'
+                ? 'Contrato pendente de pagamento via PIX — PDF ainda não disponível.'
+                : 'Contrato pendente no IAM Control — aguardando confirmação de pagamento.'),
+          );
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Não foi possível abrir o contrato.');

@@ -752,7 +752,16 @@ export const useAppStore = create<AppState>()(
     const cancCase = s.cancellationCases.find((c) => c.id === caseId);
     if (!cancCase) return;
     const now = new Date().toISOString();
-    const entry = { date: now, from: cancCase.stage, to: 'Recuperado' as CancellationStage, operationalStatus: 'Recuperado' as CancellationOperationalStatus, note: 'Cancelamento revertido.' };
+    const author = s.currentUser;
+    const entry = {
+      date: now,
+      from: cancCase.stage,
+      to: 'Recuperado' as CancellationStage,
+      operationalStatus: 'Recuperado' as CancellationOperationalStatus,
+      note: 'Cancelamento revertido.',
+      byName: author?.name,
+      byUserId: author?.id,
+    };
     const updatedCase = {
       stage: 'Recuperado' as CancellationStage,
       operationalStatus: 'Recuperado' as CancellationOperationalStatus,
@@ -871,7 +880,15 @@ export const useAppStore = create<AppState>()(
       ? [...paidOnly, fineInstallment]
       : paidOnly;
 
-    const entry = { date: now, from: cancCase.stage, to: 'Assinar Termo' as CancellationStage, operationalStatus: 'Aguardando' as CancellationOperationalStatus, note: `Cancelamento confirmado. Aguardando conciliação contábil. Multa de cancelamento: ${formatCurrency(finalFineValue)}.` };
+    const entry = {
+      date: now,
+      from: cancCase.stage,
+      to: 'Assinar Termo' as CancellationStage,
+      operationalStatus: 'Aguardando' as CancellationOperationalStatus,
+      note: `Cancelamento confirmado. Aguardando conciliação contábil. Multa de cancelamento: ${formatCurrency(finalFineValue)}.`,
+      byName: get().currentUser?.name,
+      byUserId: get().currentUser?.id,
+    };
     const updatedCase = {
       stage: 'Assinar Termo' as CancellationStage,
       operationalStatus: 'Aguardando' as CancellationOperationalStatus,
@@ -1164,6 +1181,8 @@ export const useAppStore = create<AppState>()(
         to: cancCase.stage,
         operationalStatus: cancCase.operationalStatus,
         note: 'Conciliação manual concluída. Parcelas pendentes baixadas. Aguardando pagamento da multa de cancelamento via Kamino.',
+        byName: get().currentUser?.name,
+        byUserId: get().currentUser?.id,
       };
       const updatedCase: Partial<CancellationCase> = {
         history: [...cancCase.history, entry],
@@ -1202,7 +1221,15 @@ export const useAppStore = create<AppState>()(
     }
 
     // ── Fase B: sem multa pendente — finaliza o cancelamento ──
-    const entry = { date: now, from: cancCase.stage, to: 'Cancelado' as CancellationStage, operationalStatus: 'Cancelado' as CancellationOperationalStatus, note: 'Conciliação concluída. Aluno cancelado e baixado da carteira.' };
+    const entry = {
+      date: now,
+      from: cancCase.stage,
+      to: 'Cancelado' as CancellationStage,
+      operationalStatus: 'Cancelado' as CancellationOperationalStatus,
+      note: 'Conciliação concluída. Aluno cancelado e baixado da carteira.',
+      byName: get().currentUser?.name,
+      byUserId: get().currentUser?.id,
+    };
     const updatedCase = { stage: 'Cancelado' as CancellationStage, operationalStatus: 'Cancelado' as CancellationOperationalStatus, funnelStage: 'Finalizado' as const, acao: 'Cancelado' as const, movedToCurrentStageAt: now, history: [...cancCase.history, entry] };
     const historyEntry: HistoryEntry = { date: now, type: 'Sistema', text: 'Conciliação de cancelamento concluída. Status completo: Cancelado.' };
 
@@ -1358,7 +1385,15 @@ export const useAppStore = create<AppState>()(
     const cancCase = get().cancellationCases.find((c) => c.id === id);
     if (!cancCase) return;
     const now = new Date().toISOString();
-    const entry = { date: now, from: cancCase.stage, to: newStage, operationalStatus: cancCase.operationalStatus, note };
+    const entry = {
+      date: now,
+      from: cancCase.stage,
+      to: newStage,
+      operationalStatus: cancCase.operationalStatus,
+      note,
+      byName: get().currentUser?.name,
+      byUserId: get().currentUser?.id,
+    };
     const updatedData = { stage: newStage, movedToCurrentStageAt: now, history: [...cancCase.history, entry] };
     set((s) => ({
       cancellationCases: s.cancellationCases.map((c) => c.id === id ? { ...c, ...updatedData } : c),
@@ -1370,7 +1405,15 @@ export const useAppStore = create<AppState>()(
     const cancCase = get().cancellationCases.find((c) => c.id === id);
     if (!cancCase) return;
     const now = new Date().toISOString();
-    const entry = { date: now, from: cancCase.stage, to: cancCase.stage, operationalStatus: status, note: `Status operacional: ${status}` };
+    const entry = {
+      date: now,
+      from: cancCase.stage,
+      to: cancCase.stage,
+      operationalStatus: status,
+      note: `Status operacional: ${status}`,
+      byName: get().currentUser?.name,
+      byUserId: get().currentUser?.id,
+    };
     const updatedData = { operationalStatus: status, history: [...cancCase.history, entry] };
     set((s) => ({
       cancellationCases: s.cancellationCases.map((c) => c.id === id ? { ...c, ...updatedData } : c),

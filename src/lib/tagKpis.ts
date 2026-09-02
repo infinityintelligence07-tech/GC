@@ -41,31 +41,16 @@ export function computeTagKpis(
   const todayMs = today.getTime();
 
   const group = TAG_KPI_GROUPS[0];
-  const matching = studentTags.filter((t) => group.matchers.some((m) => norm(t.name).includes(m)));
-  const refs = new Set<string>();
-  matching.forEach((t) => {
-    refs.add(t.id);
-    refs.add(norm(t.name));
-  });
-  // Permite também tags "virtuais" salvas direto pelo nome nas parcelas.
-  group.matchers.forEach((m) => refs.add(m));
-
-  const hasRef = (tags?: string[] | null) =>
-    (tags ?? []).some((t) => {
-      if (!t) return false;
-      if (refs.has(t)) return true;
-      const n = norm(t);
-      return group.matchers.some((m) => n.includes(m));
-    });
+  const refs = getTagKpiGroupRefs(studentTags, group.key);
 
   let value = 0;
   let overdueValue = 0;
   const hit: Student[] = [];
 
   students.forEach((s) => {
-    const studentLevel = hasRef(s.tags);
+    const studentLevel = tagsHitGroup(s.tags, refs, group.matchers);
     const relevant = (s.installments || []).filter(
-      (i) => !i.paid && instInRange(i) && (studentLevel || hasRef(i.tags)),
+      (i) => !i.paid && instInRange(i) && (studentLevel || tagsHitGroup(i.tags, refs, group.matchers)),
     );
     if (relevant.length === 0) return;
     const sum = relevant.reduce((a, i) => a + (i.value || 0), 0);
@@ -86,4 +71,71 @@ export function getTagIdsForKpiGroup(studentTags: StudentTag[], key: TagKpiGroup
   return studentTags
     .filter((t) => group.matchers.some((m) => norm(t.name).includes(m)))
     .map((t) => t.id);
+}
+
+/** Refs (id + nome normalizado + matchers) usadas pelo KPI — mesma lógica de computeTagKpis. */
+export function getTagKpiGroupRefs(studentTags: StudentTag[], key: TagKpiGroupKey): Set<string> {
+  const group = TAG_KPI_GROUPS.find((g) => g.key === key);
+  const refs = new Set<string>();
+  if (!group) return refs;
+  studentTags
+    .filter((t) => group.matchers.some((m) => norm(t.name).includes(m)))
+    .forEach((t) => {
+      refs.add(t.id);
+      refs.add(norm(t.name));
+    });
+  group.matchers.forEach((m) => refs.add(m));
+  return refs;
+}
+
+function tagsHitGroup(tags: string[] | null | undefined, refs: Set<string>, matchers: string[]): boolean {
+  return (tags ?? []).some((t) => {
+    if (!t) return false;
+    if (refs.has(t)) return true;
+    const n = norm(t);
+    return matchers.some((m) => n.includes(m));
+  });
+}
+
+/**
+ * Aluno conta no KPI do grupo se tiver a tag no nível do aluno OU em alguma parcela
+ * (OR entre Fundo/TMF/Antecipação — igual ao card).
+ */
+export function studentMatchesTagKpiGroup(
+  student: Student,
+  studentTags: StudentTag[],
+  key: TagKpiGroupKey = 'fundo_tmf_antecipacao',
+): boolean {
+  const group = TAG_KPI_GROUPS.find((g) => g.key === key);
+  if (!group) return false;
+  const refs = getTagKpiGroupRefs(studentTags, key);
+  if (tagsHitGroup(student.tags, refs, group.matchers)) return true;
+  return (student.installments || []).some((i) => !i.paid && tagsHitGroup(i.tags, refs, group.matchers));
+}
+
+/**
+ * Restringe o aluno às parcelas do grupo (quando a tag está só em parcelas) ou
+ * mantém todas se a tag estiver no aluno — espelha o valor do card.
+ */
+export function applyTagKpiGroupToStudent(
+  student: Student,
+  studentTags: StudentTag[],
+  key: TagKpiGroupKey = 'fundo_tmf_antecipacao',
+): Student {
+  const group = TAG_KPI_GROUPS.find((g) => g.key === key);
+  if (!group) return student;
+  const refs = getTagKpiGroupRefs(studentTags, key);
+  const studentLevel = tagsHitGroup(student.tags, refs, group.matchers);
+  const relevant = (student.installments || []).filter(
+    (i) => !i.paid && (studentLevel || tagsHitGroup(i.tags, refs, group.matchers)),
+  );
+  if (relevant.length === 0) return { ...student, installments: [] };
+  const avgValue = relevant.reduce((a, i) => a + (i.value || 0), 0) / relevant.length;
+  return {
+    ...student,
+    installments: relevant,
+    totalInstallments: relevant.length,
+    paidInstallments: 0,
+    installmentValue: avgValue,
+  };
 }

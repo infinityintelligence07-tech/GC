@@ -66,6 +66,11 @@ type ContratoMeta = {
   pendente_link?: string | null;
 };
 
+function isStatusPendente(status: string | null | undefined): boolean {
+  const s = String(status ?? '').toUpperCase().trim();
+  return s === 'PENDENTE' || s.startsWith('PENDENTE_');
+}
+
 function extrairErroIam(meta: Record<string, unknown>, status: number): string {
   const msg = meta.message ?? meta.error ?? meta.detalhe;
   if (typeof msg === 'string' && msg.trim()) return msg.trim();
@@ -141,22 +146,60 @@ Deno.serve(async (req: Request) => {
     return apiResult({ ok: false, error: 'JSON inválido' });
   }
 
-  const contratoId = typeof body.contrato_id === 'string' ? body.contrato_id.trim() : '';
+  const contratoIdBody = typeof body.contrato_id === 'string' ? body.contrato_id.trim() : '';
   const iamIdRaw = body.iam_control_aluno_id;
   const iamId = typeof iamIdRaw === 'number' ? iamIdRaw : Number(iamIdRaw);
   const produto = typeof body.produto === 'string' ? body.produto.trim() : '';
   const somenteMeta = body.somente_meta === true;
+  const statusLocal = typeof body.status_conciliacao === 'string' ? body.status_conciliacao.trim().toUpperCase() : '';
+  const pendenteTipoLocalRaw = typeof body.pendente_tipo === 'string' ? body.pendente_tipo.trim().toUpperCase() : '';
+  const pendenteTipoLocal =
+    pendenteTipoLocalRaw === 'LINK' || pendenteTipoLocalRaw === 'PIX'
+      ? (pendenteTipoLocalRaw as 'LINK' | 'PIX')
+      : statusLocal === 'PENDENTE_LINK'
+        ? 'LINK' as const
+        : statusLocal === 'PENDENTE_PIX'
+          ? 'PIX' as const
+          : null;
 
   try {
-    let meta: ContratoMeta;
+    let meta: ContratoMeta = {};
 
-    if (contratoId) {
-      meta = { contrato_id: contratoId };
-    } else {
-      if (!Number.isFinite(iamId) || iamId <= 0) {
-        return apiResult({ ok: false, error: 'Informe iam_control_aluno_id válido.' });
+    // Sempre tenta resolver a meta no IAM quando temos o aluno: status, signed_file_url
+    // e pendente_tipo/link. Antes, se o GC mandasse só contrato_id, pulávamos isso e
+    // tentávamos baixar PDF de contratos PENDENTE (PIX/LINK) — o IAM respondia 500.
+    if (Number.isFinite(iamId) && iamId > 0) {
+      try {
+        meta = await resolverContratoMeta(iamId, produto || undefined);
+      } catch (metaErr) {
+        if (!contratoIdBody) throw metaErr;
+        // Fallback: usa o contrato_id já salvo na ficha do GC + status local.
+        meta = {
+          contrato_id: contratoIdBody,
+          status_conciliacao: statusLocal || undefined,
+          pendente_tipo: pendenteTipoLocal,
+        };
       }
-      meta = await resolverContratoMeta(iamId, produto || undefined);
+    } else if (contratoIdBody) {
+      meta = {
+        contrato_id: contratoIdBody,
+        status_conciliacao: statusLocal || undefined,
+        pendente_tipo: pendenteTipoLocal,
+      };
+    } else {
+      return apiResult({ ok: false, error: 'Informe iam_control_aluno_id válido.' });
+    }
+
+    // Preferência: contrato_id salvo no GC, se a meta não trouxe um.
+    if (!meta.contrato_id?.trim() && contratoIdBody) {
+      meta = { ...meta, contrato_id: contratoIdBody };
+    }
+    // Completa status/tipo a partir da ficha do GC quando a meta do IAM veio incompleta.
+    if (!meta.status_conciliacao && statusLocal) {
+      meta = { ...meta, status_conciliacao: statusLocal };
+    }
+    if (!meta.pendente_tipo && pendenteTipoLocal) {
+      meta = { ...meta, pendente_tipo: pendenteTipoLocal };
     }
 
     const id = meta.contrato_id?.trim();
@@ -167,6 +210,7 @@ Deno.serve(async (req: Request) => {
     const status = String(meta.status_conciliacao ?? '').toUpperCase();
     const pendenteTipo = meta.pendente_tipo ?? null;
     const pendenteLink = meta.pendente_link ?? null;
+    const pendente = isStatusPendente(status);
 
     const basePayload: Record<string, unknown> = {
       ok: true,
@@ -177,8 +221,20 @@ Deno.serve(async (req: Request) => {
       pendente_link: pendenteLink,
     };
 
-    if (somenteMeta || (status === 'PENDENTE' && pendenteTipo === 'LINK' && pendenteLink)) {
+    // Pendente com link: devolve o link, sem tentar PDF.
+    if (somenteMeta || (pendente && pendenteTipo === 'LINK' && pendenteLink)) {
       return apiResult(basePayload);
+    }
+
+    // Pendente PIX (ou pendente sem documento): não força /pdf — o IAM costuma
+    // responder 500 ao tentar gerar layout de contrato ainda não assinado.
+    if (somenteMeta || (pendente && pendenteTipo === 'PIX') || (pendente && !meta.signed_file_url)) {
+      return apiResult({
+        ...basePayload,
+        aviso: pendenteTipo === 'PIX'
+          ? 'Contrato pendente de pagamento via PIX no IAM Control — PDF ainda não disponível.'
+          : 'Contrato pendente no IAM Control — PDF ainda não disponível.',
+      });
     }
 
     try {
@@ -189,7 +245,7 @@ Deno.serve(async (req: Request) => {
         filename: `contrato-${id}.pdf`,
       });
     } catch (pdfErr) {
-      if (status === 'PENDENTE') {
+      if (pendente) {
         return apiResult({
           ...basePayload,
           aviso: pdfErr instanceof Error ? pdfErr.message : 'PDF indisponível para contrato pendente.',
