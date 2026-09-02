@@ -746,4 +746,5 @@ export interface ConciliacaoImportSummary {
   jaPagas: number;        // já estavam pagas (no-op)
   semPagamento: number;   // linhas sem Recebimento/Valor Recebido
   erros: number;          // foram para a aba de erros
+  ajustesValor?: number;  // já pagas com valor recebido divergente (aplicadas só se marcadas)
 }

@@ -11,7 +11,7 @@
 // Linhas ambíguas ou sem identificação segura vão para "Erros".
 
 import { useRef, useState } from 'react';
-import { X, Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Loader2, Download, Check, Pencil, XCircle, CalendarClock } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Loader2, Download, Check, Pencil, XCircle, CalendarClock, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAppStore } from '@/store/useAppStore';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
@@ -236,11 +236,30 @@ interface BaixaKaminoEntry {
   paidDate: string;
 }
 
+// Linha da planilha que casou com uma parcela JÁ PAGA no GC, mas com valor
+// recebido diferente do registrado (juros/desconto). Não é baixa: só é
+// mostrada na pré-visualização e aplicada se o usuário marcar.
+interface AjusteJaPagaEntry {
+  studentId: string;
+  studentName: string;
+  product?: string;
+  ciclo?: string;
+  ac?: string;
+  installmentNumber: number;
+  installmentValue: number;
+  dueDate: string;
+  paidDate: string;
+  currentPaidValue: number;
+  newPaidValue: number;
+  rowRecebimento: string;
+}
+
 interface ProcessResult {
   summary: ConciliacaoImportSummary;
   errors: Omit<ConciliacaoImportError, 'id' | 'createdAt'>[];
   studentUpdates: Map<string, Partial<Student>>; // por studentId
   baixas: BaixaKaminoEntry[];                    // para registrar no histórico
+  ajustes: AjusteJaPagaEntry[];                  // parcelas já pagas com valor recebido divergente
 }
 
 // Detecta linhas que têm pagamento confirmado
@@ -275,6 +294,9 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
   const [rowSelected, setRowSelected] = useState<Record<number, boolean>>({});
   // Modo de edição ativo por linha (separado de rowEdits, que armazena valores)
   const [rowEditing, setRowEditing] = useState<Record<number, boolean>>({});
+  // Parcelas já pagas com valor recebido divergente (index em preview.ajustes).
+  // Começam DESMARCADAS: nada é alterado sem o usuário optar.
+  const [ajusteSelected, setAjusteSelected] = useState<Record<number, boolean>>({});
   // Modal de vencimento divergente: índice do erro sendo resolvido + data editável
   const [vencModalIdx, setVencModalIdx] = useState<number | null>(null);
   const [vencModalDate, setVencModalDate] = useState<string>('');
@@ -497,6 +519,9 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
   const selectedCount = preview
     ? preview.errors.filter((e, i) => rowSelected[i] && isResolvable(e)).length
     : 0;
+  const ajustesSelectedCount = preview
+    ? preview.ajustes.filter((_, i) => ajusteSelected[i]).length
+    : 0;
 
   if (!isOpen) return null;
 
@@ -507,6 +532,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
     setRowEdits({});
     setRowSelected({});
     setRowEditing({});
+    setAjusteSelected({});
     setVencModalIdx(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -566,6 +592,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
       setRowSelected(initSel);
       setRowEdits({});
       setRowEditing({});
+      setAjusteSelected({});
     } catch (err) {
       alert(`Erro ao ler planilha: ${(err as Error).message}`);
       reset();
@@ -595,6 +622,36 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
         } : undefined;
         const next = resolveErrorOnPreview(working, idx, overrides);
         if (next) working = next;
+      }
+
+      // 0b. Parcelas já pagas com valor recebido divergente: só as marcadas.
+      // Atualiza apenas paidValue + histórico — não é baixa, não gera item
+      // de conciliação (senão entraria de novo como "entrada" no extrato).
+      const ajustesMarcados = working.ajustes.filter((_, i) => ajusteSelected[i]);
+      if (ajustesMarcados.length > 0) {
+        const fmtBRLa = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+        const fmtDateA = (s: string) => { const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : s; };
+        const newUpdates = new Map(working.studentUpdates);
+        for (const aj of ajustesMarcados) {
+          const original = students.find((s) => s.id === aj.studentId);
+          if (!original) continue;
+          const patch = newUpdates.get(aj.studentId) ?? {};
+          const baseInsts = patch.installments ?? original.installments;
+          const insts = baseInsts.map((i) =>
+            i.number === aj.installmentNumber && i.paid ? { ...i, paidValue: aj.newPaidValue } : i,
+          );
+          const entry = {
+            date: new Date().toISOString(),
+            type: 'Sistema' as const,
+            text: `Valor recebido atualizado via Conciliação Kamino — Parcela ${aj.installmentNumber} (já paga em ${fmtDateA(aj.paidDate)}): ${fmtBRLa(aj.currentPaidValue)} → ${fmtBRLa(aj.newPaidValue)}. Saldo não alterado.`,
+          };
+          newUpdates.set(aj.studentId, {
+            ...patch,
+            installments: insts,
+            history: [...(patch.history ?? original.history ?? []), entry],
+          });
+        }
+        working = { ...working, studentUpdates: newUpdates };
       }
 
       // 1. Aplicar updates de parcelas pagas em paralelo
@@ -727,6 +784,9 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                 <Stat label="Parcelas baixadas" value={result.pagas} color="emerald" />
                 <Stat label="Já pagas" value={result.jaPagas} color="slate" />
+                {(result.ajustesValor ?? 0) > 0 && (
+                  <Stat label="Já pagas c/ valor diferente" value={result.ajustesValor ?? 0} color="amber" />
+                )}
                 <Stat label="Sem pagamento" value={result.semPagamento} color="slate" />
                 <Stat label="Erros" value={result.erros} color={result.erros > 0 ? 'rose' : 'slate'} />
               </div>
@@ -805,6 +865,54 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
                 <Stat label="Já pagas" value={preview.summary.jaPagas} color="slate" />
                 <Stat label="Erros" value={preview.summary.erros} color={preview.summary.erros > 0 ? 'rose' : 'slate'} />
               </div>
+
+              {preview.ajustes.length > 0 && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Info className="text-sky-600 shrink-0 mt-0.5" size={16} />
+                    <div className="text-xs text-sky-900 flex-1">
+                      <p className="font-semibold mb-1">
+                        {preview.ajustes.length} linha(s) da planilha correspondem a parcelas que JÁ ESTÃO PAGAS no GC, mas com valor recebido diferente.
+                      </p>
+                      <p>
+                        Elas <strong>não serão baixadas</strong> e não alteram o saldo. Marque apenas as que você quer que
+                        tenham o <strong>valor recebido</strong> atualizado (juros/desconto). Desmarcadas, nada é feito.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-sky-200/70 rounded-lg border border-sky-200 bg-white">
+                    {preview.ajustes.map((aj, i) => {
+                      const fmtBRL = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+                      const fmtDate = (s: string) => { const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : s || '—'; };
+                      const contrato = `${aj.product || 'Treinamento não informado'}${aj.ciclo ? ` (${aj.ciclo})` : ''}`;
+                      return (
+                        <label key={`${aj.studentId}-${aj.installmentNumber}`} className="flex items-start gap-3 px-3 py-2 cursor-pointer hover:bg-sky-50/60">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 accent-sky-600"
+                            checked={!!ajusteSelected[i]}
+                            onChange={(e) => setAjusteSelected((prev) => ({ ...prev, [i]: e.target.checked }))}
+                          />
+                          <div className="flex-1 min-w-0 text-xs">
+                            <p className="font-semibold text-foreground truncate">
+                              {aj.studentName}
+                              <span className="font-normal text-muted-foreground"> · {contrato}{aj.ac ? ` · ${aj.ac}` : ''}</span>
+                            </p>
+                            <p className="text-muted-foreground">
+                              Parcela {aj.installmentNumber} (venc. {fmtDate(aj.dueDate)} · {fmtBRL(aj.installmentValue)}) — já paga em {fmtDate(aj.paidDate)}
+                              {aj.rowRecebimento ? ` · planilha: recebido em ${fmtDate(aj.rowRecebimento)}` : ''}
+                            </p>
+                            <p className="text-sky-900">
+                              Valor recebido registrado <strong>{fmtBRL(aj.currentPaidValue)}</strong> → planilha <strong>{fmtBRL(aj.newPaidValue)}</strong>
+                              {' '}({aj.newPaidValue > aj.currentPaidValue ? '+' : '−'}{fmtBRL(Math.abs(aj.newPaidValue - aj.currentPaidValue))})
+                            </p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {preview.summary.erros > 0 && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
@@ -981,13 +1089,14 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
                 </button>
                 <button
                   onClick={handleConfirm}
-                  disabled={importing || (preview.summary.pagas === 0 && selectedCount === 0 && preview.summary.erros === 0)}
+                  disabled={importing || (preview.summary.pagas === 0 && selectedCount === 0 && ajustesSelectedCount === 0 && preview.summary.erros === 0)}
                   className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2"
                 >
                   {importing ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
                   {(() => {
                     const total = preview.summary.pagas + selectedCount;
-                    return importing ? 'Importando...' : `Confirmar (${total} baixa${total !== 1 ? 's' : ''})`;
+                    const ajustesTxt = ajustesSelectedCount > 0 ? ` + ${ajustesSelectedCount} ajuste${ajustesSelectedCount !== 1 ? 's' : ''} de valor` : '';
+                    return importing ? 'Importando...' : `Confirmar (${total} baixa${total !== 1 ? 's' : ''}${ajustesTxt})`;
                   })()}
                 </button>
               </div>
@@ -1103,6 +1212,7 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
 
   const errors: Omit<ConciliacaoImportError, 'id' | 'createdAt'>[] = [];
   const baixas: BaixaKaminoEntry[] = [];
+  const ajustes: AjusteJaPagaEntry[] = [];
   let pagas = 0, jaPagas = 0, semPagamento = 0;
 
   const pushError = (
@@ -1257,26 +1367,26 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
       const { student: paidStudent, installment: paidInstallment } = paidMatches[0];
       const paidValue = Number(valorPago) || Number(paidInstallment.value) || 0;
       const currentPaidValue = Number(paidInstallment.paidValue) || Number(paidInstallment.value) || 0;
-      // Reimportação da mesma planilha pode trazer o valor recebido com juros
-      // ou desconto. Atualiza somente esse valor, sem criar uma nova baixa
-      // quando ele já estiver idêntico.
+      // Parcela já paga no GC: nunca vira baixa nem mexe no saldo. Se a
+      // planilha trouxer um valor recebido diferente (juros/desconto), a
+      // linha é apresentada na pré-visualização e só é aplicada se o usuário
+      // marcar explicitamente.
+      jaPagas++;
       if (Math.abs(currentPaidValue - paidValue) > 0.01) {
-        const insts = getDraft(paidStudent);
-        const target = insts.find((i) => i.number === paidInstallment.number);
-        if (target) target.paidValue = paidValue;
-        baixas.push({
+        ajustes.push({
           studentId: paidStudent.id,
           studentName: paidStudent.name,
+          product: paidStudent.product,
+          ciclo: paidStudent.ciclo,
           ac: paidStudent.ac,
           installmentNumber: paidInstallment.number,
           installmentValue: Number(paidInstallment.value) || 0,
-          paidValue,
           dueDate: paidInstallment.dueDate,
-          paidDate: paidInstallment.paidDate ?? row.recebimento ?? new Date().toISOString().split('T')[0],
+          paidDate: paidInstallment.paidDate ?? '',
+          currentPaidValue,
+          newPaidValue: paidValue,
+          rowRecebimento: row.recebimento ?? '',
         });
-        pagas++;
-      } else {
-        jaPagas++;
       }
       continue;
     }
@@ -1390,9 +1500,11 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
       jaPagas,
       semPagamento,
       erros: errors.length,
+      ajustesValor: ajustes.length,
     },
     errors,
     studentUpdates,
     baixas,
+    ajustes,
   };
 }

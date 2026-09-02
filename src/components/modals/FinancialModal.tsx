@@ -278,6 +278,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const [editingInstallment, setEditingInstallment] = useState<number | null>(null);
   const [editValue, setEditValue] = useState(0);
   const [editDueDate, setEditDueDate] = useState('');
+  /** Admin: rascunho para corrigir datas de parcela já paga. */
+  const [editingPaidDates, setEditingPaidDates] = useState<{
+    number: number;
+    paidDate: string;
+    dueDate: string;
+  } | null>(null);
 
   // Renegotiation state — defaults: 10% multa / 1% juros a.m., ambos aplicados
   const [renegMultaPercent, setRenegMultaPercent] = useState(DEFAULT_MULTA);
@@ -2165,14 +2171,18 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             )}
           </div>
 
-          {/* Parcelas Pagas — possibilidade de desconciliar (somente admin/conciliação) */}
+          {/* Parcelas Pagas — desconciliar (admin/conciliação) + alterar datas (somente admin) */}
           {!readOnly && student.installments.some((i) => i.paid) && (currentUser?.role === 'admin' || currentUser?.role === 'conciliacao') && (
             <div className="space-y-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Parcelas Pagas</h3>
-              <div className="space-y-2 max-h-40 overflow-auto no-scrollbar">
-                {student.installments.filter((i) => i.paid).map((inst) => (
-                  <div key={inst.number} className="flex items-center gap-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50/50">
-                    <div className="flex-1">
+              <div className="space-y-2 max-h-56 overflow-auto no-scrollbar">
+                {student.installments.filter((i) => i.paid).map((inst) => {
+                  const isEditingPaid = editingPaidDates?.number === inst.number;
+                  const isAdmin = currentUser?.role === 'admin';
+                  return (
+                  <div key={inst.number} className="flex flex-col gap-2 p-3 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                    <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
                       <span className="text-xs font-medium text-foreground">Parcela {displayParcelLabel(inst.number)}</span>
                       <span className="ml-2 text-[10px] text-emerald-700">
                         Pago em {inst.paidDate ? formatDateBR(inst.paidDate) : '—'} • Venc. {formatDateBR(inst.dueDate)}
@@ -2197,6 +2207,22 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         </div>
                       );
                     })()}
+                    {isAdmin && !isEditingPaid && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditingPaidDates({
+                            number: inst.number,
+                            paidDate: inst.paidDate || todayIsoDate(),
+                            dueDate: inst.dueDate,
+                          })
+                        }
+                        className="px-2 py-1 rounded-lg text-[10px] font-semibold border border-border text-foreground hover:bg-muted transition-colors"
+                        title="Alterar data de pagamento e vencimento (admin)"
+                      >
+                        Alterar data
+                      </button>
+                    )}
                     <button
                       onClick={async () => {
                         const ok = await confirm({
@@ -2206,6 +2232,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                           confirmText: 'Desconciliar',
                         });
                         if (!ok) return;
+                        setEditingPaidDates(null);
                         const updated = student.installments.map((i) =>
                           i.number === inst.number
                             ? { ...i, paid: false, paidDate: undefined, paidMarkedAt: undefined }
@@ -2247,8 +2274,147 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     >
                       Desconciliar
                     </button>
+                    </div>
+                    {isAdmin && isEditingPaid && editingPaidDates && (
+                      <div className="flex flex-wrap items-end gap-2 pt-1 border-t border-emerald-200/80">
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Pago em</span>
+                          <input
+                            type="date"
+                            className="input-field text-xs py-1"
+                            value={editingPaidDates.paidDate}
+                            onChange={(e) =>
+                              setEditingPaidDates((prev) =>
+                                prev ? { ...prev, paidDate: e.target.value } : prev,
+                              )
+                            }
+                          />
+                        </label>
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Vencimento</span>
+                          <input
+                            type="date"
+                            className="input-field text-xs py-1"
+                            value={editingPaidDates.dueDate}
+                            onChange={(e) =>
+                              setEditingPaidDates((prev) =>
+                                prev ? { ...prev, dueDate: e.target.value } : prev,
+                              )
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const nextPaid = editingPaidDates.paidDate;
+                            const nextDue = editingPaidDates.dueDate;
+                            if (!nextPaid || !nextDue) {
+                              toast.error('Informe as duas datas.');
+                              return;
+                            }
+                            const paidChanged = nextPaid !== (inst.paidDate || '');
+                            const dueChanged = nextDue !== inst.dueDate;
+                            if (!paidChanged && !dueChanged) {
+                              setEditingPaidDates(null);
+                              return;
+                            }
+                            const ok = await confirm({
+                              title: `Alterar datas da parcela ${inst.number}?`,
+                              description:
+                                `${paidChanged ? `Pagamento: ${inst.paidDate ? formatDateBR(inst.paidDate) : '—'} → ${formatDateBR(nextPaid)}\n` : ''}` +
+                                `${dueChanged ? `Vencimento: ${formatDateBR(inst.dueDate)} → ${formatDateBR(nextDue)}` : ''}`,
+                              confirmText: 'Salvar datas',
+                              cancelText: 'Cancelar',
+                            });
+                            if (!ok) return;
+
+                            const updated = student.installments.map((i) =>
+                              i.number === inst.number
+                                ? { ...i, paidDate: nextPaid, dueDate: nextDue, paid: true }
+                                : i,
+                            );
+                            const histParts: string[] = [];
+                            if (paidChanged) {
+                              histParts.push(
+                                `pagamento ${inst.paidDate ? formatDateBR(inst.paidDate) : '—'} → ${formatDateBR(nextPaid)}`,
+                              );
+                            }
+                            if (dueChanged) {
+                              histParts.push(
+                                `vencimento ${formatDateBR(inst.dueDate)} → ${formatDateBR(nextDue)}`,
+                              );
+                            }
+                            updateStudent(student.id, {
+                              installments: updated,
+                              history: [
+                                ...student.history,
+                                addHistoryEntry(
+                                  `Datas da parcela ${inst.number} alteradas (admin): ${histParts.join('; ')}.`,
+                                ),
+                              ],
+                            });
+                            if (dueChanged || paidChanged) {
+                              const resumoParts: string[] = [];
+                              if (paidChanged) {
+                                resumoParts.push(
+                                  `pagamento: ${inst.paidDate ? formatDateBR(inst.paidDate) : '—'} → ${formatDateBR(nextPaid)}`,
+                                );
+                              }
+                              if (dueChanged) {
+                                resumoParts.push(
+                                  `vencimento: ${formatDateBR(inst.dueDate)} → ${formatDateBR(nextDue)}`,
+                                );
+                              }
+                              registrarConc({
+                                // parcela_vencimento quando só muda vencimento; senão parcela_valor
+                                // (pagamento_parcela é bloqueado se a parcela já está paga).
+                                tipo: dueChanged && !paidChanged ? 'parcela_vencimento' : 'parcela_valor',
+                                studentSnapshot: buildStudentSnapshot(baseStudent),
+                                studentId: student.id,
+                                studentName: student.name,
+                                ac: student.ac,
+                                resumo: `Parcela ${inst.number} (paga) — ${resumoParts.join('; ')}`,
+                                antes: {
+                                  parcela: inst.number,
+                                  paid: true,
+                                  paidDate: inst.paidDate,
+                                  vencimento: inst.dueDate,
+                                },
+                                depois: {
+                                  parcela: inst.number,
+                                  paid: true,
+                                  paidDate: nextPaid,
+                                  vencimento: nextDue,
+                                },
+                                autorObservacao: obsConciliacao.trim() || undefined,
+                              });
+                            }
+                            setOriginalInstallmentsRef((prev) =>
+                              prev.map((i) =>
+                                i.number === inst.number
+                                  ? { ...i, paidDate: nextPaid, dueDate: nextDue, paid: true }
+                                  : i,
+                              ),
+                            );
+                            setEditingPaidDates(null);
+                            toast.success(`Datas da parcela ${inst.number} atualizadas.`);
+                          }}
+                          className="px-2 py-1 rounded-lg text-[10px] font-semibold border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors"
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingPaidDates(null)}
+                          className="px-2 py-1 rounded-lg text-[10px] font-semibold border border-border text-muted-foreground hover:bg-muted transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
