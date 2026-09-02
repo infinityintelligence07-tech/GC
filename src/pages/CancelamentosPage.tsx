@@ -32,7 +32,7 @@ import {
   Clock,
   CheckCircle2, AlertTriangle, Ban, LayoutGrid, List,
   Users, History, X, RotateCcw, Award, Eye, Phone, FileEdit, Trash2, Bell, UserPlus, User,
-  DollarSign, Gavel, Info, Upload, FileText, Download as DownloadIcon, ArrowRight, PencilLine, FilePlus,
+  DollarSign, Gavel, Info, Upload, FileText, Download as DownloadIcon, ArrowRight, PencilLine,
 } from 'lucide-react';
 import { formatCurrency, formatCurrencyCompact } from '@/store/useAppStore';
 import { DatePreset, AnalysisMode, getPresetRange, getCurrentMonthDates } from '@/lib/periodFilter';
@@ -847,10 +847,10 @@ function CancellationCard({
         student?.statusCancelamento === 'revertido' && (
         <button
           onClick={(e) => { e.stopPropagation(); onNovoCancelamento(c); }}
-          className="w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded text-[9px] font-semibold text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100 border border-fuchsia-200 transition-all"
-          title="Reabre o cancelamento em Em Tratativas (com observações). Este card sai do Finalizado."
+          className="w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded text-[9px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all"
+          title="Reativar caso — reabre em Em Tratativas (com observações)"
         >
-          <FilePlus size={10} /> Novo Cancelamento
+          <RotateCcw size={10} /> REATIVAR CASO
         </button>
       )}
       {isFinal && onReactivate && !(c.acao === 'Revertido' && student?.statusCancelamento === 'revertido' && onNovoCancelamento) && (
@@ -859,7 +859,7 @@ function CancellationCard({
           className="w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded text-[9px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all"
           title="Reativar caso e escolher o próximo setor"
         >
-          <RotateCcw size={10} /> Reativar caso
+          <RotateCcw size={10} /> REATIVAR CASO
         </button>
       )}
       {!readOnly && (
@@ -4598,17 +4598,17 @@ export default function CancelamentosPage() {
                               getCaseStudent(c)?.statusCancelamento === 'revertido' && (
                               <button
                                 onClick={() => handleNovoCancelamento(c)}
-                                className="flex items-center gap-1 p-1.5 rounded-lg text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100 border border-fuchsia-200 transition-all"
-                                title="Novo Cancelamento — move para Em Tratativas"
+                                className="flex items-center gap-1 p-1.5 rounded-lg text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all"
+                                title="REATIVAR CASO — move para Em Tratativas"
                               >
-                                <FilePlus size={12} />
+                                <RotateCcw size={12} />
                               </button>
                             )}
                             {isFinal && !(c.acao === 'Revertido' && getCaseStudent(c)?.statusCancelamento === 'revertido') && (
                               <button
                                 onClick={() => setReactivateCase(c)}
                                 className="flex items-center gap-1 p-1.5 rounded-lg text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all"
-                                title="Reativar caso"
+                                title="REATIVAR CASO"
                               >
                                 <RotateCcw size={12} />
                               </button>
@@ -5495,7 +5495,7 @@ export default function CancelamentosPage() {
   );
 }
 
-// ─── Modal: Novo Cancelamento (Finalizado → Em Tratativas) ───────────────────
+// ─── Modal: Reativar caso (Finalizado → Em Tratativas) ───────────────────────
 
 function NovoCancelamentoModal({
   caseRef,
@@ -5512,11 +5512,11 @@ function NovoCancelamentoModal({
       <div className="bg-card border border-border rounded-2xl w-full max-w-lg saas-shadow-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-fuchsia-100 text-fuchsia-700 flex items-center justify-center">
-              <FilePlus size={16} />
+            <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
+              <RotateCcw size={16} />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-foreground">Novo Cancelamento</h2>
+              <h2 className="text-sm font-bold text-foreground">Reativar caso</h2>
               <p className="text-[11px] text-muted-foreground">
                 {caseRef.studentName} — o card será movido para <b>Em Tratativas</b>
               </p>
@@ -5537,7 +5537,7 @@ function NovoCancelamentoModal({
               autoFocus
               rows={6}
               placeholder="Descreva o alinhamento feito com o aluno (ex.: condições acordadas, prazo, valores, promessas etc.)."
-              className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+              className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-sky-400"
             />
           </label>
           <p className="text-[11px] text-muted-foreground">
@@ -5554,9 +5554,9 @@ function NovoCancelamentoModal({
           </button>
           <button
             onClick={() => onConfirm(obs)}
-            className="px-4 py-2 rounded-lg text-sm font-semibold bg-fuchsia-600 text-white hover:bg-fuchsia-700 transition-colors flex items-center gap-1.5"
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-sky-600 text-white hover:bg-sky-700 transition-colors flex items-center gap-1.5"
           >
-            <FilePlus size={14} /> Abrir em Tratativas
+            <RotateCcw size={14} /> REATIVAR CASO
           </button>
         </div>
       </div>

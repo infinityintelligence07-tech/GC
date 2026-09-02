@@ -924,7 +924,7 @@ export default function StudentsPage() {
                               - Admin sempre vê (pode excluir mesmo com caso ativo).
                               - Demais perfis só veem quando ainda dá para solicitar cancelamento
                                 pela aba Alunos (sem caso ativo e sem Revertido — Revertido usa
-                                "Novo Cancelamento" no Finalizado). */}
+                                "REATIVAR CASO" no Finalizado). */}
                           {(currentUser?.role === 'admin' ||
                             !student.statusCancelamento ||
                             student.statusCancelamento === 'nenhum') && (
@@ -988,7 +988,7 @@ export default function StudentsPage() {
             </div>
 
             {/* Option 1: Cancel — escondida com caso ativo OU Revertido
-                (Revertido reabre só pelo botão Novo Cancelamento no Finalizado). */}
+                (Revertido reabre só pelo botão REATIVAR CASO no Finalizado). */}
             {(() => {
               const s = allStudents.find((x) => x.id === actionStudentId);
               const sc = s?.statusCancelamento;
@@ -999,7 +999,7 @@ export default function StudentsPage() {
                   return (
                     <div className="w-full p-3 rounded-xl border border-fuchsia-200 bg-fuchsia-50 text-[11px] text-fuchsia-800">
                       Aluno <strong>Revertido</strong>. Para cancelar de novo, use{' '}
-                      <strong>Novo Cancelamento</strong> no card em Cancelamentos → Finalizado (abre em Em Tratativas).
+                      <strong>REATIVAR CASO</strong> no card em Cancelamentos → Finalizado (abre em Em Tratativas).
                     </div>
                   );
                 }
