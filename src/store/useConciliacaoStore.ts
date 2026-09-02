@@ -8,6 +8,7 @@ import { reportDbError } from '@/lib/dbError';
 // puderam ser baixados automaticamente — para revisão manual na sub-aba Erros.
 
 import { create } from 'zustand';
+import { toast } from 'sonner';
 import type { ConciliacaoItem, ConciliacaoTipo, ConciliacaoImportError } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
 import { useNotificationsStore } from '@/store/useNotificationsStore';
@@ -444,11 +445,28 @@ export function registrarConciliacao(input: {
           Number((it.depois as Record<string, unknown>)?.parcela) === parcela,
       );
       if (jaPaga || jaConciliada) {
-        void import('sonner').then(({ toast }) =>
-          toast.warning(`Parcela ${parcela} de ${input.studentName} já está paga ou conciliada.`),
-        );
+        toast.warning(`Parcela ${parcela} de ${input.studentName} já está paga ou conciliada.`);
         return;
       }
+    }
+  }
+
+  // Reenviar a mesma renegociação cria outro item na fila, e conciliar os dois
+  // soma a entrada duas vezes (o Conciliar acumula downPayment). Enquanto
+  // houver proposta aberta para o aluno, a nova é barrada.
+  if (input.tipo === 'renegociacao' && input.studentId) {
+    const aberta = useConciliacaoStore.getState().items.find(
+      (it) =>
+        it.studentId === input.studentId &&
+        it.tipo === 'renegociacao' &&
+        (it.status === 'pendente' || it.status === 'aprovado'),
+    );
+    if (aberta) {
+      toast.warning(
+        `${input.studentName} já tem uma renegociação aguardando Conciliação. ` +
+          'Peça para conciliar ou reprovar a proposta atual antes de enviar outra.',
+      );
+      return;
     }
   }
 

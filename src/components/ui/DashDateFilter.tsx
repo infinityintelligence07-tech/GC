@@ -152,16 +152,16 @@ export default function DashDateFilter({
     : PERF_PRESETS;
 
   return (
-    <div className="bg-card border border-border/60 rounded-2xl p-5 saas-shadow-md space-y-4">
+    <div className="bg-card border border-border/60 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 saas-shadow-md space-y-2.5">
       {/* Mode selector */}
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
           Modo de análise
         </span>
-        <div className="flex items-center bg-muted/50 rounded-xl p-1 gap-0.5">
+        <div className="flex items-center bg-muted/50 rounded-xl p-0.5 gap-0.5">
           <button
             onClick={() => setMode('performance')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
               mode === 'performance'
                 ? 'iam-gradient text-primary-foreground shadow-sm'
                 : 'text-muted-foreground/60 hover:text-foreground'
@@ -171,7 +171,7 @@ export default function DashDateFilter({
           </button>
           <button
             onClick={() => setMode('historico')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
               mode === 'historico'
                 ? 'bg-amber-500 text-white shadow-sm'
                 : 'text-muted-foreground/60 hover:text-foreground'

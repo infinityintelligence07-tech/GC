@@ -1116,36 +1116,36 @@ export default function DashboardPage() {
   const reportGeneratedAt = new Date().toLocaleString('pt-BR');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
 
       {/* ── 1. Modo de Análise + Relatório ──────────────────────────────────── */}
-      <div className="flex flex-col gap-3">
-        <DashDateFilter
-          mode={mode} setMode={setMode}
-          perfPreset={perfPreset} setPerfPreset={setPerfPreset}
-          perfCustomStart={perfCustomStart} setPerfCustomStart={setPerfCustomStart}
-          perfCustomEnd={perfCustomEnd} setPerfCustomEnd={setPerfCustomEnd}
-          historicoStart={historicoStart} setHistoricoStart={setHistoricoStart}
-          historicoEnd={historicoEnd} setHistoricoEnd={setHistoricoEnd}
-          variant="ac"
-          hidePerformancePresets
-        />
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => setReportOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border border-border bg-card hover:bg-muted saas-shadow transition-colors"
-          >
-            <FileText size={14} className="text-primary" />
-            Relatório
-          </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[260px]">
+          <DashDateFilter
+            mode={mode} setMode={setMode}
+            perfPreset={perfPreset} setPerfPreset={setPerfPreset}
+            perfCustomStart={perfCustomStart} setPerfCustomStart={setPerfCustomStart}
+            perfCustomEnd={perfCustomEnd} setPerfCustomEnd={setPerfCustomEnd}
+            historicoStart={historicoStart} setHistoricoStart={setHistoricoStart}
+            historicoEnd={historicoEnd} setHistoricoEnd={setHistoricoEnd}
+            variant="ac"
+            hidePerformancePresets
+          />
         </div>
+        <button
+          type="button"
+          onClick={() => setReportOpen(true)}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-border bg-card hover:bg-muted saas-shadow transition-colors shrink-0"
+        >
+          <FileText size={14} className="text-primary" />
+          Relatório
+        </button>
       </div>
       {/* ── 2. Previsão de Recebimento + Filtros (Performance) ──────────────── */}
       {mode === 'performance' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* Previsão de Recebimento */}
-          <div className="bg-card border border-border rounded-2xl p-6 saas-shadow">
+          <div className="bg-card border border-border rounded-2xl p-4 saas-shadow">
             <div className="flex items-start justify-between gap-2 mb-1">
               <div className="flex items-center gap-2">
                 <Wallet size={15} className="text-primary" />
@@ -1172,12 +1172,12 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mb-4">
+            <p className="text-xs text-muted-foreground mb-2">
               {dateBasis === 'vencimento'
                 ? `Projeção financeira por período ${acFilter ? `(${acFilter})` : usesKaminoAuthoritativeForecast ? '(fonte Kamino + baixas GC)' : '(carteira GC)'}`
                 : `Títulos pagos no período ${acFilter ? `(${acFilter})` : '(carteira GC)'}`}
             </p>
-            <div className="flex gap-1 mb-4 flex-wrap items-center">
+            <div className="flex gap-1 mb-2 flex-wrap items-center">
               {dateBasis === 'vencimento' &&
                 ['Todos', 'Hoje', 'Amanhã', '2 Dias', '3 Dias', '5 Dias', 'Personalizado'].map((p, i) => (
                   <button
@@ -1339,7 +1339,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Filtros: AC, Produto, Status, Score */}
-          <div className="bg-card border border-border rounded-2xl p-6 saas-shadow flex flex-col gap-3">
+          <div className="bg-card border border-border rounded-2xl p-4 saas-shadow flex flex-col gap-2">
             <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Filtros</h3>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold text-muted-foreground">Assessor:</span>
@@ -1491,10 +1491,10 @@ export default function DashboardPage() {
 
       {/* ── 3. Indicadores (KPIs Row 1) ──────────────────────────────────────── */}
       {/* Cards clicáveis: abrem a lista detalhada de alunos/parcelas em popup */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
         <div
           onClick={() => setKpiModalKey('total')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-primary transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 ${statusFilter === '' ? 'ring-2 ring-primary/40' : ''}`}
+          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-primary transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 ${statusFilter === '' ? 'ring-2 ring-primary/40' : ''}`}
         >
           <div className="flex items-start justify-between mb-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase">Carteira Total</p>
@@ -1513,7 +1513,7 @@ export default function DashboardPage() {
         {/* Em Dia + Novos — soma agregada */}
         <div
           onClick={() => setKpiModalKey('emdia_novos')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 ${statusFilter === 'Em Dia' ? 'ring-2 ring-teal-500/40' : ''}`}
+          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 ${statusFilter === 'Em Dia' ? 'ring-2 ring-teal-500/40' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Em Dia + Novos</p>
@@ -1538,7 +1538,7 @@ export default function DashboardPage() {
 
         <div
           onClick={() => setKpiModalKey('emdia')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${statusFilter === 'Em Dia' ? 'ring-2 ring-emerald-500/40' : ''}`}
+          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${statusFilter === 'Em Dia' ? 'ring-2 ring-emerald-500/40' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Em Dia</p>
@@ -1563,7 +1563,7 @@ export default function DashboardPage() {
 
         <div
           onClick={() => setKpiModalKey('novos')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-sky-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-sky-500/30 ${statusFilter === 'Aluno Novo' ? 'ring-2 ring-sky-500/40' : ''}`}
+          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-sky-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-sky-500/30 ${statusFilter === 'Aluno Novo' ? 'ring-2 ring-sky-500/40' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Alunos Novos</p>
@@ -1586,7 +1586,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="min-w-0 rounded-2xl p-4 sm:p-5 saas-shadow-md bg-emerald-500 border border-emerald-600 transition-transform hover:-translate-y-0.5">
+        <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-emerald-500 border border-emerald-600 transition-transform hover:-translate-y-0.5">
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Em Dia</p>
             <TrendingUp size={16} className="text-white/50 shrink-0" />
@@ -1598,7 +1598,7 @@ export default function DashboardPage() {
 
       {/* ── Indicadores Row 2 ────────────────────────────────────────────────── */}
       {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado → Taxa Inadimplente */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
         {[
           { key: 'v1', label: 'Vencido 1', value: v1Value, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos com parcelas vencidas entre 1 e 30 dias.', filter: 'Vencido 1' as StudentStatus },
           { key: 'v2', label: 'Vencido 2', value: v2Value, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos com parcelas vencidas entre 31 e 60 dias.', filter: 'Vencido 2' as StudentStatus },
@@ -1607,8 +1607,8 @@ export default function DashboardPage() {
         ].map(({ key, label, value, count, color, text, desc, filter }) => {
           const isStaleAN = key === 'an' && aNegativarStale;
           const cardCls = isStaleAN
-            ? `min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-red-500 border border-red-600 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-red-400/40 ${statusFilter === filter ? 'ring-2 ring-white/50' : ''}`
-            : `min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-${color} transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-foreground/20 ${statusFilter === filter ? 'ring-2 ring-foreground/40' : ''}`;
+            ? `min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-red-400/40 ${statusFilter === filter ? 'ring-2 ring-white/50' : ''}`
+            : `min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-${color} transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-foreground/20 ${statusFilter === filter ? 'ring-2 ring-foreground/40' : ''}`;
           const labelCls = isStaleAN ? 'text-[10px] font-semibold text-white/80 uppercase truncate' : 'text-[10px] font-semibold text-muted-foreground uppercase truncate';
           const valueCls = isStaleAN ? 'kpi-value text-white' : `kpi-value ${text}`;
           const subCls = isStaleAN ? 'text-[11px] text-white/80 truncate' : 'text-[11px] text-muted-foreground truncate';
@@ -1643,7 +1643,7 @@ export default function DashboardPage() {
         })}
 
         {/* Taxa Inadimplente — mesmo tamanho do Taxa Em Dia (full red) */}
-        <div className="min-w-0 rounded-2xl p-4 sm:p-5 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
+        <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
             <TrendingDown size={16} className="text-white/50 shrink-0" />
@@ -1654,10 +1654,10 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPIs: Solicitação + Pendências + Revertidos + Fundo/TMF ─────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3">
         <div
           onClick={() => setKpiModalKey('solic')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-fuchsia-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-fuchsia-500/30 ${kpiModalKey === 'solic' || statusFilter === 'cancelamento_solicitado' ? 'ring-2 ring-fuchsia-500/40' : ''}`}
+          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-fuchsia-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-fuchsia-500/30 ${kpiModalKey === 'solic' || statusFilter === 'cancelamento_solicitado' ? 'ring-2 ring-fuchsia-500/40' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Solicitação Cancelamento</p>
@@ -1686,7 +1686,7 @@ export default function DashboardPage() {
 
         <div
           onClick={() => setKpiModalKey('pendente')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-yellow-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-yellow-500/30 ${kpiModalKey === 'pendente' || statusFilter === 'Pendente' ? 'ring-2 ring-yellow-500/40' : ''}`}
+          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-yellow-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-yellow-500/30 ${kpiModalKey === 'pendente' || statusFilter === 'Pendente' ? 'ring-2 ring-yellow-500/40' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Pendências</p>
@@ -1717,7 +1717,7 @@ export default function DashboardPage() {
 
         <div
           onClick={() => setKpiModalKey(kpiModalKey === 'revertidos' ? null : 'revertidos')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${kpiModalKey === 'revertidos' ? 'ring-2 ring-emerald-500/40' : ''}`}
+          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-emerald-500/30 ${kpiModalKey === 'revertidos' ? 'ring-2 ring-emerald-500/40' : ''}`}
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Revertidos</p>
@@ -1748,7 +1748,7 @@ export default function DashboardPage() {
         {tagKpis[0] && (
           <div
             onClick={() => setKpiModalKey('tag')}
-            className={`min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 ${tagKpis[0].color} transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-500/30`}
+            className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 ${tagKpis[0].color} transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-500/30`}
           >
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate mb-2">{tagKpis[0].label}</p>
             <p className={`kpi-value ${tagKpis[0].text}`} title={formatCurrency(tagKpis[0].value)}>
@@ -1810,11 +1810,11 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 5. Distribuição de Status (Pizza) + Evolução Mensal ────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Pie Chart */}
-        <div className="bg-card border border-border rounded-2xl p-6 saas-shadow">
+        <div className="bg-card border border-border rounded-2xl p-4 saas-shadow">
           <h3 className="text-sm font-semibold text-foreground mb-1">Distribuição de Status</h3>
-          <p className="text-xs text-muted-foreground mb-4">
+          <p className="text-xs text-muted-foreground mb-2">
             {mode === 'historico' && historicoEnd
               ? snapshotKind === 'frozen'
                 ? `Foto congelada em ${new Date(historicoEnd + 'T12:00:00').toLocaleDateString('pt-BR')}`
@@ -1855,12 +1855,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Evolução Mensal */}
-        <div className="bg-card border border-border rounded-2xl p-6 saas-shadow">
+        <div className="bg-card border border-border rounded-2xl p-4 saas-shadow">
           <h3 className="text-sm font-semibold text-foreground mb-1">Evolução Mensal por Status</h3>
-          <p className="text-xs text-muted-foreground mb-3">Valor (R$) mês a mês {acFilter ? `— ${acFilter}` : '— carteira completa'}</p>
+          <p className="text-xs text-muted-foreground mb-2">Valor (R$) mês a mês {acFilter ? `— ${acFilter}` : '— carteira completa'}</p>
 
           {/* Filtro exclusivo do bloco — período em meses */}
-          <div className="flex flex-wrap items-center gap-1.5 mb-4">
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
             {([
               { key: '3m', label: '3 Meses' },
               { key: '6m', label: '6 Meses' },

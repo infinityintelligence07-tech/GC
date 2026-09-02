@@ -178,9 +178,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </button>
           </div>
         </header>
-        <div className={`px-4 sm:px-6 lg:px-8 ${activeTab === 'ac' ? 'pt-3' : 'pt-4 sm:pt-6 lg:pt-8'} pb-4 sm:pb-6 lg:pb-8 fade-in`}>
+        <div className={`px-4 sm:px-6 lg:px-8 ${activeTab === 'ac' || activeTab === 'dashboard' ? 'pt-3' : 'pt-4 sm:pt-6 lg:pt-8'} pb-4 sm:pb-6 lg:pb-8 fade-in`}>
           {activeTab !== 'ac' && (
-            <div className="mb-5 pb-3 border-b border-border/50 flex items-center gap-3">
+            <div className={`${activeTab === 'dashboard' ? 'mb-2 pb-1.5' : 'mb-5 pb-3'} border-b border-border/50 flex items-center gap-3`}>
               <h2 className="text-sm font-semibold text-foreground tracking-tight">{headerTitle}</h2>
               {activeTab === 'cancelamentos' && <TutorialCancelamentoButton />}
             </div>
