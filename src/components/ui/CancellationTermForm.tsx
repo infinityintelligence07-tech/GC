@@ -1,7 +1,11 @@
-import { CancellationCase } from '@/types';
-import { Student } from '@/types';
+import { CancellationCase, Student } from '@/types';
 import { Download, Upload, Copy, CheckCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import {
+  buildCancellationTermoDocument,
+  buildCancellationTermoInputFromCase,
+  cancellationTermoToPlainText,
+} from '@/lib/cancellationTermoDocument';
 
 interface CancellationTermFormProps {
   cancellationCase: CancellationCase;
@@ -14,53 +18,37 @@ export default function CancellationTermForm({
   cancellationCase,
   student,
   onTermGenerated,
-  onFileUpload
+  onFileUpload,
 }: CancellationTermFormProps) {
-  const [termContent, setTermContent] = useState(cancellationCase.termTemplate || generateDefaultTerm(cancellationCase, student));
+  const defaultTerm = useMemo(() => {
+    const semMultaCDC7 =
+      cancellationCase.dentro7Dias === true && (cancellationCase.multaPercent ?? -1) === 0;
+    const fineValue = cancellationCase.cancellationFineValue ?? cancellationCase.multaValue ?? 0;
+    const totalPaid = Number(cancellationCase.totalPagoAteMomento) || 0;
+    const balance = Math.round((fineValue - totalPaid) * 100) / 100;
+    const doc = buildCancellationTermoDocument(
+      buildCancellationTermoInputFromCase({
+        caseRef: cancellationCase,
+        student,
+        semMultaCDC7,
+        multaPercent: cancellationCase.multaPercent ?? 0,
+        multaValue: fineValue,
+        totalPago: totalPaid,
+        estornoTotal: balance < 0 ? Math.abs(balance) : 0,
+      }),
+    );
+    return cancellationTermoToPlainText(doc);
+  }, [cancellationCase, student]);
+
+  const [termContent, setTermContent] = useState(cancellationCase.termTemplate || defaultTerm);
   const [showTemplate, setShowTemplate] = useState(true);
   const [copied, setCopied] = useState(false);
-
-  function generateDefaultTerm(caseData: CancellationCase, studentData?: Student): string {
-    const now = new Date().toLocaleDateString('pt-BR');
-    return `TERMO DE CANCELAMENTO E DEVOLUÇÃO DE VALORES
-
-Data: ${now}
-
-DADOS DO CLIENTE:
-Nome: ${caseData.studentName}
-CPF: ${studentData?.cpf || '________________'}
-Endereço: ${studentData?.address || '_________________________________'}, ${studentData?.numero || '____'}
-Cidade/Estado: ${studentData?.cidade || '_________'} / ${studentData?.estado || '__'}
-CEP: ${studentData?.cep || '_________'}
-
-DADOS DO CONTRATO:
-Produto/Curso: ${studentData?.product || '_________________________________'}
-Valor Original: R$ ${studentData?.saleValue?.toFixed(2) || '________,__'}
-Data de Inscrição: ${studentData?.enrollmentDate ? new Date(studentData.enrollmentDate).toLocaleDateString('pt-BR') : '___/___/______'}
-Total de Parcelas: ${studentData?.totalInstallments || '__'}
-Parcelas Pagas: ${studentData?.paidInstallments || '__'}
-
-MOTIVO DO CANCELAMENTO:
-${caseData.motivoCancelamento || '___________________________________________________________________'}
-
-DETALHES DA SOLICITAÇÃO:
-Notas: ${caseData.notes || '___________________________________________________________________'}
-
-CONFIRMAÇÃO DO CLIENTE:
-Confirmo que solicito o cancelamento de minha inscrição no curso acima mencionado e autorizo a devolução do saldo devido conforme cálculo acima.
-
-__________________________________
-Assinatura do Cliente
-
-__________________________________
-Data
-`;
-  }
 
   const handleCopyTerm = () => {
     navigator.clipboard.writeText(termContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    onTermGenerated?.(termContent);
   };
 
   const handleDownloadTerm = () => {
@@ -71,6 +59,7 @@ Data
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    onTermGenerated?.(termContent);
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,13 +74,12 @@ Data
       <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg">
         <CheckCircle size={16} className="text-blue-600" />
         <p className="text-sm text-blue-800 font-medium">
-          Termo pré-preenchido com dados do aluno. Revise antes de enviar.
+          Termo institucional pré-preenchido (sem endereço, turma ou preço do contrato). Revise antes de enviar.
         </p>
       </div>
 
       {showTemplate && (
         <div className="space-y-3">
-          {/* Template Display */}
           <div className="relative">
             <textarea
               value={termContent}
@@ -110,7 +98,6 @@ Data
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={handleDownloadTerm}
@@ -119,65 +106,30 @@ Data
               <Download size={13} />
               Baixar Termo
             </button>
+            <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted border border-border text-foreground hover:bg-muted/80 text-xs font-medium transition cursor-pointer">
+              <Upload size={13} />
+              Anexar assinado
+              <input type="file" accept="application/pdf,image/*" className="hidden" onChange={handleFileInput} />
+            </label>
             <button
-              onClick={() => onTermGenerated?.(termContent)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg iam-gradient text-primary-foreground text-xs font-medium transition"
-            >
-              <CheckCircle size={13} />
-              Confirmar Termo
-            </button>
-            <button
+              type="button"
               onClick={() => setShowTemplate(false)}
-              className="px-3 py-2 rounded-lg bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition"
+              className="px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground"
             >
-              Próximo Passo
+              Ocultar
             </button>
           </div>
         </div>
       )}
 
       {!showTemplate && (
-        <div className="space-y-4">
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-            <h4 className="text-sm font-semibold text-amber-900 mb-2">Upload do Termo Assinado</h4>
-            <p className="text-xs text-amber-800 mb-4">
-              Faça upload do termo assinado pelo cliente (PDF, imagem ou documento)
-            </p>
-
-            <div className="border-2 border-dashed border-amber-300 rounded-lg p-6 text-center">
-              <Upload size={24} className="mx-auto mb-2 text-amber-600" />
-              <label className="cursor-pointer">
-                <span className="text-xs font-semibold text-amber-700 hover:text-amber-900">
-                  Clique para enviar arquivos
-                </span>
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleFileInput}
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  className="hidden"
-                />
-              </label>
-              <p className="text-[10px] text-amber-600 mt-2">
-                Formatos: PDF, imagens, documentos
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowTemplate(true)}
-              className="flex-1 px-3 py-2 rounded-lg bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition"
-            >
-              Voltar
-            </button>
-            <button
-              className="flex-1 px-3 py-2 rounded-lg iam-gradient text-primary-foreground text-xs font-medium transition"
-            >
-              Finalizar Upload
-            </button>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowTemplate(true)}
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          Mostrar termo
+        </button>
       )}
     </div>
   );

@@ -1,6 +1,12 @@
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/store/useAppStore';
 import type { CancellationCase, Student } from '@/types';
+import {
+  buildCancellationTermoDocument,
+  buildCancellationTermoInputFromCase,
+  cancellationTermoToPlainText,
+  type CancellationTermoDocument,
+} from '@/lib/cancellationTermoDocument';
 
 export interface IamTermoTemplate {
   id: string;
@@ -27,10 +33,19 @@ export interface IamTermoCreateResult {
 }
 
 export interface BuildCancelamentoTermoInput {
-  student: Pick<Student, 'iamControlAlunoId' | 'name' | 'product' | 'cpf' | 'saleValue'>;
+  student: Pick<Student, 'iamControlAlunoId' | 'name' | 'product' | 'cpf' | 'saleValue' | 'email' | 'whatsapp'>;
   caseRef: Pick<
     CancellationCase,
-    'studentName' | 'motivoCancelamento' | 'descricaoCancelamento' | 'notes' | 'legalNotes'
+    | 'studentName'
+    | 'studentWhatsapp'
+    | 'motivoCancelamento'
+    | 'descricaoCancelamento'
+    | 'notes'
+    | 'legalNotes'
+    | 'quantidadeInscricoes'
+    | 'treinamento'
+    | 'multaPercent'
+    | 'refundPlan'
   >;
   fineValue: number;
   totalPaid: number;
@@ -38,6 +53,10 @@ export interface BuildCancelamentoTermoInput {
   balance: number;
   templateId?: string;
   semMultaCDC7?: boolean;
+  /** Documento já montado (preview). Se omitido, é gerado a partir dos campos. */
+  document?: CancellationTermoDocument;
+  multaPercent?: number;
+  estornoTotal?: number;
 }
 
 function formatBalance(balance: number): string {
@@ -47,28 +66,42 @@ function formatBalance(balance: number): string {
 }
 
 export function buildCancelamentoTermoPayload(input: BuildCancelamentoTermoInput) {
+  const semMulta = !!input.semMultaCDC7;
+  const estornoTotal =
+    input.estornoTotal ?? (input.balance < 0 ? Math.abs(input.balance) : 0);
+  const multaPercent = input.multaPercent ?? input.caseRef.multaPercent ?? 0;
+
+  const doc =
+    input.document ??
+    buildCancellationTermoDocument(
+      buildCancellationTermoInputFromCase({
+        caseRef: input.caseRef,
+        student: input.student,
+        semMultaCDC7: semMulta,
+        multaPercent,
+        multaValue: input.fineValue,
+        totalPago: input.totalPaid,
+        estornoTotal,
+      }),
+    );
+
+  const plain = cancellationTermoToPlainText(doc);
   const motivo = input.caseRef.motivoCancelamento || input.caseRef.descricaoCancelamento || input.caseRef.notes || '';
+
   const observacoes = [
-    `Caso de cancelamento — ${input.caseRef.studentName}`,
-    input.student.product ? `Produto: ${input.student.product}` : '',
-    `Valor do contrato: ${formatCurrency(input.totalContract)}`,
-    `Total pago: ${formatCurrency(input.totalPaid)}`,
-    input.semMultaCDC7
-      ? 'Multa: isenta (direito de arrependimento — 7 dias CDC)'
-      : `Multa de cancelamento: ${formatCurrency(input.fineValue)}`,
-    `Saldo final: ${formatBalance(input.balance)}`,
-    motivo ? `Motivo: ${motivo}` : '',
-    input.caseRef.legalNotes?.trim() ? `Observações jurídicas: ${input.caseRef.legalNotes.trim()}` : '',
+    plain,
+    motivo ? `\nMotivo informado: ${motivo}` : '',
+    input.caseRef.legalNotes?.trim() ? `\nObservações jurídicas: ${input.caseRef.legalNotes.trim()}` : '',
   ]
     .filter(Boolean)
-    .join('\n');
+    .join('');
 
-  const textoIntroducao =
-    'Pelo presente instrumento, as partes formalizam o cancelamento do contrato de prestação de serviços educacionais, ' +
-    'nos termos e condições abaixo descritos, em conformidade com a legislação aplicável.';
+  const textoIntroducao = semMulta
+    ? 'Pelo presente instrumento, as partes formalizam o cancelamento sem multa rescisória, nos termos do art. 49 do CDC (prazo de reflexão de 7 dias).'
+    : 'Pelo presente instrumento, as partes formalizam o cancelamento com aplicação de multa rescisória e eventual estorno, conforme contrato e legislação aplicável.';
 
   return {
-    termo_titulo: `Termo de Cancelamento — ${input.caseRef.studentName}`,
+    termo_titulo: `${doc.titulo} — ${input.caseRef.studentName}`,
     texto_introducao: textoIntroducao,
     observacoes,
     local_assinatura: 'Americana/SP',
@@ -76,10 +109,20 @@ export function buildCancelamentoTermoPayload(input: BuildCancelamentoTermoInput
     campos_variaveis: {
       valor_contrato: formatCurrency(input.totalContract),
       valor_pago: formatCurrency(input.totalPaid),
-      valor_multa: input.semMultaCDC7 ? 'R$ 0,00 (isento CDC 7 dias)' : formatCurrency(input.fineValue),
+      valor_multa: semMulta ? 'R$ 0,00 (isento CDC 7 dias)' : formatCurrency(input.fineValue),
+      percentual_multa: semMulta ? '0%' : `${multaPercent}%`,
       saldo_final: formatBalance(input.balance),
-      produto: input.student.product ?? '',
+      estorno: formatCurrency(estornoTotal),
+      produto: input.student.product ?? input.caseRef.treinamento ?? '',
+      qtd_inscricoes: String(input.caseRef.quantidadeInscricoes ?? 1),
       motivo_cancelamento: motivo,
+      variante: doc.variant,
+      nome_aluno: doc.studentName,
+      cpf: doc.cpf,
+      email: doc.email,
+      whatsapp: doc.whatsapp,
+      chave_pix: input.caseRef.refundPlan?.pixKey ?? '',
+      tipo_pix: input.caseRef.refundPlan?.pixKeyType ?? '',
     },
   };
 }
@@ -96,7 +139,7 @@ export async function listIamTermoTemplates(): Promise<IamTermoTemplate[]> {
 }
 
 export interface BuildAditivoTermoInput {
-  student: Pick<Student, 'iamControlAlunoId' | 'name' | 'product' | 'cpf' | 'saleValue'>;
+  student: Pick<Student, 'iamControlAlunoId' | 'name' | 'product' | 'cpf' | 'saleValue' | 'whatsapp' | 'email' | 'enrollmentDate'>;
   originalValues: {
     valorVenda: number;
     entrada: number;
@@ -111,6 +154,13 @@ export interface BuildAditivoTermoInput {
     novoValorParcela: number;
     saldoAposEntrada?: number;
     primeiraParcelaVencimento?: string;
+    taxaJurosMes?: number;
+    qtdParcelasAberto?: number;
+    totalPago?: number;
+    quantidadeInscricoes?: number;
+    diaVencimento?: number;
+    dataEntrada?: string;
+    parcelamentoLines?: string[];
   };
   templateId?: string;
 }
@@ -121,61 +171,79 @@ export function buildAditivoTermoPayload(input: BuildAditivoTermoInput) {
   const saldoAposEntrada =
     input.newValues.saldoAposEntrada ??
     Math.max(0, totalComEncargos - input.newValues.novaEntrada);
+  const totalAposReneg = input.newValues.novaEntrada + saldoAposEntrada;
+  const totalPago = input.newValues.totalPago ?? 0;
+  const taxaJuros = input.newValues.taxaJurosMes ?? 0;
+  const qtdParcelasAberto = input.newValues.qtdParcelasAberto ?? input.newValues.novasParcelas;
+  const parcelamento =
+    (input.newValues.parcelamentoLines ?? []).join('\n') ||
+    `${input.newValues.novasParcelas}x de ${formatCurrency(input.newValues.novoValorParcela)}`;
 
   const observacoes = [
-    `Renegociação financeira — ${input.student.name}`,
-    input.student.product ? `Produto: ${input.student.product}` : '',
-    `Valor original do contrato: ${formatCurrency(input.originalValues.valorVenda)}`,
-    `Entrada original: ${formatCurrency(input.originalValues.entrada)}`,
-    `Parcelas originais: ${input.originalValues.parcelasOriginais}x`,
-    `Saldo devedor renegociado: ${formatCurrency(input.newValues.novoSaldo)}`,
-    `Multa aplicada: ${formatCurrency(input.newValues.multaAplicada)}`,
-    `Juros aplicados: ${formatCurrency(input.newValues.jurosAplicados)}`,
-    `Total com encargos: ${formatCurrency(totalComEncargos)}`,
+    'TERMO DE RENEGOCIAÇÃO',
+    `Aluno: ${input.student.name}`,
+    `CPF/CNPJ: ${input.student.cpf ?? ''}`,
+    `WhatsApp: ${input.student.whatsapp ?? ''}`,
+    `E-mail: ${input.student.email ?? ''}`,
+    input.student.product ? `Treinamento: ${input.student.product}` : '',
+    `Total contratado: ${formatCurrency(input.originalValues.valorVenda)}`,
+    `Total pago até o momento: ${formatCurrency(totalPago)}`,
+    `Saldo em aberto: ${formatCurrency(input.newValues.novoSaldo)}`,
+    `Parcelas em aberto: ${qtdParcelasAberto}`,
+    `Total a ser pago após a renegociação: ${formatCurrency(totalAposReneg)}`,
     input.newValues.novaEntrada > 0.0049
-      ? `Nova entrada: ${formatCurrency(input.newValues.novaEntrada)}`
-      : '',
-    `Saldo após entrada: ${formatCurrency(saldoAposEntrada)}`,
-    `Novo plano: ${input.newValues.novasParcelas}x de ${formatCurrency(input.newValues.novoValorParcela)}`,
+      ? `Entrada: ${formatCurrency(input.newValues.novaEntrada)}${input.newValues.dataEntrada ? ` em ${input.newValues.dataEntrada}` : ''}`
+      : 'Entrada: R$ 0,00',
     input.newValues.primeiraParcelaVencimento
-      ? `1ª parcela do novo plano: ${input.newValues.primeiraParcelaVencimento}`
+      ? `1º vencimento: ${input.newValues.primeiraParcelaVencimento} (demais no dia ${input.newValues.diaVencimento ?? '—'})`
       : '',
+    `Novo parcelamento:\n${parcelamento}`,
+    `Taxa de juros aplicada ao mês: ${taxaJuros.toLocaleString('pt-BR')}%`,
+    'Permanecem vigentes as demais cláusulas do contrato principal naquilo que não estiver disposto neste termo.',
   ]
     .filter(Boolean)
     .join('\n');
 
   const textoIntroducao =
-    'Pelo presente instrumento aditivo, as partes retificam as condições de parcelamento do contrato de ' +
-    'prestação de serviços educacionais, permanecendo em vigor as demais cláusulas do contrato original.';
+    'Pelo presente instrumento, o(a) ALUNO(A) e o INSTITUTO ACADEMY MIND TREINAMENTOS LTDA (CNPJ 03.727.532/0001-13) ' +
+    'ajustam sua relação contratual, formalizando a renegociação do montante pendente de pagamento, ' +
+    'permanecendo vigentes as demais cláusulas do contrato principal.';
 
   return {
-    termo_titulo: `Termo Aditivo — ${input.student.name}`,
+    termo_titulo: `Termo de Renegociação — ${input.student.name}`,
     texto_introducao: textoIntroducao,
     observacoes,
     local_assinatura: 'Americana/SP',
     template_id: input.templateId,
     campos_variaveis: {
-      valor_contrato_original: formatCurrency(input.originalValues.valorVenda),
-      entrada_original: formatCurrency(input.originalValues.entrada),
-      parcelas_originais: String(input.originalValues.parcelasOriginais),
-      saldo_devedor: formatCurrency(input.newValues.novoSaldo),
-      multa: formatCurrency(input.newValues.multaAplicada),
-      juros: formatCurrency(input.newValues.jurosAplicados),
-      total_com_encargos: formatCurrency(totalComEncargos),
+      nome_completo: input.student.name,
+      cpf_cnpj: input.student.cpf ?? '',
+      whatsapp: input.student.whatsapp ?? '',
+      email: input.student.email ?? '',
+      treinamento: input.student.product ?? '',
+      total_contratado: formatCurrency(input.originalValues.valorVenda),
+      total_pago: formatCurrency(totalPago),
+      saldo_em_aberto: formatCurrency(input.newValues.novoSaldo),
+      qtd_parcelas_aberto: String(qtdParcelasAberto),
+      total_apos_renegociacao: formatCurrency(totalAposReneg),
       nova_entrada: formatCurrency(input.newValues.novaEntrada),
-      saldo_apos_entrada: formatCurrency(saldoAposEntrada),
+      data_entrada: input.newValues.dataEntrada ?? '',
+      primeiro_vencimento: input.newValues.primeiraParcelaVencimento ?? '',
+      dia_vencimento: String(input.newValues.diaVencimento ?? ''),
       novas_parcelas: String(input.newValues.novasParcelas),
       valor_parcela: formatCurrency(input.newValues.novoValorParcela),
-      produto: input.student.product ?? '',
-      primeira_parcela: input.newValues.primeiraParcelaVencimento ?? '',
+      parcelamento: parcelamento,
+      taxa_juros_mes: `${taxaJuros.toLocaleString('pt-BR')}%`,
+      multa: formatCurrency(input.newValues.multaAplicada),
+      juros: formatCurrency(input.newValues.jurosAplicados),
     },
   };
 }
 
-/** Busca template de aditivo no IAM Control (nome contém "aditivo"). */
+/** Busca template de aditivo/renegociação no IAM Control. */
 export async function findAditivoTemplateId(): Promise<string | undefined> {
   const templates = await listIamTermoTemplates();
-  const match = templates.find((t) => /aditivo/i.test(t.nome));
+  const match = templates.find((t) => /aditivo|renegocia/i.test(t.nome));
   return match?.id;
 }
 

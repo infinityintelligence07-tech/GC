@@ -1,324 +1,271 @@
-import { useState } from 'react';
-import { X, Download, Send, Check } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { X, Download, Link2, Check, Copy } from 'lucide-react';
 import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
-import { createIamAditivoTermo, openZapSignUrl } from '@/lib/iamControlTermo';
+import { createIamAditivoTermo } from '@/lib/iamControlTermo';
 import { toast } from 'sonner';
 import logoIAM from '@/assets/logo-iam-blue.png';
 
+export interface TermoRenegociacaoOriginalValues {
+  valorVenda: number;
+  entrada: number;
+  parcelasOriginais: number;
+}
+
+export interface TermoRenegociacaoNewValues {
+  /** Saldo em aberto do contrato (antes dos encargos da renegociação). */
+  novoSaldo: number;
+  multaAplicada: number;
+  jurosAplicados: number;
+  novaEntrada: number;
+  novasParcelas: number;
+  novoValorParcela: number;
+  saldoAposEntrada?: number;
+  /** Data da 1ª parcela no formato DD/MM/AAAA */
+  primeiraParcelaVencimento?: string;
+  /** Taxa de juros a.m. aplicada (ex.: 1). */
+  taxaJurosMes?: number;
+  /** Quantidade de parcelas em aberto renegociadas. */
+  qtdParcelasAberto?: number;
+  /** Total já pago pelo aluno até o momento. */
+  totalPago?: number;
+  /** Quantidade de inscrições no treinamento. */
+  quantidadeInscricoes?: number;
+  /** Dia do mês das parcelas subsequentes. */
+  diaVencimento?: number;
+  /** Data da entrada (DD/MM/AAAA), se houver. */
+  dataEntrada?: string;
+}
+
 interface Props {
   student: Student;
-  originalValues: {
-    valorVenda: number;
-    entrada: number;
-    parcelasOriginais: number;
-  };
-  newValues: {
-    novoSaldo: number;
-    multaAplicada: number;
-    jurosAplicados: number;
-    novaEntrada: number;
-    novasParcelas: number;
-    novoValorParcela: number;
-    saldoAposEntrada?: number;
-    primeiraParcelaVencimento?: string;
-  };
+  originalValues: TermoRenegociacaoOriginalValues;
+  newValues: TermoRenegociacaoNewValues;
   onClose: () => void;
 }
 
+function parseBrDate(dateStr?: string): Date | null {
+  if (!dateStr) return null;
+  const br = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (br) return new Date(Number(br[3]), Number(br[2]) - 1, Number(br[1]));
+  const iso = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  const d = new Date(dateStr);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateBR(d: Date): string {
+  return d.toLocaleDateString('pt-BR');
+}
+
+function addMonthsKeepingDay(base: Date, months: number, day?: number): Date {
+  const targetDay = day ?? base.getDate();
+  const d = new Date(base.getFullYear(), base.getMonth() + months, 1);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(targetDay, lastDay));
+  return d;
+}
+
+function buildParcelamentoLines(
+  count: number,
+  value: number,
+  firstDueBr?: string,
+  diaVencimento?: number,
+): string[] {
+  if (count <= 0) return [];
+  const first = parseBrDate(firstDueBr) ?? new Date();
+  const day = diaVencimento ?? first.getDate();
+  const lines: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const due = i === 0 ? first : addMonthsKeepingDay(first, i, day);
+    lines.push(
+      `Parcela ${String(i + 1).padStart(2, '0')}: ${formatCurrency(value)} — vencimento ${formatDateBR(due)}`,
+    );
+  }
+  return lines;
+}
+
+const INSTITUTO =
+  'INSTITUTO ACADEMY MIND TREINAMENTOS LTDA, pessoa jurídica de direito privado, devidamente inscrita no CNPJ nº 03.727.532/0001-13, com sede na R. Major Rehder, 248 - Vila Rehder, Americana - SP, 13465-390';
+
 export default function TermoAditivoModal({ student, originalValues, newValues, onClose }: Props) {
-  const [zapsignSending, setZapsignSending] = useState(false);
-  const [zapsignSent, setZapsignSent] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [signLink, setSignLink] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const today = useMemo(() => new Date(), []);
+  const dateStr = formatDateBR(today);
+
+  const totalPago =
+    newValues.totalPago ??
+    (student.downPayment ?? 0) +
+      (student.installments ?? []).filter((i) => i.paid).reduce((s, i) => s + (i.value || 0), 0);
+
+  const totalAposReneg =
+    newValues.saldoAposEntrada != null
+      ? newValues.novaEntrada + newValues.saldoAposEntrada
+      : newValues.novoSaldo + newValues.multaAplicada + newValues.jurosAplicados;
+
+  const qtdInscricoes = newValues.quantidadeInscricoes ?? 1;
+  const qtdParcelasAberto =
+    newValues.qtdParcelasAberto ??
+    (student.installments ?? []).filter((i) => !i.paid).length;
+  const taxaJuros = newValues.taxaJurosMes ?? 0;
+  const contratoAssinado = student.enrollmentDate
+    ? formatDateBR(new Date(student.enrollmentDate + (student.enrollmentDate.includes('T') ? '' : 'T12:00:00')))
+    : '—';
+  const diaVencimento =
+    newValues.diaVencimento ??
+    parseBrDate(newValues.primeiraParcelaVencimento)?.getDate() ??
+    student.dueDay ??
+    today.getDate();
+
+  const parcelamentoLines = useMemo(
+    () =>
+      buildParcelamentoLines(
+        newValues.novasParcelas,
+        newValues.novoValorParcela,
+        newValues.primeiraParcelaVencimento,
+        diaVencimento,
+      ),
+    [newValues.novasParcelas, newValues.novoValorParcela, newValues.primeiraParcelaVencimento, diaVencimento],
+  );
+
+  const entradaLinha =
+    newValues.novaEntrada > 0.0049
+      ? `Entrada: ${formatCurrency(newValues.novaEntrada)}${
+          newValues.dataEntrada ? ` em ${newValues.dataEntrada}` : ` em ${dateStr}`
+        }`
+      : 'Entrada: R$ 0,00 (sem entrada)';
 
   const handleGeneratePDF = () => {
-    // Create a print-friendly version
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const today = new Date();
-    const dateStr = today.toLocaleDateString('pt-BR');
+    const parcelamentoHtml = parcelamentoLines
+      .map((l) => `<p class="line">${l}</p>`)
+      .join('');
 
     const htmlContent = `
       <!DOCTYPE html>
       <html lang="pt-BR">
       <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Termo Aditivo de Contrato - ${student.name}</title>
+        <title>Termo de Renegociação — ${student.name}</title>
         <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
           body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Times New Roman', Times, serif;
             background: #fff;
-            padding: 40px 20px;
-            line-height: 1.6;
-            color: #333;
+            color: #111;
+            padding: 40px 24px;
+            line-height: 1.55;
+            font-size: 13px;
           }
-          .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 40px;
-            border: 1px solid #e0e0e0;
-          }
-          .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #1e40af;
-            padding-bottom: 20px;
-          }
-          .logo {
-            max-width: 120px;
-            margin: 0 auto 15px;
-          }
-          .logo img {
-            max-width: 100%;
-            height: auto;
-          }
+          .container { max-width: 780px; margin: 0 auto; }
+          .header { text-align: center; margin-bottom: 28px; }
+          .logo { max-width: 110px; margin: 0 auto 12px; }
+          .logo img { max-width: 100%; height: auto; }
           .title {
-            font-size: 20px;
-            font-weight: bold;
-            color: #1e40af;
-            margin-top: 15px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            font-size: 18px; font-weight: bold; text-transform: uppercase;
+            letter-spacing: 0.5px; margin-top: 8px;
           }
-          .subtitle {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-          }
-          .content {
-            margin-bottom: 25px;
-          }
-          .section {
-            margin-bottom: 20px;
-          }
+          p { margin-bottom: 10px; text-align: justify; }
+          .line { margin-bottom: 4px; text-align: left; }
+          .label { font-weight: bold; }
+          .block { margin: 16px 0; }
           .section-title {
-            font-weight: bold;
-            font-size: 13px;
-            color: #1e40af;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 5px;
+            font-weight: bold; text-transform: uppercase;
+            margin: 18px 0 8px; text-align: left;
           }
-          .row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 13px;
+          .field { margin-bottom: 4px; }
+          .signature {
+            margin-top: 40px; display: flex; justify-content: space-between; gap: 24px;
           }
-          .row.highlight {
-            background: #f0f4ff;
-            padding: 8px;
-            border-radius: 4px;
-            font-weight: bold;
-            color: #1e40af;
-          }
-          .label {
-            font-weight: 500;
-            color: #333;
-          }
-          .value {
-            font-weight: bold;
-            color: #1e40af;
-            text-align: right;
-          }
-          .two-col {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 15px;
-          }
-          .column {
-            display: flex;
-            flex-direction: column;
-          }
-          .signature-area {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #ddd;
-          }
-          .signature-line {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 30px;
-          }
-          .sig-box {
-            text-align: center;
-            width: 45%;
-          }
+          .sig-box { width: 46%; text-align: center; }
           .sig-line {
-            border-top: 1px solid #333;
-            margin-bottom: 5px;
-            min-height: 60px;
+            border-top: 1px solid #111; margin: 48px 0 6px; min-height: 1px;
           }
-          .sig-label {
-            font-size: 11px;
-            color: #666;
-            font-weight: 500;
-          }
-          .footer {
-            margin-top: 30px;
-            padding-top: 15px;
-            border-top: 1px solid #ddd;
-            text-align: center;
-            font-size: 10px;
-            color: #999;
-          }
-          .observation {
-            background: #fffacd;
-            border-left: 4px solid #ffd700;
-            padding: 10px;
-            margin: 15px 0;
-            font-size: 12px;
-            color: #333;
-          }
+          .sig-label { font-size: 12px; }
+          .place { margin-top: 28px; text-align: left; }
           @media print {
-            body {
-              padding: 0;
-              background: white;
-            }
-            .container {
-              border: none;
-              max-width: 100%;
-              margin: 0;
-              padding: 0;
-            }
-            .no-print {
-              display: none;
-            }
+            body { padding: 0; }
+            .container { max-width: 100%; }
           }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <div class="logo">
-              <img src="${logoIAM}" alt="IAM Logo">
-            </div>
-            <div class="title">TERMO ADITIVO DE CONTRATO</div>
-            <div class="subtitle">Renegociação de Parcelas</div>
+            <div class="logo"><img src="${logoIAM}" alt="IAM"></div>
+            <div class="title">Termo de Renegociação</div>
           </div>
 
-          <div class="content">
-            <div class="section">
-              <div class="section-title">Identificação do Aluno</div>
-              <div class="row">
-                <span class="label">Nome:</span>
-                <span>${student.name}</span>
-              </div>
-              <div class="row">
-                <span class="label">CPF:</span>
-                <span>${student.cpf}</span>
-              </div>
-              <div class="row">
-                <span class="label">Data do Termo:</span>
-                <span>${dateStr}</span>
-              </div>
+          <p>Pelo presente instrumento, o(a) ALUNO(A):</p>
+          <div class="block">
+            <p class="field"><span class="label">NOME COMPLETO:</span> ${student.name || '—'}</p>
+            <p class="field"><span class="label">CPF/CNPJ:</span> ${student.cpf || '—'}</p>
+            <p class="field"><span class="label">WHATSAPP:</span> ${student.whatsapp || '—'}</p>
+            <p class="field"><span class="label">EMAIL:</span> ${student.email || '—'}</p>
+          </div>
+
+          <p>E o ${INSTITUTO}, <strong>AJUSTAM SUA RELAÇÃO CONTRATUAL CONFORME A SEGUIR EXPOSTO.</strong></p>
+
+          <p>
+            O(A) ALUNO(A) possui <strong>${qtdInscricoes}</strong> inscrição(ões) no treinamento
+            <strong>${student.product || '—'}</strong>, contrato assinado em <strong>${contratoAssinado}</strong>.
+          </p>
+
+          <p>
+            O presente instrumento visa formalizar a renegociação realizada entre as partes referente ao montante
+            pendente de pagamento pelo(a) ALUNO(a), de modo que as alterações de valores refletem a nova forma de
+            pagamento, estando o(a) ALUNO(a) ciente e de acordo com as novas condições.
+          </p>
+
+          <p>
+            Os demais termos aqui descritos seguem todo o disposto no contrato principal, em especial em relação a
+            multa, correção monetária, juros e atualizações.
+          </p>
+
+          <p>As partes acordam a seguinte negociação:</p>
+          <p class="section-title">Renegociação das parcelas ficando da seguinte forma:</p>
+
+          <p class="field"><span class="label">TREINAMENTO:</span> ${student.product || '—'}</p>
+          <p class="field"><span class="label">TOTAL CONTRATADO:</span> ${formatCurrency(originalValues.valorVenda)}</p>
+          <p class="field"><span class="label">TOTAL PAGO PELO ALUNO(A) ATÉ O MOMENTO:</span> ${formatCurrency(totalPago)}</p>
+          <p class="field"><span class="label">SALDO EM ABERTO DO CONTRATO:</span> ${formatCurrency(newValues.novoSaldo)}</p>
+          <p class="field"><span class="label">QUANTIDADE DE PARCELAS EM ABERTO:</span> ${qtdParcelasAberto}</p>
+          <p class="field"><span class="label">TOTAL A SER PAGO APÓS A RENEGOCIAÇÃO:</span> ${formatCurrency(totalAposReneg)}</p>
+
+          <p class="section-title">Novo parcelamento acordado:</p>
+          <p class="field">${entradaLinha}</p>
+          <p>
+            As demais parcelas serão conforme descrito abaixo e o primeiro vencimento será dia
+            <strong>${newValues.primeiraParcelaVencimento || '—'}</strong> e as demais parcelas vencerão no dia
+            <strong>${diaVencimento}</strong> dos meses subsequentes.
+          </p>
+          <div class="block">${parcelamentoHtml || '<p class="line">—</p>'}</div>
+          <p class="field"><span class="label">Taxa de juros aplicada ao mês:</span> ${taxaJuros.toLocaleString('pt-BR')}%</p>
+
+          <p>
+            Permanecem vigentes as demais cláusulas contratuais do instrumento anteriormente celebrado pelas partes
+            naquilo que não estiver disposto no presente termo de renegociação.
+          </p>
+          <p>
+            O INSTITUTO, somente após o recebimento da importância total dará ao ALUNO(A) a mais ampla, rasa, geral e
+            irrevogável quitação de suas obrigações em relação ao treinamento contratado.
+          </p>
+
+          <p class="place">Americana, ${dateStr}.</p>
+
+          <div class="signature">
+            <div class="sig-box">
+              <div class="sig-line"></div>
+              <div class="sig-label">${student.name || 'ALUNO(A)'}<br>${student.cpf || ''}</div>
             </div>
-
-            <div class="section">
-              <div class="section-title">Valores Originais do Contrato</div>
-              <div class="two-col">
-                <div class="column">
-                  <div class="row">
-                    <span class="label">Valor de Venda:</span>
-                    <span>${formatCurrency(originalValues.valorVenda)}</span>
-                  </div>
-                  <div class="row">
-                    <span class="label">Entrada:</span>
-                    <span>${formatCurrency(originalValues.entrada)}</span>
-                  </div>
-                </div>
-                <div class="column">
-                  <div class="row">
-                    <span class="label">Parcelas Originais:</span>
-                    <span>${originalValues.parcelasOriginais}x</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="section">
-              <div class="section-title">Novo Acordo - Encargos e Recalcificação</div>
-              <div class="observation">
-                Conforme requerido, procede-se à renegociação do contrato original com a aplicação dos seguintes encargos e condições.
-              </div>
-
-              <div class="two-col">
-                <div class="column">
-                  <div class="row">
-                    <span class="label">Saldo Devedor:</span>
-                    <span>${formatCurrency(newValues.novoSaldo)}</span>
-                  </div>
-                  <div class="row">
-                    <span class="label">Multa Aplicada:</span>
-                    <span class="value">${formatCurrency(newValues.multaAplicada)}</span>
-                  </div>
-                </div>
-                <div class="column">
-                  <div class="row">
-                    <span class="label">Juros Aplicados:</span>
-                    <span class="value">${formatCurrency(newValues.jurosAplicados)}</span>
-                  </div>
-                  <div class="row highlight">
-                    <span class="label">Total com Encargos:</span>
-                    <span>${formatCurrency(newValues.novoSaldo + newValues.multaAplicada + newValues.jurosAplicados)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="section">
-              <div class="section-title">Novas Condições de Parcelamento</div>
-              <div class="two-col">
-                <div class="column">
-                  <div class="row">
-                    <span class="label">Nova Entrada:</span>
-                    <span>${formatCurrency(newValues.novaEntrada)}</span>
-                  </div>
-                  <div class="row">
-                    <span class="label">Novas Parcelas:</span>
-                    <span>${newValues.novasParcelas}x</span>
-                  </div>
-                </div>
-                <div class="column">
-                  <div class="row highlight">
-                    <span class="label">Novo Valor da Parcela:</span>
-                    <span>${formatCurrency(newValues.novoValorParcela)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="section">
-              <div class="observation">
-                As partes concordam que este aditivo substitui as condições originais de parcelamento, mantendo validade integral do contrato de prestação de serviços educacionais. O aluno mantém todos os direitos e deveres previstos no contrato original, sujeitando-se às novas condições de pagamento aqui estabelecidas.
-              </div>
-            </div>
-
-            <div class="signature-area">
-              <div class="signature-line">
-                <div class="sig-box">
-                  <div class="sig-line"></div>
-                  <div class="sig-label">Aluno(a): ${student.name}</div>
-                </div>
-                <div class="sig-box">
-                  <div class="sig-line"></div>
-                  <div class="sig-label">IAM - GC</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="footer">
-              <p>Documento gerado automaticamente pelo sistema de gestão financeira IAM.</p>
-              <p>Data e hora: ${dateStr} às ${today.toLocaleTimeString('pt-BR')}</p>
+            <div class="sig-box">
+              <div class="sig-line"></div>
+              <div class="sig-label">INSTITUTO ACADEMY MIND TREINAMENTOS LTDA.<br>CNPJ 03.727.532/0001-13</div>
             </div>
           </div>
         </div>
@@ -328,112 +275,198 @@ export default function TermoAditivoModal({ student, originalValues, newValues, 
 
     printWindow.document.write(htmlContent);
     printWindow.document.close();
-
-    // Give it a moment to render before printing
-    setTimeout(() => {
-      printWindow.print();
-    }, 250);
+    setTimeout(() => printWindow.print(), 250);
   };
 
-  const handleSendToZapsign = async () => {
+  const copySignLink = async (url: string) => {
+    await navigator.clipboard.writeText(url);
+    setLinkCopied(true);
+    toast.success('Link de assinatura copiado. Envie para o aluno assinar.');
+  };
+
+  const handleCopySignLink = async () => {
     if (!student.iamControlAlunoId) {
-      toast.error('Vincule o aluno ao IAM Control para enviar via ZapSign.');
+      toast.error('Vincule o aluno ao IAM Control para gerar o link de assinatura.');
       return;
     }
 
-    setZapsignSending(true);
+    if (signLink) {
+      try {
+        await copySignLink(signLink);
+      } catch {
+        toast.error('Não foi possível copiar o link.');
+      }
+      return;
+    }
+
+    setLinkBusy(true);
     try {
       const result = await createIamAditivoTermo({
         student,
         originalValues,
-        newValues,
+        newValues: {
+          ...newValues,
+          totalPago,
+          qtdParcelasAberto,
+          quantidadeInscricoes: qtdInscricoes,
+          taxaJurosMes: taxaJuros,
+          diaVencimento,
+          dataEntrada: newValues.dataEntrada ?? (newValues.novaEntrada > 0.0049 ? dateStr : undefined),
+          parcelamentoLines,
+        },
       });
-      if (!result.ok) throw new Error(result.error || 'Falha ao enviar para ZapSign.');
+      if (!result.ok) throw new Error(result.error || 'Falha ao gerar link de assinatura.');
 
       const signUrl = result.url_assinatura || result.file_url;
-      if (signUrl) openZapSignUrl(signUrl);
+      if (!signUrl) throw new Error('Link de assinatura não disponível.');
 
-      setZapsignSent(true);
-      toast.success('Termo aditivo enviado para assinatura na ZapSign.');
+      setSignLink(signUrl);
+      await copySignLink(signUrl);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Falha ao enviar para ZapSign.');
+      toast.error(err instanceof Error ? err.message : 'Falha ao gerar link de assinatura.');
     } finally {
-      setZapsignSending(false);
+      setLinkBusy(false);
     }
   };
 
   return (
     <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-50 fade-in">
       <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto shadow-2xl border border-border">
-        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card">
-          <h2 className="text-lg font-semibold text-foreground">Termo Aditivo de Contrato</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted transition-colors"><X size={18} /></button>
+        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card z-10">
+          <h2 className="text-lg font-semibold text-foreground">Termo de Renegociação</h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted transition-colors">
+            <X size={18} />
+          </button>
         </div>
 
         <div className="p-6 space-y-4">
-          {/* Preview */}
-          <div className="border border-border rounded-xl p-6 bg-muted/20 space-y-4 max-h-96 overflow-y-auto">
-            <div className="flex justify-center mb-4">
-              <img src={logoIAM} alt="IAM" className="w-16 h-auto" />
+          <div className="border border-border rounded-xl p-6 bg-muted/20 space-y-3 max-h-[28rem] overflow-y-auto text-[11px] leading-relaxed text-foreground/90">
+            <div className="flex justify-center mb-2">
+              <img src={logoIAM} alt="IAM" className="w-14 h-auto" />
+            </div>
+            <h3 className="text-center text-sm font-bold uppercase tracking-wide">Termo de Renegociação</h3>
+
+            <p>Pelo presente instrumento, o(a) ALUNO(A):</p>
+            <div className="space-y-0.5 pl-1">
+              <p>
+                <span className="font-semibold">NOME COMPLETO:</span> {student.name || '—'}
+              </p>
+              <p>
+                <span className="font-semibold">CPF/CNPJ:</span> {student.cpf || '—'}
+              </p>
+              <p>
+                <span className="font-semibold">WHATSAPP:</span> {student.whatsapp || '—'}
+              </p>
+              <p>
+                <span className="font-semibold">EMAIL:</span> {student.email || '—'}
+              </p>
             </div>
 
-            <h3 className="text-center text-sm font-bold text-primary uppercase">TERMO ADITIVO DE CONTRATO</h3>
-            <p className="text-center text-xs text-muted-foreground">Renegociação de Parcelas</p>
+            <p>
+              E o {INSTITUTO}, <strong>AJUSTAM SUA RELAÇÃO CONTRATUAL CONFORME A SEGUIR EXPOSTO.</strong>
+            </p>
 
-            <div className="space-y-3 text-xs">
+            <p>
+              O(A) ALUNO(A) possui <strong>{qtdInscricoes}</strong> inscrição(ões) no treinamento{' '}
+              <strong>{student.product || '—'}</strong>, contrato assinado em <strong>{contratoAssinado}</strong>.
+            </p>
+
+            <p>
+              O presente instrumento visa formalizar a renegociação realizada entre as partes referente ao montante
+              pendente de pagamento pelo(a) ALUNO(a), de modo que as alterações de valores refletem a nova forma de
+              pagamento, estando o(a) ALUNO(a) ciente e de acordo com as novas condições.
+            </p>
+
+            <p>
+              Os demais termos aqui descritos seguem todo o disposto no contrato principal, em especial em relação a
+              multa, correção monetária, juros e atualizações.
+            </p>
+
+            <p>As partes acordam a seguinte negociação:</p>
+            <p className="font-bold uppercase text-[10px] pt-1">Renegociação das parcelas ficando da seguinte forma:</p>
+
+            <div className="space-y-0.5">
+              <p>
+                <span className="font-semibold">TREINAMENTO:</span> {student.product || '—'}
+              </p>
+              <p>
+                <span className="font-semibold">TOTAL CONTRATADO:</span> {formatCurrency(originalValues.valorVenda)}
+              </p>
+              <p>
+                <span className="font-semibold">TOTAL PAGO PELO ALUNO(A) ATÉ O MOMENTO:</span> {formatCurrency(totalPago)}
+              </p>
+              <p>
+                <span className="font-semibold">SALDO EM ABERTO DO CONTRATO:</span>{' '}
+                {formatCurrency(newValues.novoSaldo)}
+              </p>
+              <p>
+                <span className="font-semibold">QUANTIDADE DE PARCELAS EM ABERTO:</span> {qtdParcelasAberto}
+              </p>
+              <p>
+                <span className="font-semibold">TOTAL A SER PAGO APÓS A RENEGOCIAÇÃO:</span>{' '}
+                {formatCurrency(totalAposReneg)}
+              </p>
+            </div>
+
+            <p className="font-bold uppercase text-[10px] pt-1">Novo parcelamento acordado:</p>
+            <p>{entradaLinha}</p>
+            <p>
+              As demais parcelas serão conforme descrito abaixo e o primeiro vencimento será dia{' '}
+              <strong>{newValues.primeiraParcelaVencimento || '—'}</strong> e as demais parcelas vencerão no dia{' '}
+              <strong>{diaVencimento}</strong> dos meses subsequentes.
+            </p>
+            <div className="space-y-0.5 pl-1">
+              {parcelamentoLines.length > 0 ? (
+                parcelamentoLines.map((l) => <p key={l}>{l}</p>)
+              ) : (
+                <p>—</p>
+              )}
+            </div>
+            <p>
+              <span className="font-semibold">Taxa de juros aplicada ao mês:</span>{' '}
+              {taxaJuros.toLocaleString('pt-BR')}%
+            </p>
+
+            <p>
+              Permanecem vigentes as demais cláusulas contratuais do instrumento anteriormente celebrado pelas partes
+              naquilo que não estiver disposto no presente termo de renegociação.
+            </p>
+            <p>
+              O INSTITUTO, somente após o recebimento da importância total dará ao ALUNO(A) a mais ampla, rasa, geral e
+              irrevogável quitação de suas obrigações em relação ao treinamento contratado.
+            </p>
+
+            <p className="pt-2">Americana, {dateStr}.</p>
+            <div className="grid grid-cols-2 gap-4 pt-6 text-center text-[10px]">
               <div>
-                <p className="font-semibold text-primary mb-1">Identificação do Aluno</p>
-                <div className="text-foreground/80">
-                  <p>Nome: {student.name}</p>
-                  <p>CPF: {student.cpf}</p>
-                </div>
+                <div className="border-t border-foreground/40 mt-8 mb-1" />
+                <p className="font-medium">{student.name}</p>
+                <p>{student.cpf || ''}</p>
               </div>
-
               <div>
-                <p className="font-semibold text-primary mb-1">Valores Originais</p>
-                <div className="grid grid-cols-2 gap-2 text-foreground/80">
-                  <p>Valor de Venda: {formatCurrency(originalValues.valorVenda)}</p>
-                  <p>Entrada: {formatCurrency(originalValues.entrada)}</p>
-                  <p>Parcelas: {originalValues.parcelasOriginais}x</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="font-semibold text-primary mb-1">Novo Acordo</p>
-                <div className="grid grid-cols-2 gap-2 text-foreground/80">
-                  <p>Saldo: {formatCurrency(newValues.novoSaldo)}</p>
-                  <p>Multa: {formatCurrency(newValues.multaAplicada)}</p>
-                  <p>Juros: {formatCurrency(newValues.jurosAplicados)}</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="font-semibold text-primary mb-1">Novas Condições</p>
-                <div className="grid grid-cols-2 gap-2 text-foreground/80">
-                  <p>Nova Entrada: {formatCurrency(newValues.novaEntrada)}</p>
-                  <p>Novas Parcelas: {newValues.novasParcelas}x</p>
-                  <p className="col-span-2 font-bold text-primary">Valor Parcela: {formatCurrency(newValues.novoValorParcela)}</p>
-                </div>
+                <div className="border-t border-foreground/40 mt-8 mb-1" />
+                <p className="font-medium">INSTITUTO ACADEMY MIND TREINAMENTOS LTDA.</p>
+                <p>CNPJ 03.727.532/0001-13</p>
               </div>
             </div>
           </div>
 
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-xs text-blue-800">
-              Este termo documenta formalmente a renegociação do contrato. Gere o PDF para impressão ou envie
-              diretamente para assinatura digital na ZapSign.
+              Este termo documenta formalmente a renegociação, no mesmo padrão do documento institucional. Gere o PDF
+              para impressão ou copie o link de assinatura para enviar ao aluno.
             </p>
           </div>
 
           {!student.iamControlAlunoId && (
             <p className="text-[11px] text-amber-700">
-              Vincule o aluno ao IAM Control para habilitar o envio via ZapSign.
+              Vincule o aluno ao IAM Control para habilitar a cópia do link de assinatura.
             </p>
           )}
 
-          {zapsignSent && (
-            <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700">
-              Termo enviado para a ZapSign. O link de assinatura foi aberto em nova aba.
+          {signLink && (
+            <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
+              Link pronto para enviar ao aluno. Clique em Copiar Link novamente se precisar.
             </div>
           )}
         </div>
@@ -453,17 +486,21 @@ export default function TermoAditivoModal({ student, originalValues, newValues, 
             Gerar PDF
           </button>
           <button
-            onClick={handleSendToZapsign}
-            disabled={zapsignSending || zapsignSent || !student.iamControlAlunoId}
+            onClick={handleCopySignLink}
+            disabled={linkBusy || !student.iamControlAlunoId}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2 disabled:opacity-50"
           >
-            {zapsignSent ? (
+            {linkBusy ? (
               <>
-                <Check size={16} /> Enviado para ZapSign
+                <Link2 size={16} /> Gerando link…
+              </>
+            ) : linkCopied ? (
+              <>
+                <Check size={16} /> Link copiado
               </>
             ) : (
               <>
-                <Send size={16} /> {zapsignSending ? 'Enviando…' : 'Enviar via ZapSign'}
+                <Copy size={16} /> Copiar Link
               </>
             )}
           </button>

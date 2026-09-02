@@ -115,6 +115,7 @@ export default function EstornosPage() {
   const [logRow, setLogRow] = useState<RefundRow | null>(null);
   const [editRow, setEditRow] = useState<RefundRow | null>(null);
   const [editScopePrompt, setEditScopePrompt] = useState(false);
+  const [editScope, setEditScope] = useState<'current' | 'following'>('current');
   const [editForm, setEditForm] = useState<EditRefundForm>({
     studentName: '',
     ac: '',
@@ -406,9 +407,18 @@ export default function EstornosPage() {
     }
   };
 
+  const closeEdit = () => {
+    setEditScopePrompt(false);
+    setEditScope('current');
+    setEditRow(null);
+    setEditError(null);
+  };
+
   const openEdit = (r: RefundRow) => {
     const c = cancellationCases.find((x) => x.id === r.caseId);
     const student = students.find((s) => s.id === c?.studentId) ?? students.find((s) => s.cancellationCaseId === r.caseId);
+    setEditScopePrompt(false);
+    setEditScope('current');
     setEditRow(r);
     setEditForm({
       studentName: r.studentName,
@@ -425,16 +435,24 @@ export default function EstornosPage() {
     setEditError(null);
   };
 
-  const saveRefundEdit = (scope: 'current' | 'all') => {
+  const requestSaveRefundEdit = () => {
     if (!editRow) return;
-    setEditScopePrompt(false);
+    // Única parcela ou última da série: não há "próximas" — aplica só nesta.
+    if (editRow.installmentIndex >= editRow.totalInstallments) {
+      saveRefundEdit('current');
+      return;
+    }
+    setEditScope('current');
+    setEditScopePrompt(true);
+  };
+
+  const saveRefundEdit = (scope: 'current' | 'following') => {
+    if (!editRow) return;
     const c = cancellationCases.find((x) => x.id === editRow.caseId) as CancellationCase | undefined;
     if (!c?.refundPlan) return;
 
     const installment = c.refundPlan.installments[editRow.installmentIndex - 1];
     if (!installment) return;
-    const linkedStudent = students.find((s) => s.id === c.studentId) ?? students.find((s) => s.cancellationCaseId === c.id);
-    const currentOverrides = installment.refundOverrides ?? {};
     const studentName = editForm.studentName.trim();
     const ac = editForm.ac.trim();
     const product = editForm.product.trim();
@@ -444,26 +462,32 @@ export default function EstornosPage() {
 
     if (!studentName) {
       setEditError('Informe o nome do aluno.');
+      setEditScopePrompt(false);
       return;
     }
     if (!editForm.installmentDate) {
       setEditError('Informe a data da parcela.');
+      setEditScopePrompt(false);
       return;
     }
     if (!Number.isInteger(quantity) || quantity < 1) {
       setEditError('A quantidade de inscrições deve ser um número inteiro maior que zero.');
+      setEditScopePrompt(false);
       return;
     }
     if (!Number.isFinite(installmentValue) || installmentValue < 0) {
       setEditError('Informe um valor válido para a parcela.');
+      setEditScopePrompt(false);
       return;
     }
     if (!Number.isFinite(totalValue) || totalValue < 0) {
       setEditError('Informe um valor válido para o total do estorno.');
+      setEditScopePrompt(false);
       return;
     }
     if (editForm.paymentMethod === 'pix' && !editForm.pixKey.trim()) {
       setEditError('Informe a chave PIX do aluno.');
+      setEditScopePrompt(false);
       return;
     }
 
@@ -505,7 +529,7 @@ export default function EstornosPage() {
     }
 
     if (changes.length === 0) {
-      setEditRow(null);
+      closeEdit();
       return;
     }
 
@@ -513,68 +537,59 @@ export default function EstornosPage() {
     const userId = currentUser?.authUserId ?? null;
     const stamp = new Date().toISOString();
     const detail = changes.join('; ');
+    const scopeLabel = scope === 'following' ? 'esta e as próximas parcelas' : 'somente esta parcela';
 
     const logEntry: RefundLogEntry = { action: 'editou_dados', at: stamp, byName: userName, byUserId: userId, detail };
     const selectedIndex = editRow.installmentIndex - 1;
+
+    const sharedOverrides = {
+      studentName,
+      ac,
+      product,
+      quantidadeInscricoes: quantity,
+      totalValue,
+      paymentMethod: editForm.paymentMethod,
+      pixKeyType: editForm.paymentMethod === 'pix' ? editForm.pixKeyType : undefined,
+      pixKey: editForm.paymentMethod === 'pix' ? editForm.pixKey.trim() : '',
+    };
+
     const nextInstallments = c.refundPlan.installments.map((p, idx) => {
-      if (idx !== selectedIndex) return scope === 'all' ? { ...p, refundOverrides: undefined } : p;
-      const refundOverrides = scope === 'all'
-        ? undefined
-        : {
-            ...currentOverrides,
-            studentName,
-            ac,
-            product,
-            quantidadeInscricoes: quantity,
-            totalValue,
-            paymentMethod: editForm.paymentMethod,
-            pixKeyType: editForm.pixKeyType,
-            pixKey: editForm.pixKey.trim(),
-          };
+      const shouldApplyShared =
+        idx === selectedIndex || (scope === 'following' && idx > selectedIndex);
+      if (!shouldApplyShared) return p;
+
       const prevLog: RefundLogEntry[] = Array.isArray(p.lancadoLog) ? (p.lancadoLog as RefundLogEntry[]) : [];
       return {
         ...p,
-        date: editForm.installmentDate,
-        value: installmentValue,
-        refundOverrides,
-        lancadoLog: [...prevLog, logEntry],
+        ...(idx === selectedIndex
+          ? { date: editForm.installmentDate, value: installmentValue }
+          : {}),
+        refundOverrides: {
+          ...(p.refundOverrides ?? {}),
+          ...sharedOverrides,
+        },
+        lancadoLog: idx === selectedIndex ? [...prevLog, logEntry] : prevLog,
       };
     });
-    const basePlan = {
-      ...c.refundPlan,
-      installments: nextInstallments,
-    };
-    const nextPlan = scope === 'all'
-      ? appendPlanLog(
-          {
-            ...basePlan,
-            totalValue,
-            paymentMethod: editForm.paymentMethod,
-            pixKeyType: editForm.paymentMethod === 'pix' ? editForm.pixKeyType : c.refundPlan.pixKeyType,
-            pixKey: editForm.paymentMethod === 'pix' ? editForm.pixKey.trim() : '',
-          },
-          { action: 'dados_alterados', detail: `Todos os lançamentos: ${detail}` },
-        )
-      : basePlan;
 
-    updateCancellationCase(c.id, {
-      ...(scope === 'all'
-        ? { studentName, ac, treinamento: product, quantidadeInscricoes: quantity }
-        : {}),
-      refundPlan: nextPlan,
-    });
-    if (scope === 'all' && linkedStudent) {
-      updateStudent(linkedStudent.id, { name: studentName, ac, product });
-    }
+    const nextPlan = appendPlanLog(
+      {
+        ...c.refundPlan,
+        installments: nextInstallments,
+      },
+      { action: 'dados_alterados', detail: `${scopeLabel}: ${detail}` },
+    );
+
+    updateCancellationCase(c.id, { refundPlan: nextPlan });
     logActivity({
       action: 'estorno.dados_alterados',
       entity: 'cancellation',
       entityId: c.id,
       entityLabel: editRow.studentName,
-      summary: `${userName} alterou dados do estorno de ${editRow.studentName}: ${scope === 'all' ? 'todos os lançamentos' : 'somente este lançamento'} — ${detail}`,
+      summary: `${userName} alterou dados do estorno de ${editRow.studentName}: ${scopeLabel} — ${detail}`,
       meta: { parcela: editRow.installmentIndex, escopo: scope, alteracoes: changes },
     });
-    setEditRow(null);
+    closeEdit();
   };
 
   const getRowLogEntries = (r: RefundRow): RefundLogEntry[] => {
@@ -924,7 +939,7 @@ export default function EstornosPage() {
       />
 
       {editRow && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setEditRow(null)}>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={closeEdit}>
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card border border-border saas-shadow-sm" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border">
               <div className="min-w-0">
@@ -934,7 +949,7 @@ export default function EstornosPage() {
                   Parcela {editRow.installmentIndex}/{editRow.totalInstallments}
                 </p>
               </div>
-              <button onClick={() => setEditRow(null)} className="text-muted-foreground hover:text-foreground shrink-0" aria-label="Fechar">
+              <button onClick={closeEdit} className="text-muted-foreground hover:text-foreground shrink-0" aria-label="Fechar">
                 <X size={18} />
               </button>
             </div>
@@ -1064,14 +1079,14 @@ export default function EstornosPage() {
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => setEditRow(null)}
+                  onClick={closeEdit}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card hover:bg-muted"
                 >
                   Cancelar
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEditScopePrompt(true)}
+                  onClick={requestSaveRefundEdit}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   Salvar alterações
@@ -1089,40 +1104,51 @@ export default function EstornosPage() {
               <p className="text-[10px] font-semibold uppercase text-muted-foreground">Confirmar abrangência</p>
               <h3 className="text-sm font-semibold text-foreground mt-1">Como deseja aplicar as alterações?</h3>
               <p className="text-[11px] text-muted-foreground mt-1">
-                Escolha se os dados alterados devem ficar somente neste lançamento ou também nos demais lançamentos deste estorno.
+                Ex.: chave PIX diferente por parcela — escolha atualizar só esta ou esta e as próximas.
               </p>
             </div>
-            <div className="p-5 space-y-2">
-              <button
-                type="button"
-                onClick={() => saveRefundEdit('current')}
-                className="w-full text-left rounded-xl border border-border bg-card hover:bg-muted p-3 transition-colors"
-              >
-                <span className="block text-xs font-semibold text-foreground">Somente este lançamento</span>
-                <span className="block text-[11px] text-muted-foreground mt-0.5">
-                  Mantém os demais lançamentos como estão.
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => saveRefundEdit('all')}
-                className="w-full text-left rounded-xl border border-primary/40 bg-primary/5 hover:bg-primary/10 p-3 transition-colors"
-              >
-                <span className="block text-xs font-semibold text-foreground">Este e todos os demais lançamentos</span>
-                <span className="block text-[11px] text-muted-foreground mt-0.5">
-                  Atualiza os dados compartilhados de todos os lançamentos deste estorno.
-                </span>
-              </button>
-              <p className="text-[10px] text-muted-foreground pt-2">
-                A data e o valor da parcela são individuais e serão alterados apenas na parcela selecionada.
+            <div className="p-5 space-y-3">
+              <div className="rounded-xl border border-amber-200/80 bg-amber-50/70 p-3 space-y-2.5">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="edit-scope"
+                    checked={editScope === 'current'}
+                    onChange={() => setEditScope('current')}
+                    className="mt-0.5 size-4 shrink-0 accent-primary"
+                  />
+                  <span className="text-xs text-foreground">Atualizar apenas esta parcela</span>
+                </label>
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="edit-scope"
+                    checked={editScope === 'following'}
+                    onChange={() => setEditScope('following')}
+                    className="mt-0.5 size-4 shrink-0 accent-primary"
+                  />
+                  <span className="text-xs text-foreground">Atualizar esta e as próximas</span>
+                </label>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Data e valor da parcela continuam individuais e só mudam na parcela {editRow.installmentIndex}/{editRow.totalInstallments}.
               </p>
-              <button
-                type="button"
-                onClick={() => setEditScopePrompt(false)}
-                className="w-full px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card hover:bg-muted mt-1"
-              >
-                Voltar
-              </button>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditScopePrompt(false)}
+                  className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card hover:bg-muted"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => saveRefundEdit(editScope)}
+                  className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  Confirmar
+                </button>
+              </div>
             </div>
           </div>
         </div>

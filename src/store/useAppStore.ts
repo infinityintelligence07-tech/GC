@@ -68,7 +68,12 @@ interface AppState {
   deleteUser: (id: string) => void;
 
   // Cancel student → espelho
-  cancelStudentToFlow: (studentId: string, motivo?: string, extras?: Partial<CancellationCase>) => void;
+  cancelStudentToFlow: (
+    studentId: string,
+    motivo?: string,
+    extras?: Partial<CancellationCase>,
+    options?: { forceNew?: boolean },
+  ) => void;
   revertCancellation: (caseId: string) => void;
   finalizeCancellation: (caseId: string, reviewedInstallments?: Installment[], fineValue?: number, fineDueDate?: string, fineAlreadyPaid?: boolean, skipConciliation?: boolean, abatimento?: AbatimentoInfo) => void;
   concluirConciliacaoCancelamento: (caseId: string) => void; // baixa real após conciliação
@@ -593,26 +598,36 @@ export const useAppStore = create<AppState>()(
 
 
   // ── Cancel student → espelho ────────────────────────────────────────────
-  cancelStudentToFlow: (studentId, motivo, extras) => {
+  cancelStudentToFlow: (studentId, motivo, extras, options) => {
     const s = get();
     const student = s.students.find((st) => st.id === studentId);
     if (!student) return;
-    if (student.statusCancelamento && student.statusCancelamento !== 'nenhum' && student.statusCancelamento !== 'revertido') return;
+    if (
+      !options?.forceNew &&
+      student.statusCancelamento &&
+      student.statusCancelamento !== 'nenhum' &&
+      student.statusCancelamento !== 'revertido'
+    ) {
+      return;
+    }
     const now = new Date().toISOString();
     const remaining = student.installments.filter((i) => !i.paid).reduce((sum, i) => sum + getInstallmentFinancialValue(i), 0);
     const paid = student.installments.filter((i) => i.paid).length;
 
     // ── Dedupe: se já existir caso(s) prévio(s) do aluno, reabrimos o mais recente
     //    ao invés de criar um novo card (evita duplicação após reverter/cancelar).
+    //    forceNew: mantém o Finalizado/Revertido e abre um card novo na Entrada.
     const priorCases = s.cancellationCases
       .filter((c) => c.studentId === studentId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const existing = priorCases[0];
-    const staleIds = priorCases.slice(1).map((c) => c.id);
+    const existing = options?.forceNew ? undefined : priorCases[0];
+    const staleIds = options?.forceNew ? [] : priorCases.slice(1).map((c) => c.id);
 
     const historyEntry: HistoryEntry = {
       date: now, type: 'Sistema',
-      text: 'Cancelamento solicitado. Caso aberto em Cancelamentos. Aluno permanece na carteira.',
+      text: options?.forceNew
+        ? 'Novo cancelamento aberto a partir do caso revertido no Finalizado. O histórico anterior permanece.'
+        : 'Cancelamento solicitado. Caso aberto em Cancelamentos. Aluno permanece na carteira.',
     };
 
     if (existing) {
@@ -699,7 +714,9 @@ export const useAppStore = create<AppState>()(
       history: [{
         date: now, from: 'Aguardando Contato', to: 'Aguardando Contato',
         operationalStatus: 'Sem contato',
-        note: 'Cancelamento solicitado via aba Alunos. Aluno permanece na carteira.',
+        note: options?.forceNew
+          ? 'Novo cancelamento aberto a partir do card Revertido no Finalizado. Caso anterior permanece no histórico.'
+          : 'Cancelamento solicitado via aba Alunos. Aluno permanece na carteira.',
       }],
       isMirror: true,
       funnelStage: 'Entrada',

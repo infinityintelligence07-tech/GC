@@ -200,7 +200,7 @@ export interface FinancialRules {
   multaCancelamentoSemAntecedencia: number;
 }
 
-export type TabKey = 'dashboard' | 'alunos' | 'regua' | 'configUsuarios' | 'equipe' | 'rendaExtra' | 'config' | 'perfil' | 'ac' | 'cancelamentos' | 'comissoes' | 'estornos' | 'ranking' | 'conciliacao' | 'extrato' | 'registros';
+export type TabKey = 'dashboard' | 'alunos' | 'regua' | 'configUsuarios' | 'equipe' | 'rendaExtra' | 'config' | 'perfil' | 'ac' | 'cancelamentos' | 'comissoes' | 'estornos' | 'ranking' | 'conciliacao' | 'extrato' | 'registros' | 'documentos';
 
 // ─── Feature: Antecipação (módulo isolado por AC) ────────────────────────────
 export type AntecipacaoOrigem = 'Banco' | 'Sicoob' | 'Fundo';
@@ -225,7 +225,7 @@ export type UserRole = 'admin' | 'ac' | 'acn2' | 'juridico' | 'conciliacao';
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'own';
 
 // Abas que podem ser permissionadas (perfil é sempre liberado)
-export type PermissionTab = 'dashboard' | 'alunos' | 'equipe' | 'rendaExtra' | 'cancelamentos' | 'comissoes' | 'estornos' | 'conciliacao' | 'config' | 'admin';
+export type PermissionTab = 'dashboard' | 'alunos' | 'equipe' | 'rendaExtra' | 'cancelamentos' | 'comissoes' | 'estornos' | 'conciliacao' | 'documentos' | 'config' | 'admin';
 
 export type UserPermissions = Partial<Record<PermissionTab, PermissionLevel>>;
 
@@ -238,6 +238,7 @@ export const PERMISSION_TABS: { key: PermissionTab; label: string }[] = [
   { key: 'comissoes', label: 'Comissões' },
   { key: 'estornos', label: 'Estornos' },
   { key: 'conciliacao', label: 'Conciliação' },
+  { key: 'documentos', label: 'Documentos' },
   { key: 'config', label: 'Configurações' },
   { key: 'admin', label: 'Admin' },
 ];
@@ -277,7 +278,8 @@ export function getEffectivePermissions(user: AppUser | null | undefined): UserP
     const stored = user.permissions || {};
     return {
       dashboard: 'edit', alunos: 'edit', equipe: 'edit', rendaExtra: 'edit',
-      cancelamentos: 'edit', comissoes: 'edit', estornos: 'edit', conciliacao: 'edit', config: 'edit',
+      cancelamentos: 'edit', comissoes: 'edit', estornos: 'edit', conciliacao: 'edit',
+      documentos: 'edit', config: 'edit',
       admin: stored.admin ?? 'edit',
     };
   }
@@ -287,7 +289,13 @@ export function getEffectivePermissions(user: AppUser | null | undefined): UserP
   if (user.role === 'conciliacao') {
     return { ...(user.permissions || {}), conciliacao: 'edit' };
   }
-  if (user.permissions) return user.permissions;
+  if (user.permissions) {
+    // Jurídico antigo sem chave documentos: libera edição de modelos.
+    if (user.role === 'juridico' && !user.permissions.documentos) {
+      return { ...user.permissions, documentos: 'edit' };
+    }
+    return user.permissions;
+  }
   // Fallback derivado do role (retrocompatibilidade)
   switch (user.role) {
     case 'ac':
@@ -295,7 +303,7 @@ export function getEffectivePermissions(user: AppUser | null | undefined): UserP
     case 'acn2':
       return { equipe: 'edit', rendaExtra: 'edit', cancelamentos: 'edit' };
     case 'juridico':
-      return { cancelamentos: 'edit' };
+      return { cancelamentos: 'edit', documentos: 'edit' };
     default:
       return {};
   }

@@ -32,7 +32,7 @@ import {
   Clock,
   CheckCircle2, AlertTriangle, Ban, LayoutGrid, List,
   Users, History, X, RotateCcw, Award, Eye, Phone, FileEdit, Trash2, Bell, UserPlus, User,
-  DollarSign, Gavel, Info, Upload, FileText, Download as DownloadIcon, ArrowRight, PencilLine,
+  DollarSign, Gavel, Info, Upload, FileText, Download as DownloadIcon, ArrowRight, PencilLine, FilePlus,
 } from 'lucide-react';
 import { formatCurrency, formatCurrencyCompact } from '@/store/useAppStore';
 import { DatePreset, AnalysisMode, getPresetRange, getCurrentMonthDates } from '@/lib/periodFilter';
@@ -42,7 +42,7 @@ import { registrarConciliacao, useConciliacaoStore } from '@/store/useConciliaca
 import { useCommissionsStore, mapPagamentoTipoToPaymentType } from '@/store/useCommissionsStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { openCancellationPdf, downloadCancellationPdf } from '@/lib/openCancellationPdf';
-import { createIamCancelamentoTermo } from '@/lib/iamControlTermo';
+import TermoCancelamentoModal from '@/components/modals/TermoCancelamentoModal';
 import { toast } from 'sonner';
 import { toShortName, shortNameFontClass, getInstallmentOutstanding } from '@/lib/utils';
 import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
@@ -375,6 +375,7 @@ interface CardProps {
   onFollowCancellation?: (c: CancellationCase) => void;
   onMultaPaga?: (c: CancellationCase, valorNegativado: number) => void;
   onReactivate?: (c: CancellationCase) => void;
+  onNovoCancelamento?: (c: CancellationCase) => void;
   readOnly?: boolean;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent, id: string) => void;
@@ -389,6 +390,7 @@ function CancellationCard({
   onConciliar, podeConciliar,
   onRenegotiate, onFollowCancellation, onMultaPaga,
   onReactivate,
+  onNovoCancelamento,
   readOnly, draggable, onDragStart,
 }: CardProps) {
   const cfg = FUNNEL_STAGES.find((f) => f.label === funnelStage)!;
@@ -527,17 +529,18 @@ function CancellationCard({
             </p>
           )}
         </div>
-        <span
-          className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 leading-[1.1] ${
-            dias >= 15 ? 'bg-rose-100 text-rose-700' : dias >= 7 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
-          }`}
-          title={isFinal ? 'Tempo total: da solicitação até a finalização' : 'Dias desde a solicitação'}
-        >
-          {isFinal
-            ? <>Levou {dias} {dias === 1 ? 'dia' : 'dias'}<br />&nbsp;p/ finalizar</>
-            : `Há ${dias} ${dias === 1 ? 'dia' : 'dias'}`}
-
-        </span>
+        {funnelStage !== 'Pendente' && (
+          <span
+            className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 leading-[1.1] ${
+              dias >= 15 ? 'bg-rose-100 text-rose-700' : dias >= 7 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+            }`}
+            title={isFinal ? 'Tempo total: da solicitação até a finalização' : 'Dias desde a solicitação'}
+          >
+            {isFinal
+              ? <>Levou {dias} {dias === 1 ? 'dia' : 'dias'}<br />&nbsp;p/ finalizar</>
+              : `Há ${dias} ${dias === 1 ? 'dia' : 'dias'}`}
+          </span>
+        )}
       </div>
 
       {/* Conciliação reprovada — destaque "Ver erro" */}
@@ -810,7 +813,20 @@ function CancellationCard({
 
 
       {/* Ações do card */}
-      {isFinal && onReactivate && (
+      {isFinal &&
+        c.acao === 'Revertido' &&
+        onNovoCancelamento &&
+        !readOnly &&
+        student?.statusCancelamento === 'revertido' && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onNovoCancelamento(c); }}
+          className="w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded text-[9px] font-semibold text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100 border border-fuchsia-200 transition-all"
+          title="Abre um novo cancelamento na Entrada e mantém este card Revertido no Finalizado"
+        >
+          <FilePlus size={10} /> Novo Cancelamento
+        </button>
+      )}
+      {isFinal && onReactivate && !(c.acao === 'Revertido' && student?.statusCancelamento === 'revertido' && onNovoCancelamento) && (
         <button
           onClick={(e) => { e.stopPropagation(); onReactivate(c); }}
           className="w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded text-[9px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all"
@@ -1534,7 +1550,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   // Upload do termo assinado (PDF ou imagem)
   const termos = (caseRef.termAttachments ?? []).filter((t) => t.type === 'termo_assinado');
   const [uploading, setUploading] = useState(false);
-  const [zapsignLoading, setZapsignLoading] = useState(false);
+  const [termoModalOpen, setTermoModalOpen] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [legalNotes, setLegalNotes] = useState<string>(caseRef.legalNotes ?? '');
   const [legalNotesSaving, setLegalNotesSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -1608,56 +1624,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   };
 
   const handleGerarZapSign = async () => {
-    if (!student) {
-      setUploadError('Vincule o caso a um aluno cadastrado para gerar o termo na ZapSign.');
-      return;
-    }
-    if (!student.iamControlAlunoId) {
-      setUploadError('Aluno sem vínculo com IAM Control. Sincronize o cadastro antes de gerar o termo.');
-      return;
-    }
-
-    const netBalance = balance < 0 ? -estornoTotal : balance;
-    setZapsignLoading(true);
-    setUploadError(null);
-    try {
-      const result = await createIamCancelamentoTermo({
-        student,
-        caseRef: { ...caseRef, legalNotes },
-        fineValue,
-        totalPaid: paidBase,
-        totalContract: effectiveSimplified ? fineBase : totalContract,
-        balance: netBalance,
-        semMultaCDC7,
-      });
-
-      if (!result.ok) {
-        throw new Error(result.error || 'Não foi possível gerar o termo na ZapSign.');
-      }
-
-      const signUrl = result.url_assinatura || result.file_url;
-      if (signUrl) {
-        window.open(signUrl, '_blank', 'noopener,noreferrer');
-      }
-
-      const nextAttachments = [
-        ...(caseRef.termAttachments ?? []),
-        {
-          name: `ZapSign — ${result.nome_documento || 'Termo de Cancelamento'}`,
-          url: signUrl || `zapsign:${result.id}`,
-          uploadedAt: new Date().toISOString(),
-          type: 'outro' as const,
-        },
-      ];
-      await updateCancellationCase(caseRef.id, { termAttachments: nextAttachments });
-      toast.success('Termo enviado para assinatura na ZapSign.');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Falha ao gerar termo na ZapSign.';
-      setUploadError(msg);
-      toast.error(msg);
-    } finally {
-      setZapsignLoading(false);
-    }
+    setTermoModalOpen(true);
   };
 
   const zapsignLinks = (caseRef.termAttachments ?? []).filter(
@@ -2405,26 +2372,20 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                 </label>
               </div>
 
-              {/* Gerar termo no ZapSign */}
+              {/* Gerar termo institucional */}
               <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-                <p className="text-[11px] font-semibold text-foreground uppercase tracking-wide">Gerar termo no ZapSign</p>
+                <p className="text-[11px] font-semibold text-foreground uppercase tracking-wide">Gerar termo</p>
                 <p className="text-[10px] text-muted-foreground">
-                  Gera o PDF no IAM Control e envia para assinatura digital na ZapSign.
+                  Abre o termo institucional (com multa e estorno ou sem multa CDC). PDF ou link de assinatura.
                 </p>
                 <button
                   type="button"
                   onClick={handleGerarZapSign}
-                  disabled={zapsignLoading || !student?.iamControlAlunoId}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                 >
                   <FileText size={12} />
-                  {zapsignLoading ? 'Gerando…' : 'Gerar no ZapSign'}
+                  Visualizar termo
                 </button>
-                {!student?.iamControlAlunoId && (
-                  <p className="text-[10px] text-amber-700">
-                    Aluno precisa estar vinculado ao IAM Control.
-                  </p>
-                )}
               </div>
             </div>
 
@@ -2688,6 +2649,40 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
           </div>
         </div>
       </div>
+
+      {termoModalOpen && (
+        <TermoCancelamentoModal
+          caseRef={caseRef}
+          student={student}
+          semMultaCDC7={semMultaCDC7}
+          multaPercent={finePercent}
+          multaValue={fineValue}
+          totalPago={paidBase}
+          totalContract={effectiveSimplified ? fineBase : totalContract}
+          balance={netBalance}
+          estornoTotal={estornoTotal}
+          refundInstallments={refundInstallments}
+          refundPaymentMethod={refundPaymentMethod}
+          pixKey={pixKey}
+          pixKeyType={pixKeyType}
+          legalNotes={legalNotes}
+          onClose={() => setTermoModalOpen(false)}
+          onGenerated={async ({ signUrl, plainText }) => {
+            await updateCancellationCase(caseRef.id, {
+              termTemplate: plainText,
+              termAttachments: [
+                ...(caseRef.termAttachments ?? []),
+                {
+                  name: `ZapSign — ${semMultaCDC7 ? 'Termo sem multa' : 'Termo com multa e estorno'}`,
+                  url: signUrl || `zapsign:${Date.now()}`,
+                  uploadedAt: new Date().toISOString(),
+                  type: 'outro',
+                },
+              ],
+            });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -2794,6 +2789,7 @@ export default function CancelamentosPage() {
     students,
     updateCancellationCase,
     updateStudent,
+    cancelStudentToFlow,
     currentUser,
     acs,
     studentTags,
@@ -2976,6 +2972,36 @@ export default function CancelamentosPage() {
     removeCommissionByCaseId(liveCase.id);
     setReactivateCase(null);
     toast.success(`${liveCase.studentName} reativado para ${isFinanceiro ? 'Financeiro' : 'Jurídico'}.`);
+  };
+
+  const handleNovoCancelamento = (caseRef: CancellationCase) => {
+    const liveCase = cancellationCases.find((c) => c.id === caseRef.id) ?? caseRef;
+    const student = getCaseStudent(liveCase);
+    if (!student) {
+      toast.error('Contrato do aluno não encontrado. Abra pela aba Alunos.');
+      return;
+    }
+    if (student.statusCancelamento !== 'revertido') {
+      toast.error('Já existe um cancelamento ativo para este aluno.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Abrir um NOVO cancelamento para ${liveCase.studentName}?\n\nEste card Revertido permanece no Finalizado. O novo caso entra na coluna Entrada.`,
+      )
+    ) {
+      return;
+    }
+    cancelStudentToFlow(
+      student.id,
+      undefined,
+      {
+        quantidadeInscricoes: liveCase.quantidadeInscricoes,
+        treinamento: liveCase.treinamento || student.product,
+      },
+      { forceNew: true },
+    );
+    toast.success(`Novo cancelamento aberto para ${liveCase.studentName} na Entrada.`);
   };
 
   // Finalize handlers (Reverter / Cancelar)
@@ -3988,6 +4014,7 @@ export default function CancelamentosPage() {
                             }}
                             onMultaPaga={(cc, valor) => setMultaPagaCase({ caseRef: cc, valor })}
                             onReactivate={(cc) => setReactivateCase(cc)}
+                            onNovoCancelamento={handleNovoCancelamento}
                             onFollowCancellation={(cc) => {
                               if (!window.confirm('Devolver este caso ao Jurídico para prosseguir com o cancelamento?')) return;
                               const now = new Date().toISOString();
@@ -4171,7 +4198,18 @@ export default function CancelamentosPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 justify-end">
-                            {isFinal && (
+                            {isFinal &&
+                              c.acao === 'Revertido' &&
+                              getCaseStudent(c)?.statusCancelamento === 'revertido' && (
+                              <button
+                                onClick={() => handleNovoCancelamento(c)}
+                                className="flex items-center gap-1 p-1.5 rounded-lg text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100 border border-fuchsia-200 transition-all"
+                                title="Novo Cancelamento"
+                              >
+                                <FilePlus size={12} />
+                              </button>
+                            )}
+                            {isFinal && !(c.acao === 'Revertido' && getCaseStudent(c)?.statusCancelamento === 'revertido') && (
                               <button
                                 onClick={() => setReactivateCase(c)}
                                 className="flex items-center gap-1 p-1.5 rounded-lg text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all"

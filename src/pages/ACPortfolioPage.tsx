@@ -12,7 +12,7 @@ import CancelStudentFlowModal from '@/components/modals/CancelStudentFlowModal';
 import RendaExtraMetricsCard from '@/components/ui/RendaExtraMetricsCard';
 import DashDateFilter, { DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
-import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, CalendarClock, AlertTriangle, Coins, Star, Wallet, X, Tag, ChevronUp, ChevronDown } from 'lucide-react';
+import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, CalendarClock, AlertTriangle, Coins, Star, Wallet, X, Tag, ChevronUp, ChevronDown, Download } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import {
@@ -27,6 +27,8 @@ import {
 } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
+import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
+import { toast } from 'sonner';
 import {
   isCancellationCaseInRange,
   isCancellationCaseRevertido,
@@ -367,6 +369,23 @@ export default function ACPortfolioPage() {
     let qtd = 0;
     const qtdAlunosSet = new Set<string>();
     const qtdAlunosAVencerSet = new Set<string>();
+    const details: ForecastExportRow[] = [];
+    const pushDetail = (
+      st: Student,
+      partial: Omit<ForecastExportRow, 'studentId' | 'studentName' | 'ac' | 'product' | 'whatsapp' | 'email' | 'status' | 'saleValue'>,
+    ) => {
+      details.push({
+        studentId: st.id,
+        studentName: st.name,
+        ac: st.ac || 'Sem Assessor',
+        product: st.product || '',
+        whatsapp: st.whatsapp || '',
+        email: st.email || '',
+        status: resolveStudentDisplayStatus(st),
+        saleValue: Number(st.saleValue ?? 0),
+        ...partial,
+      });
+    };
     forecastBase.forEach((st) => {
       // Contrato IAM Control conciliado e quitado à vista/cartão de crédito:
       // entra DIRETO no Pago (inclusive a entrada, que não vira parcela)
@@ -381,6 +400,14 @@ export default function ACPortfolioPage() {
           pagoReal += entrada;
           qtd += 1;
           qtdAlunosSet.add(st.id);
+          pushDetail(st, {
+            bucket: 'pago',
+            installmentNumber: 0,
+            dueDate: st.enrollmentDate || '',
+            value: entrada,
+            paidValue: entrada,
+            paidDate: st.enrollmentDate || undefined,
+          });
         }
       }
       st.installments.forEach((i) => {
@@ -397,6 +424,14 @@ export default function ACPortfolioPage() {
           pagoReal += realValue;
           qtd += 1;
           qtdAlunosSet.add(st.id);
+          pushDetail(st, {
+            bucket: 'pago',
+            installmentNumber: i.number,
+            dueDate: i.dueDate,
+            value: i.value,
+            paidValue: realValue,
+            paidDate: i.paidDate,
+          });
           return;
         }
 
@@ -416,6 +451,14 @@ export default function ACPortfolioPage() {
           pagoReal += realValue;
           qtd += 1;
           qtdAlunosSet.add(st.id);
+          pushDetail(st, {
+            bucket: 'pago',
+            installmentNumber: i.number,
+            dueDate: i.dueDate,
+            value: i.value,
+            paidValue: realValue,
+            paidDate: i.paidDate,
+          });
           return;
         }
 
@@ -434,9 +477,16 @@ export default function ACPortfolioPage() {
         qtd += 1;
         qtdAlunosSet.add(st.id);
         qtdAlunosAVencerSet.add(st.id);
+        pushDetail(st, {
+          bucket: 'a_vencer',
+          installmentNumber: i.number,
+          dueDate: i.dueDate,
+          value: i.value,
+          paidValue: 0,
+        });
       });
     });
-    return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, qtdAlunosAVencer: qtdAlunosAVencerSet.size };
+    return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, qtdAlunosAVencer: qtdAlunosAVencerSet.size, details };
   };
   const getForecastValue = () => getForecastTotals().aVencer;
   // Carteira Total = A Vencer / Vencido da projeção (mesmo valor do card laranja).
@@ -828,9 +878,40 @@ export default function ACPortfolioPage() {
                   <input type="date" value={forecastCustomEnd} onChange={(e) => setForecastCustomEnd(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  const periodLabels = ['Todos', 'Hoje', 'Amanhã', '2 Dias', '3 Dias', '5 Dias', 'Personalizado'];
+                  const periodLabel =
+                    dateBasis === 'pagamento' || forecastIndex === 6
+                      ? `Personalizado ${forecastCustomStart || '…'} a ${forecastCustomEnd || '…'}`
+                      : periodLabels[forecastIndex] || 'Todos';
+                  const rows = carteiraTotais.details;
+                  if (!rows.length) {
+                    toast.message('Nenhum registro para exportar no período selecionado.');
+                    return;
+                  }
+                  try {
+                    exportForecastSpreadsheet(rows, {
+                      dateBasis,
+                      periodLabel,
+                      filePrefix: 'carteira-ac-projecao',
+                    });
+                    toast.success('Planilha exportada com sucesso.');
+                  } catch (err) {
+                    console.error(err);
+                    toast.error('Não foi possível exportar a planilha.');
+                  }
+                }}
+                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold border border-border bg-card text-foreground hover:bg-muted transition-colors"
+                title="Exportar A Vencer/Vencido e Pago em planilha"
+              >
+                <Download size={12} />
+                Exportar planilha
+              </button>
             </div>
             {(() => {
-              const { total, aVencer, pago, pagoReal, qtd, qtdAlunos } = getForecastTotals();
+              const { total, aVencer, pago, pagoReal, qtd, qtdAlunos } = carteiraTotais;
               if (dateBasis === 'pagamento') {
                 return (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1619,7 +1700,7 @@ export default function ACPortfolioPage() {
                               )}
                             </div>
                           )}
-                          {canMutatePortfolio && (!student.statusCancelamento || student.statusCancelamento === 'nenhum' || student.statusCancelamento === 'revertido') && (
+                          {canMutatePortfolio && (!student.statusCancelamento || student.statusCancelamento === 'nenhum') && (
                             <button onClick={() => setCancellationStudent(student)} className="action-btn text-amber-600" title="Cancelar">
                               <X size={12} />
                             </button>

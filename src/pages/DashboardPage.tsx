@@ -4,7 +4,7 @@ import ReversalRankingMirror from '@/components/ui/ReversalRankingMirror';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 import DashDateFilter, { DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
-import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity, FileText, AlertTriangle } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity, FileText, AlertTriangle, Download } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -28,6 +28,8 @@ import {
 } from '@/lib/cancellationIndicators';
 import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
 import DashboardReportModal, { type DashboardReportSection } from '@/components/ui/DashboardReportModal';
+import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
+import { toast } from 'sonner';
 
 type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'pendente' | 'tag' | 'revertidos';
 
@@ -633,8 +635,24 @@ export default function DashboardPage() {
       b.qtd += 1;
       b.alunos.add(studentId);
     };
-    // Detalhes por parcela (para popup de valores pagos/recebidos)
-    const details: Array<{ studentId: string; studentName: string; ac: string; installmentNumber: number; dueDate: string; value: number; paidValue: number; paidDate?: string }> = [];
+    // Detalhes por parcela (popup + exportação em planilha)
+    const details: ForecastExportRow[] = [];
+    const pushDetail = (
+      st: Student,
+      partial: Omit<ForecastExportRow, 'studentId' | 'studentName' | 'ac' | 'product' | 'whatsapp' | 'email' | 'status' | 'saleValue'>,
+    ) => {
+      details.push({
+        studentId: st.id,
+        studentName: st.name,
+        ac: st.ac || 'Sem Assessor',
+        product: st.product || '',
+        whatsapp: st.whatsapp || '',
+        email: st.email || '',
+        status: resolveStudentDisplayStatus(st),
+        saleValue: Number(st.saleValue ?? 0),
+        ...partial,
+      });
+    };
     forecastBase.forEach((st) => {
       // Contrato IAM Control conciliado e quitado à vista/cartão de crédito:
       // entra DIRETO no card Pago (inclusive a entrada, que não vira parcela)
@@ -650,7 +668,14 @@ export default function DashboardPage() {
           qtd += 1;
           qtdAlunosSet.add(st.id);
           bumpAc(st.ac, entrada, entrada, st.id);
-          details.push({ studentId: st.id, studentName: st.name, ac: st.ac || 'Sem Assessor', installmentNumber: 0, dueDate: st.enrollmentDate || '', value: entrada, paidValue: entrada, paidDate: st.enrollmentDate || undefined });
+          pushDetail(st, {
+            bucket: 'pago',
+            installmentNumber: 0,
+            dueDate: st.enrollmentDate || '',
+            value: entrada,
+            paidValue: entrada,
+            paidDate: st.enrollmentDate || undefined,
+          });
         }
       }
       st.installments.forEach((i) => {
@@ -668,7 +693,14 @@ export default function DashboardPage() {
           qtd += 1;
           qtdAlunosSet.add(st.id);
           bumpAc(st.ac, i.value, realValue, st.id);
-          details.push({ studentId: st.id, studentName: st.name, ac: st.ac || 'Sem Assessor', installmentNumber: i.number, dueDate: i.dueDate, value: i.value, paidValue: realValue, paidDate: i.paidDate });
+          pushDetail(st, {
+            bucket: 'pago',
+            installmentNumber: i.number,
+            dueDate: i.dueDate,
+            value: i.value,
+            paidValue: realValue,
+            paidDate: i.paidDate,
+          });
           return;
         }
 
@@ -688,7 +720,14 @@ export default function DashboardPage() {
           qtd += 1;
           qtdAlunosSet.add(st.id);
           bumpAc(st.ac, i.value, realValue, st.id);
-          details.push({ studentId: st.id, studentName: st.name, ac: st.ac || 'Sem Assessor', installmentNumber: i.number, dueDate: i.dueDate, value: i.value, paidValue: realValue, paidDate: i.paidDate });
+          pushDetail(st, {
+            bucket: 'pago',
+            installmentNumber: i.number,
+            dueDate: i.dueDate,
+            value: i.value,
+            paidValue: realValue,
+            paidDate: i.paidDate,
+          });
           return;
         }
 
@@ -707,6 +746,13 @@ export default function DashboardPage() {
         qtd += 1;
         qtdAlunosSet.add(st.id);
         qtdAlunosAVencerSet.add(st.id);
+        pushDetail(st, {
+          bucket: 'a_vencer',
+          installmentNumber: i.number,
+          dueDate: i.dueDate,
+          value: i.value,
+          paidValue: 0,
+        });
       });
     });
     const perAcList = Object.entries(perAc)
@@ -1154,6 +1200,37 @@ export default function DashboardPage() {
                   <input type="date" value={forecastCustomEnd} onChange={(e) => setForecastCustomEnd(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  const periodLabels = ['Todos', 'Hoje', 'Amanhã', '2 Dias', '3 Dias', '5 Dias', 'Personalizado'];
+                  const periodLabel =
+                    dateBasis === 'pagamento' || forecastIndex === 6
+                      ? `Personalizado ${forecastCustomStart || '…'} a ${forecastCustomEnd || '…'}`
+                      : periodLabels[forecastIndex] || 'Todos';
+                  const rows = forecastTotaisBase.details;
+                  if (!rows.length) {
+                    toast.message('Nenhum registro para exportar no período selecionado.');
+                    return;
+                  }
+                  try {
+                    exportForecastSpreadsheet(rows, {
+                      dateBasis,
+                      periodLabel,
+                      filePrefix: 'dashboard-projecao',
+                    });
+                    toast.success('Planilha exportada com sucesso.');
+                  } catch (err) {
+                    console.error(err);
+                    toast.error('Não foi possível exportar a planilha.');
+                  }
+                }}
+                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold border border-border bg-card text-foreground hover:bg-muted transition-colors"
+                title="Exportar A Vencer/Vencido e Pago em planilha"
+              >
+                <Download size={12} />
+                Exportar planilha
+              </button>
             </div>
             {(() => {
               const { total, aVencer, pago, pagoReal, qtd, qtdAlunos, perAcList, details } = forecastTotais;
@@ -1928,6 +2005,7 @@ interface PaymentDetail {
   value: number;
   paidValue: number;
   paidDate?: string;
+  bucket?: 'pago' | 'a_vencer';
 }
 
 function PaymentDetailsModal({

@@ -15,6 +15,7 @@ import CancelamentosPage from '@/pages/CancelamentosPage';
 import ConciliacaoPage from '@/pages/ConciliacaoPage';
 import ComissoesPage from '@/pages/ComissoesPage';
 import EstornosPage from '@/pages/EstornosPage';
+import DocumentosPage from '@/pages/DocumentosPage';
 import RegistrosPage from '@/pages/RegistrosPage';
 import ReguaPage from '@/pages/ReguaPage';
 import ExtratoConferenciaPage from '@/pages/ExtratoConferenciaPage';
@@ -38,12 +39,13 @@ const TAB_TO_PERMISSION: Record<TabKey, PermissionTab | 'always'> = {
   estornos: 'estornos',
   conciliacao: 'conciliacao',
   extrato: 'conciliacao',
+  documentos: 'documentos',
   config: 'config',
   perfil: 'always',
   registros: 'admin',
 };
 
-const TAB_ORDER: TabKey[] = ['dashboard', 'alunos', 'equipe', 'ac', 'ranking', 'rendaExtra', 'cancelamentos', 'comissoes', 'estornos', 'conciliacao', 'extrato', 'config', 'configUsuarios', 'regua', 'perfil', 'registros'];
+const TAB_ORDER: TabKey[] = ['dashboard', 'alunos', 'equipe', 'ac', 'ranking', 'rendaExtra', 'cancelamentos', 'comissoes', 'estornos', 'conciliacao', 'extrato', 'documentos', 'config', 'configUsuarios', 'regua', 'perfil', 'registros'];
 
 
 const Index = () => {
@@ -102,6 +104,7 @@ const Index = () => {
       case 'estornos': return <EstornosPage />;
       case 'conciliacao': return <ConciliacaoPage />;
       case 'extrato': return <ExtratoConferenciaPage />;
+      case 'documentos': return <DocumentosPage />;
       case 'registros': return <RegistrosPage />;
       default: return <PerfilPage />;
 

@@ -13,7 +13,7 @@ import {
 
 const EMPTY_PERMS: UserPermissions = {
   dashboard: 'none', alunos: 'none', equipe: 'none', rendaExtra: 'none', cancelamentos: 'none',
-  comissoes: 'none', estornos: 'none', conciliacao: 'none', config: 'none',
+  comissoes: 'none', estornos: 'none', conciliacao: 'none', documentos: 'none', config: 'none',
 };
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [

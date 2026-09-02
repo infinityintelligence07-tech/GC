@@ -895,11 +895,12 @@ export default function StudentsPage() {
 
                           {/* X button:
                               - Admin sempre vê (pode excluir mesmo com caso ativo).
-                              - Demais perfis só veem quando não há caso de cancelamento ativo. */}
+                              - Demais perfis só veem quando ainda dá para solicitar cancelamento
+                                pela aba Alunos (sem caso ativo e sem Revertido — Revertido usa
+                                "Novo Cancelamento" no Finalizado). */}
                           {(currentUser?.role === 'admin' ||
                             !student.statusCancelamento ||
-                            student.statusCancelamento === 'nenhum' ||
-                            student.statusCancelamento === 'revertido') && (
+                            student.statusCancelamento === 'nenhum') && (
                             <button
                               onClick={() => setActionStudentId(student.id)}
                               className="action-btn text-destructive hover:!bg-destructive/10"
@@ -959,11 +960,24 @@ export default function StudentsPage() {
               </div>
             </div>
 
-            {/* Option 1: Cancel — escondida quando já existe caso ativo (admin ainda pode excluir) */}
+            {/* Option 1: Cancel — escondida com caso ativo OU Revertido
+                (Revertido reabre só pelo botão Novo Cancelamento no Finalizado). */}
             {(() => {
               const s = allStudents.find((x) => x.id === actionStudentId);
-              const hasActiveCase = !!s?.statusCancelamento && s.statusCancelamento !== 'nenhum' && s.statusCancelamento !== 'revertido';
-              if (hasActiveCase) return null;
+              const sc = s?.statusCancelamento;
+              const bloqueado =
+                !!sc && sc !== 'nenhum'; // inclui revertido, solicitado, cancelado, etc.
+              if (bloqueado) {
+                if (sc === 'revertido') {
+                  return (
+                    <div className="w-full p-3 rounded-xl border border-fuchsia-200 bg-fuchsia-50 text-[11px] text-fuchsia-800">
+                      Aluno <strong>Revertido</strong>. Para cancelar de novo, use{' '}
+                      <strong>Novo Cancelamento</strong> no card em Cancelamentos → Finalizado.
+                    </div>
+                  );
+                }
+                return null;
+              }
               return (
                 <button
                   onClick={() => { setCancelId(actionStudentId); setActionStudentId(null); }}

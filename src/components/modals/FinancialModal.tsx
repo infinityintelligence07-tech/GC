@@ -2811,9 +2811,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     type="button"
                     onClick={() => setTermoModal(true)}
                     className="w-full flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-purple-700 hover:bg-purple-50 border border-purple-200 transition-colors"
-                    title="Gerar termo aditivo (PDF ou ZapSign)"
+                    title="Gerar termo de renegociação (PDF ou copiar link de assinatura)"
                   >
-                    <FileText size={12} /> Gerar Termo Aditivo
+                    <FileText size={12} /> Gerar Termo de Renegociação
                   </button>
                 </div>
               )}
@@ -3000,6 +3000,21 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             novoValorParcela: renegValues.newValue,
             saldoAposEntrada: renegValues.remainingAfterEntrada,
             primeiraParcelaVencimento: renegFirstDueDate ? formatDateBR(renegFirstDueDate) : undefined,
+            taxaJurosMes: applyJurosReneg ? renegJurosPercent : 0,
+            qtdParcelasAberto: renegValues.selectedInst.filter((i) => !i.paid).length || renegValues.selectedInst.length,
+            totalPago:
+              (student.downPayment ?? 0) +
+              student.installments.filter((i) => i.paid).reduce((s, i) => s + (i.value || 0), 0),
+            quantidadeInscricoes: 1,
+            diaVencimento: renegDueScope === 'todas' && renegFirstDueDate
+              ? new Date(renegFirstDueDate + 'T00:00:00').getDate()
+              : student.dueDay,
+            dataEntrada: novaEntrada > 0.0049
+              ? (() => {
+                  const t = getTodayBrasilia();
+                  return `${String(t.getDate()).padStart(2, '0')}/${String(t.getMonth() + 1).padStart(2, '0')}/${t.getFullYear()}`;
+                })()
+              : undefined,
           }}
           onClose={() => setTermoModal(false)}
         />
