@@ -42,6 +42,13 @@ interface Props {
   originalValues: TermoRenegociacaoOriginalValues;
   newValues: TermoRenegociacaoNewValues;
   onClose: () => void;
+  /** Chamado quando o termo é gerado na ZapSign (link disponível). */
+  onTermoGerado?: (info: {
+    id?: string;
+    urlAssinatura: string;
+    status?: string;
+    nomeDocumento?: string;
+  }) => void;
 }
 
 function parseBrDate(dateStr?: string): Date | null {
@@ -88,7 +95,7 @@ function buildParcelamentoLines(
 const INSTITUTO =
   'INSTITUTO ACADEMY MIND TREINAMENTOS LTDA, pessoa jurídica de direito privado, devidamente inscrita no CNPJ nº 03.727.532/0001-13, com sede na R. Major Rehder, 248 - Vila Rehder, Americana - SP, 13465-390';
 
-export default function TermoAditivoModal({ student, originalValues, newValues, onClose }: Props) {
+export default function TermoAditivoModal({ student, originalValues, newValues, onClose, onTermoGerado }: Props) {
   const [linkBusy, setLinkBusy] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -322,6 +329,12 @@ export default function TermoAditivoModal({ student, originalValues, newValues, 
 
       setSignLink(signUrl);
       await copySignLink(signUrl);
+      onTermoGerado?.({
+        id: result.id,
+        urlAssinatura: signUrl,
+        status: result.status,
+        nomeDocumento: result.nome_documento,
+      });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Falha ao gerar link de assinatura.');
     } finally {

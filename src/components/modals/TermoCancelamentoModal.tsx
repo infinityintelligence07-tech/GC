@@ -27,9 +27,19 @@ export interface TermoCancelamentoModalProps {
   refundPaymentMethod?: RefundPaymentMethod;
   pixKey?: string;
   pixKeyType?: RefundPixKeyType | string;
+  pixOtherHolder?: boolean;
+  pixHolderName?: string;
+  pixHolderPhone?: string;
   legalNotes?: string;
   onClose: () => void;
-  onGenerated?: (payload: { signUrl?: string; plainText: string }) => void;
+  onGenerated?: (payload: {
+    signUrl?: string;
+    plainText: string;
+    id?: string;
+    status?: string;
+    titulo?: string;
+    variant?: string;
+  }) => void;
 }
 
 export default function TermoCancelamentoModal({
@@ -46,6 +56,9 @@ export default function TermoCancelamentoModal({
   refundPaymentMethod,
   pixKey,
   pixKeyType,
+  pixOtherHolder,
+  pixHolderName,
+  pixHolderPhone,
   legalNotes,
   onClose,
   onGenerated,
@@ -69,6 +82,9 @@ export default function TermoCancelamentoModal({
           refundPaymentMethod,
           pixKey,
           pixKeyType,
+          pixOtherHolder,
+          pixHolderName,
+          pixHolderPhone,
         }),
       ),
     [
@@ -83,10 +99,29 @@ export default function TermoCancelamentoModal({
       refundPaymentMethod,
       pixKey,
       pixKeyType,
+      pixOtherHolder,
+      pixHolderName,
+      pixHolderPhone,
     ],
   );
 
   const plainText = useMemo(() => cancellationTermoToPlainText(doc), [doc]);
+  const contentHint = (() => {
+    switch (doc.variant) {
+      case 'somente_estorno':
+        return 'somente estorno (sem cláusulas de multa)';
+      case 'somente_multa':
+        return 'somente multa (sem estorno)';
+      case 'multa_e_estorno':
+        return 'com multa e estorno';
+      case 'sem_multa':
+        return 'sem multa (CDC 7 dias)';
+      default: {
+        const _exhaustive: never = doc.variant;
+        return _exhaustive;
+      }
+    }
+  })();
 
   const handleGeneratePDF = () => {
     const win = window.open('', '_blank');
@@ -134,7 +169,14 @@ export default function TermoCancelamentoModal({
       if (!url) throw new Error('Link de assinatura não disponível.');
       setSignLink(url);
       await copySignLink(url);
-      onGenerated?.({ signUrl: url, plainText });
+      onGenerated?.({
+        signUrl: url,
+        plainText,
+        id: result.id,
+        status: result.status,
+        titulo: doc.titulo,
+        variant: doc.variant,
+      });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Falha ao gerar link de assinatura.');
     } finally {
@@ -149,7 +191,7 @@ export default function TermoCancelamentoModal({
           <div>
             <h2 className="text-lg font-semibold text-foreground">{doc.titulo}</h2>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Base institucional · {semMultaCDC7 ? 'sem multa (CDC 7 dias)' : 'com multa e estorno'}
+              Base institucional · {contentHint}
             </p>
           </div>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted transition-colors" aria-label="Fechar">
@@ -210,8 +252,8 @@ export default function TermoCancelamentoModal({
 
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-xs text-blue-800">
-              Termo no padrão do documento institucional (sem endereço, turma ou preço do contrato). Gere o PDF ou
-              copie o link de assinatura para enviar ao aluno.
+              O texto do termo muda conforme a multa/% e o saldo a devolver: só estorno, só multa, ou multa +
+              estorno. Gere o PDF ou copie o link de assinatura para enviar ao aluno.
             </p>
           </div>
 

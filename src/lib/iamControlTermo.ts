@@ -96,9 +96,24 @@ export function buildCancelamentoTermoPayload(input: BuildCancelamentoTermoInput
     .filter(Boolean)
     .join('');
 
-  const textoIntroducao = semMulta
-    ? 'Pelo presente instrumento, as partes formalizam o cancelamento sem multa rescisória, nos termos do art. 49 do CDC (prazo de reflexão de 7 dias).'
-    : 'Pelo presente instrumento, as partes formalizam o cancelamento com aplicação de multa rescisória e eventual estorno, conforme contrato e legislação aplicável.';
+  const textoIntroducao = (() => {
+    switch (doc.variant) {
+      case 'somente_estorno':
+        return 'Pelo presente instrumento, as partes formalizam o cancelamento com devolução (estorno), sem aplicação de multa rescisória neste termo.';
+      case 'somente_multa':
+        return 'Pelo presente instrumento, as partes formalizam o cancelamento com aplicação de multa rescisória, sem estorno.';
+      case 'multa_e_estorno':
+        return 'Pelo presente instrumento, as partes formalizam o cancelamento com aplicação de multa rescisória e estorno, conforme contrato e legislação aplicável.';
+      case 'sem_multa':
+        return 'Pelo presente instrumento, as partes formalizam o cancelamento sem multa rescisória, nos termos do art. 49 do CDC (prazo de reflexão de 7 dias).';
+      default: {
+        const _exhaustive: never = doc.variant;
+        return _exhaustive;
+      }
+    }
+  })();
+
+  const incluiMulta = doc.variant === 'somente_multa' || doc.variant === 'multa_e_estorno';
 
   return {
     termo_titulo: `${doc.titulo} — ${input.caseRef.studentName}`,
@@ -109,8 +124,8 @@ export function buildCancelamentoTermoPayload(input: BuildCancelamentoTermoInput
     campos_variaveis: {
       valor_contrato: formatCurrency(input.totalContract),
       valor_pago: formatCurrency(input.totalPaid),
-      valor_multa: semMulta ? 'R$ 0,00 (isento CDC 7 dias)' : formatCurrency(input.fineValue),
-      percentual_multa: semMulta ? '0%' : `${multaPercent}%`,
+      valor_multa: incluiMulta ? formatCurrency(input.fineValue) : 'R$ 0,00 (sem multa neste termo)',
+      percentual_multa: incluiMulta ? `${multaPercent}%` : '0%',
       saldo_final: formatBalance(input.balance),
       estorno: formatCurrency(estornoTotal),
       produto: input.student.product ?? input.caseRef.treinamento ?? '',
@@ -302,4 +317,35 @@ export async function createIamCancelamentoTermo(
 export function openZapSignUrl(url?: string) {
   if (!url) throw new Error('Link de assinatura não disponível.');
   window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/** Interpreta se o termo já foi assinado (ZapSign / IAM). */
+export function isIamTermoAssinado(result: Pick<IamTermoCreateResult, 'status' | 'signers'> | null | undefined): boolean {
+  if (!result) return false;
+  const status = String(result.status ?? '').toLowerCase();
+  if (/assinad|signed|completed|conclu|finaliz|closed/.test(status)) return true;
+  const signers = result.signers ?? [];
+  if (signers.length > 0) {
+    const relevant = signers.filter((s) => s.tipo !== 'witness');
+    const pool = relevant.length ? relevant : signers;
+    return pool.every((s) => /assinad|signed|completed|conclu/.test(String(s.status ?? '').toLowerCase()));
+  }
+  return false;
+}
+
+export async function getIamTermoStatus(termoId: string): Promise<IamTermoCreateResult> {
+  const id = termoId.trim();
+  if (!id) return { ok: false, error: 'ID do termo não informado.' };
+
+  const { data, error } = await supabase.functions.invoke<IamTermoCreateResult>('iam-control-termo', {
+    body: { action: 'status', termo_id: id, id },
+  });
+
+  if (error) {
+    return { ok: false, error: error.message || 'Falha ao consultar status do termo.' };
+  }
+  if (!data?.ok) {
+    return { ok: false, error: data?.error || 'Não foi possível consultar o status do termo.', detalhe: data?.detalhe };
+  }
+  return data;
 }

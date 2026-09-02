@@ -42,7 +42,9 @@ import { registrarConciliacao, useConciliacaoStore } from '@/store/useConciliaca
 import { useCommissionsStore, mapPagamentoTipoToPaymentType } from '@/store/useCommissionsStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { openCancellationPdf, downloadCancellationPdf } from '@/lib/openCancellationPdf';
+import { openIamControlContrato } from '@/lib/iamControlContrato';
 import TermoCancelamentoModal from '@/components/modals/TermoCancelamentoModal';
+import { getIamTermoStatus, isIamTermoAssinado } from '@/lib/iamControlTermo';
 import { toast } from 'sonner';
 import { toShortName, shortNameFontClass, getInstallmentOutstanding } from '@/lib/utils';
 import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
@@ -744,17 +746,36 @@ function CancellationCard({
         </div>
       )}
 
-      {/* Contrato importado em PDF */}
-      {c.contractPdfUrl && (
+      {/* Contrato importado em PDF (ou fallback IAM Control) */}
+      {(c.contractPdfUrl || student?.iamControlAlunoId) && (
         <div className="pt-1 border-t border-border/50 flex items-center gap-1">
           <button
             type="button"
             onClick={async (e) => {
               e.stopPropagation();
               try {
-                await openCancellationPdf(c.contractPdfUrl!, 'contrato.pdf');
-              } catch {
-                window.alert('Não foi possível abrir o contrato anexado.');
+                if (c.contractPdfUrl) {
+                  await openCancellationPdf(c.contractPdfUrl, 'contrato.pdf');
+                  return;
+                }
+                if (!student) throw new Error('Aluno não vinculado a este card.');
+                await openIamControlContrato(student);
+              } catch (firstErr: unknown) {
+                // Anexo local falhou → tenta o PDF no IAM Control
+                if (c.contractPdfUrl && student?.iamControlAlunoId) {
+                  try {
+                    await openIamControlContrato(student);
+                    toast.success('Contrato aberto pelo IAM Control.');
+                    return;
+                  } catch {
+                    /* mantém o erro original do anexo */
+                  }
+                }
+                const msg =
+                  firstErr instanceof Error
+                    ? firstErr.message
+                    : 'Não foi possível abrir o contrato anexado.';
+                toast.error(msg);
               }
             }}
             className="flex-1 flex items-center gap-1.5 px-2 py-1 rounded-md bg-violet-50 border border-violet-200 text-violet-700 hover:bg-violet-100 transition-all text-[10px] font-medium min-w-0"
@@ -763,21 +784,27 @@ function CancellationCard({
             <Eye size={11} className="shrink-0" />
             <span className="truncate flex-1 text-left">Contrato (PDF)</span>
           </button>
-          <button
-            type="button"
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await downloadCancellationPdf(c.contractPdfUrl!, 'contrato.pdf');
-              } catch {
-                window.alert('Não foi possível baixar o contrato anexado.');
-              }
-            }}
-            className="shrink-0 flex items-center justify-center h-6 w-6 rounded-md bg-violet-50 border border-violet-200 text-violet-700 hover:bg-violet-100 transition-all"
-            title="Baixar contrato (PDF)"
-          >
-            <DownloadIcon size={11} />
-          </button>
+          {c.contractPdfUrl && (
+            <button
+              type="button"
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await downloadCancellationPdf(c.contractPdfUrl!, 'contrato.pdf');
+                } catch (err: unknown) {
+                  toast.error(
+                    err instanceof Error
+                      ? err.message
+                      : 'Não foi possível baixar o contrato anexado.',
+                  );
+                }
+              }}
+              className="shrink-0 flex items-center justify-center h-6 w-6 rounded-md bg-violet-50 border border-violet-200 text-violet-700 hover:bg-violet-100 transition-all"
+              title="Baixar contrato (PDF)"
+            >
+              <DownloadIcon size={11} />
+            </button>
+          )}
         </div>
       )}
 
@@ -821,7 +848,7 @@ function CancellationCard({
         <button
           onClick={(e) => { e.stopPropagation(); onNovoCancelamento(c); }}
           className="w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded text-[9px] font-semibold text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100 border border-fuchsia-200 transition-all"
-          title="Abre um novo cancelamento na Entrada e mantém este card Revertido no Finalizado"
+          title="Reabre o cancelamento em Em Tratativas (com observações). Este card sai do Finalizado."
         >
           <FilePlus size={10} /> Novo Cancelamento
         </button>
@@ -1234,8 +1261,8 @@ function RevertChoiceModal({ caseRef, student, overdueCount, isFormalizacao, onC
               </div>
               <p className="text-[10px] text-blue-700">
                 {isFormalizacao
-                  ? 'Move o card para "Em Tratativas" com a ação "Renegociação Jurídico".'
-                  : 'Abre a renegociação financeira (novo número de parcelas, encargos, etc.).'}
+                  ? 'Gera o termo de cancelamento e move o card para "Em Tratativas" (Renegociação Jurídico).'
+                  : 'Abre a renegociação financeira e gera o termo de cancelamento.'}
               </p>
             </button>
           </div>
@@ -1430,9 +1457,19 @@ interface CancellationReviewModalProps {
   /** Chamado antes do cancelamento quando o jurídico fraciona inscrições no próprio modal. */
   onPartialRevertBeforeCancel?: (qty: number) => void;
   simplified?: boolean;
+  /** Só Distrato (Formalização) gera termo institucional. */
+  allowGenerateTermo?: boolean;
 }
 
-function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onPartialRevertBeforeCancel, simplified = false }: CancellationReviewModalProps) {
+function CancellationReviewModal({
+  caseRef,
+  student,
+  onClose,
+  onConfirm,
+  onPartialRevertBeforeCancel,
+  simplified = false,
+  allowGenerateTermo = false,
+}: CancellationReviewModalProps) {
   const finance = student ? resolveStudentFinance(student, { kaminoPaid: caseRef.totalPagoAteMomento }) : null;
   const parcelInstallments = student
     ? getParcelInstallments(student, { kaminoPaid: caseRef.totalPagoAteMomento })
@@ -1543,6 +1580,9 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   );
   const [pixKey, setPixKey] = useState<string>(initialPlan?.pixKey ?? '');
   const [pixKeyType, setPixKeyType] = useState<PixType>(initialPlan?.pixKeyType ?? 'CPF');
+  const [pixOtherHolder, setPixOtherHolder] = useState<boolean>(!!initialPlan?.pixOtherHolder);
+  const [pixHolderName, setPixHolderName] = useState<string>(initialPlan?.pixHolderName ?? '');
+  const [pixHolderPhone, setPixHolderPhone] = useState<string>(initialPlan?.pixHolderPhone ?? '');
   const [refundPaymentMethod, setRefundPaymentMethod] = useState<RefundPaymentMethod>(
     initialPlan?.paymentMethod === 'boleto' ? 'boleto' : 'pix',
   );
@@ -1552,6 +1592,18 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   const [uploading, setUploading] = useState(false);
   const [termoModalOpen, setTermoModalOpen] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  type CancelTermoPending = {
+    id?: string;
+    urlAssinatura?: string;
+    status: 'pending' | 'signed';
+    createdAt: string;
+    signedAt?: string;
+  };
+  const [cancelTermoPending, setCancelTermoPending] = useState<CancelTermoPending | null>(null);
+  const [termoChecking, setTermoChecking] = useState(false);
+  const termoZapAssinado = cancelTermoPending?.status === 'signed';
+  const termoAguardandoAssinatura = !!cancelTermoPending && !termoZapAssinado;
+  const termoLiberado = termos.length > 0 || termoZapAssinado;
   const [legalNotes, setLegalNotes] = useState<string>(caseRef.legalNotes ?? '');
   const [legalNotesSaving, setLegalNotesSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
   const legalNotesSavedAt = caseRef.legalNotesUpdatedAt;
@@ -1596,11 +1648,78 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
         { name: file.name, url: path, uploadedAt: new Date().toISOString(), type: 'termo_assinado' as const },
       ];
       await updateCancellationCase(caseRef.id, { termAttachments: next });
+      toast.success('Termo anexado — Confirmar liberado.');
     } catch (err: any) {
       setUploadError(err?.message ?? 'Falha ao enviar o arquivo.');
     } finally {
       setUploading(false);
     }
+  };
+
+  const markCancelTermoSigned = (opts?: { silent?: boolean }) => {
+    setCancelTermoPending((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        status: 'signed',
+        signedAt: new Date().toISOString(),
+      };
+    });
+    if (!opts?.silent) toast.success('Termo assinado — Confirmar liberado.');
+  };
+
+  const verificarAssinaturaCancelTermo = async () => {
+    if (!cancelTermoPending?.id) {
+      toast.error('Gere o link do termo (Copiar Link) para o sistema poder verificar a assinatura.');
+      return;
+    }
+    setTermoChecking(true);
+    try {
+      const result = await getIamTermoStatus(cancelTermoPending.id);
+      if (!result.ok) throw new Error(result.error || 'Falha ao verificar assinatura.');
+      if (isIamTermoAssinado(result)) {
+        markCancelTermoSigned();
+      } else {
+        toast.message(
+          `Ainda pendente de assinatura${result.status ? ` (status: ${result.status})` : ''}.`,
+        );
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível verificar a assinatura.');
+    } finally {
+      setTermoChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!termoAguardandoAssinatura || !cancelTermoPending?.id) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const result = await getIamTermoStatus(cancelTermoPending.id!);
+        if (cancelled || !result.ok) return;
+        if (isIamTermoAssinado(result)) markCancelTermoSigned({ silent: true });
+      } catch {
+        /* ignore poll errors */
+      }
+    };
+    const id = window.setInterval(tick, 20_000);
+    void tick();
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [termoAguardandoAssinatura, cancelTermoPending?.id]);
+
+  const requireTermoAssinado = (): boolean => {
+    if (termoLiberado) return true;
+    toast.error(
+      termos.length === 0 && !cancelTermoPending
+        ? 'Anexe o termo assinado ou gere o link (Copiar Link) e aguarde a assinatura para confirmar.'
+        : 'Aguarde a assinatura do termo para confirmar. Use Verificar assinatura ou anexe o PDF assinado.',
+    );
+    return false;
   };
 
   const handleRemoveTermo = async (idx: number) => {
@@ -1731,7 +1850,11 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   const refundSum = Math.round(refundInstallments.reduce((s, p) => s + (p.value || 0), 0) * 100) / 100;
   const refundMatches = !precisaEstorno || Math.abs(refundSum - estornoTotal) < 0.01;
   const refundDatesOk = !precisaEstorno || refundInstallments.every((p) => !!p.date);
-  const refundPixOk = !precisaEstorno || refundPaymentMethod === 'boleto' || pixKey.trim().length > 0;
+  const refundPixOk =
+    !precisaEstorno ||
+    refundPaymentMethod === 'boleto' ||
+    (pixKey.trim().length > 0 &&
+      (!pixOtherHolder || (pixHolderName.trim().length > 0 && pixHolderPhone.trim().length > 0)));
   const abatimentoOk =
     !abaterOutroContrato ||
     (!!abatimentoStudentId && abatimentoValor > 0 && abatimentoValor <= estornoBruto + 0.01);
@@ -1780,6 +1903,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   };
 
   const handleConfirmCancellation = (fineAlreadyPaid: boolean, abatimentoInfo?: AbatimentoInfo) => {
+    if (!requireTermoAssinado()) return;
     if (localRevertQty > 0 && onPartialRevertBeforeCancel) {
       onPartialRevertBeforeCancel(localRevertQty);
     }
@@ -1787,6 +1911,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
   };
 
   const persistRefundPlanAndConfirm = async (fineAlreadyPaid: boolean) => {
+    if (!requireTermoAssinado()) return;
     let abatimentoInfo: AbatimentoInfo | undefined;
     if (balance < 0) {
       if (!refundReady) return;
@@ -1818,6 +1943,11 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
           paymentMethod: refundPaymentMethod,
           pixKey: refundPaymentMethod === 'boleto' ? '' : pixKey.trim(),
           pixKeyType,
+          pixOtherHolder: refundPaymentMethod === 'pix' ? pixOtherHolder : false,
+          pixHolderName:
+            refundPaymentMethod === 'pix' && pixOtherHolder ? pixHolderName.trim() : undefined,
+          pixHolderPhone:
+            refundPaymentMethod === 'pix' && pixOtherHolder ? pixHolderPhone.trim() : undefined,
           totalValue: estornoTotal,
           installments: refundInstallments.map((p) => ({ date: p.date, value: Math.round(p.value * 100) / 100, lancadoParaPagamento: false })),
           createdAt: new Date().toISOString(),
@@ -2315,35 +2445,94 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
               )}
 
               {refundPaymentMethod === 'pix' && (
-              <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-2 pt-1">
-                <div>
-                  <label className="text-[10px] font-semibold uppercase text-rose-800">Tipo da chave PIX</label>
-                  <select
-                    value={pixKeyType}
-                    onChange={(e) => setPixKeyType(e.target.value as PixType)}
-                    className="input-field text-xs w-full mt-1"
-                  >
-                    <option value="CPF">CPF</option>
-                    <option value="CNPJ">CNPJ</option>
-                    <option value="Email">Email</option>
-                    <option value="Telefone">Telefone</option>
-                    <option value="Aleatória">Aleatória</option>
-                  </select>
+              <div className="space-y-3 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-2">
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase text-rose-800">Tipo da chave PIX</label>
+                    <select
+                      value={pixKeyType}
+                      onChange={(e) => setPixKeyType(e.target.value as PixType)}
+                      className="input-field text-xs w-full mt-1"
+                    >
+                      <option value="CPF">CPF</option>
+                      <option value="CNPJ">CNPJ</option>
+                      <option value="Email">Email</option>
+                      <option value="Telefone">Telefone</option>
+                      <option value="Aleatória">Aleatória</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase text-rose-800">
+                      Chave PIX {pixOtherHolder ? 'do titular' : 'do aluno'} <span className="text-rose-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={pixKey}
+                      required
+                      onChange={(e) => setPixKey(e.target.value)}
+                      placeholder="Informe a chave PIX para o estorno"
+                      className={`input-field text-xs w-full mt-1 ${!pixKey.trim() ? 'border-rose-500 ring-1 ring-rose-500' : ''}`}
+                    />
+                    {!pixKey.trim() && <p className="text-[9px] text-rose-600 font-medium mt-1">Chave PIX obrigatória</p>}
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-semibold uppercase text-rose-800">
-                    Chave PIX do aluno <span className="text-rose-600">*</span>
-                  </label>
+
+                <label className="flex items-start gap-2 cursor-pointer select-none rounded-lg border border-rose-200 bg-card px-3 py-2.5">
                   <input
-                    type="text"
-                    value={pixKey}
-                    required
-                    onChange={(e) => setPixKey(e.target.value)}
-                    placeholder="Informe a chave PIX para o estorno"
-                    className={`input-field text-xs w-full mt-1 ${!pixKey.trim() ? 'border-rose-500 ring-1 ring-rose-500' : ''}`}
+                    type="checkbox"
+                    checked={pixOtherHolder}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setPixOtherHolder(checked);
+                      if (!checked) {
+                        setPixHolderName('');
+                        setPixHolderPhone('');
+                      }
+                    }}
+                    className="mt-0.5 rounded border-border"
                   />
-                  {!pixKey.trim() && <p className="text-[9px] text-rose-600 font-medium mt-1">Chave PIX obrigatória</p>}
-                </div>
+                  <span>
+                    <span className="text-xs font-semibold text-foreground block">Chave PIX de outro titular</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      Marque apenas se a chave não for do próprio aluno. Será preciso informar nome e telefone do titular.
+                    </span>
+                  </span>
+                </label>
+
+                {pixOtherHolder && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase text-amber-900">
+                        Nome do titular da chave <span className="text-rose-600">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={pixHolderName}
+                        onChange={(e) => setPixHolderName(e.target.value)}
+                        placeholder="Nome completo do titular"
+                        className={`input-field text-xs w-full mt-1 ${!pixHolderName.trim() ? 'border-rose-500 ring-1 ring-rose-500' : ''}`}
+                      />
+                      {!pixHolderName.trim() && (
+                        <p className="text-[9px] text-rose-600 font-medium mt-1">Nome do titular obrigatório</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase text-amber-900">
+                        Telefone do titular <span className="text-rose-600">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={pixHolderPhone}
+                        onChange={(e) => setPixHolderPhone(e.target.value)}
+                        placeholder="(00) 00000-0000"
+                        className={`input-field text-xs w-full mt-1 ${!pixHolderPhone.trim() ? 'border-rose-500 ring-1 ring-rose-500' : ''}`}
+                      />
+                      {!pixHolderPhone.trim() && (
+                        <p className="text-[9px] text-rose-600 font-medium mt-1">Telefone do titular obrigatório</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               )}
               <p className="text-[10px] text-rose-700/80">
@@ -2358,7 +2547,7 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
           <div className="rounded-xl border border-border p-4 space-y-3 bg-muted/10">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">TERMO DE CANCELAMENTO</h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className={`grid grid-cols-1 gap-3 ${allowGenerateTermo ? 'sm:grid-cols-2' : ''}`}>
               {/* Anexar */}
               <div className="rounded-lg border border-border bg-card p-3 space-y-2">
                 <p className="text-[11px] font-semibold text-foreground uppercase tracking-wide">Anexar</p>
@@ -2372,11 +2561,12 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                 </label>
               </div>
 
-              {/* Gerar termo institucional */}
+              {/* Gerar termo — somente Distrato do Contrato */}
+              {allowGenerateTermo && (
               <div className="rounded-lg border border-border bg-card p-3 space-y-2">
                 <p className="text-[11px] font-semibold text-foreground uppercase tracking-wide">Gerar termo</p>
                 <p className="text-[10px] text-muted-foreground">
-                  Abre o termo institucional (com multa e estorno ou sem multa CDC). PDF ou link de assinatura.
+                  Monta o termo conforme multa/% e saldo a devolver (só estorno, só multa ou multa + estorno).
                 </p>
                 <button
                   type="button"
@@ -2387,7 +2577,90 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
                   Visualizar termo
                 </button>
               </div>
+              )}
             </div>
+
+            {!allowGenerateTermo && (
+              <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                A geração do termo de cancelamento é feita apenas na coluna <strong>Distrato do Contrato</strong>. Aqui você pode anexar o termo já assinado.
+              </p>
+            )}
+
+            {(cancelTermoPending || termoLiberado) && (
+              <div
+                className={`rounded-xl border p-3 flex items-start gap-2.5 ${
+                  termoLiberado
+                    ? 'border-emerald-200 bg-emerald-50'
+                    : 'border-sky-200 bg-sky-50'
+                }`}
+              >
+                {termoLiberado ? (
+                  <CheckCircle2 size={16} className="text-emerald-700 mt-0.5 shrink-0" />
+                ) : (
+                  <Clock size={16} className="text-sky-700 mt-0.5 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs font-bold leading-snug ${termoLiberado ? 'text-emerald-800' : 'text-sky-800'}`}>
+                    {termoLiberado
+                      ? termos.length > 0
+                        ? 'Termo anexado'
+                        : 'Termo assinado'
+                      : 'Cancelamento em andamento'}
+                  </p>
+                  <p className={`text-[11px] leading-snug mt-1 ${termoLiberado ? 'text-emerald-800/90' : 'text-sky-800/90'}`}>
+                    {termoLiberado
+                      ? 'Você já pode confirmar o cancelamento.'
+                      : 'Pendente de assinatura do termo. O botão Confirmar fica bloqueado até o sistema identificar a assinatura ou você anexar o PDF assinado.'}
+                  </p>
+                  {termoAguardandoAssinatura && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => void verificarAssinaturaCancelTermo()}
+                        disabled={termoChecking}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors disabled:opacity-60"
+                      >
+                        {termoChecking ? 'Verificando…' : 'Verificar assinatura'}
+                      </button>
+                      {cancelTermoPending?.urlAssinatura && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(cancelTermoPending.urlAssinatura!);
+                            toast.success('Link copiado.');
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
+                        >
+                          Copiar link
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              'Marcar o termo como assinado manualmente? Use só se a assinatura já foi concluída fora da verificação automática.',
+                            )
+                          ) {
+                            return;
+                          }
+                          markCancelTermoSigned();
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
+                      >
+                        Já assinou
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!termoLiberado && !cancelTermoPending && (
+              <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Confirmar só libera após anexar o termo assinado ou copiar o link e concluir a assinatura.
+              </p>
+            )}
 
             {uploadError && <p className="text-[10px] text-rose-600">{uploadError}</p>}
             {zapsignLinks.length > 0 && (
@@ -2621,26 +2894,55 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
             {balance > 0 ? (
               <>
                 <button
-                  onClick={() => handleConfirmCancellation(true)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-                  title="O aluno já quitou a multa — encerra o caso imediatamente."
+                  onClick={() => {
+                    if (!requireTermoAssinado()) return;
+                    handleConfirmCancellation(true);
+                  }}
+                  disabled={!termoLiberado}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={
+                    termoLiberado
+                      ? 'O aluno já quitou a multa — encerra o caso imediatamente.'
+                      : 'Aguarde a assinatura do termo ou anexe o PDF assinado.'
+                  }
                 >
                   Multa Quitada
                 </button>
                 <button
-                  onClick={() => handleConfirmCancellation(false)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-                  title="Registra o saldo da multa como pendência a negativar."
+                  onClick={() => {
+                    if (!requireTermoAssinado()) return;
+                    handleConfirmCancellation(false);
+                  }}
+                  disabled={!termoLiberado}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={
+                    termoLiberado
+                      ? 'Registra o saldo da multa como pendência a negativar.'
+                      : 'Aguarde a assinatura do termo ou anexe o PDF assinado.'
+                  }
                 >
                   Negativar Multa
                 </button>
               </>
             ) : (
               <button
-                onClick={() => setConfirmStep(true)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                onClick={() => {
+                  if (!requireTermoAssinado()) return;
+                  setConfirmStep(true);
+                }}
+                disabled={!termoLiberado}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={
+                  termoLiberado
+                    ? 'Confirmar cancelamento'
+                    : 'Aguarde a assinatura do termo ou anexe o PDF assinado.'
+                }
               >
-                Confirmar Cancelamento
+                {termoLiberado
+                  ? 'Confirmar Cancelamento'
+                  : termoAguardandoAssinatura
+                    ? 'Pendente de assinatura do termo'
+                    : 'Aguardando termo assinado'}
               </button>
             )}
             <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors">
@@ -2665,16 +2967,29 @@ function CancellationReviewModal({ caseRef, student, onClose, onConfirm, onParti
           refundPaymentMethod={refundPaymentMethod}
           pixKey={pixKey}
           pixKeyType={pixKeyType}
+          pixOtherHolder={pixOtherHolder}
+          pixHolderName={pixHolderName}
+          pixHolderPhone={pixHolderPhone}
           legalNotes={legalNotes}
           onClose={() => setTermoModalOpen(false)}
-          onGenerated={async ({ signUrl, plainText }) => {
+          onGenerated={async ({ signUrl, plainText, id, status, titulo }) => {
+            setCancelTermoPending({
+              id,
+              urlAssinatura: signUrl,
+              status: isIamTermoAssinado({ status }) ? 'signed' : 'pending',
+              createdAt: new Date().toISOString(),
+              signedAt: isIamTermoAssinado({ status }) ? new Date().toISOString() : undefined,
+            });
+            if (!isIamTermoAssinado({ status })) {
+              toast.message('Termo enviado. Confirmar fica bloqueado até a assinatura.');
+            }
             await updateCancellationCase(caseRef.id, {
               termTemplate: plainText,
               termAttachments: [
                 ...(caseRef.termAttachments ?? []),
                 {
-                  name: `ZapSign — ${semMultaCDC7 ? 'Termo sem multa' : 'Termo com multa e estorno'}`,
-                  url: signUrl || `zapsign:${Date.now()}`,
+                  name: `ZapSign — ${titulo || 'Termo de Cancelamento'}`,
+                  url: signUrl || (id ? `zapsign:${id}` : `zapsign:${Date.now()}`),
                   uploadedAt: new Date().toISOString(),
                   type: 'outro',
                 },
@@ -2789,7 +3104,6 @@ export default function CancelamentosPage() {
     students,
     updateCancellationCase,
     updateStudent,
-    cancelStudentToFlow,
     currentUser,
     acs,
     studentTags,
@@ -2839,6 +3153,8 @@ export default function CancelamentosPage() {
   } | null>(null);
   // Caso de cancelamento vinculado à renegociação atual — quando fechada, marcamos como Revertido/Finalizado
   const [renegSourceCaseId, setRenegSourceCaseId] = useState<string | null>(null);
+  /** Termo de cancelamento aberto pelo fluxo "Reverter COM Ajustes Financeiros". */
+  const [comAjustesTermoCase, setComAjustesTermoCase] = useState<CancellationCase | null>(null);
   // Visualização da Ficha do Aluno (caso vinculado)
   const [viewingCase, setViewingCase] = useState<{ student: Student; caseRef: CancellationCase } | null>(null);
   const [viewingExternal, setViewingExternal] = useState<CancellationCase | null>(null);
@@ -2856,6 +3172,7 @@ export default function CancelamentosPage() {
 
   // Envio para Jurídico (Em Tratativas → Distrato do Contrato) com observações
   const [sendToLegalCase, setSendToLegalCase] = useState<CancellationCase | null>(null);
+  const [novoCancelamentoCase, setNovoCancelamentoCase] = useState<CancellationCase | null>(null);
   const [multaPagaCase, setMultaPagaCase] = useState<{ caseRef: CancellationCase; valor: number } | null>(null);
 
   // Helper: lookup student by case
@@ -2985,23 +3302,101 @@ export default function CancelamentosPage() {
       toast.error('Já existe um cancelamento ativo para este aluno.');
       return;
     }
-    if (
-      !window.confirm(
-        `Abrir um NOVO cancelamento para ${liveCase.studentName}?\n\nEste card Revertido permanece no Finalizado. O novo caso entra na coluna Entrada.`,
-      )
-    ) {
-      return;
-    }
-    cancelStudentToFlow(
-      student.id,
-      undefined,
-      {
-        quantidadeInscricoes: liveCase.quantidadeInscricoes,
-        treinamento: liveCase.treinamento || student.product,
-      },
-      { forceNew: true },
+    setNovoCancelamentoCase(liveCase);
+  };
+
+  const confirmNovoCancelamento = (obs: string) => {
+    const caseRef = novoCancelamentoCase;
+    if (!caseRef) return;
+    const liveCase = cancellationCases.find((c) => c.id === caseRef.id) ?? caseRef;
+    const student = getCaseStudent(liveCase);
+    const now = new Date().toISOString();
+    const trimmed = obs.trim();
+
+    const relatedItems = conciliacaoItems.filter(
+      (item) =>
+        item.relatedCaseId === liveCase.id &&
+        (item.tipo === 'cancelamento' || item.tipo === 'reversao'),
     );
-    toast.success(`Novo cancelamento aberto para ${liveCase.studentName} na Entrada.`);
+    const snapshotItem = [...relatedItems].reverse().find((item) => {
+      const snapshot = item.antes?._snapshot;
+      return !!snapshot && typeof snapshot === 'object'
+        && Array.isArray((snapshot as Record<string, unknown>).installments);
+    });
+    const snapshot = snapshotItem?.antes?._snapshot as Partial<Student> | undefined;
+    const restoredInstallments = (snapshot?.installments as Installment[] | undefined)
+      ?? student?.installments?.filter((item) => !(item.tags ?? []).includes('multa-cancelamento'));
+    const restoredAc = resolveOriginalCancellationAc(liveCase) || student?.ac || '';
+    const reopenedValue = restoredInstallments
+      ? restoredInstallments
+        .filter((item) => !item.paid)
+        .reduce((total, item) => total + getInstallmentOutstanding(item), 0)
+      : liveCase.value;
+
+    const noteText = trimmed
+      ? `Novo cancelamento: caso movido do Finalizado para Em Tratativas. Observações: ${trimmed}`
+      : 'Novo cancelamento: caso movido do Finalizado para Em Tratativas. Sem observações adicionais.';
+    const caseHistoryEntry = makeCaseHistoryEntry(
+      liveCase,
+      noteText,
+      currentUser,
+      { to: 'Ajustes em Geral / Boleto', operationalStatus: 'Negociando' },
+    );
+    const prevNotes = liveCase.notes ? `${liveCase.notes}\n\n` : '';
+    const obsBlock = `[${new Date(now).toLocaleString('pt-BR')}] Observações (Novo Cancelamento):\n${trimmed || '(sem observações)'}`;
+
+    const updatedCase: Partial<CancellationCase> = {
+      funnelStage: 'Em Execução',
+      stage: 'Ajustes em Geral / Boleto',
+      acao: 'Conversa WhatsApp',
+      responsavel: 'Financeiro',
+      operationalStatus: 'Negociando',
+      value: reopenedValue,
+      movedToCurrentStageAt: now,
+      inscricoesRevertidas: 0,
+      cancellationFineValue: null as any,
+      cancellationReviewedInstallments: null as any,
+      multaPercent: null as any,
+      multaValue: null as any,
+      refundPlan: null as any,
+      abatimento: null as any,
+      finalChecklist: null as any,
+      conciliacaoReprovadaMotivo: null as any,
+      conciliacaoReprovadaAt: null as any,
+      conciliacaoReprovadaPorNome: null as any,
+      notes: prevNotes + obsBlock,
+      history: [...(liveCase.history ?? []), caseHistoryEntry],
+    };
+
+    if (student) {
+      const studentHistoryEntry: HistoryEntry = {
+        date: now,
+        type: 'Sistema',
+        text: `Novo cancelamento: card reaberto em Em Tratativas.${trimmed ? ` Observações: ${trimmed}` : ''}`,
+      };
+      updateStudent(student.id, {
+        status: 'Solicitação Cancelamento',
+        statusMode: 'Manual',
+        statusCancelamento: 'solicitado',
+        cancellationCaseId: liveCase.id,
+        ...(restoredInstallments ? {
+          installments: restoredInstallments,
+          totalInstallments: restoredInstallments.length,
+          paidInstallments: restoredInstallments.filter((item) => item.paid).length,
+        } : {}),
+        ...(snapshot?.installmentValue !== undefined ? { installmentValue: Number(snapshot.installmentValue) || 0 } : {}),
+        ...(snapshot?.saleValue !== undefined ? { saleValue: Number(snapshot.saleValue) || 0 } : {}),
+        ...(snapshot?.downPayment !== undefined ? { downPayment: Number(snapshot.downPayment) || 0 } : {}),
+        ...(restoredAc ? { ac: restoredAc } : {}),
+        history: [...(student.history ?? []), studentHistoryEntry],
+      });
+    }
+
+    updateCancellationCase(liveCase.id, updatedCase);
+    removeConciliacaoByCaseId(liveCase.id);
+    removeCommissionByCaseId(liveCase.id);
+    setNovoCancelamentoCase(null);
+    toast.success(`${liveCase.studentName} movido para Em Tratativas.`);
   };
 
   // Finalize handlers (Reverter / Cancelar)
@@ -4204,7 +4599,7 @@ export default function CancelamentosPage() {
                               <button
                                 onClick={() => handleNovoCancelamento(c)}
                                 className="flex items-center gap-1 p-1.5 rounded-lg text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100 border border-fuchsia-200 transition-all"
-                                title="Novo Cancelamento"
+                                title="Novo Cancelamento — move para Em Tratativas"
                               >
                                 <FilePlus size={12} />
                               </button>
@@ -4315,7 +4710,8 @@ export default function CancelamentosPage() {
         <ExternalCancellationViewModal caseRef={viewingExternal} onClose={() => setViewingExternal(null)} />
       )}
       {viewingCase && (() => {
-        const c = viewingCase.caseRef;
+        const c =
+          cancellationCases.find((x) => x.id === viewingCase.caseRef.id) ?? viewingCase.caseRef;
         const st = students.find((s) => s.id === viewingCase.student.id) ?? viewingCase.student;
         const funnelStage = getFunnelStage(c);
         const cfg = FUNNEL_STAGES.find((f) => f.label === funnelStage);
@@ -4522,6 +4918,13 @@ export default function CancelamentosPage() {
           onConfirm={(destination) => handleReactivate(reactivateCase, destination)}
         />
       )}
+      {novoCancelamentoCase && (
+        <NovoCancelamentoModal
+          caseRef={novoCancelamentoCase}
+          onClose={() => setNovoCancelamentoCase(null)}
+          onConfirm={confirmNovoCancelamento}
+        />
+      )}
       {revertChoice && (() => {
         const st = getCaseStudent(revertChoice);
         const open = computeOpenValue(st);
@@ -4639,6 +5042,7 @@ export default function CancelamentosPage() {
                     partial,
                     `COM Ajustes Financeiros — sem ajuste necessário (pago ${formatCurrency(pagoTotal)} ≥ ${formatCurrency(valorInscricoesRevertidas)} da(s) inscrição(ões) revertida(s)).`,
                   );
+                  setComAjustesTermoCase(revertChoice);
                   setRevertChoice(null);
                   setPendingPartialRevert(null);
                   setPendingClassChange(null);
@@ -4683,6 +5087,7 @@ export default function CancelamentosPage() {
                     setRenegStudent(stRef);
                     setRenegSourceCaseId(caseRef.id);
                     setRenegSuggestedTotal(totalSaldo);
+                    setComAjustesTermoCase(caseRef);
                     setPartialAdjustPrompt(null);
                     setRevertChoice(null);
                     setPendingClassChange(null);
@@ -4691,7 +5096,7 @@ export default function CancelamentosPage() {
                 return;
               }
               if (isFormalizacao) {
-                // Fluxo Distrato → move card para Em Tratativas com ação "Renegociação Jurídico"
+                // Fluxo Distrato → termo de cancelamento + Em Tratativas (Renegociação Jurídico)
                 const now = new Date().toISOString();
                 updateCancellationCase(revertChoice.id, {
                   funnelStage: 'Em Execução',
@@ -4701,7 +5106,7 @@ export default function CancelamentosPage() {
                     ...revertChoice.history,
                     makeCaseHistoryEntry(
                       revertChoice,
-                      'Reverter COM Ajustes Financeiros — movido para Em Tratativas (Renegociação Jurídico).',
+                      'Reverter COM Ajustes Financeiros — termo de cancelamento + movido para Em Tratativas (Renegociação Jurídico).',
                       currentUser,
                     ),
                   ],
@@ -4712,6 +5117,7 @@ export default function CancelamentosPage() {
                 setRenegSourceCaseId(revertChoice.id);
                 // pendingPartialRevert é preservado para tratar no fechamento do FinancialModal
               }
+              setComAjustesTermoCase(revertChoice);
               setRevertChoice(null);
               setPendingClassChange(null);
             }}
@@ -4813,6 +5219,68 @@ export default function CancelamentosPage() {
           }}
         />
       )}
+      {comAjustesTermoCase && (() => {
+        const caseRef = cancellationCases.find((c) => c.id === comAjustesTermoCase.id) ?? comAjustesTermoCase;
+        const student = getCaseStudent(caseRef);
+        const finance = student
+          ? resolveStudentFinance(student, { kaminoPaid: caseRef.totalPagoAteMomento })
+          : null;
+        const totalContract =
+          finance?.saleValue ?? student?.saleValue ?? (Number(caseRef.value) || 0);
+        const totalPago = student
+          ? getStudentTotalPaid(student, { kaminoPaid: caseRef.totalPagoAteMomento })
+          : Number(caseRef.totalPagoAteMomento) || 0;
+        const semMultaCDC7 =
+          caseRef.dentro7Dias === true && (caseRef.multaPercent ?? -1) === 0;
+        const multaPercent = semMultaCDC7 ? 0 : (caseRef.multaPercent ?? 30);
+        const multaValue = semMultaCDC7
+          ? 0
+          : (caseRef.cancellationFineValue ??
+            caseRef.multaValue ??
+            Math.round(totalContract * (multaPercent / 100) * 100) / 100);
+        const balance = Math.round((multaValue - totalPago) * 100) / 100;
+        const planEstorno =
+          caseRef.refundPlan?.installments?.reduce((s, p) => s + (Number(p.value) || 0), 0) ?? 0;
+        const estornoTotal =
+          planEstorno > 0.01 ? planEstorno : balance < 0 ? Math.abs(balance) : 0;
+        const netBalance = balance < 0 ? -estornoTotal : balance;
+        return (
+          <TermoCancelamentoModal
+            caseRef={caseRef}
+            student={student}
+            semMultaCDC7={semMultaCDC7}
+            multaPercent={multaPercent}
+            multaValue={multaValue}
+            totalPago={totalPago}
+            totalContract={totalContract}
+            balance={netBalance}
+            estornoTotal={estornoTotal}
+            refundInstallments={caseRef.refundPlan?.installments?.map((p) => ({
+              date: p.date,
+              value: Number(p.value) || 0,
+            }))}
+            refundPaymentMethod={caseRef.refundPlan?.paymentMethod}
+            pixKey={caseRef.refundPlan?.pixKey}
+            pixKeyType={caseRef.refundPlan?.pixKeyType}
+            legalNotes={caseRef.legalNotes}
+            onClose={() => setComAjustesTermoCase(null)}
+            onGenerated={async ({ signUrl, plainText, titulo }) => {
+              await updateCancellationCase(caseRef.id, {
+                termTemplate: plainText,
+                termAttachments: [
+                  ...(caseRef.termAttachments ?? []),
+                  {
+                    name: `ZapSign — ${titulo || 'Termo de Cancelamento'}`,
+                    url: signUrl || `zapsign:${Date.now()}`,
+                    uploadedAt: new Date().toISOString(),
+                    type: 'outro',
+                  },
+                ],
+              });
+            }}
+          />
+        );
+      })()}
       {partialAdjustPrompt && (
         <PartialRevertAdjustModal
           data={partialAdjustPrompt}
@@ -4832,6 +5300,7 @@ export default function CancelamentosPage() {
             caseRef={liveCase}
             student={getCaseStudent(liveCase)}
             simplified={simplified}
+            allowGenerateTermo={getFunnelStage(liveCase) === 'Formalização'}
             onPartialRevertBeforeCancel={(qty) => {
               applyPartialRevert(liveCase, qty, 'Fracionamento definido no distrato — jurídico.');
             }}
@@ -5022,6 +5491,75 @@ export default function CancelamentosPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Modal: Novo Cancelamento (Finalizado → Em Tratativas) ───────────────────
+
+function NovoCancelamentoModal({
+  caseRef,
+  onClose,
+  onConfirm,
+}: {
+  caseRef: CancellationCase;
+  onClose: () => void;
+  onConfirm: (obs: string) => void;
+}) {
+  const [obs, setObs] = useState('');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-lg saas-shadow-md">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-fuchsia-100 text-fuchsia-700 flex items-center justify-center">
+              <FilePlus size={16} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-foreground">Novo Cancelamento</h2>
+              <p className="text-[11px] text-muted-foreground">
+                {caseRef.studentName} — o card será movido para <b>Em Tratativas</b>
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-5 space-y-3">
+          <label className="block">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+              Observações da tratativa com o aluno
+            </span>
+            <textarea
+              value={obs}
+              onChange={(e) => setObs(e.target.value)}
+              autoFocus
+              rows={6}
+              placeholder="Descreva o alinhamento feito com o aluno (ex.: condições acordadas, prazo, valores, promessas etc.)."
+              className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+            />
+          </label>
+          <p className="text-[11px] text-muted-foreground">
+            Essas observações ficarão registradas no histórico do caso e do aluno. Em Tratativas o fluxo normal
+            volta a valer (reverter, enviar ao Jurídico, cancelar).
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => onConfirm(obs)}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-fuchsia-600 text-white hover:bg-fuchsia-700 transition-colors flex items-center gap-1.5"
+          >
+            <FilePlus size={14} /> Abrir em Tratativas
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

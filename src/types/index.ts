@@ -495,6 +495,12 @@ export interface RefundPlan {
   paymentMethod?: RefundPaymentMethod;
   pixKey: string;
   pixKeyType: RefundPixKeyType;
+  /** true = chave PIX de terceiro (não do aluno). */
+  pixOtherHolder?: boolean;
+  /** Nome do titular da chave quando `pixOtherHolder`. */
+  pixHolderName?: string;
+  /** Telefone do titular da chave quando `pixOtherHolder`. */
+  pixHolderPhone?: string;
   totalValue: number;
   installments: RefundPlanInstallment[];
   createdAt: string;

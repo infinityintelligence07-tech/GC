@@ -40,6 +40,9 @@ interface RefundRow {
   value: number;
   pixKey: string;
   pixKeyType: string;
+  pixOtherHolder?: boolean;
+  pixHolderName?: string;
+  pixHolderPhone?: string;
   paymentMethod: RefundPaymentMethod;
   boletoFileUrl?: string;
   boletoFileName?: string;
@@ -198,6 +201,9 @@ export default function EstornosPage() {
           value: Number(p.value ?? 0),
           pixKey: overrides.pixKey ?? plan.pixKey ?? '',
           pixKeyType: overrides.pixKeyType ?? plan.pixKeyType ?? '—',
+          pixOtherHolder: !!(plan.pixOtherHolder),
+          pixHolderName: plan.pixHolderName,
+          pixHolderPhone: plan.pixHolderPhone,
           paymentMethod: overrides.paymentMethod ?? resolveRefundPaymentMethod(plan),
           boletoFileUrl: p.boletoFileUrl,
           boletoFileName: p.boletoFileName,
@@ -821,6 +827,13 @@ export default function EstornosPage() {
                           </button>
                         )}
                       </div>
+                      {r.pixOtherHolder && (
+                        <div className="pt-1 border-t border-border/60 space-y-0.5">
+                          <p className="text-[9px] uppercase font-semibold text-amber-800">Outro titular</p>
+                          <p className="text-[11px] text-foreground">{r.pixHolderName || '—'}</p>
+                          <p className="text-[10px] text-muted-foreground">{r.pixHolderPhone || '—'}</p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="rounded-lg border border-sky-200 bg-sky-50/80 p-2 space-y-2">

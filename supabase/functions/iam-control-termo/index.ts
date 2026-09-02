@@ -74,8 +74,52 @@ Deno.serve(async (req: Request) => {
       return json(200, data);
     }
 
+    if (action === 'status') {
+      const termoIdRaw = body.termo_id ?? body.id;
+      const termoId = typeof termoIdRaw === 'string' ? termoIdRaw.trim() : String(termoIdRaw ?? '').trim();
+      if (!termoId) {
+        return json(400, { ok: false, error: 'Informe termo_id.' });
+      }
+
+      // Tenta endpoints comuns do IAM Control / ZapSign
+      const paths = [
+        `/webhooks/gestao-contas/termos/${encodeURIComponent(termoId)}`,
+        `/webhooks/gestao-contas/termos/zapsign/${encodeURIComponent(termoId)}`,
+        `/webhooks/gestao-contas/termos/status/${encodeURIComponent(termoId)}`,
+      ];
+
+      let lastError = 'Não foi possível consultar o status do termo.';
+      for (const path of paths) {
+        const res = await fetchIam(path);
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          return json(200, { ok: true, ...data });
+        }
+        lastError = data?.message ?? data?.error ?? lastError;
+        // 404 → tenta próximo path; outros erros também tentam fallback
+        if (res.status !== 404 && res.status !== 405) {
+          // continua tentando os demais
+        }
+      }
+
+      // Fallback: POST status no mesmo endpoint de create
+      const resPost = await fetchIam('/webhooks/gestao-contas/termos/zapsign/status', {
+        method: 'POST',
+        body: JSON.stringify({ termo_id: termoId, id: termoId }),
+      });
+      const dataPost = await resPost.json().catch(() => ({}));
+      if (resPost.ok) {
+        return json(200, { ok: true, ...dataPost });
+      }
+
+      return json(resPost.status >= 400 ? resPost.status : 502, {
+        ok: false,
+        error: dataPost?.message ?? dataPost?.error ?? lastError,
+      });
+    }
+
     if (action !== 'create') {
-      return json(400, { ok: false, error: 'Ação inválida. Use list_templates ou create.' });
+      return json(400, { ok: false, error: 'Ação inválida. Use list_templates, status ou create.' });
     }
 
     const iamIdRaw = body.iam_control_aluno_id;

@@ -27,8 +27,11 @@ interface Props {
 }
 
 export default function CaseNotesPanel({ caseRef }: Props) {
-  const { updateCancellationCase, currentUser } = useAppStore();
-  const notes: CaseNote[] = caseRef.caseNotes ?? [];
+  const { updateCancellationCase, currentUser, cancellationCases } = useAppStore();
+  // Sempre lê do store vivo — o caseRef do modal de visualização é um snapshot
+  // e não atualiza sozinho após salvar.
+  const liveCase = cancellationCases.find((c) => c.id === caseRef.id) ?? caseRef;
+  const notes: CaseNote[] = liveCase.caseNotes ?? [];
   const [text, setText] = useState('');
   const [pending, setPending] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
@@ -59,7 +62,7 @@ export default function CaseNotesPanel({ caseRef }: Props) {
     const uploaded: CaseNoteAttachment[] = [];
     for (const file of pending) {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const path = `${companyId}/case-notes/${caseRef.id}/${Date.now()}_${safeName}`;
+      const path = `${companyId}/case-notes/${liveCase.id}/${Date.now()}_${safeName}`;
       const { error: upErr } = await supabase.storage
         .from('cancellation-docs')
         .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
@@ -94,8 +97,8 @@ export default function CaseNotesPanel({ caseRef }: Props) {
         attachments: attachments.length ? attachments : undefined,
       };
       const next = [note, ...notes];
-      updateCancellationCase(caseRef.id, { caseNotes: next });
-      await saveCancellationCaseNotesDb(caseRef.id, next);
+      updateCancellationCase(liveCase.id, { caseNotes: next });
+      await saveCancellationCaseNotesDb(liveCase.id, next);
       setText('');
       setPending([]);
       toast.success('Observação registrada.');
@@ -117,8 +120,8 @@ export default function CaseNotesPanel({ caseRef }: Props) {
       } catch { /* ignore */ }
     }
     const next = notes.filter((n) => n.id !== id);
-    updateCancellationCase(caseRef.id, { caseNotes: next });
-    await saveCancellationCaseNotesDb(caseRef.id, next);
+    updateCancellationCase(liveCase.id, { caseNotes: next });
+    await saveCancellationCaseNotesDb(liveCase.id, next);
   };
 
   const openAttachment = async (a: CaseNoteAttachment) => {

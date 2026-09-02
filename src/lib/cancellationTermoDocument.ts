@@ -2,7 +2,11 @@ import { formatCurrency } from '@/store/useAppStore';
 import type { CancellationCase, RefundPaymentMethod, RefundPixKeyType, Student } from '@/types';
 import { refundPaymentMethodLabel } from '@/types';
 
-export type CancellationTermoVariant = 'com_multa_estorno' | 'sem_multa';
+export type CancellationTermoVariant =
+  | 'somente_estorno'
+  | 'somente_multa'
+  | 'multa_e_estorno'
+  | 'sem_multa';
 
 export interface CancellationTermoRefundParcel {
   date: string;
@@ -26,6 +30,9 @@ export interface CancellationTermoInput {
   refundPaymentMethod?: RefundPaymentMethod;
   pixKeyType?: RefundPixKeyType | string;
   pixKey?: string;
+  pixOtherHolder?: boolean;
+  pixHolderName?: string;
+  pixHolderPhone?: string;
   refundInstallments?: CancellationTermoRefundParcel[];
   /** Data limite para assinar (YYYY-MM-DD ou DD/MM/AAAA). */
   diaLimiteAssinatura?: string;
@@ -44,6 +51,45 @@ export interface CancellationTermoDocument {
   paragraphs: string[];
   bankLines: string[];
   showBankBlock: boolean;
+}
+
+/**
+ * Regras do conteúdo do termo:
+ * - Sem multa (CDC) ou % zerado + saldo a devolver → base "multa e estorno", só a parte de estorno
+ * - % > 0 sem saldo a devolver → só multa
+ * - % > 0 com saldo a devolver → multa e estorno
+ * - Sem multa / % zerado sem estorno → termo sem multa (CDC)
+ */
+export function resolveCancellationTermoVariant(input: {
+  semMultaCDC7: boolean;
+  multaPercent: number;
+  estornoTotal: number;
+}): CancellationTermoVariant {
+  const pct = Number(input.multaPercent) || 0;
+  const semMultaEfetiva = input.semMultaCDC7 || pct <= 0;
+  const comEstorno = Math.max(0, Number(input.estornoTotal) || 0) > 0.01;
+
+  if (semMultaEfetiva && comEstorno) return 'somente_estorno';
+  if (!semMultaEfetiva && comEstorno) return 'multa_e_estorno';
+  if (!semMultaEfetiva && !comEstorno) return 'somente_multa';
+  return 'sem_multa';
+}
+
+function tituloForVariant(variant: CancellationTermoVariant): string {
+  switch (variant) {
+    case 'somente_estorno':
+      return 'Termo de Cancelamento (estorno)';
+    case 'somente_multa':
+      return 'Termo de Cancelamento (com multa)';
+    case 'multa_e_estorno':
+      return 'Termo de Cancelamento (com multa e estorno)';
+    case 'sem_multa':
+      return 'Termo de Cancelamento (sem multa)';
+    default: {
+      const _exhaustive: never = variant;
+      return _exhaustive;
+    }
+  }
 }
 
 const INSTITUTO =
@@ -98,12 +144,10 @@ function typicalParcelValue(parcels: CancellationTermoRefundParcel[]): number {
   return values.reduce((s, v) => s + v, 0) / values.length;
 }
 
-/** Monta o termo institucional (base: com multa e estorno; variante sem multa). Sem endereço/CEP/turma/preço do contrato. */
+/** Monta o termo institucional conforme multa/% e saldo a devolver. Sem endereço/CEP/turma/preço do contrato. */
 export function buildCancellationTermoDocument(input: CancellationTermoInput): CancellationTermoDocument {
-  const variant: CancellationTermoVariant = input.semMultaCDC7 ? 'sem_multa' : 'com_multa_estorno';
-  const titulo = input.semMultaCDC7
-    ? 'Termo de Cancelamento (sem multa)'
-    : 'Termo de Cancelamento (com multa e estorno)';
+  const variant = resolveCancellationTermoVariant(input);
+  const titulo = tituloForVariant(variant);
 
   const dataTermo = input.dataTermo ?? new Date();
   const limite =
@@ -112,7 +156,8 @@ export function buildCancellationTermoDocument(input: CancellationTermoInput): C
   const treinamento = dash(input.treinamento);
   const totalPago = formatCurrency(input.totalPago);
   const estorno = Math.max(0, Number(input.estornoTotal) || 0);
-  const precisaEstorno = estorno > 0.01;
+  const incluiEstorno = variant === 'somente_estorno' || variant === 'multa_e_estorno';
+  const incluiMulta = variant === 'somente_multa' || variant === 'multa_e_estorno';
   const parcels = (input.refundInstallments ?? []).filter((p) => (Number(p.value) || 0) > 0.0049 || !!p.date);
   const qtdParcelas = Math.max(1, parcels.length || 1);
   const valorParcela = formatCurrency(typicalParcelValue(parcels.length ? parcels : [{ date: '', value: estorno }]));
@@ -127,18 +172,28 @@ export function buildCancellationTermoDocument(input: CancellationTermoInput): C
     `Vem perante a ${INSTITUTO}, REQUERER O CANCELAMENTO de ${qtdInsc} inscrição(ões) no treinamento ${treinamento}.`,
   );
 
-  if (input.semMultaCDC7) {
+  if (variant === 'sem_multa' || (variant === 'somente_estorno' && input.semMultaCDC7)) {
     paragraphs.push(
       'Considerando que a contratação do treinamento se deu de forma presencial e que o pedido de cancelamento ocorreu durante o prazo de 7 (sete) dias de reflexão previsto no artigo 49 do Código de Defesa do Consumidor, não será aplicada multa rescisória correspondente conforme contrato assinado pelas partes.',
     );
     paragraphs.push('Ajustam as partes que:');
     paragraphs.push('Todos os bônus eventualmente concedidos pela IAM estão automaticamente cancelados.');
+  } else if (variant === 'somente_estorno') {
+    // % zerado (sem marcar CDC): base do termo com multa e estorno, sem cláusulas de multa.
+    paragraphs.push(
+      'Considerando a contratação presencial e que as partes acordam o cancelamento sem aplicação de multa rescisória;',
+    );
+    paragraphs.push('Acordam as partes que:');
+    paragraphs.push('Todos os bônus eventualmente concedidos pela ACADEMY estão automaticamente cancelados.');
   } else {
     paragraphs.push(
       'Considerando a contratação presencial e que o pedido de cancelamento ocorreu após o prazo de 7 dias da contratação;',
     );
     paragraphs.push('Acordam as partes que:');
     paragraphs.push('Todos os bônus eventualmente concedidos pela ACADEMY estão automaticamente cancelados.');
+  }
+
+  if (incluiMulta) {
     const pct = Number.isFinite(input.multaPercent) ? input.multaPercent : 0;
     paragraphs.push(
       `Será aplicada a título de multa rescisória o valor correspondente a ${pct}% do preço principal, perfazendo o montante de ${formatCurrency(input.multaValue)}, conforme previsto em contrato.`,
@@ -148,14 +203,14 @@ export function buildCancellationTermoDocument(input: CancellationTermoInput): C
     );
   }
 
-  if (precisaEstorno) {
-    if (input.semMultaCDC7) {
+  if (incluiEstorno) {
+    if (incluiMulta) {
       paragraphs.push(
-        `O(a) ALUNO(A) realizou o pagamento de ${totalPago} e requereu o cancelamento da inscrição, o saldo a ser reembolsado totaliza o importe de ${formatCurrency(estorno)}, o(a) ALUNO(A) informa os dados bancários para devolução do montante que será pago em ${qtdParcelas} parcela(s) de ${valorParcela} para a(s) data(s) de ${datasParcelas}.`,
+        `Assim, descontada a multa, saldo a ser reembolsado totaliza o importe de ${formatCurrency(estorno)}, o(a) ALUNO(A) informa os dados bancários para devolução do montante que será pago em ${qtdParcelas} parcela(s) de ${valorParcela} para a(s) data(s) de ${datasParcelas}.`,
       );
     } else {
       paragraphs.push(
-        `Assim, descontada a multa, saldo a ser reembolsado totaliza o importe de ${formatCurrency(estorno)}, o(a) ALUNO(A) informa os dados bancários para devolução do montante que será pago em ${qtdParcelas} parcela(s) de ${valorParcela} para a(s) data(s) de ${datasParcelas}.`,
+        `O(a) ALUNO(A) realizou o pagamento de ${totalPago} e requereu o cancelamento da inscrição, o saldo a ser reembolsado totaliza o importe de ${formatCurrency(estorno)}, o(a) ALUNO(A) informa os dados bancários para devolução do montante que será pago em ${qtdParcelas} parcela(s) de ${valorParcela} para a(s) data(s) de ${datasParcelas}.`,
       );
     }
     paragraphs.push(
@@ -164,7 +219,7 @@ export function buildCancellationTermoDocument(input: CancellationTermoInput): C
     paragraphs.push(
       `O ALUNO(A) fica ciente de que o estorno ora realizado será realizado mediante ${metodo === 'Boleto' ? 'boleto bancário / transferência' : 'transferência bancária'} e no caso de a compra ter sido realizada mediante parcelamento no cartão de crédito, exime-se a ACADEMY de quaisquer responsabilidades de pagamento em relação à fatura do plástico.`,
     );
-  } else if (!input.semMultaCDC7) {
+  } else if (incluiMulta) {
     const saldoMulta = Math.round((input.multaValue - input.totalPago) * 100) / 100;
     if (saldoMulta > 0.01) {
       paragraphs.push(
@@ -190,17 +245,24 @@ export function buildCancellationTermoDocument(input: CancellationTermoInput): C
     'E por estarem justos e contratados, assinam as partes o presente instrumento, em duas vias de igual teor e forma, na presença das duas testemunhas abaixo, para que o mesmo produza seus jurídicos e legais efeitos.',
   );
 
-  const showBankBlock = precisaEstorno;
+  const showBankBlock = incluiEstorno;
   const bankLines: string[] = [];
   if (showBankBlock) {
     if ((input.refundPaymentMethod ?? 'pix') === 'pix') {
       bankLines.push(`Tipo da chave: ${dash(input.pixKeyType)}`);
       bankLines.push(`CHAVE PIX: ${dash(input.pixKey)}`);
+      if (input.pixOtherHolder) {
+        bankLines.push(`Titularidade (terceiro): ${dash(input.pixHolderName)}`);
+        bankLines.push(`Telefone do titular: ${dash(input.pixHolderPhone)}`);
+      } else {
+        bankLines.push(`Titularidade: ${dash(input.studentName)}`);
+        bankLines.push(`CPF/CNPJ: ${dash(input.cpf)}`);
+      }
     } else {
       bankLines.push('Forma: Boleto (anexo / emissão na aba Estornos)');
+      bankLines.push(`Titularidade: ${dash(input.studentName)}`);
+      bankLines.push(`CPF/CNPJ: ${dash(input.cpf)}`);
     }
-    bankLines.push(`Titularidade: ${dash(input.studentName)}`);
-    bankLines.push(`CPF/CNPJ: ${dash(input.cpf)}`);
   }
 
   return {
@@ -241,9 +303,13 @@ export function buildCancellationTermoInputFromCase(opts: {
   refundPaymentMethod?: RefundPaymentMethod;
   pixKey?: string;
   pixKeyType?: RefundPixKeyType | string;
+  pixOtherHolder?: boolean;
+  pixHolderName?: string;
+  pixHolderPhone?: string;
   diaLimiteAssinatura?: string;
 }): CancellationTermoInput {
   const plan = opts.caseRef.refundPlan;
+  const pixOtherHolder = opts.pixOtherHolder ?? plan?.pixOtherHolder ?? false;
   return {
     studentName: opts.student?.name || opts.caseRef.studentName,
     cpf: opts.student?.cpf,
@@ -259,6 +325,9 @@ export function buildCancellationTermoInputFromCase(opts: {
     refundPaymentMethod: opts.refundPaymentMethod ?? plan?.paymentMethod ?? 'pix',
     pixKeyType: opts.pixKeyType ?? plan?.pixKeyType,
     pixKey: opts.pixKey ?? plan?.pixKey,
+    pixOtherHolder,
+    pixHolderName: opts.pixHolderName ?? plan?.pixHolderName,
+    pixHolderPhone: opts.pixHolderPhone ?? plan?.pixHolderPhone,
     refundInstallments:
       opts.refundInstallments ??
       plan?.installments?.map((p) => ({ date: p.date, value: Number(p.value) || 0 })),

@@ -181,8 +181,20 @@ export default function StudentsPage() {
         return;
       }
       if (s.status === 'Pendente') return;
-      // Cancelamento (solicitação, conciliação pendente, cancelado…) não recalcula Vencido.
-      if (cancelamentoOverridesFinancialStatus(s)) return;
+      // Cancelamento ativo: não recalcula Vencido; mantém status de solicitação na ficha.
+      if (cancelamentoOverridesFinancialStatus(s)) {
+        if (
+          s.status !== 'Solicitação Cancelamento' &&
+          s.status !== 'Cancelado' &&
+          s.statusCancelamento !== 'cancelado'
+        ) {
+          updateStudent(s.id, {
+            status: 'Solicitação Cancelamento',
+            statusMode: 'Manual',
+          });
+        }
+        return;
+      }
       if (s.statusMode === 'Automático') {
         const autoStatus = calculateAutoStatus(s.installments);
         if (autoStatus !== s.status) updateStudent(s.id, { status: autoStatus });
@@ -680,7 +692,6 @@ export default function StudentsPage() {
               ) : (
                 sorted.map((student) => {
                   const sc = student.statusCancelamento;
-                  const hasCancelTag = sc && sc !== 'nenhum';
                   const isMirrorRow = !!student._mirrorCaseId;
                   return (
                     <tr key={student.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${sc === 'cancelado' ? 'opacity-60' : ''} ${isMirrorRow ? 'bg-sky-50/40' : ''}`}>
@@ -729,34 +740,50 @@ export default function StudentsPage() {
                         })()}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{student.ac}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1 items-start">
+                      <td className="px-4 py-3 max-w-[12rem]">
+                        <div className="flex flex-col gap-1 items-start min-w-0">
                           {(() => {
                             const cancelBadge = getCancelamentoBadge(student);
-                            if (cancelamentoOverridesFinancialStatus(student) && cancelBadge) {
+                            const cancelOverrides = cancelamentoOverridesFinancialStatus(student);
+                            // Cancelamento ativo: só o badge de cancelamento (sem Vencido/Em Dia por baixo).
+                            if (cancelOverrides) {
+                              if (cancelBadge) {
+                                return (
+                                  <span
+                                    className={`text-[10px] font-semibold px-2 py-1 rounded-lg max-w-full whitespace-normal break-words leading-snug ${cancelBadge.color}`}
+                                    title={cancelBadge.label}
+                                  >
+                                    {cancelBadge.label}
+                                  </span>
+                                );
+                              }
+                              const display = resolveStudentDisplayStatus(student);
                               return (
-                                <span className={`text-[10px] font-semibold px-2 py-1 rounded-lg ${cancelBadge.color}`}>
-                                  {cancelBadge.label}
+                                <span
+                                  className={`text-[10px] font-semibold px-2 py-1 rounded-lg max-w-full whitespace-normal break-words leading-snug ${statusColors[display] ?? 'bg-muted'}`}
+                                  title={display}
+                                >
+                                  {display}
                                 </span>
                               );
                             }
+                            // Sem cancelamento ativo: status financeiro (+ lembrete Revertido, se houver).
                             return (
                             <>
-                              {/* Renda Extra finalizado: mostra somente "Renda Extra" como status principal */}
                               {isRendaExtraAtivo(student) && student.rendaExtraStatus !== 'Conciliar Exclusão' ? (
                                 <span className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-purple-100 text-purple-700 border border-purple-300">
                                   Renda Extra
                                 </span>
                               ) : (
                                 <>
-                                  <div className="flex items-center gap-1.5">
-                                    <StatusBadgeManual student={student} status={student.status} />
-                                    {student.status !== 'Em Dia' && student.status !== 'Pago' && student.status !== 'Pendente' && (() => {
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                    <StatusBadgeManual student={student} status={resolveStudentDisplayStatus(student)} />
+                                    {student.status !== 'Em Dia' && student.status !== 'Pago' && student.status !== 'Pendente' && student.status !== 'Solicitação Cancelamento' && (() => {
                                       const dias = calcularDiasVencido(student.installments);
                                       const due = nextDueDateUi(student);
                                       return dias && dias > 0 ? (
                                         <span
-                                          className="text-[9px] font-bold text-destructive"
+                                          className="text-[9px] font-bold text-destructive shrink-0"
                                           title={due.rolledFromWeekend
                                             ? `${dias} dia(s) desde o vencimento efetivo (${fmtDateBR(due.displayIso)}). Contrato: ${fmtDateBR(due.originalIso)}.`
                                             : `${dias} dia(s) em atraso`}
@@ -766,7 +793,6 @@ export default function StudentsPage() {
                                       ) : null;
                                     })()}
                                   </div>
-                                  {/* Renda Extra em transição (Conciliar Exclusão): sub-badge */}
                                   {isRendaExtraAtivo(student) && student.rendaExtraStatus === 'Conciliar Exclusão' && (
                                     <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit bg-slate-200 text-slate-600 border border-slate-300">
                                       Renda Extra
@@ -774,9 +800,10 @@ export default function StudentsPage() {
                                   )}
                                 </>
                               )}
-                              {hasCancelTag && cancelStatusConfig[sc!] && !(sc === 'revertido' && student.status === 'Pago') && (
-                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit ${cancelStatusConfig[sc!].color}`}>
-                                  {cancelStatusConfig[sc!].label}
+                              {/* Só "Revertido" como sub-badge — cancelamento ativo nunca empilha com Vencido */}
+                              {sc === 'revertido' && student.status !== 'Pago' && cancelStatusConfig.revertido && (
+                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit ${cancelStatusConfig.revertido.color}`}>
+                                  {cancelStatusConfig.revertido.label}
                                 </span>
                               )}
                             </>
@@ -972,7 +999,7 @@ export default function StudentsPage() {
                   return (
                     <div className="w-full p-3 rounded-xl border border-fuchsia-200 bg-fuchsia-50 text-[11px] text-fuchsia-800">
                       Aluno <strong>Revertido</strong>. Para cancelar de novo, use{' '}
-                      <strong>Novo Cancelamento</strong> no card em Cancelamentos → Finalizado.
+                      <strong>Novo Cancelamento</strong> no card em Cancelamentos → Finalizado (abre em Em Tratativas).
                     </div>
                   );
                 }

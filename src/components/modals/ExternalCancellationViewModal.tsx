@@ -1,5 +1,6 @@
 import { X, Eye, Download, FileText } from 'lucide-react';
 import type { CancellationCase } from '@/types';
+import { useAppStore } from '@/store/useAppStore';
 import { openCancellationPdf, downloadCancellationPdf } from '@/lib/openCancellationPdf';
 import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
 
@@ -29,7 +30,10 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default function ExternalCancellationViewModal({ caseRef: c, onClose }: Props) {
+export default function ExternalCancellationViewModal({ caseRef, onClose }: Props) {
+  const liveCase =
+    useAppStore((s) => s.cancellationCases.find((c) => c.id === caseRef.id)) ?? caseRef;
+  const c = liveCase;
   const multaPct = Number(c.multaPercent ?? 0);
   const multaVal = Number(c.multaValue ?? c.cancellationFineValue ?? 0);
 

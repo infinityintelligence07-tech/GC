@@ -148,7 +148,7 @@ export default function StatusBadgeManual({ student, status, readOnly = false }:
 
   if (!isClickable) {
     return (
-      <span className={`text-[10px] font-semibold px-2 py-1 rounded-lg ${statusColors[status]}`}>
+      <span className={`text-[10px] font-semibold px-2 py-1 rounded-lg max-w-[11rem] whitespace-normal break-words leading-snug inline-block ${statusColors[status]}`}>
         {status}
       </span>
     );
@@ -159,7 +159,7 @@ export default function StatusBadgeManual({ student, status, readOnly = false }:
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className={`text-[10px] font-semibold px-2 py-1 rounded-lg ${statusColors[status]} inline-flex items-center gap-1 hover:brightness-95 transition`}
+        className={`text-[10px] font-semibold px-2 py-1 rounded-lg max-w-[11rem] whitespace-normal break-words leading-snug ${statusColors[status]} inline-flex items-center gap-1 hover:brightness-95 transition`}
         title="Clique para alterar manualmente o status"
       >
         {status}

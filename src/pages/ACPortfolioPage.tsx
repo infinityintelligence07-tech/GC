@@ -1537,34 +1537,47 @@ export default function ACPortfolioPage() {
                           );
                         })()}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1 items-start">
+                      <td className="px-4 py-3 max-w-[12rem]">
+                        <div className="flex flex-col gap-1 items-start min-w-0">
                           {(() => {
                             const cancelBadge = getCancelamentoBadge(student);
-                            if (cancelamentoOverridesFinancialStatus(student) && cancelBadge) {
+                            const cancelOverrides = cancelamentoOverridesFinancialStatus(student);
+                            if (cancelOverrides) {
+                              if (cancelBadge) {
+                                return (
+                                  <span
+                                    className={`text-[10px] font-semibold px-2 py-1 rounded-lg max-w-full whitespace-normal break-words leading-snug ${cancelBadge.color}`}
+                                    title={cancelBadge.label}
+                                  >
+                                    {cancelBadge.label}
+                                  </span>
+                                );
+                              }
                               return (
-                                <span className={`text-[10px] font-semibold px-2 py-1 rounded-lg ${cancelBadge.color}`}>
-                                  {cancelBadge.label}
+                                <span
+                                  className={`text-[10px] font-semibold px-2 py-1 rounded-lg max-w-full whitespace-normal break-words leading-snug ${statusColors[tableStatus] ?? 'bg-muted'}`}
+                                  title={tableStatus}
+                                >
+                                  {tableStatus}
                                 </span>
                               );
                             }
                             return (
                             <>
-                              {/* Renda Extra in final stages: show only "Renda Extra" as primary status */}
                               {isRendaExtraAtivo(student) && student.rendaExtraStatus !== 'Conciliar Exclusão' ? (
                                 <span className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-purple-100 text-purple-700 border border-purple-300">
                                   Renda Extra
                                 </span>
                               ) : (
                                 <>
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                                     <StatusBadgeManual student={student} status={tableStatus} readOnly={!canMutatePortfolio} />
-                                    {tableStatus !== 'Em Dia' && tableStatus !== 'Pago' && tableStatus !== 'Pendente' && (() => {
+                                    {tableStatus !== 'Em Dia' && tableStatus !== 'Pago' && tableStatus !== 'Pendente' && tableStatus !== 'Solicitação Cancelamento' && (() => {
                                       const dias = calcularDiasVencido(student.installments);
                                       const due = nextDueDateUi(student);
                                       return dias && dias > 0 ? (
                                         <span
-                                          className="text-[9px] font-bold text-destructive"
+                                          className="text-[9px] font-bold text-destructive shrink-0"
                                           title={due.rolledFromWeekend
                                             ? `${dias} dia(s) desde o vencimento efetivo (${fmtDateBR(due.displayIso)}). Contrato: ${fmtDateBR(due.originalIso)}.`
                                             : `${dias} dia(s) em atraso`}
@@ -1574,7 +1587,6 @@ export default function ACPortfolioPage() {
                                       ) : null;
                                     })()}
                                   </div>
-                                  {/* Renda Extra in Conciliar stage: show secondary badge */}
                                   {isRendaExtraAtivo(student) && student.rendaExtraStatus === 'Conciliar Exclusão' && (
                                     <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit bg-slate-200 text-slate-600 border border-slate-300">
                                       Renda Extra
@@ -1582,9 +1594,9 @@ export default function ACPortfolioPage() {
                                   )}
                                 </>
                               )}
-                              {student.statusCancelamento && student.statusCancelamento !== 'nenhum' && cancelStatusConfig[student.statusCancelamento] && !(student.statusCancelamento === 'revertido' && student.status === 'Pago') && (
-                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit ${cancelStatusConfig[student.statusCancelamento].color}`}>
-                                  {cancelStatusConfig[student.statusCancelamento].label}
+                              {student.statusCancelamento === 'revertido' && student.status !== 'Pago' && cancelStatusConfig.revertido && (
+                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit ${cancelStatusConfig.revertido.color}`}>
+                                  {cancelStatusConfig.revertido.label}
                                 </span>
                               )}
                             </>

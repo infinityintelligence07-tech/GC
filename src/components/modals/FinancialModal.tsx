@@ -13,6 +13,7 @@ import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import { getInstallmentCreditApplied, getInstallmentOutstanding, getStudentCreditAppliedTotal } from '@/lib/utils';
 import { isEntradaPendenciaInstallment, sumEntradaPendenteValue } from '@/lib/studentDisplayStatus';
 import { resolveStudentFinance } from '@/lib/studentFinance';
+import { getIamTermoStatus, isIamTermoAssinado } from '@/lib/iamControlTermo';
 
 interface Props {
   student: Student;
@@ -34,9 +35,18 @@ interface Props {
 
 type RenegMode = 'none' | 'initial' | 'detailed' | 'confirm';
 
+type RenegTermoPending = {
+  id?: string;
+  urlAssinatura?: string;
+  status: 'pending' | 'signed';
+  createdAt: string;
+  signedAt?: string;
+  nomeDocumento?: string;
+};
+
 /** Rascunho local da renegociação — permite retomar se fechar o modal no meio. */
 type RenegStandbyDraft = {
-  version: 1;
+  version: 1 | 2;
   studentId: string;
   mode: Exclude<RenegMode, 'none'>;
   renegMultaPercent: number;
@@ -51,6 +61,8 @@ type RenegStandbyDraft = {
   entradaPercent: number;
   renegSelected: number[];
   savedAt: string;
+  /** Termo de renegociação aguardando / concluído na ZapSign. */
+  termo?: RenegTermoPending;
 };
 
 function renegStandbyKey(studentId: string) {
@@ -62,7 +74,7 @@ function loadRenegStandby(studentId: string): RenegStandbyDraft | null {
     const raw = localStorage.getItem(renegStandbyKey(studentId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as RenegStandbyDraft;
-    if (!parsed || parsed.version !== 1 || parsed.studentId !== studentId) return null;
+    if (!parsed || (parsed.version !== 1 && parsed.version !== 2) || parsed.studentId !== studentId) return null;
     if (parsed.mode !== 'initial' && parsed.mode !== 'detailed' && parsed.mode !== 'confirm') return null;
     return parsed;
   } catch {
@@ -294,14 +306,24 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const toggleRenegParcel = (n: number) =>
     setRenegSelected((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
   const [termoModal, setTermoModal] = useState(false);
+  const [termoPending, setTermoPending] = useState<RenegTermoPending | null>(
+    () => loadRenegStandby(studentProp.id)?.termo ?? null,
+  );
+  const [termoChecking, setTermoChecking] = useState(false);
 
   // Rascunho/stand-by da renegociação (localStorage) — retomar de onde parou
   const [standbyDraft, setStandbyDraft] = useState<RenegStandbyDraft | null>(() =>
     loadRenegStandby(studentProp.id),
   );
 
-  const buildRenegStandby = (mode: Exclude<RenegMode, 'none'>): RenegStandbyDraft => ({
-    version: 1,
+  const termoAssinado = termoPending?.status === 'signed';
+  const termoAguardandoAssinatura = !!termoPending && !termoAssinado;
+
+  const buildRenegStandby = (
+    mode: Exclude<RenegMode, 'none'>,
+    termoOverride?: RenegTermoPending | null,
+  ): RenegStandbyDraft => ({
+    version: 2,
     studentId: student.id,
     mode,
     renegMultaPercent,
@@ -316,12 +338,16 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     entradaPercent,
     renegSelected,
     savedAt: new Date().toISOString(),
+    termo: termoOverride === undefined ? (termoPending ?? undefined) : (termoOverride ?? undefined),
   });
 
-  const persistRenegStandby = (mode?: Exclude<RenegMode, 'none'>) => {
+  const persistRenegStandby = (
+    mode?: Exclude<RenegMode, 'none'>,
+    termoOverride?: RenegTermoPending | null,
+  ) => {
     const m = mode ?? (renegMode !== 'none' ? renegMode : null);
     if (!m) return;
-    const draft = buildRenegStandby(m);
+    const draft = buildRenegStandby(m, termoOverride);
     saveRenegStandby(draft);
     setStandbyDraft(draft);
   };
@@ -338,18 +364,105 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     setEntradaMode(draft.entradaMode);
     setEntradaPercent(draft.entradaPercent || 0);
     setRenegSelected(Array.isArray(draft.renegSelected) ? draft.renegSelected : []);
+    setTermoPending(draft.termo ?? null);
     setQuitacaoMode(false);
     setQuitParcelasMode(false);
     setRenegMode(draft.mode);
-    toast.success('Renegociação restaurada — continue de onde parou.');
+    toast.success(
+      draft.termo?.status === 'pending'
+        ? 'Renegociação restaurada — aguardando assinatura do termo.'
+        : 'Renegociação restaurada — continue de onde parou.',
+    );
   };
 
   const discardRenegStandby = () => {
     clearRenegStandby(student.id);
     setStandbyDraft(null);
+    setTermoPending(null);
     setRenegMode('none');
     toast.message('Rascunho de renegociação descartado.');
   };
+
+  const markTermoPending = (info: {
+    id?: string;
+    urlAssinatura: string;
+    status?: string;
+    nomeDocumento?: string;
+  }) => {
+    const pending: RenegTermoPending = {
+      id: info.id,
+      urlAssinatura: info.urlAssinatura,
+      status: isIamTermoAssinado({ status: info.status }) ? 'signed' : 'pending',
+      createdAt: new Date().toISOString(),
+      signedAt: isIamTermoAssinado({ status: info.status }) ? new Date().toISOString() : undefined,
+      nomeDocumento: info.nomeDocumento,
+    };
+    setTermoPending(pending);
+    const mode = renegMode !== 'none' ? renegMode : 'detailed';
+    persistRenegStandby(mode, pending);
+    if (pending.status === 'pending') {
+      toast.message('Termo enviado. Confirmar fica bloqueado até a assinatura.');
+    }
+  };
+
+  const markTermoSigned = (opts?: { silent?: boolean }) => {
+    if (!termoPending) return;
+    const signed: RenegTermoPending = {
+      ...termoPending,
+      status: 'signed',
+      signedAt: new Date().toISOString(),
+    };
+    setTermoPending(signed);
+    const mode = renegMode !== 'none' ? renegMode : 'detailed';
+    persistRenegStandby(mode, signed);
+    if (!opts?.silent) toast.success('Termo assinado — Confirmar liberado.');
+  };
+
+  const verificarAssinaturaTermo = async () => {
+    if (!termoPending?.id) {
+      toast.error('Gere o link do termo (Copiar Link) para o sistema poder verificar a assinatura.');
+      return;
+    }
+    setTermoChecking(true);
+    try {
+      const result = await getIamTermoStatus(termoPending.id);
+      if (!result.ok) throw new Error(result.error || 'Falha ao verificar assinatura.');
+      if (isIamTermoAssinado(result)) {
+        markTermoSigned();
+      } else {
+        toast.message(
+          `Ainda pendente de assinatura${result.status ? ` (status: ${result.status})` : ''}.`,
+        );
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível verificar a assinatura.');
+    } finally {
+      setTermoChecking(false);
+    }
+  };
+
+  // Polling leve enquanto o termo estiver pendente e a renegociação aberta
+  useEffect(() => {
+    if (!termoAguardandoAssinatura || !termoPending?.id) return;
+    if (renegMode === 'none') return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const result = await getIamTermoStatus(termoPending.id!);
+        if (cancelled || !result.ok) return;
+        if (isIamTermoAssinado(result)) markTermoSigned();
+      } catch {
+        /* ignore poll errors */
+      }
+    };
+    const id = window.setInterval(tick, 20_000);
+    void tick();
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [termoAguardandoAssinatura, termoPending?.id, renegMode]);
 
   // Quitação mode
   const [quitacaoMode, setQuitacaoMode] = useState(false);
@@ -906,6 +1019,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
   const handleConfirmRenegotiate = () => {
     if (readOnly) return;
+    if (!termoAssinado) {
+      toast.error('Confirme só após a assinatura do termo de renegociação.');
+      return;
+    }
     // ⚠️ Renegociação agora vira RASCUNHO: NÃO altera o aluno aqui.
     // Apenas envia o novo plano para a aba Conciliação. As alterações só
     // são efetivadas quando o setor de Conciliação aprovar+conciliar.
@@ -983,6 +1100,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     toast.success('Renegociação enviada para Conciliação. As alterações só ficam efetivas após a aprovação.');
     clearRenegStandby(student.id);
     setStandbyDraft(null);
+    setTermoPending(null);
     setRenegMode('none');
     onClose();
   };
@@ -1352,13 +1470,21 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           <div className="mx-6 mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 flex items-start gap-2.5 fade-in shadow-sm">
             <Clock size={16} className="text-sky-700 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-sky-800 leading-snug">Renegociação em rascunho</p>
+              <p className="text-xs font-bold text-sky-800 leading-snug">
+                {standbyDraft.termo?.status === 'pending'
+                  ? 'Renegociação em andamento'
+                  : standbyDraft.termo?.status === 'signed'
+                    ? 'Renegociação pronta para confirmar'
+                    : 'Renegociação em rascunho'}
+              </p>
               <p className="text-[11px] text-sky-800/90 leading-snug mt-1">
-                Você saiu no meio do fluxo
-                {standbyDraft.savedAt
-                  ? ` (${new Date(standbyDraft.savedAt).toLocaleString('pt-BR')})`
-                  : ''}
-                . Pode continuar de onde parou.
+                {standbyDraft.termo?.status === 'pending'
+                  ? 'Pendente de assinatura do termo. Continue o fluxo após o aluno assinar.'
+                  : `Você saiu no meio do fluxo${
+                      standbyDraft.savedAt
+                        ? ` (${new Date(standbyDraft.savedAt).toLocaleString('pt-BR')})`
+                        : ''
+                    }. Pode continuar de onde parou.`}
               </p>
               <div className="flex flex-wrap gap-2 mt-2">
                 <button
@@ -1376,6 +1502,61 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   Descartar rascunho
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {termoPending && renegMode !== 'none' && (
+          <div className="mx-6 mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 flex items-start gap-2.5 fade-in shadow-sm">
+            <Clock size={16} className="text-sky-700 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-sky-800 leading-snug">
+                {termoAssinado ? 'Termo assinado' : 'Renegociação em andamento'}
+              </p>
+              <p className="text-[11px] text-sky-800/90 leading-snug mt-1">
+                {termoAssinado
+                  ? `Assinatura confirmada${termoPending.signedAt ? ` em ${new Date(termoPending.signedAt).toLocaleString('pt-BR')}` : ''}. Você já pode confirmar a renegociação.`
+                  : 'Pendente de assinatura do termo. O botão Confirmar fica bloqueado até o sistema identificar a assinatura.'}
+              </p>
+              {!termoAssinado && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => void verificarAssinaturaTermo()}
+                    disabled={termoChecking}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-sky-600 text-white hover:bg-sky-700 transition-colors disabled:opacity-60"
+                  >
+                    {termoChecking ? 'Verificando…' : 'Verificar assinatura'}
+                  </button>
+                  {termoPending.urlAssinatura && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(termoPending.urlAssinatura!);
+                        toast.success('Link de assinatura copiado.');
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
+                    >
+                      <Copy size={11} /> Copiar link
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          'Marcar o termo como assinado manualmente? Use só se a assinatura já foi concluída fora da verificação automática.',
+                        )
+                      ) {
+                        markTermoSigned();
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
+                  >
+                    Já assinou
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2786,15 +2967,32 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     </button>
                     <button
                       onClick={() => {
+                        if (!termoAssinado) {
+                          toast.error(
+                            termoAguardandoAssinatura
+                              ? 'Aguarde a assinatura do termo para confirmar.'
+                              : 'Gere o termo e envie o link ao aluno. Só libera após a assinatura.',
+                          );
+                          if (!termoPending) setTermoModal(true);
+                          return;
+                        }
                         const draft = buildRenegStandby('confirm');
                         saveRenegStandby(draft);
                         setStandbyDraft(draft);
                         setRenegMode('confirm');
                       }}
-                      disabled={newInstallments < 1}
+                      disabled={newInstallments < 1 || !termoAssinado}
                       className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 transition-colors"
+                      title={
+                        termoAssinado
+                          ? 'Prosseguir para confirmação'
+                          : termoAguardandoAssinatura
+                            ? 'Pendente de assinatura do termo'
+                            : 'Gere e envie o termo antes de confirmar'
+                      }
                     >
-                      <CheckCircle2 size={12} /> Confirmar
+                      {termoAssinado ? <CheckCircle2 size={12} /> : <Lock size={12} />}
+                      {termoAssinado ? 'Confirmar' : 'Pendente assinatura'}
                     </button>
                     <button
                       onClick={() => {
@@ -2815,6 +3013,13 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   >
                     <FileText size={12} /> Gerar Termo de Renegociação
                   </button>
+                  {!termoAssinado && (
+                    <p className="text-[10px] text-center text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                      {termoAguardandoAssinatura
+                        ? 'Aguardando assinatura do termo. O Confirmar libera automaticamente quando o sistema identificar a assinatura.'
+                        : 'Gere o termo, copie o link e envie ao aluno. Só depois da assinatura o Confirmar é liberado.'}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -2918,9 +3123,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     </button>
                     <button
                       onClick={handleConfirmRenegotiate}
-                      className="px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+                      disabled={!termoAssinado}
+                      className="px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 transition-colors"
+                      title={termoAssinado ? 'Confirmar renegociação' : 'Pendente de assinatura do termo'}
                     >
-                      Sim, confirmo!
+                      {termoAssinado ? 'Sim, confirmo!' : 'Pendente assinatura'}
                     </button>
                   </div>
                 </div>
@@ -3017,6 +3224,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               : undefined,
           }}
           onClose={() => setTermoModal(false)}
+          onTermoGerado={(info) => {
+            markTermoPending(info);
+            setTermoModal(false);
+          }}
         />
       )}
     </div>
