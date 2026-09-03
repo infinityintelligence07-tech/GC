@@ -70,10 +70,19 @@ export function isKaminoPortfolioStudent(student: Student): boolean {
   return true;
 }
 
-/** CONCILIADO quitado à vista / cartão integral — entra na dashboard sem aprovação GC. */
+/**
+ * Contrato IAM quitado à vista / cartão integral, reconhecido pelo GC.
+ *
+ * Vale quando o IAM diz CONCILIADO (entra na dashboard sem aprovação GC) ou
+ * quando o GC já aprovou o contrato (iam_gc_conciliado_at): depois da
+ * aprovação o IAM pode trocar o rótulo (ex.: AJUSTES) e o pull espelha esse
+ * status — o contrato continua quitado e não pode sumir do card Pago nem
+ * voltar para "Em Dia" sem parcela.
+ */
 export function isIamConciliadoQuitadoAvista(student: Student): boolean {
   if (!isIamControlStudent(student)) return false;
-  if (normalizeIamContratoStatus(student.iamControlContratoStatus) !== 'CONCILIADO') return false;
+  const conciliadoNoIam = normalizeIamContratoStatus(student.iamControlContratoStatus) === 'CONCILIADO';
+  if (!conciliadoNoIam && !student.iamGcConciliadoAt) return false;
 
   const sale = Number(student.saleValue ?? 0);
   const down = Number(student.downPayment ?? 0);

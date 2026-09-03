@@ -2277,6 +2277,9 @@ export default function ConciliacaoPage() {
               if (allChangedKeys.has('downPayment') || allChangedKeys.has('entrada')) subTipos.push('Entrada');
               const tituloAlteracao = subTipos.length > 0 ? subTipos.join(' + ') : TIPO_LABEL[group.items[0].tipo];
               const st = group.studentId ? students.find((s) => s.id === group.studentId) : null;
+              // Item aponta para uma ficha que não existe mais (excluída depois de
+              // criado): não há resumo, seleção nem alteração para aplicar.
+              const fichaExcluida = !!group.studentId && !st;
               const jaConciliadoSistema = groupJaAplicadoNoSistema(group.items);
               const temObservacao = groupTemObservacao(group.items);
               const aprovarSoObs = jaConciliadoSistema && temObservacao;
@@ -2355,6 +2358,22 @@ export default function ConciliacaoPage() {
 
                       {/* Resumo do contrato (Total Contratado / Pago / Saldo / Parcelas em aberto) */}
                       {st && <ContractSummaryPanel student={st} conciliacaoItems={group.items} />}
+
+                      {fichaExcluida && (
+                        <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2.5">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <AlertTriangle size={12} className="text-rose-700" />
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-rose-800">
+                              Ficha do aluno não encontrada
+                            </span>
+                          </div>
+                          <p className="text-[12px] leading-relaxed text-rose-900">
+                            A ficha de {group.studentName} vinculada a este item foi excluída depois que ele entrou na fila
+                            {group.items[0]?.resumo ? ` (${group.items[0].resumo})` : ''}. Não há contrato para consultar nem
+                            alteração para aplicar — use <strong>Excluir</strong> para retirar o item da fila.
+                          </p>
+                        </div>
+                      )}
 
                       {/* Recompra: seleção do treinamento de origem */}
                       {isRecompraGrupo && st && (
@@ -2475,6 +2494,13 @@ export default function ConciliacaoPage() {
                         const isAprovado = group.items[0].status === 'aprovado';
                         if (isRecompraGrupo) {
                           const temSelecao = !!(recompraSelects[group.key] ?? '').trim();
+                          if (fichaExcluida) {
+                            return (
+                              <p className="text-[10px] text-center text-rose-700 px-1 leading-tight">
+                                Ficha excluída — nada a vincular
+                              </p>
+                            );
+                          }
                           return canConciliarEdit ? (
                             <>
                               <button
