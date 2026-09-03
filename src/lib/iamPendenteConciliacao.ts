@@ -23,6 +23,39 @@ export function normalizeIamContratoStatus(status?: string | null): string {
     .replace(/\s+/g, '_');
 }
 
+export type IamGcCarteira = 'iam' | 'liberty';
+
+/**
+ * Carteira do contrato IAM pelo treinamento — espelho de
+ * public.product_is_liberty_gc: Liberty, Liberty Begin, BEGIN → Liberty;
+ * demais treinamentos → IAM.
+ */
+export function isLibertyGcProduct(product?: string | null): boolean {
+  const p = String(product ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+  if (!p) return false;
+  return (
+    p === 'liberty' ||
+    p === 'begin' ||
+    p.startsWith('liberty ') ||
+    p.endsWith(' liberty') ||
+    p.includes(' liberty ') ||
+    p.includes('liberty begin')
+  );
+}
+
+export function resolveIamGcCarteira(product?: string | null): IamGcCarteira {
+  return isLibertyGcProduct(product) ? 'liberty' : 'iam';
+}
+
+export const IAM_GC_CARTEIRA_LABEL: Record<IamGcCarteira, string> = {
+  iam: 'IAM',
+  liberty: 'Liberty',
+};
+
 /** Aluno importado/sincronizado pelo IAM Control. */
 export function isIamControlStudent(student: Student): boolean {
   return student.iamControlAlunoId != null && Number.isFinite(student.iamControlAlunoId);

@@ -23,7 +23,12 @@ import type { CaseNoteAttachment } from '@/types';
 import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
 import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
 import { isCancelamentoEspelhoItem, groupBlocksEspelhoConciliacao, isCancelamentoAguardandoFinalizacaoGc, isCancelamentoProntoConciliarGc } from '@/lib/cancelamentoGcConciliacao';
-import { buildIamGcApprovalStudentPatch } from '@/lib/iamPendenteConciliacao';
+import {
+  buildIamGcApprovalStudentPatch,
+  IAM_GC_CARTEIRA_LABEL,
+  resolveIamGcCarteira,
+  type IamGcCarteira,
+} from '@/lib/iamPendenteConciliacao';
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -912,6 +917,20 @@ function NegativarRow({ valor, multa, pago }: { valor: number; multa: number; pa
   );
 }
 
+// ─── Carteira (Liberty x IAM) de um item IAM CONTROL → GC ────────────────────
+// Usa o treinamento da ficha do aluno; se a ficha não estiver carregada, o
+// produto gravado no item quando entrou na fila.
+function resolveItemIamCarteira(i: ConciliacaoItem, students: Student[]): IamGcCarteira {
+  const st = i.studentId ? students.find((s) => s.id === i.studentId) : undefined;
+  const product = st?.product ?? String((i.depois as Record<string, unknown>)?.product ?? '');
+  return resolveIamGcCarteira(product);
+}
+
+const IAM_CARTEIRA_BADGE: Record<IamGcCarteira, string> = {
+  iam: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200',
+  liberty: 'bg-sky-50 text-sky-700 border border-sky-200',
+};
+
 // ─── Painel "Resumo do Contrato" ──────────────────────────────────────────────
 // Bloco didático colocado no topo do card de conciliação, com as informações
 // que o revisor precisa SEMPRE ver antes de decidir: total contratado, total
@@ -1187,6 +1206,8 @@ export default function ConciliacaoPage() {
   const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'planilha-conferencia' | 'iam-control-gc' | 'cancelamentos-gc' | 'recompras-gc'>('menu');
   const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'renda_extra' | 'historico' | 'erros' | 'iam_pendentes' | 'recompras'>('ajuste_financeiro');
   const [cancelGcFilter, setCancelGcFilter] = useState<'todos' | 'aguardando_finalizacao' | 'prontos_conciliar'>('prontos_conciliar');
+  // IAM CONTROL → GC: carteira do contrato pelo treinamento (Liberty x IAM).
+  const [iamCarteiraFilter, setIamCarteiraFilter] = useState<'todas' | IamGcCarteira>('todas');
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<ConciliacaoGrupoFilter>('todos');
   const [erroStatusFilter, setErroStatusFilter] = useState<'pendente' | 'resolvido' | 'ignorado' | 'todos'>('pendente');
@@ -1262,8 +1283,29 @@ export default function ConciliacaoPage() {
           return isCancelamentoAguardandoFinalizacaoGc(i, st, items);
         }
         return isCancelamentoProntoConciliarGc(i, st, items);
+      })
+      .filter((i) => {
+        if (flow !== 'iam-control-gc' || i.tipo !== 'iam_pendente' || iamCarteiraFilter === 'todas') return true;
+        return resolveItemIamCarteira(i, students) === iamCarteiraFilter;
       });
-  }, [items, tab, tipoFilter, search, flow, cancelGcFilter, students]);
+  }, [items, tab, tipoFilter, search, flow, cancelGcFilter, iamCarteiraFilter, students]);
+
+  // Contagem por aluno distinto em cada carteira (fila IAM CONTROL → GC).
+  const iamCarteiraCounts = useMemo(() => {
+    const keys: Record<'todas' | IamGcCarteira, Set<string>> = {
+      todas: new Set(),
+      iam: new Set(),
+      liberty: new Set(),
+    };
+    for (const i of items) {
+      if (i.tipo !== 'iam_pendente') continue;
+      if (i.status !== 'pendente' && i.status !== 'aprovado') continue;
+      const key = i.studentId ?? i.studentName;
+      keys.todas.add(key);
+      keys[resolveItemIamCarteira(i, students)].add(key);
+    }
+    return { todas: keys.todas.size, iam: keys.iam.size, liberty: keys.liberty.size };
+  }, [items, students]);
 
   const filteredErrors = useMemo(() => {
     return importErrors
@@ -2110,6 +2152,43 @@ export default function ConciliacaoPage() {
             <option value="todos">Todos</option>
           </select>
         )}
+        {flow === 'iam-control-gc' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIamCarteiraFilter('todas')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                iamCarteiraFilter === 'todas'
+                  ? 'bg-card text-foreground border-border shadow-sm'
+                  : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+              }`}
+            >
+              Todos ({iamCarteiraCounts.todas})
+            </button>
+            <button
+              type="button"
+              onClick={() => setIamCarteiraFilter('iam')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                iamCarteiraFilter === 'iam'
+                  ? 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300 shadow-sm'
+                  : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+              }`}
+            >
+              IAM ({iamCarteiraCounts.iam})
+            </button>
+            <button
+              type="button"
+              onClick={() => setIamCarteiraFilter('liberty')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                iamCarteiraFilter === 'liberty'
+                  ? 'bg-sky-100 text-sky-800 border-sky-300 shadow-sm'
+                  : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+              }`}
+            >
+              Liberty ({iamCarteiraCounts.liberty})
+            </button>
+          </div>
+        )}
         {flow === 'cancelamentos-gc' && tab === 'cancelamentos' && (
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -2195,6 +2274,9 @@ export default function ConciliacaoPage() {
               const aprovarSoObs = jaConciliadoSistema && temObservacao;
               const isEspelhoCancel = groupBlocksEspelhoConciliacao(group.items, st ?? undefined, items);
               const isRecompraGrupo = group.items.every((i) => i.tipo === 'recompra_vinculo');
+              const iamCarteira = group.items.every((i) => i.tipo === 'iam_pendente')
+                ? resolveItemIamCarteira(group.items[0], students)
+                : null;
               // Opções de treinamento: contratos do próprio aluno primeiro, depois o catálogo
               let recompraOpcoes: { proprios: string[]; catalogo: string[] } = { proprios: [], catalogo: [] };
               if (isRecompraGrupo && st) {
@@ -2219,6 +2301,14 @@ export default function ConciliacaoPage() {
                       <div className="flex items-center gap-2 flex-wrap mb-2">
                         <UserIcon size={16} className="text-primary shrink-0" />
                         <h3 className="text-base font-bold text-foreground">{group.studentName}</h3>
+                        {iamCarteira && (
+                          <span
+                            className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${IAM_CARTEIRA_BADGE[iamCarteira]}`}
+                            title={`Carteira ${IAM_GC_CARTEIRA_LABEL[iamCarteira]} — definida pelo treinamento${st?.product ? `: ${st.product}` : ''}`}
+                          >
+                            {IAM_GC_CARTEIRA_LABEL[iamCarteira]}
+                          </span>
+                        )}
                         {group.ac && <span className="text-[11px] text-muted-foreground">• AC: {group.ac}</span>}
                         {group.items.length > 1 && (
                           <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary">
