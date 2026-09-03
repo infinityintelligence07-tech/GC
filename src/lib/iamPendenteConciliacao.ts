@@ -1,4 +1,5 @@
 import type { ConciliacaoItem, Student, Installment, StudentStatus } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 import { createConciliacaoItemDb } from '@/lib/supabaseMutations';
 
 /** Status IAM que exigem aprovação na Conciliação GC antes de entrar na dashboard. */
@@ -150,16 +151,60 @@ function iamConciliacaoResumo(student: Student): string {
   return `IAM Control — ${iamStatus.replace(/_/g, ' ')}`;
 }
 
+/**
+ * Reconfere no banco, na hora de inserir, quais candidatos ainda precisam de
+ * item: o snapshot do reload pode ser velho (students e conciliacao_items são
+ * buscados em paralelo — o item já aparece conciliado e a ficha ainda não
+ * mostra iam_gc_conciliado_at), e outra aba pode ter criado o item.
+ */
+async function fetchIamPendenteBloqueadosNoBanco(studentIds: string[]): Promise<Set<string>> {
+  const bloqueados = new Set<string>();
+  if (studentIds.length === 0) return bloqueados;
+  const [aprovadosRes, abertosRes] = await Promise.all([
+    supabase.from('students').select('id').in('id', studentIds).not('iam_gc_conciliado_at', 'is', null),
+    supabase
+      .from('conciliacao_items')
+      .select('student_id')
+      .eq('tipo', 'iam_pendente')
+      .in('status', ['pendente', 'aprovado'])
+      .in('student_id', studentIds),
+  ]);
+  if (aprovadosRes.error) throw aprovadosRes.error;
+  if (abertosRes.error) throw abertosRes.error;
+  for (const r of aprovadosRes.data ?? []) bloqueados.add(String(r.id));
+  for (const r of abertosRes.data ?? []) if (r.student_id) bloqueados.add(String(r.student_id));
+  return bloqueados;
+}
+
+/** Erros esperados quando o banco já protegeu a fila (trigger / índice único). */
+function isIamPendenteGuardError(e: unknown): boolean {
+  const err = e as { code?: string; message?: string } | null;
+  const msg = String(err?.message ?? '');
+  return err?.code === '23505' || msg.includes('IAM_PENDENTE_JA_APROVADO') || msg.includes('conciliacao_items_iam_pendente_aberto_uidx');
+}
+
 /** Cria item na fila Conciliação > IAM CONTROL → GC. */
 export async function ensureIamPendenteConciliacaoItems(
   students: Student[],
   items: ConciliacaoItem[],
 ): Promise<ConciliacaoItem[]> {
+  const candidatos = students.filter(
+    (s) => needsIamGcConciliacaoApproval(s) && !hasOpenIamPendenteItem(s.id, items),
+  );
+  if (candidatos.length === 0) return items;
+
+  let bloqueados = new Set<string>();
+  try {
+    bloqueados = await fetchIamPendenteBloqueadosNoBanco(candidatos.map((s) => s.id));
+  } catch (e) {
+    console.error('[iam_pendente] falha ao reconferir fila no banco; adiando criação', e);
+    return items;
+  }
+
   const created: ConciliacaoItem[] = [];
-  for (const s of students) {
-    if (!needsIamGcConciliacaoApproval(s)) continue;
+  for (const s of candidatos) {
+    if (bloqueados.has(s.id)) continue;
     const iamStatus = normalizeIamContratoStatus(s.iamControlContratoStatus);
-    if (hasOpenIamPendenteItem(s.id, items)) continue;
     // Item já conciliado não bloqueia: se o aluno voltou a precisar de aprovação
     // é porque o IAM reabriu uma pendência (iam_gc_conciliado_at foi zerado pelo
     // sync), e o contrato precisa aparecer de novo na fila IAM CONTROL → GC.
@@ -187,6 +232,9 @@ export async function ensureIamPendenteConciliacaoItems(
       });
       created.push(row);
     } catch (e) {
+      // Banco já protegeu (aluno aprovado entre o reload e o insert, ou item
+      // criado por outra aba): não é erro.
+      if (isIamPendenteGuardError(e)) continue;
       console.error('[iam_pendente] falha ao criar item de conciliação', s.id, e);
     }
   }

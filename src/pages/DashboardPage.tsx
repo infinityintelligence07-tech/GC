@@ -1507,7 +1507,19 @@ export default function DashboardPage() {
             <span className="sm:hidden">{formatCurrencyCompact(carteiraTotalValue)}</span>
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
-            <p className="text-[11px] text-muted-foreground truncate">{carteiraTotalAlunos} alunos</p>
+            <p
+              className="text-[11px] text-muted-foreground truncate"
+              title={
+                solicCancQuitados > 0
+                  ? `${carteiraTotalAlunos} alunos com parcela em aberto + ${solicCancQuitados} com contrato quitado aguardando fechamento do cancelamento (R$ 0,00). Soma dos cards de status: ${carteiraTotalAlunos + solicCancQuitados}.`
+                  : undefined
+              }
+            >
+              {carteiraTotalAlunos} alunos
+              {solicCancQuitados > 0 && (
+                <span className="text-muted-foreground/80"> + {solicCancQuitados} quitados em cancelamento</span>
+              )}
+            </p>
             <p className="text-[11px] font-semibold text-primary shrink-0">100%</p>
           </div>
         </div>
