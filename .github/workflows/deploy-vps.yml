@@ -42,7 +42,12 @@ jobs:
       - name: Empacotar dist
         run: tar -C dist -czf gc-dist.tar.gz .
 
+      # O runner troca de IP a cada execução e a conexão com a VPS às vezes
+      # estoura o timeout padrão de 30s. Uma segunda tentativa evita perder o
+      # build inteiro por causa de um soluço de rede.
       - name: Enviar pacote
+        id: scp
+        continue-on-error: true
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -50,6 +55,20 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
           passphrase: ${{ secrets.VPS_SSH_KEY_PASSPHRASE }}
+          timeout: 120s
+          source: gc-dist.tar.gz
+          target: /tmp
+
+      - name: Enviar pacote (2ª tentativa)
+        if: steps.scp.outcome == 'failure'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          passphrase: ${{ secrets.VPS_SSH_KEY_PASSPHRASE }}
+          timeout: 120s
           source: gc-dist.tar.gz
           target: /tmp
 
@@ -61,6 +80,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
           passphrase: ${{ secrets.VPS_SSH_KEY_PASSPHRASE }}
+          timeout: 120s
           script_stop: true
           command_timeout: 10m
           script: |
