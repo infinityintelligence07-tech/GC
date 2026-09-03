@@ -15,6 +15,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import DocumentRelationMultiSelect from '@/components/ui/DocumentRelationMultiSelect';
 import { useAppStore } from '@/store/useAppStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { canEditTab, canViewTab } from '@/types';
@@ -35,6 +36,7 @@ import {
   updateManagedDocument,
   type ManagedDocument,
   type ManagedDocumentKind,
+  type DocumentRelation,
 } from '@/lib/managedDocuments';
 
 type EditorMode = 'create' | 'edit' | 'preview';
@@ -75,6 +77,7 @@ export default function DocumentosPage() {
   const [formName, setFormName] = useState('');
   const [formKind, setFormKind] = useState<ManagedDocumentKind>('termo');
   const [formContent, setFormContent] = useState('');
+  const [formRelatedTo, setFormRelatedTo] = useState<DocumentRelation[]>([]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -104,6 +107,7 @@ export default function DocumentosPage() {
     setFormName('');
     setFormKind('termo');
     setFormContent('');
+    setFormRelatedTo([]);
     setEditorMode('create');
     setShowList(true);
   };
@@ -113,6 +117,7 @@ export default function DocumentosPage() {
     setFormName(doc.name);
     setFormKind(doc.kind);
     setFormContent(doc.content);
+    setFormRelatedTo(doc.relatedTo ?? []);
     setEditorMode('edit');
   };
 
@@ -121,6 +126,7 @@ export default function DocumentosPage() {
     setFormName(doc.name);
     setFormKind(doc.kind);
     setFormContent(doc.content);
+    setFormRelatedTo(doc.relatedTo ?? []);
     setEditorMode('preview');
   };
 
@@ -142,13 +148,20 @@ export default function DocumentosPage() {
     }
     const by = currentUser?.name;
     if (editorMode === 'create') {
-      createManagedDocument(companyId, { name, kind: formKind, content: formContent, updatedByName: by });
+      createManagedDocument(companyId, {
+        name,
+        kind: formKind,
+        content: formContent,
+        relatedTo: formRelatedTo,
+        updatedByName: by,
+      });
       toast.success('Documento criado.');
     } else if (editing) {
       updateManagedDocument(companyId, editing.id, {
         name,
         kind: formKind,
         content: formContent,
+        relatedTo: formRelatedTo,
         updatedByName: by,
       });
       toast.success('Documento atualizado.');
@@ -491,6 +504,12 @@ export default function DocumentosPage() {
                   </select>
                 </div>
               </div>
+
+              <DocumentRelationMultiSelect
+                selected={formRelatedTo}
+                onChange={setFormRelatedTo}
+                disabled={editorMode === 'preview'}
+              />
 
               <div>
                 <div className="flex items-center justify-between gap-2 mb-1">

@@ -642,6 +642,9 @@ export default function StudentModal({ student, onClose }: Props) {
                         : '— Automático (esteira) —'}
                     </option>
                   )}
+                  {/* Sem esta opção o <select> exibe o 1º AC da lista quando ac = '',
+                      fazendo parecer que a ficha tem assessor quando não tem. */}
+                  {student && !form.ac && <option value="">— Sem assessor —</option>}
                   {acs.filter((g) => g.active).map((g) => (
                     <option key={g.id} value={g.name}>{g.name}</option>
                   ))}

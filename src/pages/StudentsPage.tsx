@@ -352,6 +352,13 @@ export default function StudentsPage() {
   })();
 
   const paidCount = (s: Student) => (s.installments || []).filter((i) => i.paid).length;
+  // Contrato quitado à vista / cartão integral: sync IAM entrega a venda inteira
+  // como entrada e zero parcelas. Sem este caso a linha mostra "0/0" e "R$ 0,00".
+  const isQuitadoAvistaSemParcelas = (s: Student) =>
+    (s.installments || []).length === 0 &&
+    (s.totalInstallments || 0) === 0 &&
+    (s.saleValue || 0) > 0 &&
+    (s.downPayment || 0) >= (s.saleValue || 0) - 0.01;
 
   // Detecta se algum filtro está ativo. Quando nenhum filtro está ativo,
   // exporta TODOS os alunos (inclusive Pagos / Cancelados / Renda Extra).
@@ -739,7 +746,11 @@ export default function StudentsPage() {
                           );
                         })()}
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{student.ac}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {student.ac?.trim() ? student.ac : (
+                          <span className="italic text-muted-foreground/60" title="Ficha sem assessor vinculado">— sem assessor —</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 max-w-[12rem]">
                         <div className="flex flex-col gap-1 items-start min-w-0">
                           {(() => {
@@ -818,6 +829,13 @@ export default function StudentsPage() {
                       <td className="px-4 py-3">
                         {isMirrorRow ? (
                           <span className="text-xs text-muted-foreground">—</span>
+                        ) : isQuitadoAvistaSemParcelas(student) ? (
+                          <span
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap"
+                            title="Contrato quitado à vista / cartão integral — sem parcelas a receber"
+                          >
+                            À vista
+                          </span>
                         ) : (
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-muted-foreground">{paidCount(student)}/{student.totalInstallments}</span>
@@ -834,6 +852,11 @@ export default function StudentsPage() {
                       <td className="px-4 py-3 text-xs font-medium text-foreground">
                         {isMirrorRow ? (
                           <span className="whitespace-nowrap text-muted-foreground">{formatCurrency(student.saleValue || 0)}</span>
+                        ) : isQuitadoAvistaSemParcelas(student) ? (
+                          <span className="whitespace-nowrap" title="Valor pago à vista (entrada = valor da venda)">
+                            {formatCurrency(student.downPayment || 0)}
+                            <span className="ml-1 text-[9px] font-medium text-muted-foreground">(pago)</span>
+                          </span>
                         ) : (() => {
                           const { value, varied } = getDisplayInstallmentValue(student);
                           return (

@@ -9,6 +9,36 @@ export const DOCUMENT_KIND_LABELS: Record<ManagedDocumentKind, string> = {
   outro: 'Outro',
 };
 
+/** Contextos de uso aos quais um documento pode estar relacionado. */
+export type DocumentRelation =
+  | 'cancelamento_com_multa'
+  | 'cancelamento_sem_multa'
+  | 'renegociacao'
+  | 'contrato'
+  | 'aditivo'
+  | 'reversao_cancelamento'
+  | 'quitacao';
+
+export const DOCUMENT_RELATIONS: readonly DocumentRelation[] = [
+  'cancelamento_com_multa',
+  'cancelamento_sem_multa',
+  'renegociacao',
+  'contrato',
+  'aditivo',
+  'reversao_cancelamento',
+  'quitacao',
+];
+
+export const DOCUMENT_RELATION_LABELS: Record<DocumentRelation, string> = {
+  cancelamento_com_multa: 'Cancelamento com multa',
+  cancelamento_sem_multa: 'Cancelamento sem multa',
+  renegociacao: 'Renegociação',
+  contrato: 'Contrato',
+  aditivo: 'Aditivo',
+  reversao_cancelamento: 'Reversão de cancelamento',
+  quitacao: 'Quitação',
+};
+
 export interface ManagedDocument {
   id: string;
   name: string;
@@ -21,6 +51,8 @@ export interface ManagedDocument {
   updatedByName?: string;
   /** Chave de modelo embutido do app (permite resetar para o padrão). */
   builtInKey?: string;
+  /** Contextos de uso relacionados a este documento (ex.: cancelamento com multa). */
+  relatedTo?: DocumentRelation[];
   companyId: string;
 }
 
@@ -55,6 +87,12 @@ export function extractTemplateVariables(content: string): string[] {
   }
   return [...found];
 }
+
+const BUILTIN_RELATED: Partial<Record<string, DocumentRelation[]>> = {
+  termo_cancelamento_com_multa: ['cancelamento_com_multa'],
+  termo_cancelamento_sem_multa: ['cancelamento_sem_multa'],
+  termo_renegociacao: ['renegociacao'],
+};
 
 const BUILTIN_TEMPLATES: Array<{
   key: string;
@@ -223,10 +261,19 @@ export function listManagedDocuments(companyId: string): ManagedDocument[] {
       updatedAt: stamp,
       updatedByName: 'Sistema',
       builtInKey: t.key,
+      relatedTo: BUILTIN_RELATED[t.key],
       companyId: cid,
     });
     changed = true;
   }
+
+  docs = docs.map((d) => {
+    if (!d.builtInKey || d.relatedTo?.length) return d;
+    const related = BUILTIN_RELATED[d.builtInKey];
+    if (!related?.length) return d;
+    changed = true;
+    return { ...d, relatedTo: related };
+  });
 
   if (changed) writeRaw(cid, docs);
   return docs.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -242,6 +289,7 @@ export function createManagedDocument(
     name: string;
     kind: ManagedDocumentKind;
     content: string;
+    relatedTo?: DocumentRelation[];
     updatedByName?: string;
   },
 ): ManagedDocument {
@@ -254,6 +302,7 @@ export function createManagedDocument(
     kind: input.kind,
     version: 1,
     content: input.content,
+    relatedTo: input.relatedTo?.length ? [...input.relatedTo] : undefined,
     createdAt: stamp,
     updatedAt: stamp,
     updatedByName: input.updatedByName,
@@ -266,7 +315,7 @@ export function createManagedDocument(
 export function updateManagedDocument(
   companyId: string,
   id: string,
-  patch: Partial<Pick<ManagedDocument, 'name' | 'kind' | 'content' | 'updatedByName'>>,
+  patch: Partial<Pick<ManagedDocument, 'name' | 'kind' | 'content' | 'relatedTo' | 'updatedByName'>>,
   opts?: { bumpVersion?: boolean },
 ): ManagedDocument | null {
   const cid = companyId || 'default';
@@ -279,6 +328,12 @@ export function updateManagedDocument(
     name: patch.name?.trim() || prev.name,
     kind: patch.kind ?? prev.kind,
     content: patch.content ?? prev.content,
+    relatedTo:
+      patch.relatedTo !== undefined
+        ? patch.relatedTo.length
+          ? [...patch.relatedTo]
+          : undefined
+        : prev.relatedTo,
     updatedAt: nowIso(),
     updatedByName: patch.updatedByName ?? prev.updatedByName,
     version: opts?.bumpVersion === false ? prev.version : prev.version + 1,
@@ -300,6 +355,7 @@ export function duplicateManagedDocument(
     name: `${src.name} (cópia)`,
     kind: src.kind,
     content: src.content,
+    relatedTo: src.relatedTo,
     updatedByName,
   });
 }
@@ -357,7 +413,10 @@ export function exportDocumentTxt(doc: ManagedDocument): string {
 export function parseImportPayload(
   text: string,
   fileName: string,
-): { docs: Array<{ name: string; kind: ManagedDocumentKind; content: string }>; error?: string } {
+): {
+  docs: Array<{ name: string; kind: ManagedDocumentKind; content: string; relatedTo?: DocumentRelation[] }>;
+  error?: string;
+} {
   const trimmed = text.trim();
   if (!trimmed) return { docs: [], error: 'Arquivo vazio.' };
 
@@ -379,6 +438,11 @@ export function parseImportPayload(
             ? item.kind
             : 'outro') as ManagedDocumentKind,
           content: String(item.content ?? ''),
+          relatedTo: Array.isArray(item.relatedTo)
+            ? item.relatedTo.filter((id: unknown): id is DocumentRelation =>
+                typeof id === 'string' && (DOCUMENT_RELATIONS as readonly string[]).includes(id),
+              )
+            : undefined,
         }))
         .filter((d: { content: string }) => d.content.length > 0);
       if (!docs.length) return { docs: [], error: 'Nenhum documento válido no JSON.' };
