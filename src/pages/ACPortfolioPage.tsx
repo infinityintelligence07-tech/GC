@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, calculateChurnRisk, calculateRendaExtraMetrics, isRecompraOuFundoParcela } from '@/store/useAppStore';
+import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, calculateChurnRisk, calculateRendaExtraMetrics } from '@/store/useAppStore';
 import { Student, StudentStatus, MOTIVOS_CANCELAMENTO, Notification } from '@/types';
 import StudentModal from '@/components/modals/StudentModal';
 import StudentViewModal from '@/components/modals/StudentViewModal';
@@ -21,6 +21,7 @@ import {
   isSolicitacaoCancelamento,
   isStudentHiddenFromAcPortfolio,
   isStudentInAcPortfolio,
+  isStudentFullyPaid,
   isVisibleInAcPortfolio,
   hasActiveCancellationCase,
   matchesCancelamentoFilter,
@@ -35,6 +36,7 @@ import {
   studentIdsFromRevertidosCases,
 } from '@/lib/cancellationIndicators';
 import { statusColors } from '@/lib/statusColors';
+import { NaoSomaBadge } from '@/components/NaoSomaBadge';
 import { getTodayBrasilia, calcularDiasVencido, dueDateForDisplay } from '@/lib/brasiliaDate';
 import { getDisplayInstallmentValue, normalizeSearch } from '@/lib/utils';
 import { getTagStyle } from '@/lib/tagColors';
@@ -668,29 +670,21 @@ export default function ACPortfolioPage() {
         .reduce((a, i) => a + i.value, 0);
     }, 0);
 
-  const _todayMs = (() => { const d = getTodayBrasilia(); d.setHours(0,0,0,0); return d.getTime(); })();
-  const sumOverdue = (arr: Student[]) =>
-    arr.reduce((acc, s) => {
-      if (s.statusCancelamento === 'cancelado') return acc;
-      if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
-      return acc + s.installments
-        .filter((i) =>
-          !i.paid &&
-          !isRecompraOuFundoParcela(i, studentTags) &&
-          _instInRange(i) &&
-          new Date(i.dueDate + 'T00:00:00').getTime() < _todayMs,
-        )
-        .reduce((a, i) => a + i.value, 0);
-    }, 0);
-
+  // Todo card de status soma o saldo em aberto inteiro (vencido + a vencer),
+  // na mesma régua da Carteira Total. Enquanto Vencido 1/2 e Negativado
+  // mostravam só a fatia já vencida, as parcelas futuras desses alunos
+  // entravam no total e não apareciam em card nenhum.
   const emDiaValue = sumUnpaid(emDia);
   const alunosNovosValue = sumUnpaid(alunosNovos);
-  const v1Value = sumOverdue(vencido1);
-  const v2Value = sumOverdue(vencido2);
-  // À Negativar: considera TODO o saldo em aberto (vencidas + a vencer)
+  const v1Value = sumUnpaid(vencido1);
+  const v2Value = sumUnpaid(vencido2);
   const anValue = sumUnpaid(aNegativar);
-  const negValue = sumOverdue(negativado);
+  const negValue = sumUnpaid(negativado);
   const solicCancValue = sumUnpaid(solicitacaoCancelamento);
+  // Quitado no funil de cancelamento continua neste card mas some da Carteira
+  // Total, que só conta quem tem parcela em aberto. É a diferença entre a soma
+  // dos cards e o total.
+  const solicCancQuitados = solicitacaoCancelamento.filter(isStudentFullyPaid).length;
 
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
   const tagKpis = computeTagKpis(kpiStudentsScoped, studentTags, _instInRange);
@@ -939,9 +933,6 @@ export default function ACPortfolioPage() {
                   </div>
                 );
               }
-              const pctBase = aVencer + pago;
-              const pctAV = pctBase > 0 ? ((aVencer / pctBase) * 100).toFixed(1) : '0.0';
-              const pctPg = pctBase > 0 ? ((pago / pctBase) * 100).toFixed(1) : '0.0';
               return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="kpi-fit rounded-xl border border-amber-200/60 bg-amber-50/60 p-2 min-w-0">
@@ -949,14 +940,13 @@ export default function ACPortfolioPage() {
                     <p className="kpi-value-fit text-amber-700 mt-0.5" title={formatCurrency(aVencer)}>
                       {formatCurrency(aVencer)}
                     </p>
-                    <p className="text-[10px] font-semibold text-amber-700 mt-0">{pctAV}%</p>
                   </div>
                   <div className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0">
                     <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Pago no período</p>
                     <p className="kpi-value-fit text-emerald-700 mt-0.5" title={formatCurrency(pago)}>
                       {formatCurrency(pago)}
                     </p>
-                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">{pctPg}% · por data de pagamento</p>
+                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">por data de pagamento</p>
                   </div>
                 </div>
               );
@@ -1106,9 +1096,12 @@ export default function ACPortfolioPage() {
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Em Dia + Novos</p>
-            <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos' ? null : 'emdia_novos'); }} className="text-muted-foreground/50 hover:text-muted-foreground shrink-0">
-              <Info size={14} />
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <NaoSomaBadge title='Composição dos cards "Em Dia" e "Alunos Novos" ao lado. Somar os três conta os mesmos alunos duas vezes.' />
+              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos' ? null : 'emdia_novos'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
+                <Info size={14} />
+              </button>
+            </div>
           </div>
           <p className="kpi-value text-teal-600" title={formatCurrency(emDiaValue + alunosNovosValue)}>
             <span className="hidden sm:inline">{formatCurrency(emDiaValue + alunosNovosValue)}</span>
@@ -1257,12 +1250,18 @@ export default function ACPortfolioPage() {
             <span className="sm:hidden">{formatCurrencyCompact(solicCancValue)}</span>
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
-            <p className="text-[11px] text-muted-foreground truncate">{solicitacaoCancelamento.length} alunos</p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {solicitacaoCancelamento.length} alunos
+              {solicCancQuitados > 0 && ` · ${solicCancQuitados} quitados`}
+            </p>
             <p className="text-[11px] font-semibold text-fuchsia-600 shrink-0">{pctSolic}%</p>
           </div>
           {infoStatus === 'solic' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
-              <p>Alunos deste assessor que solicitaram cancelamento. O valor sai do status anterior (Em Dia/Vencido/etc.) e passa a compor este indicador até reversão ou cancelamento definitivo.</p>
+              <p>
+                Alunos deste assessor que solicitaram cancelamento. O valor sai do status anterior (Em Dia/Vencido/etc.) e passa a compor este indicador até reversão ou cancelamento definitivo.
+                {solicCancQuitados > 0 && ` ${solicCancQuitados} já estão com o contrato quitado: seguem aqui até o caso fechar, somam R$ 0,00 no valor e não entram na Carteira Total.`}
+              </p>
             </div>
           )}
         </div>
@@ -1322,9 +1321,12 @@ export default function ACPortfolioPage() {
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Revertidos</p>
-            <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'revertidos' ? null : 'revertidos'); }} className="text-muted-foreground/50 hover:text-muted-foreground shrink-0">
-              <Info size={14} />
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <NaoSomaBadge title="Conta pedidos de cancelamento revertidos, não alunos da carteira. Unidade diferente dos demais cards." />
+              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'revertidos' ? null : 'revertidos'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
+                <Info size={14} />
+              </button>
+            </div>
           </div>
           <p className="kpi-value text-emerald-600" title={formatCurrency(revertidosValue)}>
             <span className="hidden sm:inline">{formatCurrency(revertidosValue)}</span>
@@ -1360,7 +1362,10 @@ export default function ACPortfolioPage() {
             }}
             className={`h-full min-w-0 cursor-pointer rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 ${tagKpis[0].color} transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-500/30 ${kpiCardFilter === 'boletos_antecipados' ? 'ring-2 ring-indigo-500/40' : ''}`}
           >
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate mb-2">{tagKpis[0].label}</p>
+            <div className="flex items-start justify-between mb-2 gap-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">{tagKpis[0].label}</p>
+              <NaoSomaBadge title="Recorte por tag: estes alunos e valores já estão contados nos cards de status (Em Dia, Vencido, À Negativar)." />
+            </div>
             <p className={`kpi-value ${tagKpis[0].text}`} title={formatCurrency(tagKpis[0].value)}>
               <span className="hidden sm:inline">{formatCurrency(tagKpis[0].value)}</span>
               <span className="sm:hidden">{formatCurrencyCompact(tagKpis[0].value)}</span>

@@ -1,5 +1,6 @@
 import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, getInstallmentFinancialValueExport } from '@/store/useAppStore';
 import ACRankingCard from '@/components/ui/ACRankingCard';
+import { NaoSomaBadge } from '@/components/NaoSomaBadge';
 import ReversalRankingMirror from '@/components/ui/ReversalRankingMirror';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 import DashDateFilter, { DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
@@ -48,20 +49,6 @@ const STATUS_COLORS: Record<string, string> = {
   'Negativado': '#9f1239',
   'Pago': '#14b8a6',
 };
-
-// Nem todo card é uma fatia da carteira: alguns recortam por tag, outros
-// repetem cards vizinhos e outros contam pedidos em vez de alunos. Somar todos
-// dá um total inflado, então os que não entram na conta vêm marcados.
-function NaoSomaBadge({ title }: { title: string }) {
-  return (
-    <span
-      title={title}
-      className="shrink-0 rounded border border-border bg-muted px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-muted-foreground"
-    >
-      não soma
-    </span>
-  );
-}
 
 export default function DashboardPage() {
   const { students, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals } = useAppStore();
@@ -1320,9 +1307,6 @@ export default function DashboardPage() {
                 );
               }
 
-              const pctBase = aVencer + pago;
-              const pctAV = pctBase > 0 ? ((aVencer / pctBase) * 100).toFixed(1) : '0.0';
-              const pctPg = pctBase > 0 ? ((pago / pctBase) * 100).toFixed(1) : '0.0';
               return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="kpi-fit rounded-xl border border-amber-200/60 bg-amber-50/60 p-2 min-w-0">
@@ -1330,14 +1314,12 @@ export default function DashboardPage() {
                     <p className="kpi-value-fit text-amber-700 mt-0.5" title={kaminoTotalsPending ? 'Carregando totais Kamino…' : formatCurrency(aVencer)}>
                       {kaminoTotalsPending ? '…' : formatCurrency(aVencer)}
                     </p>
-                    <p className="text-[10px] font-semibold text-amber-700 mt-0">{kaminoTotalsPending ? '—' : `${pctAV}%`}</p>
                   </div>
                   <div className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0">
                     <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Pago</p>
                     <p className="kpi-value-fit text-emerald-700 mt-0.5" title={kaminoTotalsPending ? 'Carregando totais Kamino…' : formatCurrency(pago)}>
                       {kaminoTotalsPending ? '…' : formatCurrency(pago)}
                     </p>
-                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">{kaminoTotalsPending ? '—' : `${pctPg}%`}</p>
                   </div>
                 </div>
               );
