@@ -3,7 +3,7 @@
 // Importação de pagamentos do Kamino (Erros para revisar).
 
 import { useMemo, useState, useEffect } from 'react';
-import { CheckCircle2, Search, FileSpreadsheet, ScrollText, User as UserIcon, Calendar, ArrowRight, ArrowLeft, Upload, AlertTriangle, XCircle, Trash2, Loader2, Wallet, History as HistoryIcon, Ban, ThumbsUp, Pencil, Check, X as XIcon, Settings2, FileText, Eye, DollarSign, Cloud, Clock } from 'lucide-react';
+import { CheckCircle2, Search, FileSpreadsheet, ScrollText, User as UserIcon, Calendar, ArrowRight, ArrowLeft, Upload, AlertTriangle, XCircle, Trash2, Loader2, Wallet, History as HistoryIcon, Ban, ThumbsUp, Pencil, Check, X as XIcon, Settings2, FileText, Eye, DollarSign, Cloud, Clock, FileUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useConciliacaoStore, notifyConciliacaoGrupo } from '@/store/useConciliacaoStore';
 
@@ -22,7 +22,7 @@ import { openCancellationPdf, downloadCancellationPdf, isViewableInBrowser } fro
 import type { CaseNoteAttachment } from '@/types';
 import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
 import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
-import { isCancelamentoEspelhoItem, groupBlocksEspelhoConciliacao, isCancelamentoAguardandoFinalizacaoGc, isCancelamentoProntoConciliarGc } from '@/lib/cancelamentoGcConciliacao';
+import { isCancelamentoEspelhoItem, groupBlocksEspelhoConciliacao, isCancelamentoAguardandoFinalizacaoGc, isCancelamentoProntoConciliarGc, isCancelamentoCadastroExternoItem } from '@/lib/cancelamentoGcConciliacao';
 import {
   buildIamGcApprovalStudentPatch,
   IAM_GC_CARTEIRA_LABEL,
@@ -1205,7 +1205,11 @@ export default function ConciliacaoPage() {
 
   const [flow, setFlow] = useState<'menu' | 'gc-kamino' | 'planilha-conferencia' | 'iam-control-gc' | 'cancelamentos-gc' | 'recompras-gc'>('menu');
   const [tab, setTab] = useState<'ajuste_financeiro' | 'cancelamentos' | 'renda_extra' | 'historico' | 'erros' | 'iam_pendentes' | 'recompras'>('ajuste_financeiro');
-  const [cancelGcFilter, setCancelGcFilter] = useState<'todos' | 'aguardando_finalizacao' | 'prontos_conciliar'>('prontos_conciliar');
+  // 'cadastro_externo': casos vindos de "Cadastrar Cancelamento" (sem ficha no
+  // GC) — conciliar não altera carteira nem dashboard.
+  const [cancelGcFilter, setCancelGcFilter] = useState<'todos' | 'aguardando_finalizacao' | 'prontos_conciliar' | 'cadastro_externo'>('prontos_conciliar');
+  // Histórico do fluxo Cancelamentos → GC: mostrar só cadastros externos.
+  const [histCadastroExternoOnly, setHistCadastroExternoOnly] = useState(false);
   // IAM CONTROL → GC: carteira do contrato pelo treinamento (Liberty x IAM).
   const [iamCarteiraFilter, setIamCarteiraFilter] = useState<'todas' | IamGcCarteira>('todas');
   const [search, setSearch] = useState('');
@@ -1278,6 +1282,9 @@ export default function ConciliacaoPage() {
         if (flow !== 'cancelamentos-gc' || tab !== 'cancelamentos' || cancelGcFilter === 'todos') {
           return true;
         }
+        if (cancelGcFilter === 'cadastro_externo') {
+          return isCancelamentoCadastroExternoItem(i, cancellationCases);
+        }
         const st = i.studentId ? students.find((s) => s.id === i.studentId) : undefined;
         if (cancelGcFilter === 'aguardando_finalizacao') {
           return isCancelamentoAguardandoFinalizacaoGc(i, st, items);
@@ -1285,10 +1292,14 @@ export default function ConciliacaoPage() {
         return isCancelamentoProntoConciliarGc(i, st, items);
       })
       .filter((i) => {
+        if (flow !== 'cancelamentos-gc' || tab !== 'historico' || !histCadastroExternoOnly) return true;
+        return isCancelamentoCadastroExternoItem(i, cancellationCases);
+      })
+      .filter((i) => {
         if (flow !== 'iam-control-gc' || i.tipo !== 'iam_pendente' || iamCarteiraFilter === 'todas') return true;
         return resolveItemIamCarteira(i, students) === iamCarteiraFilter;
       });
-  }, [items, tab, tipoFilter, search, flow, cancelGcFilter, iamCarteiraFilter, students]);
+  }, [items, tab, tipoFilter, search, flow, cancelGcFilter, histCadastroExternoOnly, iamCarteiraFilter, students, cancellationCases]);
 
   // Contagem por aluno distinto em cada carteira (fila IAM CONTROL → GC).
   const iamCarteiraCounts = useMemo(() => {
@@ -1358,18 +1369,21 @@ export default function ConciliacaoPage() {
     );
     const aguardandoKeys = new Set<string>();
     const prontosKeys = new Set<string>();
+    const externosKeys = new Set<string>();
     for (const i of pending) {
       const st = i.studentId ? students.find((s) => s.id === i.studentId) : undefined;
       const key = i.studentId ?? i.studentName;
       if (isCancelamentoAguardandoFinalizacaoGc(i, st, items)) aguardandoKeys.add(key);
       if (isCancelamentoProntoConciliarGc(i, st, items)) prontosKeys.add(key);
+      if (isCancelamentoCadastroExternoItem(i, cancellationCases)) externosKeys.add(key);
     }
     return {
       todos: cancelamentosCount,
       aguardando: aguardandoKeys.size,
       prontos: prontosKeys.size,
+      externos: externosKeys.size,
     };
-  }, [items, students, cancelamentosCount]);
+  }, [items, students, cancelamentosCount, cancellationCases]);
   const rendaExtraCount = new Set(
     items
       .filter((i) => (i.status === 'pendente' || i.status === 'aprovado') && isRendaExtraTipo(i.tipo))
@@ -2225,6 +2239,19 @@ export default function ConciliacaoPage() {
             </button>
             <button
               type="button"
+              onClick={() => setCancelGcFilter('cadastro_externo')}
+              title="Casos criados por “Cadastrar Cancelamento” (importação externa), sem ficha de aluno no GC. Conciliar registra o desfecho, mas não altera carteira nem cards da dashboard — não há saldo a sair."
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                cancelGcFilter === 'cadastro_externo'
+                  ? 'bg-sky-100 text-sky-800 border-sky-300 shadow-sm'
+                  : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+              }`}
+            >
+              <FileUp size={13} />
+              Cadastro externo — sem impacto na dash ({cancelGcFilterCounts.externos})
+            </button>
+            <button
+              type="button"
               onClick={() => setCancelGcFilter('todos')}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
                 cancelGcFilter === 'todos'
@@ -2235,6 +2262,21 @@ export default function ConciliacaoPage() {
               Todos ({cancelGcFilterCounts.todos})
             </button>
           </div>
+        )}
+        {flow === 'cancelamentos-gc' && tab === 'historico' && (
+          <button
+            type="button"
+            onClick={() => setHistCadastroExternoOnly((v) => !v)}
+            title="Mostrar só casos criados por “Cadastrar Cancelamento” (importação externa), que não alteram carteira nem dashboard ao conciliar."
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+              histCadastroExternoOnly
+                ? 'bg-sky-100 text-sky-800 border-sky-300 shadow-sm'
+                : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+            }`}
+          >
+            <FileUp size={13} />
+            Só cadastro externo — sem impacto na dash
+          </button>
         )}
       </div>
 
@@ -2251,7 +2293,9 @@ export default function ConciliacaoPage() {
                       ? 'Nenhum cancelamento aguardando finalização na aba Cancelamentos.'
                       : flow === 'cancelamentos-gc' && cancelGcFilter === 'prontos_conciliar'
                         ? 'Nenhum cancelamento pronto para conciliar.'
-                        : 'Nenhuma pendência de cancelamento ou reversão.'
+                        : flow === 'cancelamentos-gc' && cancelGcFilter === 'cadastro_externo'
+                          ? 'Nenhum cancelamento de cadastro externo pendente.'
+                          : 'Nenhuma pendência de cancelamento ou reversão.'
                   )
                   : tab === 'renda_extra' ? 'Nenhuma pendência de Renda Extra.'
                   : tab === 'iam_pendentes' ? 'Nenhum contrato IAM aguardando aprovação.'
@@ -2284,6 +2328,7 @@ export default function ConciliacaoPage() {
               const temObservacao = groupTemObservacao(group.items);
               const aprovarSoObs = jaConciliadoSistema && temObservacao;
               const isEspelhoCancel = groupBlocksEspelhoConciliacao(group.items, st ?? undefined, items);
+              const isCadastroExterno = group.items.some((i) => isCancelamentoCadastroExternoItem(i, cancellationCases));
               const isRecompraGrupo = group.items.every((i) => i.tipo === 'recompra_vinculo');
               const iamCarteira = group.items.every((i) => i.tipo === 'iam_pendente')
                 ? resolveItemIamCarteira(group.items[0], students)
@@ -2340,6 +2385,14 @@ export default function ConciliacaoPage() {
                             title="Cancelamento ainda em andamento no funil — finalize na aba Cancelamentos antes de conciliar no GC"
                           >
                             Em andamento
+                          </span>
+                        )}
+                        {isCadastroExterno && (
+                          <span
+                            className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200"
+                            title="Caso criado por “Cadastrar Cancelamento” (importação externa), sem ficha de aluno no GC. Conciliar registra o desfecho, mas não altera carteira nem cards da dashboard."
+                          >
+                            Cadastro externo — sem impacto na dash
                           </span>
                         )}
                       </div>
@@ -2661,6 +2714,14 @@ export default function ConciliacaoPage() {
                       <UserIcon size={16} className="text-primary shrink-0" />
                       <h3 className="text-base font-bold text-foreground">{item.studentName}</h3>
                       {item.ac && <span className="text-[11px] text-muted-foreground">• AC: {item.ac}</span>}
+                      {isCancelamentoCadastroExternoItem(item, cancellationCases) && (
+                        <span
+                          className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200"
+                          title="Caso criado por “Cadastrar Cancelamento” (importação externa), sem ficha de aluno no GC. A conciliação registrou o desfecho, mas não alterou carteira nem cards da dashboard."
+                        >
+                          Cadastro externo — sem impacto na dash
+                        </span>
+                      )}
                     </div>
 
                     {/* Badge da alteração principal (composta) + resumo */}

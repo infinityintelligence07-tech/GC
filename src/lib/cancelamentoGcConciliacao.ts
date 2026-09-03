@@ -82,6 +82,22 @@ export function isCancelamentoEspelhoGc(student: Student, cases: CancellationCas
   return openBalance(student) > 0.0049;
 }
 
+/**
+ * Item de cancelamento vindo de "Cadastrar Cancelamento" (importação externa):
+ * o caso existe só em Cancelamentos, sem ficha de aluno no GC. Conciliar não
+ * mexe em carteira nem em card da dashboard — não há saldo a sair.
+ */
+export function isCancelamentoCadastroExternoItem(
+  item: ConciliacaoItem,
+  cases: CancellationCase[],
+): boolean {
+  if (item.tipo !== 'cancelamento' && item.tipo !== 'reversao') return false;
+  if (item.studentId) return false;
+  if (!item.relatedCaseId) return false;
+  const caso = cases.find((c) => c.id === item.relatedCaseId);
+  return caso?.externalImport === true && !caso.studentId;
+}
+
 /** Item espelho — placeholder enquanto o cancelamento não foi formalizado. */
 export function isCancelamentoEspelhoItem(item: ConciliacaoItem): boolean {
   return item.tipo === 'cancelamento' && item.depois?.espelho_gc === true;
