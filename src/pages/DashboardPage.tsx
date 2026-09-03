@@ -49,6 +49,20 @@ const STATUS_COLORS: Record<string, string> = {
   'Pago': '#14b8a6',
 };
 
+// Nem todo card é uma fatia da carteira: alguns recortam por tag, outros
+// repetem cards vizinhos e outros contam pedidos em vez de alunos. Somar todos
+// dá um total inflado, então os que não entram na conta vêm marcados.
+function NaoSomaBadge({ title }: { title: string }) {
+  return (
+    <span
+      title={title}
+      className="shrink-0 rounded border border-border bg-muted px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-muted-foreground"
+    >
+      não soma
+    </span>
+  );
+}
+
 export default function DashboardPage() {
   const { students, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
@@ -1517,9 +1531,12 @@ export default function DashboardPage() {
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Em Dia + Novos</p>
-            <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos' ? null : 'emdia_novos'); }} className="text-muted-foreground/50 hover:text-muted-foreground shrink-0">
-              <Info size={14} />
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <NaoSomaBadge title='Composição dos cards "Em Dia" e "Alunos Novos" ao lado. Somar os três conta os mesmos alunos duas vezes.' />
+              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos' ? null : 'emdia_novos'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
+                <Info size={14} />
+              </button>
+            </div>
           </div>
           <p className="kpi-value text-teal-600" title={formatCurrency(emDiaValue + alunosNovosValue)}>
             <span className="hidden sm:inline">{formatCurrency(emDiaValue + alunosNovosValue)}</span>
@@ -1531,7 +1548,10 @@ export default function DashboardPage() {
           </div>
           {infoStatus === 'emdia_novos' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
-              <p>Soma de "Em Dia" + "Alunos Novos": alunos adimplentes da carteira (sem parcelas vencidas).</p>
+              <p>
+                Soma de "Em Dia" + "Alunos Novos": alunos adimplentes da carteira (sem parcelas vencidas).
+                É a composição dos dois cards ao lado — não deve ser somada junto com eles.
+              </p>
             </div>
           )}
         </div>
@@ -1721,9 +1741,12 @@ export default function DashboardPage() {
         >
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Revertidos</p>
-            <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'revertidos' ? null : 'revertidos'); }} className="text-muted-foreground/50 hover:text-muted-foreground shrink-0">
-              <Info size={14} />
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <NaoSomaBadge title="Conta pedidos de cancelamento revertidos, não alunos da carteira. Unidade diferente dos demais cards." />
+              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'revertidos' ? null : 'revertidos'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
+                <Info size={14} />
+              </button>
+            </div>
           </div>
           <p className="kpi-value text-emerald-600" title={formatCurrency(revertidosValue)}>
             <span className="hidden sm:inline">{formatCurrency(revertidosValue)}</span>
@@ -1740,6 +1763,7 @@ export default function DashboardPage() {
               <p>
                 Pedidos de cancelamento revertidos no período selecionado (Performance / Histórico).
                 Taxa = revertidos ÷ pedidos criados no período.
+                Conta pedidos, não alunos — não entra na soma da Carteira Total.
               </p>
             </div>
           )}
@@ -1750,7 +1774,10 @@ export default function DashboardPage() {
             onClick={() => setKpiModalKey('tag')}
             className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 ${tagKpis[0].color} transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-500/30`}
           >
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate mb-2">{tagKpis[0].label}</p>
+            <div className="flex items-start justify-between mb-2 gap-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">{tagKpis[0].label}</p>
+              <NaoSomaBadge title="Recorte por tag: estes alunos e valores já estão contados nos cards de status (Em Dia, Vencido, À Negativar)." />
+            </div>
             <p className={`kpi-value ${tagKpis[0].text}`} title={formatCurrency(tagKpis[0].value)}>
               <span className="hidden sm:inline">{formatCurrency(tagKpis[0].value)}</span>
               <span className="sm:hidden">{formatCurrencyCompact(tagKpis[0].value)}</span>
