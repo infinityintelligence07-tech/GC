@@ -2566,7 +2566,7 @@ function CancellationReviewModal({
               <div className="rounded-lg border border-border bg-card p-3 space-y-2">
                 <p className="text-[11px] font-semibold text-foreground uppercase tracking-wide">Gerar termo</p>
                 <p className="text-[10px] text-muted-foreground">
-                  Monta o termo conforme multa/% e saldo a devolver (só estorno, só multa ou multa + estorno).
+                  Monta o termo conforme multa/% e saldo a devolver (só estorno, só multa ou multa + estorno). Dá para trocar o modelo na visualização.
                 </p>
                 <button
                   type="button"

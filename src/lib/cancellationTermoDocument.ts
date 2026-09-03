@@ -38,6 +38,32 @@ export interface CancellationTermoInput {
   diaLimiteAssinatura?: string;
   /** Data do termo (default: hoje). */
   dataTermo?: Date;
+  /** Força um modelo específico, ignorando a seleção automática por multa/estorno. */
+  variantOverride?: CancellationTermoVariant;
+}
+
+export const CANCELLATION_TERMO_VARIANTS: readonly CancellationTermoVariant[] = [
+  'sem_multa',
+  'somente_estorno',
+  'somente_multa',
+  'multa_e_estorno',
+];
+
+export function cancellationTermoVariantLabel(variant: CancellationTermoVariant): string {
+  switch (variant) {
+    case 'somente_estorno':
+      return 'Somente estorno (sem multa)';
+    case 'somente_multa':
+      return 'Somente multa (sem estorno)';
+    case 'multa_e_estorno':
+      return 'Multa e estorno';
+    case 'sem_multa':
+      return 'Sem multa (CDC 7 dias)';
+    default: {
+      const _exhaustive: never = variant;
+      return _exhaustive;
+    }
+  }
 }
 
 export interface CancellationTermoDocument {
@@ -146,7 +172,7 @@ function typicalParcelValue(parcels: CancellationTermoRefundParcel[]): number {
 
 /** Monta o termo institucional conforme multa/% e saldo a devolver. Sem endereço/CEP/turma/preço do contrato. */
 export function buildCancellationTermoDocument(input: CancellationTermoInput): CancellationTermoDocument {
-  const variant = resolveCancellationTermoVariant(input);
+  const variant = input.variantOverride ?? resolveCancellationTermoVariant(input);
   const titulo = tituloForVariant(variant);
 
   const dataTermo = input.dataTermo ?? new Date();

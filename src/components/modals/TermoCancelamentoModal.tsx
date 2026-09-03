@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react';
-import { X, Download, Copy, Check, Link2 } from 'lucide-react';
+import { X, Download, Copy, Check, Link2, FileText } from 'lucide-react';
 import type { CancellationCase, RefundPaymentMethod, RefundPixKeyType, Student } from '@/types';
 import {
+  CANCELLATION_TERMO_VARIANTS,
   buildCancellationTermoDocument,
   buildCancellationTermoInputFromCase,
   buildCancellationTermoPrintHtml,
   cancellationTermoToPlainText,
+  cancellationTermoVariantLabel,
+  resolveCancellationTermoVariant,
   type CancellationTermoRefundParcel,
+  type CancellationTermoVariant,
 } from '@/lib/cancellationTermoDocument';
 import { createIamCancelamentoTermo } from '@/lib/iamControlTermo';
 import { toast } from 'sonner';
@@ -66,11 +70,19 @@ export default function TermoCancelamentoModal({
   const [linkBusy, setLinkBusy] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  /** 'auto' = modelo escolhido pelas regras de multa/estorno; senão, modelo forçado pelo usuário. */
+  const [variantChoice, setVariantChoice] = useState<'auto' | CancellationTermoVariant>('auto');
+
+  const autoVariant = useMemo(
+    () => resolveCancellationTermoVariant({ semMultaCDC7, multaPercent, estornoTotal }),
+    [semMultaCDC7, multaPercent, estornoTotal],
+  );
+  const variantOverride = variantChoice === 'auto' ? undefined : variantChoice;
 
   const doc = useMemo(
     () =>
-      buildCancellationTermoDocument(
-        buildCancellationTermoInputFromCase({
+      buildCancellationTermoDocument({
+        ...buildCancellationTermoInputFromCase({
           caseRef,
           student,
           semMultaCDC7,
@@ -86,7 +98,8 @@ export default function TermoCancelamentoModal({
           pixHolderName,
           pixHolderPhone,
         }),
-      ),
+        variantOverride,
+      }),
     [
       caseRef,
       student,
@@ -102,26 +115,15 @@ export default function TermoCancelamentoModal({
       pixOtherHolder,
       pixHolderName,
       pixHolderPhone,
+      variantOverride,
     ],
   );
 
   const plainText = useMemo(() => cancellationTermoToPlainText(doc), [doc]);
-  const contentHint = (() => {
-    switch (doc.variant) {
-      case 'somente_estorno':
-        return 'somente estorno (sem cláusulas de multa)';
-      case 'somente_multa':
-        return 'somente multa (sem estorno)';
-      case 'multa_e_estorno':
-        return 'com multa e estorno';
-      case 'sem_multa':
-        return 'sem multa (CDC 7 dias)';
-      default: {
-        const _exhaustive: never = doc.variant;
-        return _exhaustive;
-      }
-    }
-  })();
+  const isManualVariant = variantOverride !== undefined && variantOverride !== autoVariant;
+  const contentHint = `${cancellationTermoVariantLabel(doc.variant).toLowerCase()}${
+    variantOverride === undefined ? ' · seleção automática' : isManualVariant ? ' · escolhido manualmente' : ''
+  }`;
 
   const handleGeneratePDF = () => {
     const win = window.open('', '_blank');
@@ -187,16 +189,37 @@ export default function TermoCancelamentoModal({
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-foreground/30 backdrop-blur-sm p-4 fade-in">
       <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto shadow-2xl border border-border">
-        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card z-10">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">{doc.titulo}</h2>
+        <div className="flex items-center justify-between gap-3 p-6 border-b border-border sticky top-0 bg-card z-10">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-foreground truncate">{doc.titulo}</h2>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               Base institucional · {contentHint}
             </p>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted transition-colors" aria-label="Fechar">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <label className="inline-flex items-center rounded-lg border border-border bg-muted/40 overflow-hidden text-xs">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 font-medium text-foreground border-r border-border bg-muted/60">
+                <FileText size={13} />
+                Modelo
+              </span>
+              <select
+                value={variantChoice}
+                onChange={(e) => setVariantChoice(e.target.value as 'auto' | CancellationTermoVariant)}
+                className="bg-transparent px-2.5 py-1.5 text-xs text-foreground focus:outline-none cursor-pointer max-w-[15rem]"
+                aria-label="Modelo do termo"
+              >
+                <option value="auto">Automático — {cancellationTermoVariantLabel(autoVariant)}</option>
+                {CANCELLATION_TERMO_VARIANTS.map((v) => (
+                  <option key={v} value={v}>
+                    {cancellationTermoVariantLabel(v)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted transition-colors" aria-label="Fechar">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="p-6 space-y-4">
@@ -250,12 +273,23 @@ export default function TermoCancelamentoModal({
             </div>
           </div>
 
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-            <p className="text-xs text-blue-800">
-              O texto do termo muda conforme a multa/% e o saldo a devolver: só estorno, só multa, ou multa +
-              estorno. Gere o PDF ou copie o link de assinatura para enviar ao aluno.
-            </p>
-          </div>
+          {isManualVariant ? (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-xs text-amber-800">
+                Modelo escolhido manualmente. Pelas regras de multa/% e saldo a devolver, o automático seria{' '}
+                <strong>{cancellationTermoVariantLabel(autoVariant)}</strong>. O PDF e o link de assinatura usam o
+                modelo selecionado acima.
+              </p>
+            </div>
+          ) : (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+              <p className="text-xs text-blue-800">
+                O modelo é escolhido automaticamente conforme a multa/% e o saldo a devolver: só estorno, só multa,
+                multa + estorno ou sem multa. Se precisar, troque o modelo no seletor ao lado do título antes de gerar
+                o PDF ou copiar o link de assinatura.
+              </p>
+            </div>
+          )}
 
           {!student?.iamControlAlunoId && (
             <p className="text-[11px] text-amber-700">
