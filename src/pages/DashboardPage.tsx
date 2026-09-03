@@ -1,4 +1,4 @@
-import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, getInstallmentFinancialValueExport, isRecompraOuFundoParcela } from '@/store/useAppStore';
+import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, getInstallmentFinancialValueExport } from '@/store/useAppStore';
 import ACRankingCard from '@/components/ui/ACRankingCard';
 import ReversalRankingMirror from '@/components/ui/ReversalRankingMirror';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
@@ -16,7 +16,7 @@ import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
-import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
+import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter, isStudentFullyPaid } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
 import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { fetchKaminoDashboardForecastTotals, type KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
@@ -512,29 +512,21 @@ export default function DashboardPage() {
         .reduce((a, i) => a + i.value, 0);
     }, 0);
 
-  const sumOverdue = (arr: Student[]) =>
-    arr.reduce((acc, s) => {
-      if (s.statusCancelamento === 'cancelado') return acc;
-      if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
-      return acc + s.installments
-        .filter((i) =>
-          !i.paid &&
-          !isRecompraOuFundoParcela(i, studentTags) &&
-          _instInRange(i) &&
-          !isInstallmentExcludedFromFinancialTotals(s, i) &&
-          new Date(i.dueDate + 'T00:00:00').getTime() < _refDayMs,
-        )
-        .reduce((a, i) => a + i.value, 0);
-    }, 0);
-
+  // Todo card de status soma o saldo em aberto inteiro (vencido + a vencer),
+  // na mesma régua da Carteira Total. Enquanto Vencido 1/2 e Negativado
+  // mostravam só a fatia já vencida, as parcelas futuras desses alunos
+  // entravam no total e não apareciam em card nenhum.
   const emDiaValue = sumUnpaid(emDia);
   const alunosNovosValue = sumUnpaid(alunosNovos);
-  const v1Value = sumOverdue(vencido1);
-  const v2Value = sumOverdue(vencido2);
-  // À Negativar: considera TODO o saldo em aberto (vencidas + a vencer)
+  const v1Value = sumUnpaid(vencido1);
+  const v2Value = sumUnpaid(vencido2);
   const anValue = sumUnpaid(aNegativar);
-  const negValue = sumOverdue(negativado);
+  const negValue = sumUnpaid(negativado);
   const solicCancValue = sumUnpaid(solicitacaoCancelamento);
+  // Quitado no funil de cancelamento continua neste card (regra de
+  // filterCarteiraActiveStudents) mas some da Carteira Total, que só conta quem
+  // tem parcela em aberto. É a diferença entre a soma dos cards e o total.
+  const solicCancQuitados = solicitacaoCancelamento.filter(isStudentFullyPaid).length;
   const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
   // Mesma base do card "Carteira Total" — pendência IAM excluída por parcela, não por aluno.
@@ -562,13 +554,13 @@ export default function DashboardPage() {
       case 'novos':
         return { title: 'Alunos Novos', students: alunosNovos, valueMode: 'unpaid' };
       case 'v1':
-        return { title: 'Vencido 1', students: vencido1, valueMode: 'overdue' };
+        return { title: 'Vencido 1', students: vencido1, valueMode: 'unpaid' };
       case 'v2':
-        return { title: 'Vencido 2', students: vencido2, valueMode: 'overdue' };
+        return { title: 'Vencido 2', students: vencido2, valueMode: 'unpaid' };
       case 'an':
         return { title: 'À Negativar', students: aNegativar, valueMode: 'unpaid' };
       case 'neg':
-        return { title: 'Negativado', students: negativado, valueMode: 'overdue' };
+        return { title: 'Negativado', students: negativado, valueMode: 'unpaid' };
       case 'solic':
         return { title: 'Solicitação Cancelamento', students: solicitacaoCancelamento, valueMode: 'unpaid' };
       case 'pendente':
@@ -1690,7 +1682,10 @@ export default function DashboardPage() {
             <span className="sm:hidden">{formatCurrencyCompact(solicCancValue)}</span>
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
-            <p className="text-[11px] text-muted-foreground truncate">{solicitacaoCancelamento.length} alunos</p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {solicitacaoCancelamento.length} alunos
+              {solicCancQuitados > 0 && ` · ${solicCancQuitados} quitados`}
+            </p>
             <p className="text-[11px] font-semibold text-fuchsia-600 shrink-0">
               {kpiStudents.length > 0
                 ? ((solicitacaoCancelamento.length / kpiStudents.length) * 100).toFixed(1)
@@ -1699,7 +1694,10 @@ export default function DashboardPage() {
           </div>
           {infoStatus === 'solic' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
-              <p>Alunos que solicitaram cancelamento e estão em tratativa no funil. O valor sai do status anterior (Em Dia/Vencido/etc.) e passa a compor este indicador até reversão ou cancelamento definitivo.</p>
+              <p>
+                Alunos que solicitaram cancelamento e estão em tratativa no funil. O valor sai do status anterior (Em Dia/Vencido/etc.) e passa a compor este indicador até reversão ou cancelamento definitivo.
+                {solicCancQuitados > 0 && ` ${solicCancQuitados} já estão com o contrato quitado: seguem aqui até o caso fechar, somam R$ 0,00 no valor e não entram na Carteira Total.`}
+              </p>
             </div>
           )}
         </div>
