@@ -10,7 +10,8 @@ import DeleteModal from '@/components/modals/DeleteModal';
 import ChurnRiskCard from '@/components/ui/ChurnRiskCard';
 import CancelStudentFlowModal from '@/components/modals/CancelStudentFlowModal';
 import RendaExtraMetricsCard from '@/components/ui/RendaExtraMetricsCard';
-import DashDateFilter, { DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
+import DashDateFilter, { AnalysisModeToggle, DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
+import HeaderActions from '@/components/layout/HeaderActions';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
 import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, CalendarClock, AlertTriangle, Coins, Star, Wallet, X, Tag, ChevronUp, ChevronDown, Download } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
@@ -802,6 +803,10 @@ export default function ACPortfolioPage() {
       )}
 
       {/* ── 1. Modo de Análise ──────────────────────────────────────────────────── */}
+      {/* No desktop os botões ficam no cabeçalho, ao lado do seletor de empresa. */}
+      <HeaderActions>
+        <AnalysisModeToggle mode={mode} setMode={setMode} />
+      </HeaderActions>
       <DashDateFilter
         mode={mode} setMode={setMode}
         perfPreset={perfPreset} setPerfPreset={setPerfPreset}
@@ -811,6 +816,7 @@ export default function ACPortfolioPage() {
         historicoEnd={historicoEnd} setHistoricoEnd={setHistoricoEnd}
         variant="ac"
         hidePerformancePresets
+        moveModeToHeader
       />
 
       {/* ── 2. Previsão de Recebimento + Filtros (Performance) ──────────────── */}

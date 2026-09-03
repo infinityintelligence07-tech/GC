@@ -3,7 +3,8 @@ import ACRankingCard from '@/components/ui/ACRankingCard';
 import { NaoSomaBadge } from '@/components/NaoSomaBadge';
 import ReversalRankingMirror from '@/components/ui/ReversalRankingMirror';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
-import DashDateFilter, { DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
+import DashDateFilter, { AnalysisModeToggle, DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
+import HeaderActions from '@/components/layout/HeaderActions';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
 import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity, FileText, AlertTriangle, Download } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
@@ -49,6 +50,19 @@ const STATUS_COLORS: Record<string, string> = {
   'Negativado': '#9f1239',
   'Pago': '#14b8a6',
 };
+
+function BotaoRelatorio({ onClick, className = '' }: { onClick: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-border bg-card hover:bg-muted saas-shadow transition-colors shrink-0 ${className}`}
+    >
+      <FileText size={14} className="text-primary" />
+      Relatório
+    </button>
+  );
+}
 
 export default function DashboardPage() {
   const { students, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals } = useAppStore();
@@ -1112,7 +1126,13 @@ export default function DashboardPage() {
     <div className="space-y-3">
 
       {/* ── 1. Modo de Análise + Relatório ──────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* No desktop estes controles ficam no cabeçalho, ao lado do seletor de
+          empresa; abaixo de sm eles seguem aqui, onde há espaço. */}
+      <HeaderActions>
+        <AnalysisModeToggle mode={mode} setMode={setMode} />
+        <BotaoRelatorio onClick={() => setReportOpen(true)} />
+      </HeaderActions>
+      <div className={`flex flex-wrap items-center gap-2 ${mode === 'performance' ? 'sm:hidden' : ''}`}>
         <div className="flex-1 min-w-[260px]">
           <DashDateFilter
             mode={mode} setMode={setMode}
@@ -1123,16 +1143,10 @@ export default function DashboardPage() {
             historicoEnd={historicoEnd} setHistoricoEnd={setHistoricoEnd}
             variant="ac"
             hidePerformancePresets
+            moveModeToHeader
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setReportOpen(true)}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-border bg-card hover:bg-muted saas-shadow transition-colors shrink-0"
-        >
-          <FileText size={14} className="text-primary" />
-          Relatório
-        </button>
+        <BotaoRelatorio onClick={() => setReportOpen(true)} className="sm:hidden" />
       </div>
       {/* ── 2. Previsão de Recebimento + Filtros (Performance) ──────────────── */}
       {mode === 'performance' && (

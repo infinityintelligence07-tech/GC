@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import CompanySwitcher from './CompanySwitcher';
+import { HeaderActionsSlotContext } from './HeaderActions';
 import { useAppStore } from '@/store/useAppStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { RefreshCw, ShieldCheck, Users, Scale, Sun, Moon, Menu } from 'lucide-react';
@@ -73,6 +74,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { companies, activeCompanyId } = useCompanyStore();
   const { theme, setTheme } = useTheme();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Callback ref: guardar o nó em estado é o que faz o portal montar assim que
+  // o cabeçalho existe no DOM.
+  const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null);
 
   // Aplica paleta da empresa ativa nas CSS vars (--primary / --accent)
   useEffect(() => {
@@ -133,6 +137,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <div className="hidden sm:block">
               <CompanySwitcher />
             </div>
+            {/* Controles da página. Escondidos no celular, como o seletor de
+                empresa: lá as telas mostram os mesmos botões no corpo. */}
+            <div ref={setHeaderSlot} className="hidden sm:flex items-center gap-2" />
           </div>
 
           <div className="flex items-center gap-3">
@@ -185,7 +192,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               {activeTab === 'cancelamentos' && <TutorialCancelamentoButton />}
             </div>
           )}
-          {children}
+          <HeaderActionsSlotContext.Provider value={headerSlot}>
+            {children}
+          </HeaderActionsSlotContext.Provider>
         </div>
       </main>
     </div>
