@@ -109,6 +109,8 @@ async function fetchAll(activeCompanyId?: string | null) {
         metaTaxaEmDia: (rulesRes.data as any).meta_taxa_em_dia != null ? Number((rulesRes.data as any).meta_taxa_em_dia) : undefined,
         metaTaxaEmDiaBase: (rulesRes.data as any).meta_taxa_em_dia_base != null ? Number((rulesRes.data as any).meta_taxa_em_dia_base) : undefined,
         metaTaxaEmDiaEm: (rulesRes.data as any).meta_taxa_em_dia_em ?? undefined,
+        emDiaNovosBase: (rulesRes.data as any).em_dia_novos_base != null ? Number((rulesRes.data as any).em_dia_novos_base) : undefined,
+        emDiaNovosBaseMes: (rulesRes.data as any).em_dia_novos_base_mes ?? undefined,
         multaCancelamentoComAntecedencia: Number((rulesRes.data as any).multa_cancelamento_com_antecedencia ?? 30),
         multaCancelamentoSemAntecedencia: Number((rulesRes.data as any).multa_cancelamento_sem_antecedencia ?? 40),
       }

@@ -12,7 +12,7 @@ import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge from '@/components/ui/RibbonGauge';
 import { Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { getTodayBrasilia } from '@/lib/brasiliaDate';
+import { getTodayBrasilia, getTodayStringBrasilia } from '@/lib/brasiliaDate';
 import { getTagStyle } from '@/lib/tagColors';
 import { computeTagKpis } from '@/lib/tagKpis';
 import { studentMatchesTagFilter, applyTagFilterToStudent } from '@/lib/tagFilter';
@@ -591,6 +591,26 @@ export default function DashboardPage() {
   const pctCarteira = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
   const pctEmDia = pct(emDia.length);
   const pctInadimplente = pct(inadimplentes);
+  const pctEmDiaNovos = pct(emDia.length + alunosNovos.length);
+
+  // ── Fita "Em Dia + Novos": marca do início do mês ─────────────────────────
+  // O ponteiro segue o valor ao vivo; a marca de partida é a participação
+  // registrada na primeira visualização de cada mês (Brasília). Quando o mês
+  // vira, a marca é refeita com o valor daquele momento — gravada em
+  // financial_rules para todos os usuários da empresa verem a mesma referência.
+  const mesAtualKey = getTodayStringBrasilia().slice(0, 7); // YYYY-MM
+  const emDiaNovosBaseAtual =
+    rules.emDiaNovosBaseMes === mesAtualKey ? rules.emDiaNovosBase : undefined;
+  const fixarBaseEmDiaNovos =
+    currentUser?.role === 'admin' && totalComposicao > 0 && rules.emDiaNovosBaseMes !== mesAtualKey;
+  useEffect(() => {
+    if (!fixarBaseEmDiaNovos) return;
+    setRules({
+      emDiaNovosBase: Math.round(Number(pctEmDiaNovos) * 10) / 10,
+      emDiaNovosBaseMes: mesAtualKey,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixarBaseEmDiaNovos, mesAtualKey]);
 
   // ── Forecast (filtro isolado: só afeta este card) ─────────────────────────
   // Índices: 0=Todos, 1=Hoje, 2=Amanhã, 3=2Dias, 4=3Dias, 5=7Dias, 6=Personalizado
@@ -1138,88 +1158,26 @@ export default function DashboardPage() {
         <BotaoRelatorio onClick={() => setReportOpen(true)} />
       </HeaderActions>
 
-      {/* ── 0. Cabeçalho de saúde da carteira ───────────────────────────────── */}
-      {/* Esquerda: velocímetro da meta mensal de Taxa em Dia (mesmo componente
-          da Carteira do Assessor, com a meta gravada em financial_rules).
-          Centro: card "Em Dia + Novos" com indicador de fita reta.
-          Direita: Taxa Em Dia e Taxa Inadimplente empilhados. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_minmax(180px,220px)] gap-2.5 sm:gap-3 items-stretch">
-        <div className="hidden sm:flex items-center justify-center rounded-2xl bg-card border border-border saas-shadow-md px-3 py-2">
-          <MetaTaxaEmDiaHeader
-            taxaAtual={Number(pctEmDia)}
-            meta={rules.metaTaxaEmDia}
-            metaPadrao={rules.meta1}
-            base={rules.metaTaxaEmDiaBase}
-            definidaEm={rules.metaTaxaEmDiaEm}
-            titulo="Dashboard geral"
-            canEdit={currentUser?.role === 'admin'}
-            temDados={totalComposicao > 0}
-            onSave={({ meta, base, definidaEm }) =>
-              setRules({
-                ...(meta != null ? { metaTaxaEmDia: meta } : {}),
-                metaTaxaEmDiaBase: base,
-                metaTaxaEmDiaEm: definidaEm,
-              })}
-          />
-        </div>
-
-        {/* Em Dia + Novos — soma agregada, com fita reta */}
-        <div
-          onClick={() => setKpiModalKey('emdia_novos')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 flex flex-col ${statusFilter === 'Em Dia' ? 'ring-2 ring-teal-500/40' : ''}`}
-        >
-          <div className="flex items-start justify-between mb-2 gap-2">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Em Dia + Novos</p>
-            <div className="flex items-center gap-1 shrink-0">
-              <NaoSomaBadge title='Composição dos cards "Em Dia" e "Alunos Novos" abaixo. Somar os três conta os mesmos alunos duas vezes.' />
-              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos' ? null : 'emdia_novos'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
-                <Info size={14} />
-              </button>
-            </div>
-          </div>
-          <div className="flex items-end justify-between gap-3 flex-wrap">
-            <div className="min-w-0">
-              <p className="kpi-value text-teal-600" title={formatCurrency(emDiaValue + alunosNovosValue)}>
-                <span className="hidden sm:inline">{formatCurrency(emDiaValue + alunosNovosValue)}</span>
-                <span className="sm:hidden">{formatCurrencyCompact(emDiaValue + alunosNovosValue)}</span>
-              </p>
-              <p className="text-[11px] text-muted-foreground truncate mt-1">{emDia.length + alunosNovos.length} alunos</p>
-            </div>
-            <p className="text-sm font-bold text-teal-600 shrink-0">{pct(emDia.length + alunosNovos.length)}%</p>
-          </div>
-          <div className="mt-auto pt-2">
-            <RibbonGauge value={Number(pct(emDia.length + alunosNovos.length))} pointerColor="#0d9488" />
-            <p className="text-[9px] text-muted-foreground text-center -mt-1">Participação de "Em Dia + Novos" na carteira</p>
-          </div>
-          {infoStatus === 'emdia_novos' && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
-              <p>
-                Soma de "Em Dia" + "Alunos Novos": alunos adimplentes da carteira (sem parcelas vencidas).
-                É a composição dos dois cards abaixo — não deve ser somada junto com eles.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Taxa Em Dia + Taxa Inadimplente — empilhados */}
-        <div className="grid grid-cols-2 lg:grid-cols-1 gap-2.5 sm:gap-3">
-          <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-emerald-500 border border-emerald-600 transition-transform hover:-translate-y-0.5">
-            <div className="flex items-start justify-between mb-2 gap-2">
-              <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Em Dia</p>
-              <TrendingUp size={16} className="text-white/50 shrink-0" />
-            </div>
-            <p className="kpi-value text-white">{pctEmDia}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {totalComposicao}</p>
-          </div>
-          <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
-            <div className="flex items-start justify-between mb-2 gap-2">
-              <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
-              <TrendingDown size={16} className="text-white/50 shrink-0" />
-            </div>
-            <p className="kpi-value text-white">{pctInadimplente}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {totalComposicao}</p>
-          </div>
-        </div>
+      {/* ── 0. Velocímetro da meta mensal de Taxa em Dia da empresa ─────────── */}
+      {/* Mesmo componente da Carteira do Assessor, mas com a Taxa em Dia geral
+          e a meta gravada em financial_rules (por empresa). */}
+      <div className="hidden sm:flex justify-center">
+        <MetaTaxaEmDiaHeader
+          taxaAtual={Number(pctEmDia)}
+          meta={rules.metaTaxaEmDia}
+          metaPadrao={rules.meta1}
+          base={rules.metaTaxaEmDiaBase}
+          definidaEm={rules.metaTaxaEmDiaEm}
+          titulo="Dashboard geral"
+          canEdit={currentUser?.role === 'admin'}
+          temDados={totalComposicao > 0}
+          onSave={({ meta, base, definidaEm }) =>
+            setRules({
+              ...(meta != null ? { metaTaxaEmDia: meta } : {}),
+              metaTaxaEmDiaBase: base,
+              metaTaxaEmDiaEm: definidaEm,
+            })}
+        />
       </div>
       <div className={`flex flex-wrap items-center gap-2 ${mode === 'performance' ? 'sm:hidden' : ''}`}>
         <div className="flex-1 min-w-[260px]">
@@ -1585,7 +1543,7 @@ export default function DashboardPage() {
 
       {/* ── 3. Indicadores (KPIs Row 1) ──────────────────────────────────────── */}
       {/* Cards clicáveis: abrem a lista detalhada de alunos/parcelas em popup */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
         <div
           onClick={() => setKpiModalKey('total')}
           className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-primary transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 ${statusFilter === '' ? 'ring-2 ring-primary/40' : ''}`}
@@ -1614,6 +1572,50 @@ export default function DashboardPage() {
             </p>
             <p className="text-[11px] font-semibold text-primary shrink-0">100%</p>
           </div>
+        </div>
+
+        {/* Em Dia + Novos — soma agregada + fita do mês (ponteiro = agora; marca = início do mês) */}
+        <div
+          onClick={() => setKpiModalKey('emdia_novos')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 ${statusFilter === 'Em Dia' ? 'ring-2 ring-teal-500/40' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Em Dia + Novos</p>
+            <div className="flex items-center gap-1 shrink-0">
+              <NaoSomaBadge title='Composição dos cards "Em Dia" e "Alunos Novos" ao lado. Somar os três conta os mesmos alunos duas vezes.' />
+              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos' ? null : 'emdia_novos'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
+                <Info size={14} />
+              </button>
+            </div>
+          </div>
+          <p className="kpi-value text-teal-600" title={formatCurrency(emDiaValue + alunosNovosValue)}>
+            <span className="hidden sm:inline">{formatCurrency(emDiaValue + alunosNovosValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(emDiaValue + alunosNovosValue)}</span>
+          </p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className="text-[11px] text-muted-foreground truncate">{emDia.length + alunosNovos.length} alunos</p>
+            <p className="text-[11px] font-semibold text-teal-600 shrink-0">{pctEmDiaNovos}%</p>
+          </div>
+          <RibbonGauge
+            value={Number(pctEmDiaNovos)}
+            baseline={emDiaNovosBaseAtual}
+            baselineLabel="Início do mês"
+            pointerColor="#0d9488"
+            className="mt-2"
+          />
+          {infoStatus === 'emdia_novos' && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+              <p>
+                Soma de "Em Dia" + "Alunos Novos": alunos adimplentes da carteira (sem parcelas vencidas).
+                É a composição dos dois cards ao lado — não deve ser somada junto com eles.
+              </p>
+              <p className="mt-1.5">
+                A fita mostra a participação atual na carteira (ponteiro) e a marca do início do mês
+                {emDiaNovosBaseAtual != null ? ` (${emDiaNovosBaseAtual.toFixed(1).replace('.', ',')}%)` : ''}.
+                A marca é refeita automaticamente quando o mês vira.
+              </p>
+            </div>
+          )}
         </div>
 
         <div
@@ -1666,11 +1668,19 @@ export default function DashboardPage() {
           )}
         </div>
 
+        <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-emerald-500 border border-emerald-600 transition-transform hover:-translate-y-0.5">
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Em Dia</p>
+            <TrendingUp size={16} className="text-white/50 shrink-0" />
+          </div>
+          <p className="kpi-value text-white">{pctEmDia}%</p>
+          <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {totalComposicao}</p>
+        </div>
       </div>
 
       {/* ── Indicadores Row 2 ────────────────────────────────────────────────── */}
-      {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
+      {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado → Taxa Inadimplente */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
         {[
           { key: 'v1', label: 'Vencido 1', value: v1Value, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos com parcelas vencidas entre 1 e 30 dias.', filter: 'Vencido 1' as StudentStatus },
           { key: 'v2', label: 'Vencido 2', value: v2Value, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos com parcelas vencidas entre 31 e 60 dias.', filter: 'Vencido 2' as StudentStatus },
@@ -1713,6 +1723,16 @@ export default function DashboardPage() {
             </div>
           );
         })}
+
+        {/* Taxa Inadimplente — mesmo tamanho do Taxa Em Dia (full red) */}
+        <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
+            <TrendingDown size={16} className="text-white/50 shrink-0" />
+          </div>
+          <p className="kpi-value text-white">{pctInadimplente}%</p>
+          <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {totalComposicao}</p>
+        </div>
       </div>
 
       {/* ── KPIs: Solicitação + Pendências + Revertidos + Fundo/TMF ─────────── */}

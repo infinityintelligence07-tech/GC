@@ -208,6 +208,10 @@ export interface FinancialRules {
   metaTaxaEmDiaBase?: number;
   /** ISO — quando a meta de Taxa em Dia foi definida. */
   metaTaxaEmDiaEm?: string;
+  /** Participação "Em Dia + Novos" (%) registrada no início do mês — marca da fita do Dashboard. */
+  emDiaNovosBase?: number;
+  /** Mês (YYYY-MM, Brasília) a que `emDiaNovosBase` se refere; mês diferente = refazer a marca. */
+  emDiaNovosBaseMes?: string;
   /** Multa (%) quando cancelamento é pedido com MAIS de 30 dias de antecedência do evento */
   multaCancelamentoComAntecedencia: number;
   /** Multa (%) quando cancelamento é pedido com MENOS de 30 dias de antecedência do evento */

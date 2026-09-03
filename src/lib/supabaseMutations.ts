@@ -374,6 +374,8 @@ export async function updateRulesDb(data: Partial<FinancialRules>) {
   if ('metaTaxaEmDia' in data) patch.meta_taxa_em_dia = data.metaTaxaEmDia ?? null;
   if ('metaTaxaEmDiaBase' in data) patch.meta_taxa_em_dia_base = data.metaTaxaEmDiaBase ?? null;
   if ('metaTaxaEmDiaEm' in data) patch.meta_taxa_em_dia_em = data.metaTaxaEmDiaEm ?? null;
+  if ('emDiaNovosBase' in data) patch.em_dia_novos_base = data.emDiaNovosBase ?? null;
+  if ('emDiaNovosBaseMes' in data) patch.em_dia_novos_base_mes = data.emDiaNovosBaseMes ?? null;
   if (data.multaCancelamentoComAntecedencia !== undefined)
     patch.multa_cancelamento_com_antecedencia = data.multaCancelamentoComAntecedencia;
   if (data.multaCancelamentoSemAntecedencia !== undefined)

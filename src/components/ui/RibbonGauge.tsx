@@ -1,13 +1,18 @@
 /**
  * RibbonGauge — indicador de fita reta (escala linear 0–100%).
  *
- * Barra horizontal com gradiente vermelho → amarelo → verde e um ponteiro
- * (triângulo + traço) marcando o valor atual. Usado no Dashboard para o card
- * "Em Dia + Novos", ao lado do velocímetro da Taxa em Dia.
+ * Barra horizontal com gradiente vermelho → amarelo → verde. O ponteiro
+ * (triângulo + traço) marca o valor atual; opcionalmente uma marca fina
+ * indica a referência (ex.: valor no início do mês). Usado no card
+ * "Em Dia + Novos" do Dashboard.
  */
 interface RibbonGaugeProps {
   /** Valor atual (%), 0–100. */
   value: number;
+  /** Referência (%) exibida como marca fina — ex.: início do mês. */
+  baseline?: number;
+  /** Texto do tooltip da marca de referência. */
+  baselineLabel?: string;
   /** Marcas exibidas abaixo da fita (%). */
   ticks?: number[];
   /** Cor do ponteiro (CSS). */
@@ -22,24 +27,36 @@ const fmtPct = (n: number) => {
 
 export default function RibbonGauge({
   value,
-  ticks = [0, 25, 50, 75, 100],
+  baseline,
+  baselineLabel = 'Referência',
+  ticks = [0, 50, 100],
   pointerColor = 'hsl(var(--foreground))',
   className,
 }: RibbonGaugeProps) {
   const W = 300;
-  const padX = 14;
-  const barY = 22;
-  const barH = 12;
-  const H = 50;
+  const padX = 10;
+  const barY = 18;
+  const barH = 9;
+  const H = 40;
   const innerW = W - padX * 2;
 
-  const v = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
-  const px = padX + (innerW * v) / 100;
-  const uid = `rg-${Math.round(v * 10)}`;
+  const clamp = (n: number) => Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
+  const xOf = (p: number) => padX + (innerW * clamp(p)) / 100;
+
+  const v = clamp(value);
+  const px = xOf(v);
+  const hasBase = baseline != null && Number.isFinite(baseline);
+  const bx = hasBase ? xOf(baseline as number) : 0;
+  const delta = hasBase ? v - clamp(baseline as number) : 0;
+  const uid = `rg-${Math.round(v * 10)}-${hasBase ? Math.round((baseline as number) * 10) : 'x'}`;
+
+  const aria = hasBase
+    ? `${fmtPct(v)}% da carteira — ${baselineLabel} ${fmtPct(baseline as number)}%`
+    : `${fmtPct(v)}% da carteira`;
 
   return (
     <div className={className}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`${fmtPct(v)}% da carteira`}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={aria}>
         <defs>
           <linearGradient id={`${uid}-grad`} x1="0" x2="1" y1="0" y2="0">
             <stop offset="0%" stopColor="#dc2626" />
@@ -49,26 +66,18 @@ export default function RibbonGauge({
           </linearGradient>
         </defs>
 
-        <rect
-          x={padX}
-          y={barY}
-          width={innerW}
-          height={barH}
-          rx={barH / 2}
-          fill={`url(#${uid}-grad)`}
-          opacity={0.9}
-        />
+        <rect x={padX} y={barY} width={innerW} height={barH} rx={barH / 2} fill={`url(#${uid}-grad)`} opacity={0.9} />
 
         {ticks.map((t) => {
-          const x = padX + (innerW * Math.max(0, Math.min(100, t))) / 100;
+          const x = xOf(t);
           return (
             <g key={t}>
-              <line x1={x} x2={x} y1={barY + barH} y2={barY + barH + 3} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
+              <line x1={x} x2={x} y1={barY + barH} y2={barY + barH + 2.5} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
               <text
                 x={x}
-                y={barY + barH + 12}
-                textAnchor={t === 0 ? 'start' : t === 100 ? 'end' : 'middle'}
-                fontSize={8}
+                y={barY + barH + 10}
+                textAnchor={t <= 0 ? 'start' : t >= 100 ? 'end' : 'middle'}
+                fontSize={7}
                 fontWeight={600}
                 fill="hsl(var(--muted-foreground))"
               >
@@ -78,20 +87,52 @@ export default function RibbonGauge({
           );
         })}
 
-        <line x1={px} x2={px} y1={barY - 2} y2={barY + barH + 2} stroke={pointerColor} strokeWidth={2} strokeLinecap="round" />
-        <polygon points={`${px - 6},${barY - 10} ${px + 6},${barY - 10} ${px},${barY - 2}`} fill={pointerColor} />
-        <text
-          x={px}
-          y={barY - 13}
-          textAnchor={v < 8 ? 'start' : v > 92 ? 'end' : 'middle'}
-          fontSize={10}
-          fontWeight={800}
-          fill="hsl(var(--foreground))"
-          style={{ letterSpacing: '-0.01em' }}
-        >
-          {fmtPct(v)}%
-        </text>
+        {hasBase && (
+          <g>
+            <title>{`${baselineLabel}: ${fmtPct(baseline as number)}%`}</title>
+            <line
+              x1={bx}
+              x2={bx}
+              y1={barY - 3}
+              y2={barY + barH + 3}
+              stroke="hsl(var(--foreground))"
+              strokeWidth={1.5}
+              strokeDasharray="2 1.5"
+              opacity={0.7}
+            />
+            <polygon
+              points={`${bx - 3.5},${barY + barH + 3} ${bx + 3.5},${barY + barH + 3} ${bx},${barY + barH}`}
+              fill="hsl(var(--foreground))"
+              opacity={0.7}
+            />
+          </g>
+        )}
+
+        <g>
+          <title>{hasBase ? `Agora ${fmtPct(v)}% (${delta >= 0 ? '+' : ''}${fmtPct(delta)} pp desde o início do mês)` : `Agora ${fmtPct(v)}%`}</title>
+          <line x1={px} x2={px} y1={barY - 2} y2={barY + barH + 2} stroke={pointerColor} strokeWidth={2} strokeLinecap="round" />
+          <polygon points={`${px - 5},${barY - 9} ${px + 5},${barY - 9} ${px},${barY - 2}`} fill={pointerColor} />
+          <text
+            x={px}
+            y={barY - 11.5}
+            textAnchor={v < 10 ? 'start' : v > 90 ? 'end' : 'middle'}
+            fontSize={9}
+            fontWeight={800}
+            fill="hsl(var(--foreground))"
+            style={{ letterSpacing: '-0.01em' }}
+          >
+            {fmtPct(v)}%
+          </text>
+        </g>
       </svg>
+      {hasBase && (
+        <p className="text-[9px] text-muted-foreground text-center -mt-0.5 leading-tight">
+          Início do mês {fmtPct(baseline as number)}% ·{' '}
+          <span className={delta >= 0 ? 'text-emerald-600 font-semibold' : 'text-red-600 font-semibold'}>
+            {delta >= 0 ? '+' : ''}{fmtPct(delta)} pp
+          </span>
+        </p>
+      )}
     </div>
   );
 }
