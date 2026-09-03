@@ -80,6 +80,9 @@ async function fetchAll(activeCompanyId?: string | null) {
     meta1: r.meta_1 != null ? Number(r.meta_1) : undefined,
     meta2: r.meta_2 != null ? Number(r.meta_2) : undefined,
     meta3: r.meta_3 != null ? Number(r.meta_3) : undefined,
+    metaTaxaEmDia: r.meta_taxa_em_dia != null ? Number(r.meta_taxa_em_dia) : undefined,
+    metaTaxaEmDiaBase: r.meta_taxa_em_dia_base != null ? Number(r.meta_taxa_em_dia_base) : undefined,
+    metaTaxaEmDiaEm: r.meta_taxa_em_dia_em ?? undefined,
   }));
 
   const products: Product[] = (productsRes.data ?? []).map((r: any) => ({

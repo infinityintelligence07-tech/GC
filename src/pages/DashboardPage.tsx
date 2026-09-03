@@ -31,6 +31,13 @@ import {
 import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
 import DashboardReportModal, { type DashboardReportSection } from '@/components/ui/DashboardReportModal';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
+import {
+  PAGO_FORMA_FILTER_DEFAULT,
+  entradaAvistaCountsInPago,
+  installmentCountsInPago,
+  type PagoFormaFilter,
+} from '@/lib/pagoFormaFilter';
+import { PagoFormaToggle } from '@/components/ui/PagoFormaToggle';
 import { toast } from 'sonner';
 
 type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'pendente' | 'tag' | 'revertidos';
@@ -69,6 +76,8 @@ export default function DashboardPage() {
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
   const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
+  // Card Pago: "Somente boleto" (padrão) ou "Geral" (inclui entrada à vista/cartão e PIX/link).
+  const [pagoForma, setPagoForma] = useState<PagoFormaFilter>(PAGO_FORMA_FILTER_DEFAULT);
   const [acFilter, setAcFilter] = useState('');
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
   const [productFilter, setProductFilter] = useState('');
@@ -665,7 +674,7 @@ export default function DashboardPage() {
       // entra DIRETO no card Pago (inclusive a entrada, que não vira parcela)
       // e nunca soma no A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
-      if (quitadoAvista && !range && dateBasis === 'vencimento') {
+      if (quitadoAvista && !range && dateBasis === 'vencimento' && entradaAvistaCountsInPago(pagoForma)) {
         const entrada = Number(st.downPayment ?? 0);
         if (entrada > 0) {
           total += entrada;
@@ -688,6 +697,7 @@ export default function DashboardPage() {
       st.installments.forEach((i) => {
         if (dateBasis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
+          if (!installmentCountsInPago(pagoForma, i)) return;
           if (range) {
             const pd = new Date(i.paidDate + 'T00:00:00');
             if (pd < range.start || pd > range.end) return;
@@ -713,6 +723,7 @@ export default function DashboardPage() {
 
         // Vencimento: em aberto pelo dueDate; pago somente se paidDate estiver no período.
         if (i.paid) {
+          if (!installmentCountsInPago(pagoForma, i)) return;
           if (!i.paidDate) {
             if (range) return;
           } else if (range) {
@@ -1239,6 +1250,12 @@ export default function DashboardPage() {
                 Exportar planilha
               </button>
             </div>
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <PagoFormaToggle value={pagoForma} onChange={setPagoForma} />
+              <span className="text-[10px] text-muted-foreground">
+                {pagoForma === 'boleto' ? 'Pago considera só títulos (boletos)' : 'Pago inclui à vista, cartão e PIX/link'}
+              </span>
+            </div>
             {(() => {
               const { total, aVencer, pago, pagoReal, qtd, qtdAlunos, perAcList, details } = forecastTotais;
               if (dateBasis === 'pagamento') {
@@ -1333,6 +1350,9 @@ export default function DashboardPage() {
                     <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Pago</p>
                     <p className="kpi-value-fit text-emerald-700 mt-0.5" title={kaminoTotalsPending ? 'Carregando totais Kamino…' : formatCurrency(pago)}>
                       {kaminoTotalsPending ? '…' : formatCurrency(pago)}
+                    </p>
+                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">
+                      {pagoForma === 'boleto' ? 'somente boleto' : 'geral'}
                     </p>
                   </div>
                 </div>
@@ -1674,7 +1694,8 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPIs: Solicitação + Pendências + Revertidos + Fundo/TMF ─────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3">
+      {/* Colunas = nº de cards da linha, para preencher a largura sem sobra à direita. */}
+      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 ${tagKpis[0] ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         <div
           onClick={() => setKpiModalKey('solic')}
           className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-fuchsia-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-fuchsia-500/30 ${kpiModalKey === 'solic' || statusFilter === 'cancelamento_solicitado' ? 'ring-2 ring-fuchsia-500/40' : ''}`}

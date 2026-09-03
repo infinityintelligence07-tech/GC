@@ -159,6 +159,13 @@ export interface AC {
   meta1?: number;
   meta2?: number;
   meta3?: number;
+  /** Meta mensal de Taxa em Dia (%) — topo do velocímetro da carteira.
+   *  Se ausente, o app usa `rules.meta1`. */
+  metaTaxaEmDia?: number;
+  /** Taxa em Dia (%) no momento em que a meta foi definida — início da escala. */
+  metaTaxaEmDiaBase?: number;
+  /** ISO — quando a meta de Taxa em Dia foi definida. */
+  metaTaxaEmDiaEm?: string;
 }
 
 export interface Product {

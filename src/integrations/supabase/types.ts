@@ -56,6 +56,9 @@ export type Database = {
           meta_1: number | null
           meta_2: number | null
           meta_3: number | null
+          meta_taxa_em_dia: number | null
+          meta_taxa_em_dia_base: number | null
+          meta_taxa_em_dia_em: string | null
           name: string
           photo: string | null
           updated_at: string
@@ -68,6 +71,9 @@ export type Database = {
           meta_1?: number | null
           meta_2?: number | null
           meta_3?: number | null
+          meta_taxa_em_dia?: number | null
+          meta_taxa_em_dia_base?: number | null
+          meta_taxa_em_dia_em?: string | null
           name: string
           photo?: string | null
           updated_at?: string
@@ -80,6 +86,9 @@ export type Database = {
           meta_1?: number | null
           meta_2?: number | null
           meta_3?: number | null
+          meta_taxa_em_dia?: number | null
+          meta_taxa_em_dia_base?: number | null
+          meta_taxa_em_dia_em?: string | null
           name?: string
           photo?: string | null
           updated_at?: string

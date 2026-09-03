@@ -294,6 +294,9 @@ export async function updateACDb(id: string, data: Partial<AC>) {
   if (data.meta1 !== undefined) patch.meta_1 = data.meta1 ?? null;
   if (data.meta2 !== undefined) patch.meta_2 = data.meta2 ?? null;
   if (data.meta3 !== undefined) patch.meta_3 = data.meta3 ?? null;
+  if ('metaTaxaEmDia' in data) patch.meta_taxa_em_dia = data.metaTaxaEmDia ?? null;
+  if ('metaTaxaEmDiaBase' in data) patch.meta_taxa_em_dia_base = data.metaTaxaEmDiaBase ?? null;
+  if ('metaTaxaEmDiaEm' in data) patch.meta_taxa_em_dia_em = data.metaTaxaEmDiaEm ?? null;
   const { error } = await supabase.from('acs').update(patch).eq('id', id);
   if (error) throw error;
 }

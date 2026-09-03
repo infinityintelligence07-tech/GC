@@ -13,7 +13,7 @@ import RendaExtraMetricsCard from '@/components/ui/RendaExtraMetricsCard';
 import DashDateFilter, { AnalysisModeToggle, DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
 import HeaderActions from '@/components/layout/HeaderActions';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
-import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, CalendarClock, AlertTriangle, Coins, Star, Wallet, X, Tag, ChevronUp, ChevronDown, Download } from 'lucide-react';
+import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, CalendarClock, AlertTriangle, Coins, Star, Wallet, X, Tag, ChevronUp, ChevronDown, Download, Pencil } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import {
@@ -30,6 +30,13 @@ import {
 import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
+import {
+  PAGO_FORMA_FILTER_DEFAULT,
+  entradaAvistaCountsInPago,
+  installmentCountsInPago,
+  type PagoFormaFilter,
+} from '@/lib/pagoFormaFilter';
+import { PagoFormaToggle } from '@/components/ui/PagoFormaToggle';
 import { toast } from 'sonner';
 import {
   isCancellationCaseInRange,
@@ -49,7 +56,7 @@ import {
 import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagRefs } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
-import MetaGauge from '@/components/ui/MetaGauge';
+import MetaTaxaEmDiaGauge from '@/components/ui/MetaTaxaEmDiaGauge';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 
 function ScoreStars({ score }: { score: number }) {
@@ -93,7 +100,7 @@ function resolveAssignedStudentTags(student: Student, studentTags: ReturnType<ty
 }
 
 export default function ACPortfolioPage() {
-  const { selectedACId, setSelectedACId, acs, students, updateStudent, deleteStudent, cancellationCases, products, cancelStudentToFlow, studentTags, toggleStudentTag, currentUser, rules } = useAppStore();
+  const { selectedACId, setSelectedACId, acs, students, updateStudent, deleteStudent, cancellationCases, products, cancelStudentToFlow, studentTags, toggleStudentTag, currentUser, rules, updateAC } = useAppStore();
   const [search, setSearch] = useState('');
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
   const [productFilter, setProductFilter] = useState('');
@@ -101,6 +108,8 @@ export default function ACPortfolioPage() {
   const [kpiCardFilter, setKpiCardFilter] = useState<'' | 'revertidos' | 'boletos_antecipados' | 'pendente'>('');
   const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
+  // Card Pago: "Somente boleto" (padrão) ou "Geral" (inclui entrada à vista/cartão e PIX/link).
+  const [pagoForma, setPagoForma] = useState<PagoFormaFilter>(PAGO_FORMA_FILTER_DEFAULT);
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [financialStudent, setFinancialStudent] = useState<Student | null>(null);
@@ -144,6 +153,10 @@ export default function ACPortfolioPage() {
   const [perfCustomEnd, setPerfCustomEnd] = useState(currentMonthEnd);
   const [historicoStart, setHistoricoStart] = useState(currentMonthStart);
   const [historicoEnd, setHistoricoEnd] = useState(currentMonthEnd);
+  // Edição da meta mensal de Taxa em Dia (velocímetro do cabeçalho).
+  const [editMetaOpen, setEditMetaOpen] = useState(false);
+  const [metaDraft, setMetaDraft] = useState('');
+  const [metaBaseDraft, setMetaBaseDraft] = useState('');
 
   // AC vinculado: pode abrir qualquer carteira, mas só edita a própria.
   const ownACId = currentUser?.acId ?? null;
@@ -394,7 +407,7 @@ export default function ACPortfolioPage() {
       // entra DIRETO no Pago (inclusive a entrada, que não vira parcela)
       // e nunca soma no A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
-      if (quitadoAvista && !range && dateBasis === 'vencimento') {
+      if (quitadoAvista && !range && dateBasis === 'vencimento' && entradaAvistaCountsInPago(pagoForma)) {
         const entrada = Number(st.downPayment ?? 0);
         if (entrada > 0) {
           total += entrada;
@@ -416,6 +429,7 @@ export default function ACPortfolioPage() {
       st.installments.forEach((i) => {
         if (dateBasis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
+          if (!installmentCountsInPago(pagoForma, i)) return;
           if (range) {
             const pd = new Date(i.paidDate + 'T00:00:00');
             if (pd < range.start || pd > range.end) return;
@@ -440,6 +454,7 @@ export default function ACPortfolioPage() {
 
         // Vencimento: em aberto pelo dueDate; pago somente se paidDate estiver no período.
         if (i.paid) {
+          if (!installmentCountsInPago(pagoForma, i)) return;
           if (!i.paidDate) {
             // Sem data de pagamento: só entra em "Todos".
             if (range) return;
@@ -766,22 +781,112 @@ export default function ACPortfolioPage() {
           </div>
         </div>
 
-        {/* Velocímetro centralizado no topo (otimização de espaço) */}
+        {/* Velocímetro da meta mensal de Taxa em Dia (centralizado no topo) */}
         <div className="hidden sm:flex flex-1 justify-center">
-          <div className="flex flex-col items-center">
-            <MetaGauge
-              value={Number(pctEmDia)}
-              meta1={rules.meta1}
-              meta2={rules.meta2}
-              meta3={rules.meta3}
-              size={170}
-              showLabel={false}
-            />
-            <div className="flex items-baseline gap-1.5 -mt-12">
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Taxa em Dia</span>
-              <span className="text-sm font-bold text-foreground tracking-tight">{pctEmDia}%</span>
-            </div>
-          </div>
+          {(() => {
+            const taxaAtual = Number(pctEmDia);
+            const metaTaxa = ac.metaTaxaEmDia ?? rules.meta1;
+            const baseTaxa = ac.metaTaxaEmDiaBase ?? taxaAtual;
+            const isAdmin = currentUser?.role === 'admin';
+            const fmtPct = (n: number) => (Math.round(n * 10) / 10).toFixed(1).replace('.', ',');
+            const abrirEdicao = () => {
+              setMetaDraft(fmtPct(metaTaxa));
+              setMetaBaseDraft(fmtPct(taxaAtual));
+              setEditMetaOpen(true);
+            };
+            const salvarMeta = () => {
+              const meta = Number(metaDraft.replace(',', '.'));
+              if (!Number.isFinite(meta) || meta <= 0 || meta > 100) {
+                toast.error('Meta inválida — informe um percentual entre 0 e 100.');
+                return;
+              }
+              const baseRaw = metaBaseDraft.trim() ? Number(metaBaseDraft.replace(',', '.')) : taxaAtual;
+              const base = Number.isFinite(baseRaw) ? Math.max(0, Math.min(100, baseRaw)) : taxaAtual;
+              updateAC(ac.id, {
+                metaTaxaEmDia: Math.round(meta * 10) / 10,
+                metaTaxaEmDiaBase: Math.round(base * 10) / 10,
+                metaTaxaEmDiaEm: new Date().toISOString(),
+              });
+              setEditMetaOpen(false);
+              toast.success(`Meta de Taxa em Dia de ${ac.name}: ${fmtPct(meta)}% (partida ${fmtPct(base)}%).`);
+            };
+            return (
+              <div className="relative flex flex-col items-center">
+                <MetaTaxaEmDiaGauge value={taxaAtual} base={baseTaxa} meta={metaTaxa} size={170} />
+                <div className="flex items-center gap-1.5 -mt-2">
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Taxa em Dia</span>
+                  <span className="text-sm font-bold text-foreground tracking-tight">{pctEmDia}%</span>
+                  <span
+                    className="text-[9px] text-muted-foreground"
+                    title={ac.metaTaxaEmDiaEm
+                      ? `Meta definida em ${new Date(ac.metaTaxaEmDiaEm).toLocaleDateString('pt-BR')}`
+                      : 'Meta padrão (Configurações → Meta 1). Defina uma meta própria para este assessor.'}
+                  >
+                    · Meta {fmtPct(metaTaxa)}%
+                  </span>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => (editMetaOpen ? setEditMetaOpen(false) : abrirEdicao())}
+                      className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+                      title="Editar meta de Taxa em Dia"
+                    >
+                      <Pencil size={11} />
+                    </button>
+                  )}
+                </div>
+
+                {editMetaOpen && (
+                  <div className="absolute top-full z-30 mt-1 w-64 rounded-xl border border-border bg-card p-3 shadow-lg text-left">
+                    <p className="text-[11px] font-semibold text-foreground mb-2">Meta de Taxa em Dia — {ac.name}</p>
+                    <label className="block text-[10px] text-muted-foreground">
+                      Meta do mês (%)
+                      <input
+                        type="number" step="0.1" min={0} max={100}
+                        className="input-field w-full mt-1"
+                        value={metaDraft}
+                        autoFocus
+                        onFocus={(e) => e.currentTarget.select()}
+                        onChange={(e) => setMetaDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') salvarMeta(); if (e.key === 'Escape') setEditMetaOpen(false); }}
+                      />
+                    </label>
+                    <label className="block text-[10px] text-muted-foreground mt-2">
+                      Ponto de partida (%) — início do velocímetro
+                      <input
+                        type="number" step="0.1" min={0} max={100}
+                        className="input-field w-full mt-1"
+                        value={metaBaseDraft}
+                        placeholder={fmtPct(taxaAtual)}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onChange={(e) => setMetaBaseDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') salvarMeta(); if (e.key === 'Escape') setEditMetaOpen(false); }}
+                      />
+                    </label>
+                    <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug">
+                      Pré-preenchido com a taxa atual. A escala vai da partida até o dobro da meta; o amarelo marca o meio do caminho.
+                    </p>
+                    <div className="flex justify-end gap-2 mt-3">
+                      <button
+                        type="button"
+                        onClick={() => setEditMetaOpen(false)}
+                        className="px-3 py-1.5 rounded-lg text-[11px] bg-muted hover:bg-muted/70"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={salvarMeta}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-semibold iam-gradient text-primary-foreground"
+                      >
+                        Salvar meta
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {canMutatePortfolio ? (
@@ -910,6 +1015,12 @@ export default function ACPortfolioPage() {
                 Exportar planilha
               </button>
             </div>
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <PagoFormaToggle value={pagoForma} onChange={setPagoForma} />
+              <span className="text-[10px] text-muted-foreground">
+                {pagoForma === 'boleto' ? 'Pago considera só títulos (boletos)' : 'Pago inclui à vista, cartão e PIX/link'}
+              </span>
+            </div>
             {(() => {
               const { total, aVencer, pago, pagoReal, qtd, qtdAlunos } = carteiraTotais;
               if (dateBasis === 'pagamento') {
@@ -952,7 +1063,9 @@ export default function ACPortfolioPage() {
                     <p className="kpi-value-fit text-emerald-700 mt-0.5" title={formatCurrency(pago)}>
                       {formatCurrency(pago)}
                     </p>
-                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">por data de pagamento</p>
+                    <p className="text-[10px] font-semibold text-emerald-700 mt-0">
+                      por data de pagamento · {pagoForma === 'boleto' ? 'somente boleto' : 'geral'}
+                    </p>
                   </div>
                 </div>
               );
