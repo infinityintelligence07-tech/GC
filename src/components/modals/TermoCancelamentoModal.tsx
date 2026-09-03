@@ -139,18 +139,14 @@ export default function TermoCancelamentoModal({
     toast.success('Link de assinatura copiado. Envie para o aluno assinar.');
   };
 
-  const handleCopySignLink = async () => {
+  /** Gera o termo no ZapSign; só depois libera o botão de copiar o link. */
+  const handleGenerateZapSign = async () => {
     if (!student?.iamControlAlunoId) {
-      toast.error('Vincule o aluno ao IAM Control para gerar o link de assinatura.');
+      toast.error('Vincule o aluno ao IAM Control para gerar o termo no ZapSign.');
       return;
     }
-
     if (signLink) {
-      try {
-        await copySignLink(signLink);
-      } catch {
-        toast.error('Não foi possível copiar o link.');
-      }
+      toast.message('Termo já gerado. Use Copiar Link para enviar ao aluno.');
       return;
     }
 
@@ -166,11 +162,12 @@ export default function TermoCancelamentoModal({
         semMultaCDC7,
         document: doc,
       });
-      if (!result.ok) throw new Error(result.error || 'Falha ao gerar link de assinatura.');
+      if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo no ZapSign.');
       const url = result.url_assinatura || result.file_url;
       if (!url) throw new Error('Link de assinatura não disponível.');
       setSignLink(url);
-      await copySignLink(url);
+      setLinkCopied(false);
+      toast.success('Termo gerado no ZapSign. Agora você pode copiar o link.');
       onGenerated?.({
         signUrl: url,
         plainText,
@@ -180,9 +177,21 @@ export default function TermoCancelamentoModal({
         variant: doc.variant,
       });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Falha ao gerar link de assinatura.');
+      toast.error(err instanceof Error ? err.message : 'Falha ao gerar termo no ZapSign.');
     } finally {
       setLinkBusy(false);
+    }
+  };
+
+  const handleCopySignLink = async () => {
+    if (!signLink) {
+      toast.error('Gere o termo no ZapSign antes de copiar o link.');
+      return;
+    }
+    try {
+      await copySignLink(signLink);
+    } catch {
+      toast.error('Não foi possível copiar o link.');
     }
   };
 
@@ -204,7 +213,11 @@ export default function TermoCancelamentoModal({
               </span>
               <select
                 value={variantChoice}
-                onChange={(e) => setVariantChoice(e.target.value as 'auto' | CancellationTermoVariant)}
+                onChange={(e) => {
+                  setVariantChoice(e.target.value as 'auto' | CancellationTermoVariant);
+                  setSignLink(null);
+                  setLinkCopied(false);
+                }}
                 className="bg-transparent px-2.5 py-1.5 text-xs text-foreground focus:outline-none cursor-pointer max-w-[15rem]"
                 aria-label="Modelo do termo"
               >
@@ -277,7 +290,7 @@ export default function TermoCancelamentoModal({
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
               <p className="text-xs text-amber-800">
                 Modelo escolhido manualmente. Pelas regras de multa/% e saldo a devolver, o automático seria{' '}
-                <strong>{cancellationTermoVariantLabel(autoVariant)}</strong>. O PDF e o link de assinatura usam o
+                <strong>{cancellationTermoVariantLabel(autoVariant)}</strong>. O PDF e o termo no ZapSign usam o
                 modelo selecionado acima.
               </p>
             </div>
@@ -286,20 +299,20 @@ export default function TermoCancelamentoModal({
               <p className="text-xs text-blue-800">
                 O modelo é escolhido automaticamente conforme a multa/% e o saldo a devolver: só estorno, só multa,
                 multa + estorno ou sem multa. Se precisar, troque o modelo no seletor ao lado do título antes de gerar
-                o PDF ou copiar o link de assinatura.
+                o PDF ou o termo no ZapSign.
               </p>
             </div>
           )}
 
           {!student?.iamControlAlunoId && (
             <p className="text-[11px] text-amber-700">
-              Vincule o aluno ao IAM Control para habilitar a cópia do link de assinatura.
+              Vincule o aluno ao IAM Control para habilitar a geração do termo no ZapSign.
             </p>
           )}
 
           {signLink && (
             <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700">
-              Link pronto para enviar ao aluno. Clique em Copiar Link novamente se precisar.
+              Termo gerado no ZapSign. Clique em Copiar Link para enviar ao aluno.
             </div>
           )}
         </div>
@@ -319,15 +332,30 @@ export default function TermoCancelamentoModal({
             Gerar PDF
           </button>
           <button
-            onClick={handleCopySignLink}
-            disabled={linkBusy || !student?.iamControlAlunoId}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+            onClick={() => void handleGenerateZapSign()}
+            disabled={linkBusy || !student?.iamControlAlunoId || !!signLink}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             {linkBusy ? (
               <>
-                <Link2 size={16} /> Gerando link…
+                <Link2 size={16} /> Gerando termo…
               </>
-            ) : linkCopied ? (
+            ) : signLink ? (
+              <>
+                <Check size={16} /> Termo gerado
+              </>
+            ) : (
+              <>
+                <FileText size={16} /> Gerar Termo
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => void handleCopySignLink()}
+            disabled={!signLink || linkBusy}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            {linkCopied ? (
               <>
                 <Check size={16} /> Link copiado
               </>

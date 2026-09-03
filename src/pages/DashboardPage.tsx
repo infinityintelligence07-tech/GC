@@ -8,6 +8,7 @@ import HeaderActions from '@/components/layout/HeaderActions';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
 import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity, FileText, AlertTriangle, Download } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import { Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
@@ -72,7 +73,7 @@ function BotaoRelatorio({ onClick, className = '' }: { onClick: () => void; clas
 }
 
 export default function DashboardPage() {
-  const { students, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals } = useAppStore();
+  const { students, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals, rules, setRules, currentUser } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
   const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
@@ -1143,6 +1144,24 @@ export default function DashboardPage() {
         <AnalysisModeToggle mode={mode} setMode={setMode} />
         <BotaoRelatorio onClick={() => setReportOpen(true)} />
       </HeaderActions>
+
+      {/* ── 0. Velocímetro da meta mensal de Taxa em Dia da empresa ─────────── */}
+      {/* Mesmo componente da Carteira do Assessor, mas com a Taxa em Dia geral
+          e a meta gravada em financial_rules (por empresa). */}
+      <div className="hidden sm:flex justify-center">
+        <MetaTaxaEmDiaHeader
+          taxaAtual={Number(pctEmDia)}
+          meta={rules.metaTaxaEmDia}
+          metaPadrao={rules.meta1}
+          base={rules.metaTaxaEmDiaBase}
+          definidaEm={rules.metaTaxaEmDiaEm}
+          titulo="Dashboard geral"
+          canEdit={currentUser?.role === 'admin'}
+          temDados={totalComposicao > 0}
+          onSave={({ meta, base, definidaEm }) =>
+            setRules({ metaTaxaEmDia: meta, metaTaxaEmDiaBase: base, metaTaxaEmDiaEm: definidaEm })}
+        />
+      </div>
       <div className={`flex flex-wrap items-center gap-2 ${mode === 'performance' ? 'sm:hidden' : ''}`}>
         <div className="flex-1 min-w-[260px]">
           <DashDateFilter

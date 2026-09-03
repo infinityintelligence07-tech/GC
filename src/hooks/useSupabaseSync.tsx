@@ -106,6 +106,9 @@ async function fetchAll(activeCompanyId?: string | null) {
         metaReversao1: (rulesRes.data as any).meta_reversao_1 != null ? Number((rulesRes.data as any).meta_reversao_1) : undefined,
         metaReversao2: (rulesRes.data as any).meta_reversao_2 != null ? Number((rulesRes.data as any).meta_reversao_2) : undefined,
         metaReversao3: (rulesRes.data as any).meta_reversao_3 != null ? Number((rulesRes.data as any).meta_reversao_3) : undefined,
+        metaTaxaEmDia: (rulesRes.data as any).meta_taxa_em_dia != null ? Number((rulesRes.data as any).meta_taxa_em_dia) : undefined,
+        metaTaxaEmDiaBase: (rulesRes.data as any).meta_taxa_em_dia_base != null ? Number((rulesRes.data as any).meta_taxa_em_dia_base) : undefined,
+        metaTaxaEmDiaEm: (rulesRes.data as any).meta_taxa_em_dia_em ?? undefined,
         multaCancelamentoComAntecedencia: Number((rulesRes.data as any).multa_cancelamento_com_antecedencia ?? 30),
         multaCancelamentoSemAntecedencia: Number((rulesRes.data as any).multa_cancelamento_sem_antecedencia ?? 40),
       }

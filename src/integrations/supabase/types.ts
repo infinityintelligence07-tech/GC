@@ -782,6 +782,9 @@ export type Database = {
           meta_reversao_1: number | null
           meta_reversao_2: number | null
           meta_reversao_3: number | null
+          meta_taxa_em_dia: number | null
+          meta_taxa_em_dia_base: number | null
+          meta_taxa_em_dia_em: string | null
           multa_cancelamento_com_antecedencia: number
           multa_cancelamento_sem_antecedencia: number
           multa_percent: number
@@ -801,6 +804,9 @@ export type Database = {
           meta_reversao_1?: number | null
           meta_reversao_2?: number | null
           meta_reversao_3?: number | null
+          meta_taxa_em_dia?: number | null
+          meta_taxa_em_dia_base?: number | null
+          meta_taxa_em_dia_em?: string | null
           multa_cancelamento_com_antecedencia?: number
           multa_cancelamento_sem_antecedencia?: number
           multa_percent?: number
@@ -820,6 +826,9 @@ export type Database = {
           meta_reversao_1?: number | null
           meta_reversao_2?: number | null
           meta_reversao_3?: number | null
+          meta_taxa_em_dia?: number | null
+          meta_taxa_em_dia_base?: number | null
+          meta_taxa_em_dia_em?: string | null
           multa_cancelamento_com_antecedencia?: number
           multa_cancelamento_sem_antecedencia?: number
           multa_percent?: number

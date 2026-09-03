@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { X, Download, Link2, Check, Copy, Paperclip } from 'lucide-react';
+import { X, Download, Link2, Check, Copy, Paperclip, FileText } from 'lucide-react';
 import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
@@ -313,18 +313,14 @@ export default function TermoAditivoModal({
     toast.success('Link de assinatura copiado. Envie para o aluno assinar.');
   };
 
-  const handleCopySignLink = async () => {
+  /** Gera o termo/contrato no ZapSign; só depois libera o botão de copiar o link. */
+  const handleGenerateZapSign = async () => {
     if (!student.iamControlAlunoId) {
-      toast.error('Vincule o aluno ao IAM Control para gerar o link de assinatura.');
+      toast.error('Vincule o aluno ao IAM Control para gerar o termo no ZapSign.');
       return;
     }
-
     if (signLink) {
-      try {
-        await copySignLink(signLink);
-      } catch {
-        toast.error('Não foi possível copiar o link.');
-      }
+      toast.message('Termo já gerado. Use Copiar Link para enviar ao aluno.');
       return;
     }
 
@@ -344,13 +340,14 @@ export default function TermoAditivoModal({
           parcelamentoLines,
         },
       });
-      if (!result.ok) throw new Error(result.error || 'Falha ao gerar link de assinatura.');
+      if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo no ZapSign.');
 
       const signUrl = result.url_assinatura || result.file_url;
       if (!signUrl) throw new Error('Link de assinatura não disponível.');
 
       setSignLink(signUrl);
-      await copySignLink(signUrl);
+      setLinkCopied(false);
+      toast.success('Termo gerado no ZapSign. Agora você pode copiar o link.');
       onTermoGerado?.({
         id: result.id,
         urlAssinatura: signUrl,
@@ -358,9 +355,21 @@ export default function TermoAditivoModal({
         nomeDocumento: result.nome_documento,
       });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Falha ao gerar link de assinatura.');
+      toast.error(err instanceof Error ? err.message : 'Falha ao gerar termo no ZapSign.');
     } finally {
       setLinkBusy(false);
+    }
+  };
+
+  const handleCopySignLink = async () => {
+    if (!signLink) {
+      toast.error('Gere o termo no ZapSign antes de copiar o link.');
+      return;
+    }
+    try {
+      await copySignLink(signLink);
+    } catch {
+      toast.error('Não foi possível copiar o link.');
     }
   };
 
@@ -516,20 +525,20 @@ export default function TermoAditivoModal({
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-xs text-blue-800">
               Este termo documenta formalmente a renegociação, no mesmo padrão do documento institucional. Gere o PDF
-              para impressão, copie o link de assinatura para enviar ao aluno ou anexe o termo já assinado.
+              para impressão, gere o termo no ZapSign para obter o link de assinatura ou anexe o termo já assinado.
             </p>
           </div>
 
           {!student.iamControlAlunoId && (
             <p className="text-[11px] text-amber-700">
-              Vincule o aluno ao IAM Control para habilitar a cópia do link de assinatura. Sem o vínculo, use{' '}
+              Vincule o aluno ao IAM Control para habilitar a geração do termo no ZapSign. Sem o vínculo, use{' '}
               <strong>Anexar assinado</strong> para enviar o termo/contrato já assinado.
             </p>
           )}
 
           {signLink && (
             <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
-              Link pronto para enviar ao aluno. Clique em Copiar Link novamente se precisar.
+              Termo gerado no ZapSign. Clique em Copiar Link para enviar ao aluno.
             </div>
           )}
         </div>
@@ -566,15 +575,30 @@ export default function TermoAditivoModal({
             {anexoBusy ? 'Enviando…' : 'Anexar assinado'}
           </button>
           <button
-            onClick={handleCopySignLink}
-            disabled={linkBusy || !student.iamControlAlunoId}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+            onClick={() => void handleGenerateZapSign()}
+            disabled={linkBusy || !student.iamControlAlunoId || !!signLink}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             {linkBusy ? (
               <>
-                <Link2 size={16} /> Gerando link…
+                <Link2 size={16} /> Gerando termo…
               </>
-            ) : linkCopied ? (
+            ) : signLink ? (
+              <>
+                <Check size={16} /> Termo gerado
+              </>
+            ) : (
+              <>
+                <FileText size={16} /> Gerar Termo
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => void handleCopySignLink()}
+            disabled={!signLink || linkBusy}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            {linkCopied ? (
               <>
                 <Check size={16} /> Link copiado
               </>

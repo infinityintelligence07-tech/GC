@@ -201,6 +201,13 @@ export interface FinancialRules {
   metaReversao1?: number;
   metaReversao2?: number;
   metaReversao3?: number;
+  /** Meta mensal de Taxa em Dia (%) da empresa — velocímetro do Dashboard.
+   *  Se ausente, o app usa `meta1`. */
+  metaTaxaEmDia?: number;
+  /** Taxa em Dia (%) no momento em que a meta foi definida — início da escala. */
+  metaTaxaEmDiaBase?: number;
+  /** ISO — quando a meta de Taxa em Dia foi definida. */
+  metaTaxaEmDiaEm?: string;
   /** Multa (%) quando cancelamento é pedido com MAIS de 30 dias de antecedência do evento */
   multaCancelamentoComAntecedencia: number;
   /** Multa (%) quando cancelamento é pedido com MENOS de 30 dias de antecedência do evento */

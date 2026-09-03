@@ -131,7 +131,7 @@ export default function CancellationFinalizeModal({
     toast.success('Link de assinatura copiado. Envie para o aluno assinar.');
   };
 
-  const handleCopySignLink = async () => {
+  const handleGenerateZapSign = async () => {
     if (isReverter) {
       toast.error('Aditivo de contrato ainda não está integrado à ZapSign. Use Gerar PDF.');
       return;
@@ -141,11 +141,7 @@ export default function CancellationFinalizeModal({
       return;
     }
     if (signLink) {
-      try {
-        await copySignLink(signLink);
-      } catch {
-        toast.error('Não foi possível copiar o link.');
-      }
+      toast.message('Termo já gerado. Use Copiar Link para enviar ao aluno.');
       return;
     }
 
@@ -163,11 +159,12 @@ export default function CancellationFinalizeModal({
         multaPercent,
         estornoTotal,
       });
-      if (!result.ok) throw new Error(result.error || 'Falha ao gerar link de assinatura.');
+      if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo no ZapSign.');
       const url = result.url_assinatura || result.file_url;
       if (!url) throw new Error('Link de assinatura não disponível.');
       setSignLink(url);
-      await copySignLink(url);
+      setLinkCopied(false);
+      toast.success('Termo gerado no ZapSign. Agora você pode copiar o link.');
       await updateCancellationCase(caseRef.id, {
         termTemplate: documento,
         termAttachments: [
@@ -181,9 +178,21 @@ export default function CancellationFinalizeModal({
         ],
       });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Falha ao gerar link de assinatura.');
+      toast.error(err instanceof Error ? err.message : 'Falha ao gerar termo no ZapSign.');
     } finally {
       setLinkBusy(false);
+    }
+  };
+
+  const handleCopySignLink = async () => {
+    if (!signLink) {
+      toast.error('Gere o termo no ZapSign antes de copiar o link.');
+      return;
+    }
+    try {
+      await copySignLink(signLink);
+    } catch {
+      toast.error('Não foi possível copiar o link.');
     }
   };
 
@@ -219,15 +228,30 @@ export default function CancellationFinalizeModal({
             <Download size={12} /> Gerar PDF
           </button>
           <button
-            onClick={handleCopySignLink}
-            disabled={linkBusy || isReverter || !student?.iamControlAlunoId}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all disabled:opacity-50"
+            onClick={() => void handleGenerateZapSign()}
+            disabled={linkBusy || isReverter || !student?.iamControlAlunoId || !!signLink}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-violet-600 text-white hover:bg-violet-700 transition-all disabled:opacity-50"
           >
             {linkBusy ? (
               <>
                 <Link2 size={12} /> Gerando…
               </>
-            ) : linkCopied ? (
+            ) : signLink ? (
+              <>
+                <Check size={12} /> Termo gerado
+              </>
+            ) : (
+              <>
+                <FileText size={12} /> Gerar Termo
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => void handleCopySignLink()}
+            disabled={!signLink || linkBusy}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all disabled:opacity-50"
+          >
+            {linkCopied ? (
               <>
                 <Check size={12} /> Link copiado
               </>
@@ -241,11 +265,11 @@ export default function CancellationFinalizeModal({
 
         {signLink && (
           <div className="mb-4 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700">
-            Link pronto para enviar ao aluno.
+            Termo gerado no ZapSign. Clique em Copiar Link para enviar ao aluno.
           </div>
         )}
         {!isReverter && !student?.iamControlAlunoId && (
-          <p className="mb-4 text-[11px] text-amber-700">Vincule o aluno ao IAM Control para copiar o link de assinatura.</p>
+          <p className="mb-4 text-[11px] text-amber-700">Vincule o aluno ao IAM Control para gerar o termo no ZapSign.</p>
         )}
 
         {allowChooseOutcome ? (

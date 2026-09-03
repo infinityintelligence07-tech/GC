@@ -13,7 +13,7 @@ import RendaExtraMetricsCard from '@/components/ui/RendaExtraMetricsCard';
 import DashDateFilter, { AnalysisModeToggle, DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
 import HeaderActions from '@/components/layout/HeaderActions';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
-import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, CalendarClock, AlertTriangle, Coins, Star, Wallet, X, Tag, ChevronUp, ChevronDown, Download, Pencil } from 'lucide-react';
+import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, CalendarClock, AlertTriangle, Coins, Star, Wallet, X, Tag, ChevronUp, ChevronDown, Download } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import {
@@ -56,7 +56,7 @@ import {
 import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagRefs } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
-import MetaTaxaEmDiaGauge from '@/components/ui/MetaTaxaEmDiaGauge';
+import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 
 function ScoreStars({ score }: { score: number }) {
@@ -153,10 +153,6 @@ export default function ACPortfolioPage() {
   const [perfCustomEnd, setPerfCustomEnd] = useState(currentMonthEnd);
   const [historicoStart, setHistoricoStart] = useState(currentMonthStart);
   const [historicoEnd, setHistoricoEnd] = useState(currentMonthEnd);
-  // Edição da meta mensal de Taxa em Dia (velocímetro do cabeçalho).
-  const [editMetaOpen, setEditMetaOpen] = useState(false);
-  const [metaDraft, setMetaDraft] = useState('');
-  const [metaBaseDraft, setMetaBaseDraft] = useState('');
 
   // AC vinculado: pode abrir qualquer carteira, mas só edita a própria.
   const ownACId = currentUser?.acId ?? null;
@@ -304,7 +300,9 @@ export default function ACPortfolioPage() {
       const refDate = new Date(historicoEnd + 'T23:59:59');
       const base = acStudents.filter((s) => new Date(s.enrollmentDate) <= refDate);
       const remapped = base.map((s) => {
-        if (s.status === 'Negativado') return s;
+        // Mesma regra da Dashboard: Negativado, funil de cancelamento e pendência
+        // operacional preservados — nunca rebaixados pelo recálculo na data.
+        if (s.status === 'Negativado' || cancelamentoOverridesFinancialStatus(s) || isOperationalPendente(s)) return s;
         if (s.statusMode === 'Automático') {
           return { ...s, status: calculateAutoStatusAt(s.installments, refDate) as StudentStatus };
         }
@@ -653,12 +651,17 @@ export default function ACPortfolioPage() {
     const due = new Date(i.dueDate + 'T00:00:00');
     return due >= _fcRange.start && due <= _fcRange.end;
   };
+  // Mesma regra de contagem da Dashboard: com filtro de período, só conta aluno
+  // com parcela EM ABERTO dentro do intervalo (parcela já paga no período não
+  // infla o contador — o valor, sumUnpaid, também ignora pagas). Alinha os
+  // cards com a tabela (hasInstallmentInForecastRange).
   const kpiStudentsScoped = _fcRange
-    ? kpiStudents.filter((s) => s.installments.some(_instInRange))
+    ? kpiStudents.filter((s) => s.installments.some((i) => !i.paid && _instInRange(i)))
     : kpiStudents;
   const total = kpiStudentsScoped.length;
-  // Solicitação de cancelamento sobrepõe visualmente qualquer outro status (dados preservados)
-  const _isSolic = isSolicitacaoCancelamento;
+  // Pedido de cancelamento: critério unificado da Dashboard (status OU caso
+  // ativo no funil Cancelamentos). Sobrepõe visualmente qualquer outro status.
+  const _isSolic = (s: Student) => matchesCancelamentoFilter(s, cancellationCases);
   const emDia = kpiStudentsScoped.filter((s) => s.status === 'Em Dia' && !_isSolic(s));
   const alunosNovos = kpiStudentsScoped.filter((s) => s.status === 'Aluno Novo' && !_isSolic(s));
   const vencido1 = kpiStudentsScoped.filter((s) => s.status === 'Vencido 1' && !_isSolic(s));
@@ -719,7 +722,7 @@ export default function ACPortfolioPage() {
 
   const revertPct = acCases.length > 0 ? Math.round((revertidos.length / acCases.length) * 100) : 0;
   const revertidosValue = revertidos.reduce((acc, c) => acc + (c.value ?? 0), 0);
-  const pendentes = kpiStudentsScoped.filter((s) => isOperationalPendente(s) && !isSolicCancel(s));
+  const pendentes = kpiStudentsScoped.filter((s) => isOperationalPendente(s) && !_isSolic(s));
   const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
   // Display status for table rows (always current, table is independent)
@@ -783,110 +786,18 @@ export default function ACPortfolioPage() {
 
         {/* Velocímetro da meta mensal de Taxa em Dia (centralizado no topo) */}
         <div className="hidden sm:flex flex-1 justify-center">
-          {(() => {
-            const taxaAtual = Number(pctEmDia);
-            const metaTaxa = ac.metaTaxaEmDia ?? rules.meta1;
-            const baseTaxa = ac.metaTaxaEmDiaBase ?? taxaAtual;
-            const isAdmin = currentUser?.role === 'admin';
-            const fmtPct = (n: number) => (Math.round(n * 10) / 10).toFixed(1).replace('.', ',');
-            const abrirEdicao = () => {
-              setMetaDraft(fmtPct(metaTaxa));
-              setMetaBaseDraft(fmtPct(taxaAtual));
-              setEditMetaOpen(true);
-            };
-            const salvarMeta = () => {
-              const meta = Number(metaDraft.replace(',', '.'));
-              if (!Number.isFinite(meta) || meta <= 0 || meta > 100) {
-                toast.error('Meta inválida — informe um percentual entre 0 e 100.');
-                return;
-              }
-              const baseRaw = metaBaseDraft.trim() ? Number(metaBaseDraft.replace(',', '.')) : taxaAtual;
-              const base = Number.isFinite(baseRaw) ? Math.max(0, Math.min(100, baseRaw)) : taxaAtual;
-              updateAC(ac.id, {
-                metaTaxaEmDia: Math.round(meta * 10) / 10,
-                metaTaxaEmDiaBase: Math.round(base * 10) / 10,
-                metaTaxaEmDiaEm: new Date().toISOString(),
-              });
-              setEditMetaOpen(false);
-              toast.success(`Meta de Taxa em Dia de ${ac.name}: ${fmtPct(meta)}% (partida ${fmtPct(base)}%).`);
-            };
-            return (
-              <div className="relative flex flex-col items-center">
-                <MetaTaxaEmDiaGauge value={taxaAtual} base={baseTaxa} meta={metaTaxa} size={170} />
-                <div className="flex items-center gap-1.5 -mt-2">
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Taxa em Dia</span>
-                  <span className="text-sm font-bold text-foreground tracking-tight">{pctEmDia}%</span>
-                  <span
-                    className="text-[9px] text-muted-foreground"
-                    title={ac.metaTaxaEmDiaEm
-                      ? `Meta definida em ${new Date(ac.metaTaxaEmDiaEm).toLocaleDateString('pt-BR')}`
-                      : 'Meta padrão (Configurações → Meta 1). Defina uma meta própria para este assessor.'}
-                  >
-                    · Meta {fmtPct(metaTaxa)}%
-                  </span>
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => (editMetaOpen ? setEditMetaOpen(false) : abrirEdicao())}
-                      className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-                      title="Editar meta de Taxa em Dia"
-                    >
-                      <Pencil size={11} />
-                    </button>
-                  )}
-                </div>
-
-                {editMetaOpen && (
-                  <div className="absolute top-full z-30 mt-1 w-64 rounded-xl border border-border bg-card p-3 shadow-lg text-left">
-                    <p className="text-[11px] font-semibold text-foreground mb-2">Meta de Taxa em Dia — {ac.name}</p>
-                    <label className="block text-[10px] text-muted-foreground">
-                      Meta do mês (%)
-                      <input
-                        type="number" step="0.1" min={0} max={100}
-                        className="input-field w-full mt-1"
-                        value={metaDraft}
-                        autoFocus
-                        onFocus={(e) => e.currentTarget.select()}
-                        onChange={(e) => setMetaDraft(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') salvarMeta(); if (e.key === 'Escape') setEditMetaOpen(false); }}
-                      />
-                    </label>
-                    <label className="block text-[10px] text-muted-foreground mt-2">
-                      Ponto de partida (%) — início do velocímetro
-                      <input
-                        type="number" step="0.1" min={0} max={100}
-                        className="input-field w-full mt-1"
-                        value={metaBaseDraft}
-                        placeholder={fmtPct(taxaAtual)}
-                        onFocus={(e) => e.currentTarget.select()}
-                        onChange={(e) => setMetaBaseDraft(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') salvarMeta(); if (e.key === 'Escape') setEditMetaOpen(false); }}
-                      />
-                    </label>
-                    <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug">
-                      Pré-preenchido com a taxa atual. A escala vai da partida até o dobro da meta; o amarelo marca o meio do caminho.
-                    </p>
-                    <div className="flex justify-end gap-2 mt-3">
-                      <button
-                        type="button"
-                        onClick={() => setEditMetaOpen(false)}
-                        className="px-3 py-1.5 rounded-lg text-[11px] bg-muted hover:bg-muted/70"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={salvarMeta}
-                        className="px-3 py-1.5 rounded-lg text-[11px] font-semibold iam-gradient text-primary-foreground"
-                      >
-                        Salvar meta
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+          <MetaTaxaEmDiaHeader
+            taxaAtual={Number(pctEmDia)}
+            meta={ac.metaTaxaEmDia}
+            metaPadrao={rules.meta1}
+            base={ac.metaTaxaEmDiaBase}
+            definidaEm={ac.metaTaxaEmDiaEm}
+            titulo={ac.name}
+            canEdit={currentUser?.role === 'admin'}
+            temDados={totalComposicao > 0}
+            onSave={({ meta, base, definidaEm }) =>
+              updateAC(ac.id, { metaTaxaEmDia: meta, metaTaxaEmDiaBase: base, metaTaxaEmDiaEm: definidaEm })}
+          />
         </div>
 
         {canMutatePortfolio ? (

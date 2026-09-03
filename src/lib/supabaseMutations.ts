@@ -371,6 +371,9 @@ export async function updateRulesDb(data: Partial<FinancialRules>) {
   if ((data as any).metaReversao1 !== undefined) patch.meta_reversao_1 = (data as any).metaReversao1;
   if ((data as any).metaReversao2 !== undefined) patch.meta_reversao_2 = (data as any).metaReversao2;
   if ((data as any).metaReversao3 !== undefined) patch.meta_reversao_3 = (data as any).metaReversao3;
+  if ('metaTaxaEmDia' in data) patch.meta_taxa_em_dia = data.metaTaxaEmDia ?? null;
+  if ('metaTaxaEmDiaBase' in data) patch.meta_taxa_em_dia_base = data.metaTaxaEmDiaBase ?? null;
+  if ('metaTaxaEmDiaEm' in data) patch.meta_taxa_em_dia_em = data.metaTaxaEmDiaEm ?? null;
   if (data.multaCancelamentoComAntecedencia !== undefined)
     patch.multa_cancelamento_com_antecedencia = data.multaCancelamentoComAntecedencia;
   if (data.multaCancelamentoSemAntecedencia !== undefined)
