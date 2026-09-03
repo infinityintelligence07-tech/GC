@@ -127,9 +127,9 @@ export async function ensureIamPendenteConciliacaoItems(
     if (!needsIamGcConciliacaoApproval(s)) continue;
     const iamStatus = normalizeIamContratoStatus(s.iamControlContratoStatus);
     if (hasOpenIamPendenteItem(s.id, items)) continue;
-    if (items.some((i) => i.tipo === 'iam_pendente' && i.studentId === s.id && i.status === 'conciliado')) {
-      continue;
-    }
+    // Item já conciliado não bloqueia: se o aluno voltou a precisar de aprovação
+    // é porque o IAM reabriu uma pendência (iam_gc_conciliado_at foi zerado pelo
+    // sync), e o contrato precisa aparecer de novo na fila IAM CONTROL → GC.
     try {
       const row = await createConciliacaoItemDb({
         tipo: 'iam_pendente',

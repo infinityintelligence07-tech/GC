@@ -1,10 +1,21 @@
-import { useMemo, useState } from 'react';
-import { X, Download, Link2, Check, Copy } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { X, Download, Link2, Check, Copy, Paperclip } from 'lucide-react';
 import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
+import { useCompanyStore } from '@/store/useCompanyStore';
+import { supabase } from '@/integrations/supabase/client';
 import { createIamAditivoTermo } from '@/lib/iamControlTermo';
 import { toast } from 'sonner';
 import logoIAM from '@/assets/logo-iam-blue.png';
+
+const ANEXO_MAX_BYTES = 10 * 1024 * 1024;
+const ANEXO_ACCEPT = '.pdf,image/*';
+
+export interface TermoAnexadoInfo {
+  /** Path no bucket `cancellation-docs`. */
+  path: string;
+  nomeArquivo: string;
+}
 
 export interface TermoRenegociacaoOriginalValues {
   valorVenda: number;
@@ -49,6 +60,8 @@ interface Props {
     status?: string;
     nomeDocumento?: string;
   }) => void;
+  /** Chamado quando o usuário anexa um termo/contrato já assinado (fora da ZapSign). */
+  onTermoAnexado?: (info: TermoAnexadoInfo) => void;
 }
 
 function parseBrDate(dateStr?: string): Date | null {
@@ -95,10 +108,19 @@ function buildParcelamentoLines(
 const INSTITUTO =
   'INSTITUTO ACADEMY MIND TREINAMENTOS LTDA, pessoa jurídica de direito privado, devidamente inscrita no CNPJ nº 03.727.532/0001-13, com sede na R. Major Rehder, 248 - Vila Rehder, Americana - SP, 13465-390';
 
-export default function TermoAditivoModal({ student, originalValues, newValues, onClose, onTermoGerado }: Props) {
+export default function TermoAditivoModal({
+  student,
+  originalValues,
+  newValues,
+  onClose,
+  onTermoGerado,
+  onTermoAnexado,
+}: Props) {
   const [linkBusy, setLinkBusy] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [anexoBusy, setAnexoBusy] = useState(false);
+  const anexoInputRef = useRef<HTMLInputElement>(null);
 
   const today = useMemo(() => new Date(), []);
   const dateStr = formatDateBR(today);
@@ -342,6 +364,33 @@ export default function TermoAditivoModal({ student, originalValues, newValues, 
     }
   };
 
+  const handleAnexarAssinado = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > ANEXO_MAX_BYTES) {
+      toast.error('Arquivo muito grande. Limite de 10 MB.');
+      return;
+    }
+    setAnexoBusy(true);
+    try {
+      const activeCompanyId = useCompanyStore.getState().activeCompanyId;
+      if (!activeCompanyId) throw new Error('Empresa ativa não identificada.');
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${activeCompanyId}/termos-renegociacao/${student.id}/${Date.now()}_${safeName}`;
+      const { error } = await supabase.storage.from('cancellation-docs').upload(path, file, {
+        contentType: file.type || 'application/pdf',
+        upsert: false,
+      });
+      if (error) throw error;
+      toast.success('Termo assinado anexado. Confirmar liberado.');
+      onTermoAnexado?.({ path, nomeArquivo: file.name });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao anexar o termo.');
+    } finally {
+      setAnexoBusy(false);
+      if (anexoInputRef.current) anexoInputRef.current.value = '';
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-50 fade-in">
       <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto shadow-2xl border border-border">
@@ -467,13 +516,14 @@ export default function TermoAditivoModal({ student, originalValues, newValues, 
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-xs text-blue-800">
               Este termo documenta formalmente a renegociação, no mesmo padrão do documento institucional. Gere o PDF
-              para impressão ou copie o link de assinatura para enviar ao aluno.
+              para impressão, copie o link de assinatura para enviar ao aluno ou anexe o termo já assinado.
             </p>
           </div>
 
           {!student.iamControlAlunoId && (
             <p className="text-[11px] text-amber-700">
-              Vincule o aluno ao IAM Control para habilitar a cópia do link de assinatura.
+              Vincule o aluno ao IAM Control para habilitar a cópia do link de assinatura. Sem o vínculo, use{' '}
+              <strong>Anexar assinado</strong> para enviar o termo/contrato já assinado.
             </p>
           )}
 
@@ -497,6 +547,23 @@ export default function TermoAditivoModal({ student, originalValues, newValues, 
           >
             <Download size={16} />
             Gerar PDF
+          </button>
+          <input
+            ref={anexoInputRef}
+            type="file"
+            accept={ANEXO_ACCEPT}
+            className="hidden"
+            onChange={(e) => void handleAnexarAssinado(e.target.files?.[0])}
+          />
+          <button
+            type="button"
+            onClick={() => anexoInputRef.current?.click()}
+            disabled={anexoBusy}
+            title="Anexar termo/contrato já assinado (PDF ou imagem, até 10 MB). Libera o Confirmar."
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            <Paperclip size={16} />
+            {anexoBusy ? 'Enviando…' : 'Anexar assinado'}
           </button>
           <button
             onClick={handleCopySignLink}
