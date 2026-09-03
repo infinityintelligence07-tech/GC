@@ -641,7 +641,7 @@ export default function DashboardPage() {
         product: st.product || '',
         whatsapp: st.whatsapp || '',
         email: st.email || '',
-        status: resolveStudentDisplayStatus(st),
+        displayStatus: resolveStudentDisplayStatus(st),
         saleValue: Number(st.saleValue ?? 0),
         ...partial,
       });
