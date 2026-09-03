@@ -137,7 +137,7 @@ async function fetchAll(activeCompanyId?: string | null) {
   const conciliacaoItems = (concRes.data ?? []).map(rowToConciliacaoItem);
   const conciliacaoImportErrors = (concErrRes.data ?? []).map(rowToConciliacaoImportError);
 
-  return { acs, products, studentTags, rules, rulesId: rulesRes.data?.id, students, cancellationCases, appUsers, antecipacaoItems, conciliacaoItems, conciliacaoImportErrors };
+  return { acs, products, studentTags, rules, rulesId: rulesRes.data?.id, students, studentsLoadOk: !studentsRes.error, cancellationCases, appUsers, antecipacaoItems, conciliacaoItems, conciliacaoImportErrors };
 }
 
 let cachedRulesId: string | null = null;
@@ -182,7 +182,7 @@ export function useSupabaseSync() {
     let mounted = true;
 
     const reload = async () => {
-      const { acs, products, studentTags, rules, rulesId, students, cancellationCases, appUsers, antecipacaoItems, conciliacaoItems, conciliacaoImportErrors } = await fetchAll(activeCompanyId);
+      const { acs, products, studentTags, rules, rulesId, students, studentsLoadOk, cancellationCases, appUsers, antecipacaoItems, conciliacaoItems, conciliacaoImportErrors } = await fetchAll(activeCompanyId);
       if (!mounted) return;
       cachedRulesId = rulesId ?? null;
 
@@ -313,7 +313,7 @@ export function useSupabaseSync() {
       // Fila de vínculo de treinamento para fichas de Recompra
       try {
         const { ensureRecompraVinculoConciliacaoItems } = await import('@/lib/recompraConciliacao');
-        finalConciliacaoItems = await ensureRecompraVinculoConciliacaoItems(studentsReconciled, finalConciliacaoItems);
+        finalConciliacaoItems = await ensureRecompraVinculoConciliacaoItems(studentsReconciled, finalConciliacaoItems, studentsLoadOk);
       } catch (e) {
         console.error('Falha ao garantir fila Recompras:', e);
       }

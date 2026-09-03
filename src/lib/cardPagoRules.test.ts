@@ -3,6 +3,7 @@ import type { Installment, Student } from '@/types';
 import { isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { filterCarteiraActiveStudents, isStudentFullyPaid } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
+import { entradaForaDasParcelas } from '@/lib/pagoFormaFilter';
 
 const parcela = (n: number, value: number, paid: boolean): Installment => ({
   number: n,
@@ -134,6 +135,54 @@ describe('quitado à vista sem parcelas', () => {
 
   it('é exibido como Pago mesmo sem parcelas', () => {
     expect(resolveStudentDisplayStatus(quitadoAvista)).toBe('Pago');
+  });
+});
+
+/**
+ * Entrada que não virou parcela precisa entrar no card Pago (Geral) para
+ * qualquer origem — senão cadastro manual com entrada some da dashboard.
+ */
+describe('entradaForaDasParcelas', () => {
+  it('cadastro manual: entrada + parcelas fecham o contrato → conta a entrada', () => {
+    // Pedro Henrique — Confronto: R$ 23.939,96, entrada R$ 16.048,31, 5x R$ 1.578,33
+    const s = aluno({
+      saleValue: 23939.96,
+      downPayment: 16048.31,
+      installments: [1, 2, 3, 4, 5].map((n) => parcela(n, 1578.33, false)),
+    });
+    expect(entradaForaDasParcelas(s)).toBeCloseTo(16048.31, 2);
+  });
+
+  it('entrada embutida nas parcelas (parcelas já cobrem o contrato) → 0, sem duplicar', () => {
+    const s = aluno({
+      saleValue: 1000,
+      downPayment: 200,
+      installments: [parcela(1, 200, true), parcela(2, 400, false), parcela(3, 400, false)],
+    });
+    expect(entradaForaDasParcelas(s)).toBe(0);
+  });
+
+  it('parcelas com encargos acima do contrato → entrada considerada embutida', () => {
+    const s = aluno({
+      saleValue: 1000,
+      downPayment: 200,
+      installments: [parcela(1, 550, false), parcela(2, 550, false)],
+    });
+    expect(entradaForaDasParcelas(s)).toBe(0);
+  });
+
+  it('sem entrada → 0', () => {
+    expect(entradaForaDasParcelas(aluno({ saleValue: 1000, downPayment: 0, installments: [parcela(1, 1000, false)] }))).toBe(0);
+  });
+
+  it('sem valor de contrato não dá para saber → 0 (conservador)', () => {
+    expect(entradaForaDasParcelas(aluno({ saleValue: 0, downPayment: 300, installments: [] }))).toBe(0);
+  });
+
+  it('IAM quitado à vista conta sempre, mesmo sem parcelas', () => {
+    const s = aluno({ saleValue: 1000, downPayment: 1000, installments: [] });
+    expect(entradaForaDasParcelas(s, true)).toBe(1000);
+    expect(entradaForaDasParcelas(s)).toBe(1000);
   });
 });
 

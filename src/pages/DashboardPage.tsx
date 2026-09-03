@@ -9,6 +9,7 @@ import { getCurrentMonthDates } from '@/lib/periodFilter';
 import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity, FileText, AlertTriangle, Download } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
+import RibbonGauge from '@/components/ui/RibbonGauge';
 import { Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
@@ -32,13 +33,7 @@ import {
 import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
 import DashboardReportModal, { type DashboardReportSection } from '@/components/ui/DashboardReportModal';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
-import {
-  PAGO_FORMA_FILTER_DEFAULT,
-  entradaAvistaCountsInPago,
-  installmentCountsInPago,
-  type PagoFormaFilter,
-} from '@/lib/pagoFormaFilter';
-import { PagoFormaToggle } from '@/components/ui/PagoFormaToggle';
+import { entradaForaDasParcelas, entradaNoPeriodo, entradaPaidDate } from '@/lib/pagoFormaFilter';
 import { toast } from 'sonner';
 
 type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'pendente' | 'tag' | 'revertidos';
@@ -77,8 +72,6 @@ export default function DashboardPage() {
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
   const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
-  // Card Pago: "Somente boleto" (padrão) ou "Geral" (inclui entrada à vista/cartão e PIX/link).
-  const [pagoForma, setPagoForma] = useState<PagoFormaFilter>(PAGO_FORMA_FILTER_DEFAULT);
   const [acFilter, setAcFilter] = useState('');
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
   const [productFilter, setProductFilter] = useState('');
@@ -671,12 +664,14 @@ export default function DashboardPage() {
       });
     };
     forecastBase.forEach((st) => {
-      // Contrato IAM Control conciliado e quitado à vista/cartão de crédito:
-      // entra DIRETO no card Pago (inclusive a entrada, que não vira parcela)
-      // e nunca soma no A Vencer/Vencido.
+      // Entrada recebida que não virou parcela (IAM à vista/cartão, cadastro
+      // manual, importação Kamino, IAM parcelado com entrada) entra DIRETO no
+      // card Pago em qualquer base (vencimento/pagamento), com a data da
+      // matrícula como data de recebimento para o filtro de período. Contrato
+      // IAM quitado à vista/cartão além disso nunca soma no A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
-      if (quitadoAvista && !range && dateBasis === 'vencimento' && entradaAvistaCountsInPago(pagoForma)) {
-        const entrada = Number(st.downPayment ?? 0);
+      if (entradaNoPeriodo(st, range)) {
+        const entrada = entradaForaDasParcelas(st, quitadoAvista);
         if (entrada > 0) {
           total += entrada;
           totalReal += entrada;
@@ -688,17 +683,16 @@ export default function DashboardPage() {
           pushDetail(st, {
             bucket: 'pago',
             installmentNumber: 0,
-            dueDate: st.enrollmentDate || '',
+            dueDate: entradaPaidDate(st),
             value: entrada,
             paidValue: entrada,
-            paidDate: st.enrollmentDate || undefined,
+            paidDate: entradaPaidDate(st) || undefined,
           });
         }
       }
       st.installments.forEach((i) => {
         if (dateBasis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
-          if (!installmentCountsInPago(pagoForma, i)) return;
           if (range) {
             const pd = new Date(i.paidDate + 'T00:00:00');
             if (pd < range.start || pd > range.end) return;
@@ -724,7 +718,6 @@ export default function DashboardPage() {
 
         // Vencimento: em aberto pelo dueDate; pago somente se paidDate estiver no período.
         if (i.paid) {
-          if (!installmentCountsInPago(pagoForma, i)) return;
           if (!i.paidDate) {
             if (range) return;
           } else if (range) {
@@ -1145,22 +1138,88 @@ export default function DashboardPage() {
         <BotaoRelatorio onClick={() => setReportOpen(true)} />
       </HeaderActions>
 
-      {/* ── 0. Velocímetro da meta mensal de Taxa em Dia da empresa ─────────── */}
-      {/* Mesmo componente da Carteira do Assessor, mas com a Taxa em Dia geral
-          e a meta gravada em financial_rules (por empresa). */}
-      <div className="hidden sm:flex justify-center">
-        <MetaTaxaEmDiaHeader
-          taxaAtual={Number(pctEmDia)}
-          meta={rules.metaTaxaEmDia}
-          metaPadrao={rules.meta1}
-          base={rules.metaTaxaEmDiaBase}
-          definidaEm={rules.metaTaxaEmDiaEm}
-          titulo="Dashboard geral"
-          canEdit={currentUser?.role === 'admin'}
-          temDados={totalComposicao > 0}
-          onSave={({ meta, base, definidaEm }) =>
-            setRules({ metaTaxaEmDia: meta, metaTaxaEmDiaBase: base, metaTaxaEmDiaEm: definidaEm })}
-        />
+      {/* ── 0. Cabeçalho de saúde da carteira ───────────────────────────────── */}
+      {/* Esquerda: velocímetro da meta mensal de Taxa em Dia (mesmo componente
+          da Carteira do Assessor, com a meta gravada em financial_rules).
+          Centro: card "Em Dia + Novos" com indicador de fita reta.
+          Direita: Taxa Em Dia e Taxa Inadimplente empilhados. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_minmax(180px,220px)] gap-2.5 sm:gap-3 items-stretch">
+        <div className="hidden sm:flex items-center justify-center rounded-2xl bg-card border border-border saas-shadow-md px-3 py-2">
+          <MetaTaxaEmDiaHeader
+            taxaAtual={Number(pctEmDia)}
+            meta={rules.metaTaxaEmDia}
+            metaPadrao={rules.meta1}
+            base={rules.metaTaxaEmDiaBase}
+            definidaEm={rules.metaTaxaEmDiaEm}
+            titulo="Dashboard geral"
+            canEdit={currentUser?.role === 'admin'}
+            temDados={totalComposicao > 0}
+            onSave={({ meta, base, definidaEm }) =>
+              setRules({
+                ...(meta != null ? { metaTaxaEmDia: meta } : {}),
+                metaTaxaEmDiaBase: base,
+                metaTaxaEmDiaEm: definidaEm,
+              })}
+          />
+        </div>
+
+        {/* Em Dia + Novos — soma agregada, com fita reta */}
+        <div
+          onClick={() => setKpiModalKey('emdia_novos')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 flex flex-col ${statusFilter === 'Em Dia' ? 'ring-2 ring-teal-500/40' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Em Dia + Novos</p>
+            <div className="flex items-center gap-1 shrink-0">
+              <NaoSomaBadge title='Composição dos cards "Em Dia" e "Alunos Novos" abaixo. Somar os três conta os mesmos alunos duas vezes.' />
+              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos' ? null : 'emdia_novos'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
+                <Info size={14} />
+              </button>
+            </div>
+          </div>
+          <div className="flex items-end justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="kpi-value text-teal-600" title={formatCurrency(emDiaValue + alunosNovosValue)}>
+                <span className="hidden sm:inline">{formatCurrency(emDiaValue + alunosNovosValue)}</span>
+                <span className="sm:hidden">{formatCurrencyCompact(emDiaValue + alunosNovosValue)}</span>
+              </p>
+              <p className="text-[11px] text-muted-foreground truncate mt-1">{emDia.length + alunosNovos.length} alunos</p>
+            </div>
+            <p className="text-sm font-bold text-teal-600 shrink-0">{pct(emDia.length + alunosNovos.length)}%</p>
+          </div>
+          <div className="mt-auto pt-2">
+            <RibbonGauge value={Number(pct(emDia.length + alunosNovos.length))} pointerColor="#0d9488" />
+            <p className="text-[9px] text-muted-foreground text-center -mt-1">Participação de "Em Dia + Novos" na carteira</p>
+          </div>
+          {infoStatus === 'emdia_novos' && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+              <p>
+                Soma de "Em Dia" + "Alunos Novos": alunos adimplentes da carteira (sem parcelas vencidas).
+                É a composição dos dois cards abaixo — não deve ser somada junto com eles.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Taxa Em Dia + Taxa Inadimplente — empilhados */}
+        <div className="grid grid-cols-2 lg:grid-cols-1 gap-2.5 sm:gap-3">
+          <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-emerald-500 border border-emerald-600 transition-transform hover:-translate-y-0.5">
+            <div className="flex items-start justify-between mb-2 gap-2">
+              <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Em Dia</p>
+              <TrendingUp size={16} className="text-white/50 shrink-0" />
+            </div>
+            <p className="kpi-value text-white">{pctEmDia}%</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {totalComposicao}</p>
+          </div>
+          <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
+            <div className="flex items-start justify-between mb-2 gap-2">
+              <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
+              <TrendingDown size={16} className="text-white/50 shrink-0" />
+            </div>
+            <p className="kpi-value text-white">{pctInadimplente}%</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {totalComposicao}</p>
+          </div>
+        </div>
       </div>
       <div className={`flex flex-wrap items-center gap-2 ${mode === 'performance' ? 'sm:hidden' : ''}`}>
         <div className="flex-1 min-w-[260px]">
@@ -1269,12 +1328,6 @@ export default function DashboardPage() {
                 Exportar planilha
               </button>
             </div>
-            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-              <PagoFormaToggle value={pagoForma} onChange={setPagoForma} />
-              <span className="text-[10px] text-muted-foreground">
-                {pagoForma === 'boleto' ? 'Pago considera só títulos (boletos)' : 'Pago inclui à vista, cartão e PIX/link'}
-              </span>
-            </div>
             {(() => {
               const { total, aVencer, pago, pagoReal, qtd, qtdAlunos, perAcList, details } = forecastTotais;
               if (dateBasis === 'pagamento') {
@@ -1371,7 +1424,7 @@ export default function DashboardPage() {
                       {kaminoTotalsPending ? '…' : formatCurrency(pago)}
                     </p>
                     <p className="text-[10px] font-semibold text-emerald-700 mt-0">
-                      {pagoForma === 'boleto' ? 'somente boleto' : 'geral'}
+                      boletos, entradas e demais recebimentos
                     </p>
                   </div>
                 </div>
@@ -1532,7 +1585,7 @@ export default function DashboardPage() {
 
       {/* ── 3. Indicadores (KPIs Row 1) ──────────────────────────────────────── */}
       {/* Cards clicáveis: abrem a lista detalhada de alunos/parcelas em popup */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3">
         <div
           onClick={() => setKpiModalKey('total')}
           className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-primary transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 ${statusFilter === '' ? 'ring-2 ring-primary/40' : ''}`}
@@ -1561,38 +1614,6 @@ export default function DashboardPage() {
             </p>
             <p className="text-[11px] font-semibold text-primary shrink-0">100%</p>
           </div>
-        </div>
-
-        {/* Em Dia + Novos — soma agregada */}
-        <div
-          onClick={() => setKpiModalKey('emdia_novos')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 ${statusFilter === 'Em Dia' ? 'ring-2 ring-teal-500/40' : ''}`}
-        >
-          <div className="flex items-start justify-between mb-2 gap-2">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Em Dia + Novos</p>
-            <div className="flex items-center gap-1 shrink-0">
-              <NaoSomaBadge title='Composição dos cards "Em Dia" e "Alunos Novos" ao lado. Somar os três conta os mesmos alunos duas vezes.' />
-              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos' ? null : 'emdia_novos'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
-                <Info size={14} />
-              </button>
-            </div>
-          </div>
-          <p className="kpi-value text-teal-600" title={formatCurrency(emDiaValue + alunosNovosValue)}>
-            <span className="hidden sm:inline">{formatCurrency(emDiaValue + alunosNovosValue)}</span>
-            <span className="sm:hidden">{formatCurrencyCompact(emDiaValue + alunosNovosValue)}</span>
-          </p>
-          <div className="flex items-center justify-between mt-1 gap-2">
-            <p className="text-[11px] text-muted-foreground truncate">{emDia.length + alunosNovos.length} alunos</p>
-            <p className="text-[11px] font-semibold text-teal-600 shrink-0">{pct(emDia.length + alunosNovos.length)}%</p>
-          </div>
-          {infoStatus === 'emdia_novos' && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
-              <p>
-                Soma de "Em Dia" + "Alunos Novos": alunos adimplentes da carteira (sem parcelas vencidas).
-                É a composição dos dois cards ao lado — não deve ser somada junto com eles.
-              </p>
-            </div>
-          )}
         </div>
 
         <div
@@ -1645,19 +1666,11 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-emerald-500 border border-emerald-600 transition-transform hover:-translate-y-0.5">
-          <div className="flex items-start justify-between mb-2 gap-2">
-            <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Em Dia</p>
-            <TrendingUp size={16} className="text-white/50 shrink-0" />
-          </div>
-          <p className="kpi-value text-white">{pctEmDia}%</p>
-          <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {totalComposicao}</p>
-        </div>
       </div>
 
       {/* ── Indicadores Row 2 ────────────────────────────────────────────────── */}
-      {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado → Taxa Inadimplente */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
+      {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
         {[
           { key: 'v1', label: 'Vencido 1', value: v1Value, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos com parcelas vencidas entre 1 e 30 dias.', filter: 'Vencido 1' as StudentStatus },
           { key: 'v2', label: 'Vencido 2', value: v2Value, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos com parcelas vencidas entre 31 e 60 dias.', filter: 'Vencido 2' as StudentStatus },
@@ -1700,16 +1713,6 @@ export default function DashboardPage() {
             </div>
           );
         })}
-
-        {/* Taxa Inadimplente — mesmo tamanho do Taxa Em Dia (full red) */}
-        <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
-          <div className="flex items-start justify-between mb-2 gap-2">
-            <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
-            <TrendingDown size={16} className="text-white/50 shrink-0" />
-          </div>
-          <p className="kpi-value text-white">{pctInadimplente}%</p>
-          <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {totalComposicao}</p>
-        </div>
       </div>
 
       {/* ── KPIs: Solicitação + Pendências + Revertidos + Fundo/TMF ─────────── */}

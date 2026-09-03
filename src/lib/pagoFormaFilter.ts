@@ -1,43 +1,54 @@
-import type { Installment } from '@/types';
-import { isEntradaPendenciaInstallment } from '@/lib/studentDisplayStatus';
+import type { Student } from '@/types';
 
 /**
- * Filtro dos cards "Pago" (Dashboard e Carteira do AC).
- *
- * - `boleto` (padrão): só títulos da carteira — parcelas pagas por boleto.
- *   Ficam de fora a entrada de contrato IAM quitado à vista / cartão de
- *   crédito (que não vira parcela) e parcelas de entrada PIX/link
- *   (tags `entrada-pendente` / `entrada-restante`).
- * - `geral`: tudo o que foi pago, independente da forma.
- *
- * A parcela não guarda a forma de pagamento; a distinção usa os sinais que
- * o sistema tem (origem IAM à vista/cartão e tags de entrada PIX/link).
+ * Regra do card "Pago" (Dashboard e Carteira do AC): TUDO o que foi pago entra
+ * no card, independente da forma (boleto, à vista, cartão, PIX/link, entrada
+ * de cadastro manual/Kamino). Não existe mais filtro por forma de pagamento.
  */
-export type PagoFormaFilter = 'boleto' | 'geral';
 
-export const PAGO_FORMA_FILTER_DEFAULT: PagoFormaFilter = 'boleto';
-
-export const PAGO_FORMA_FILTER_LABEL: Record<PagoFormaFilter, string> = {
-  boleto: 'Somente boleto',
-  geral: 'Geral',
-};
-
-export const PAGO_FORMA_FILTER_HINT: Record<PagoFormaFilter, string> = {
-  boleto: 'Pago só com títulos da carteira (boletos). Entrada à vista/cartão e entrada PIX/link ficam de fora.',
-  geral: 'Pago com tudo: boletos, entrada à vista/cartão de crédito e entrada PIX/link.',
-};
-
-/** Parcela paga é título de boleto (não é entrada PIX/link). */
-export function isBoletoInstallment(i: Installment): boolean {
-  return !isEntradaPendenciaInstallment(i);
+/**
+ * Entrada recebida que NÃO está representada nas parcelas — é o valor que o
+ * card Pago precisa somar à parte, senão o dinheiro some da dashboard.
+ *
+ * Vale para cadastro manual, importação Kamino e IAM (down_payment do IAM já é
+ * só o que foi recebido; entrada pendente vira parcela com tag). Quando a soma
+ * das parcelas já cobre o contrato, a entrada está embutida nelas e somá-la
+ * duplicaria — retorna 0. `quitadoAvista` (IAM à vista/cartão) conta sempre.
+ */
+export function entradaForaDasParcelas(
+  student: Pick<Student, 'downPayment' | 'saleValue' | 'installments'>,
+  quitadoAvista = false,
+): number {
+  const entrada = Number(student.downPayment ?? 0);
+  if (!(entrada > 0)) return 0;
+  if (quitadoAvista) return entrada;
+  const sale = Number(student.saleValue ?? 0);
+  if (!(sale > 0)) return 0;
+  const instSum = (student.installments ?? []).reduce((a, i) => a + (Number(i.value) || 0), 0);
+  return instSum < sale - 1 ? entrada : 0;
 }
 
-/** Parcela paga entra no card Pago sob o filtro atual? */
-export function installmentCountsInPago(filter: PagoFormaFilter, i: Installment): boolean {
-  return filter === 'geral' || isBoletoInstallment(i);
+/**
+ * Data em que a entrada foi recebida, para filtrar o card por período. A
+ * entrada não tem data própria no GC: usa a matrícula (data da venda). Vazio
+ * quando não há como saber.
+ */
+export function entradaPaidDate(student: Pick<Student, 'enrollmentDate'>): string {
+  return (student.enrollmentDate || '').slice(0, 10);
 }
 
-/** Entrada de contrato IAM quitado à vista/cartão entra no card Pago sob o filtro atual? */
-export function entradaAvistaCountsInPago(filter: PagoFormaFilter): boolean {
-  return filter === 'geral';
+/**
+ * A entrada entra no período do card? Em "Todos" (sem intervalo) sempre.
+ * Com intervalo, só se a data de recebimento (matrícula) estiver dentro dele;
+ * sem data conhecida ela fica de fora, como uma parcela paga sem paidDate.
+ */
+export function entradaNoPeriodo(
+  student: Pick<Student, 'enrollmentDate'>,
+  range: { start: Date; end: Date } | null,
+): boolean {
+  if (!range) return true;
+  const d = entradaPaidDate(student);
+  if (!d) return false;
+  const dt = new Date(d + 'T00:00:00');
+  return !(dt < range.start || dt > range.end);
 }

@@ -30,13 +30,7 @@ import {
 import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
-import {
-  PAGO_FORMA_FILTER_DEFAULT,
-  entradaAvistaCountsInPago,
-  installmentCountsInPago,
-  type PagoFormaFilter,
-} from '@/lib/pagoFormaFilter';
-import { PagoFormaToggle } from '@/components/ui/PagoFormaToggle';
+import { entradaForaDasParcelas, entradaNoPeriodo, entradaPaidDate } from '@/lib/pagoFormaFilter';
 import { toast } from 'sonner';
 import {
   isCancellationCaseInRange,
@@ -108,8 +102,6 @@ export default function ACPortfolioPage() {
   const [kpiCardFilter, setKpiCardFilter] = useState<'' | 'revertidos' | 'boletos_antecipados' | 'pendente'>('');
   const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
-  // Card Pago: "Somente boleto" (padrão) ou "Geral" (inclui entrada à vista/cartão e PIX/link).
-  const [pagoForma, setPagoForma] = useState<PagoFormaFilter>(PAGO_FORMA_FILTER_DEFAULT);
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [financialStudent, setFinancialStudent] = useState<Student | null>(null);
@@ -401,12 +393,14 @@ export default function ACPortfolioPage() {
       });
     };
     forecastBase.forEach((st) => {
-      // Contrato IAM Control conciliado e quitado à vista/cartão de crédito:
-      // entra DIRETO no Pago (inclusive a entrada, que não vira parcela)
-      // e nunca soma no A Vencer/Vencido.
+      // Entrada recebida que não virou parcela (IAM à vista/cartão, cadastro
+      // manual, importação Kamino, IAM parcelado com entrada) entra DIRETO no
+      // Pago em qualquer base, com a matrícula como data de recebimento para o
+      // período — mesma regra da Dashboard. Contrato IAM quitado à vista/cartão
+      // além disso nunca soma no A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
-      if (quitadoAvista && !range && dateBasis === 'vencimento' && entradaAvistaCountsInPago(pagoForma)) {
-        const entrada = Number(st.downPayment ?? 0);
+      if (entradaNoPeriodo(st, range)) {
+        const entrada = entradaForaDasParcelas(st, quitadoAvista);
         if (entrada > 0) {
           total += entrada;
           totalReal += entrada;
@@ -417,17 +411,16 @@ export default function ACPortfolioPage() {
           pushDetail(st, {
             bucket: 'pago',
             installmentNumber: 0,
-            dueDate: st.enrollmentDate || '',
+            dueDate: entradaPaidDate(st),
             value: entrada,
             paidValue: entrada,
-            paidDate: st.enrollmentDate || undefined,
+            paidDate: entradaPaidDate(st) || undefined,
           });
         }
       }
       st.installments.forEach((i) => {
         if (dateBasis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
-          if (!installmentCountsInPago(pagoForma, i)) return;
           if (range) {
             const pd = new Date(i.paidDate + 'T00:00:00');
             if (pd < range.start || pd > range.end) return;
@@ -452,7 +445,6 @@ export default function ACPortfolioPage() {
 
         // Vencimento: em aberto pelo dueDate; pago somente se paidDate estiver no período.
         if (i.paid) {
-          if (!installmentCountsInPago(pagoForma, i)) return;
           if (!i.paidDate) {
             // Sem data de pagamento: só entra em "Todos".
             if (range) return;
@@ -796,7 +788,11 @@ export default function ACPortfolioPage() {
             canEdit={currentUser?.role === 'admin'}
             temDados={totalComposicao > 0}
             onSave={({ meta, base, definidaEm }) =>
-              updateAC(ac.id, { metaTaxaEmDia: meta, metaTaxaEmDiaBase: base, metaTaxaEmDiaEm: definidaEm })}
+              updateAC(ac.id, {
+                ...(meta != null ? { metaTaxaEmDia: meta } : {}),
+                metaTaxaEmDiaBase: base,
+                metaTaxaEmDiaEm: definidaEm,
+              })}
           />
         </div>
 
@@ -926,12 +922,6 @@ export default function ACPortfolioPage() {
                 Exportar planilha
               </button>
             </div>
-            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-              <PagoFormaToggle value={pagoForma} onChange={setPagoForma} />
-              <span className="text-[10px] text-muted-foreground">
-                {pagoForma === 'boleto' ? 'Pago considera só títulos (boletos)' : 'Pago inclui à vista, cartão e PIX/link'}
-              </span>
-            </div>
             {(() => {
               const { total, aVencer, pago, pagoReal, qtd, qtdAlunos } = carteiraTotais;
               if (dateBasis === 'pagamento') {
@@ -975,7 +965,7 @@ export default function ACPortfolioPage() {
                       {formatCurrency(pago)}
                     </p>
                     <p className="text-[10px] font-semibold text-emerald-700 mt-0">
-                      por data de pagamento · {pagoForma === 'boleto' ? 'somente boleto' : 'geral'}
+                      por data de pagamento · boletos, entradas e demais recebimentos
                     </p>
                   </div>
                 </div>

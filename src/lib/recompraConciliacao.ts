@@ -47,15 +47,35 @@ function hasRecentlyConciliadoRecompraItem(studentId: string, items: Conciliacao
 /**
  * Mantém a fila Conciliação > Recompras coerente com a carteira:
  * - cria item para ficha sem vínculo e sem item aberto;
- * - resolve item aberto cuja ficha já tem vínculo (fantasma deixado pela corrida).
+ * - resolve item aberto cuja ficha já tem vínculo (fantasma deixado pela corrida);
+ * - resolve item aberto cuja ficha foi excluída (órfão — não há o que vincular).
+ *
+ * `studentsCompletos`: só encerra órfãos quando a carteira carregou por inteiro;
+ * com carga parcial (erro de paginação), uma ficha ausente não prova exclusão.
  */
 export async function ensureRecompraVinculoConciliacaoItems(
   students: Student[],
   items: ConciliacaoItem[],
+  studentsCompletos = true,
 ): Promise<ConciliacaoItem[]> {
   const now = Date.now();
   const created: ConciliacaoItem[] = [];
   const resolvidos = new Map<string, string>(); // itemId → nota
+
+  if (studentsCompletos) {
+    const ids = new Set(students.map((s) => s.id));
+    for (const i of items) {
+      if (i.tipo !== 'recompra_vinculo' || !isOpen(i)) continue;
+      if (!i.studentId || ids.has(i.studentId)) continue;
+      const nota = 'Ficha da recompra foi excluída — item encerrado automaticamente (nada a vincular).';
+      try {
+        await conciliarItemDb(i.id, { conciliadoPorNome: 'Sistema', conciliadoNota: nota });
+        resolvidos.set(i.id, nota);
+      } catch (e) {
+        console.error('[recompra_vinculo] falha ao encerrar item órfão', i.id, e);
+      }
+    }
+  }
 
   for (const s of students) {
     if (!isRecompraFicha(s)) continue;

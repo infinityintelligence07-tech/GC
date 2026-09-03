@@ -6,9 +6,11 @@ import MetaTaxaEmDiaGauge from '@/components/ui/MetaTaxaEmDiaGauge';
 /**
  * Velocímetro da meta mensal de Taxa em Dia + leitura + edição da meta.
  * Usado no cabeçalho da Carteira do Assessor (meta por AC) e do Dashboard
- * (meta da empresa). O ponto de partida é gravado ao salvar a meta; quando a
- * meta existe sem partida (definida direto no banco), a partida é fixada na
- * taxa atual na primeira visualização de quem pode editar.
+ * (meta da empresa). O ponto de partida é gravado ao salvar a meta; quando
+ * ainda não há partida gravada (meta padrão ou meta definida direto no
+ * banco), a partida é fixada na taxa atual na primeira visualização de quem
+ * pode editar — sem isso o início da escala acompanharia a taxa ao vivo e a
+ * agulha ficaria sempre colada no começo do velocímetro.
  */
 interface Props {
   /** Taxa em Dia atual (%), já calculada pela página. */
@@ -26,7 +28,8 @@ interface Props {
   canEdit: boolean;
   /** Há dados suficientes para a taxa atual fazer sentido (evita fixar partida em 0% de carteira vazia). */
   temDados: boolean;
-  onSave: (patch: { meta: number; base: number; definidaEm: string }) => void;
+  /** `meta` ausente = só fixa a partida, mantendo a meta padrão em vigor. */
+  onSave: (patch: { meta?: number; base: number; definidaEm: string }) => void;
   size?: number;
 }
 
@@ -52,11 +55,13 @@ export default function MetaTaxaEmDiaHeader({
   const baseEfetiva = base ?? taxaAtual;
   const taxaArred = Math.round(taxaAtual * 10) / 10;
 
-  // Meta gravada sem partida: fixa a partida na taxa atual (uma vez).
-  const fixarPartida = canEdit && temDados && meta != null && base == null;
+  // Sem partida gravada (meta padrão ou meta salva direto no banco): fixa a
+  // partida na taxa atual, uma vez. Meta só é gravada se já existia — a meta
+  // padrão continua vindo das Configurações.
+  const fixarPartida = canEdit && temDados && base == null;
   useEffect(() => {
     if (!fixarPartida) return;
-    onSave({ meta: metaEfetiva, base: taxaArred, definidaEm: definidaEm ?? new Date().toISOString() });
+    onSave({ meta: meta ?? undefined, base: taxaArred, definidaEm: definidaEm ?? new Date().toISOString() });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixarPartida]);
 
@@ -96,7 +101,7 @@ export default function MetaTaxaEmDiaHeader({
         <span className="text-sm font-bold text-foreground tracking-tight">{fmtPct(taxaAtual)}%</span>
         <span
           className="text-[9px] text-muted-foreground"
-          title={definidaEm
+          title={meta != null && definidaEm
             ? `Meta definida em ${new Date(definidaEm).toLocaleDateString('pt-BR')}`
             : 'Meta padrão (Configurações → Meta 1). Defina uma meta própria.'}
         >
