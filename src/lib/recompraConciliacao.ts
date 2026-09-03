@@ -4,7 +4,14 @@
 // Conciliação, onde o revisor seleciona o treinamento de origem.
 
 import type { ConciliacaoItem, Student } from '@/types';
-import { createConciliacaoItemDb } from '@/lib/supabaseMutations';
+import { conciliarItemDb, createConciliacaoItemDb } from '@/lib/supabaseMutations';
+
+/**
+ * Janela em que um item recém-conciliado ainda "segura" a fila. Cobre a corrida
+ * entre a gravação do vínculo no aluno e o reload disparado pelo realtime do
+ * item conciliado (que pode ler o aluno antes do vínculo ter sido gravado).
+ */
+const GRACE_MS = 10 * 60 * 1000;
 
 /** Ficha de Recompra (Fundo) — contrato à parte na carteira do AC. */
 export function isRecompraFicha(student: Student): boolean {
@@ -16,24 +23,60 @@ export function needsRecompraVinculo(student: Student): boolean {
   return isRecompraFicha(student) && !student.recompraTreinamento;
 }
 
-function hasOpenRecompraItem(studentId: string, items: ConciliacaoItem[]): boolean {
-  return items.some(
-    (i) =>
-      i.tipo === 'recompra_vinculo' &&
-      i.studentId === studentId &&
-      (i.status === 'pendente' || i.status === 'aprovado'),
-  );
+function isOpen(i: ConciliacaoItem): boolean {
+  return i.status === 'pendente' || i.status === 'aprovado';
 }
 
-/** Cria itens na fila Conciliação > Recompras para fichas sem vínculo. */
+function isRecompraItemOf(i: ConciliacaoItem, studentId: string): boolean {
+  return i.tipo === 'recompra_vinculo' && i.studentId === studentId;
+}
+
+function hasOpenRecompraItem(studentId: string, items: ConciliacaoItem[]): boolean {
+  return items.some((i) => isRecompraItemOf(i, studentId) && isOpen(i));
+}
+
+/** Item conciliado há pouco: o vínculo provavelmente está a caminho do banco. */
+function hasRecentlyConciliadoRecompraItem(studentId: string, items: ConciliacaoItem[], now: number): boolean {
+  return items.some((i) => {
+    if (!isRecompraItemOf(i, studentId) || i.status !== 'conciliado' || !i.conciliadoAt) return false;
+    const t = new Date(i.conciliadoAt).getTime();
+    return Number.isFinite(t) && now - t < GRACE_MS;
+  });
+}
+
+/**
+ * Mantém a fila Conciliação > Recompras coerente com a carteira:
+ * - cria item para ficha sem vínculo e sem item aberto;
+ * - resolve item aberto cuja ficha já tem vínculo (fantasma deixado pela corrida).
+ */
 export async function ensureRecompraVinculoConciliacaoItems(
   students: Student[],
   items: ConciliacaoItem[],
 ): Promise<ConciliacaoItem[]> {
+  const now = Date.now();
   const created: ConciliacaoItem[] = [];
+  const resolvidos = new Map<string, string>(); // itemId → nota
+
   for (const s of students) {
-    if (!needsRecompraVinculo(s)) continue;
+    if (!isRecompraFicha(s)) continue;
+
+    if (s.recompraTreinamento) {
+      for (const i of items) {
+        if (!isRecompraItemOf(i, s.id) || !isOpen(i)) continue;
+        const nota = `Vínculo já registrado na ficha: "${s.recompraTreinamento}".`;
+        try {
+          await conciliarItemDb(i.id, { conciliadoPorNome: 'Sistema', conciliadoNota: nota });
+          resolvidos.set(i.id, nota);
+        } catch (e) {
+          console.error('[recompra_vinculo] falha ao resolver item fantasma', i.id, e);
+        }
+      }
+      continue;
+    }
+
     if (hasOpenRecompraItem(s.id, items)) continue;
+    if (hasRecentlyConciliadoRecompraItem(s.id, items, now)) continue;
+
     const abertas = s.installments.filter((i) => !i.paid);
     const valorAberto = abertas.reduce((sum, i) => sum + (Number(i.value) || 0), 0);
     try {
@@ -56,5 +99,17 @@ export async function ensureRecompraVinculoConciliacaoItems(
       console.error('[recompra_vinculo] falha ao criar item de conciliação', s.id, e);
     }
   }
-  return created.length > 0 ? [...items, ...created] : items;
+
+  if (created.length === 0 && resolvidos.size === 0) return items;
+
+  const conciliadoAt = new Date(now).toISOString();
+  const base =
+    resolvidos.size === 0
+      ? items
+      : items.map((i) =>
+          resolvidos.has(i.id)
+            ? { ...i, status: 'conciliado' as const, conciliadoAt, conciliadoPorNome: 'Sistema', conciliadoNota: resolvidos.get(i.id) }
+            : i,
+        );
+  return created.length > 0 ? [...base, ...created] : base;
 }

@@ -32,7 +32,8 @@ interface AppState {
   setKaminoPortfolioTotals: (totals: KaminoDashboardForecastTotals | null) => void;
   addStudent: (student: Student) => void;
   addStudentsBulk: (students: Student[]) => Promise<{ inserted: number; failed: number }>;
-  updateStudent: (id: string, data: Partial<Student>) => void;
+  /** Atualiza otimista + grava no banco. A promise resolve quando a gravação confirmar (rejeita se falhar). */
+  updateStudent: (id: string, data: Partial<Student>) => Promise<void>;
   markStudentNegativado: (id: string) => Promise<void>;
   deleteStudent: (id: string) => void;
 

@@ -1686,17 +1686,25 @@ export default function ConciliacaoPage() {
     });
     if (!ok) return;
     const revisor = currentUser?.name ?? 'Conciliação';
-    useAppStore.getState().updateStudent(st.id, {
-      recompraTreinamento: treinamento,
-      history: [
-        ...st.history,
-        {
-          date: new Date().toISOString(),
-          type: 'Sistema',
-          text: `Recompra vinculada ao treinamento "${treinamento}" na Conciliação por ${revisor}.`,
-        },
-      ],
-    });
+    // Aguarda a gravação do vínculo ANTES de conciliar o item. Se o item fosse
+    // conciliado primeiro, o realtime recarregaria a carteira com a ficha ainda
+    // sem vínculo e a fila criaria um novo item — a recompra "voltava".
+    try {
+      await useAppStore.getState().updateStudent(st.id, {
+        recompraTreinamento: treinamento,
+        history: [
+          ...st.history,
+          {
+            date: new Date().toISOString(),
+            type: 'Sistema',
+            text: `Recompra vinculada ao treinamento "${treinamento}" na Conciliação por ${revisor}.`,
+          },
+        ],
+      });
+    } catch {
+      // updateStudent já desfez o otimismo e exibiu o erro; a recompra segue na fila.
+      return;
+    }
     for (const it of group.items) {
       conciliar(it.id, `Vinculada ao treinamento "${treinamento}"`, { silent: true });
     }
