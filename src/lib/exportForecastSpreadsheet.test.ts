@@ -97,63 +97,69 @@ describe('exportForecastSpreadsheet', () => {
 
     const ws = wb.Sheets['A Vencer Vencido'];
     const header = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })[0];
-    // Sem parcela paga nesta aba: data de pagamento e valor recebido saem fora.
+    // Coluna A fica livre para anotações; sem parcela paga nesta aba, data de
+    // pagamento e valor recebido saem fora.
     expect(header).toEqual([
-      'Aluno', 'WhatsApp', 'Email', 'Produto', 'Assessor', 'Valor Venda',
+      '', 'Aluno', 'WhatsApp', 'Email', 'Produto', 'Assessor', 'Valor Venda',
       'Parcela', 'Vencimento', 'Mês/Ano', 'Valor Parcela', 'Situação',
     ]);
+    expect(ws['A2']?.v).toBeUndefined();
 
     // Ordenado por nome: Acir vem antes de Adrian.
-    expect(ws['A2'].v).toBe('Acir Amalfi');
-    // Valor Parcela (coluna J) continua numérico, com formato de dinheiro.
-    expect(ws['J2'].t).toBe('n');
-    expect(ws['J2'].v).toBe(625);
-    expect(ws['J2'].z).toBe('R$ #,##0.00');
-    expect(ws['J3'].z).toBe('R$ #,##0.00');
+    expect(ws['B2'].v).toBe('Acir Amalfi');
+    // Valor Parcela (coluna K) continua numérico, com formato de dinheiro.
+    expect(ws['K2'].t).toBe('n');
+    expect(ws['K2'].v).toBe(625);
+    expect(ws['K2'].z).toBe('R$ #,##0.00');
+    expect(ws['K3'].z).toBe('R$ #,##0.00');
     // Valor Venda vazio não vira texto: a célula simplesmente não existe.
-    expect(ws['F2']).toBeUndefined();
+    expect(ws['G2']).toBeUndefined();
     // Valor Venda preenchido também sai formatado.
-    expect(ws['F3'].t).toBe('n');
-    expect(ws['F3'].z).toBe('R$ #,##0.00');
+    expect(ws['G3'].t).toBe('n');
+    expect(ws['G3'].z).toBe('R$ #,##0.00');
     // Vencimento legível, com a competência ao lado.
-    expect(ws['H2'].v).toBe('20/04/2026');
-    expect(ws['I2'].v).toBe('Abril/26');
-    expect(ws['I3'].v).toBe('Setembro/26');
-    expect(ws['I4'].v).toBe('Outubro/26');
+    expect(ws['I2'].v).toBe('20/04/2026');
+    expect(ws['J2'].v).toBe('Abril/26');
+    expect(ws['J3'].v).toBe('Setembro/26');
+    expect(ws['J4'].v).toBe('Outubro/26');
 
     // Situação desmembrada pelo card do aluno, com o mesmo nome da tela.
-    expect(ws['K2'].v).toBe('À Negativar');
-    expect(ws['K3'].v).toBe('Em Dia');
-    expect(ws['K4'].v).toBe('Alunos Novos');
+    expect(ws['L2'].v).toBe('À Negativar');
+    expect(ws['L3'].v).toBe('Em Dia');
+    expect(ws['L4'].v).toBe('Alunos Novos');
     // Status fora dos cards cai no rótulo genérico em vez de sumir.
-    expect(ws['K5'].v).toBe('A Vencer / Vencido');
+    expect(ws['L5'].v).toBe('A Vencer / Vencido');
 
-    expect(ws['!autofilter']).toBeTruthy();
+    // Filtro começa em B: a coluna de anotações não entra.
+    expect(ws['!autofilter']!.ref).toMatch(/^B1:/);
     const cols = ws['!cols']!;
-    expect(cols).toHaveLength(11);
+    expect(cols).toHaveLength(12);
+    // Coluna de anotações nasce larga o bastante para escrever.
+    expect(cols[0].wch).toBe(18);
     // Coluna do nome acompanha o aluno mais longo.
-    expect(cols[0].wch).toBeGreaterThan(30);
+    expect(cols[1].wch).toBeGreaterThan(30);
     // Coluna de vencimento cabe dd/mm/aaaa inteiro.
-    expect(cols[7].wch).toBeGreaterThanOrEqual(12);
+    expect(cols[8].wch).toBeGreaterThanOrEqual(12);
 
     const pago = wb.Sheets['Pago'];
     // A aba Pago mantém as colunas de pagamento e dispensa a Situação, que
     // repetiria "Pago" em todas as linhas.
     const headerPago = XLSX.utils.sheet_to_json<string[]>(pago, { header: 1 })[0];
     expect(headerPago).toEqual([
-      'Aluno', 'WhatsApp', 'Email', 'Produto', 'Assessor', 'Valor Venda',
+      '', 'Aluno', 'WhatsApp', 'Email', 'Produto', 'Assessor', 'Valor Venda',
       'Parcela', 'Vencimento', 'Mês/Ano', 'Data Pagamento', 'Valor Parcela', 'Valor Recebido',
     ]);
+    expect(pago['A2']?.v).toBeUndefined();
     // Aqui a competência segue o caixa: vence em setembro, pago em outubro.
-    expect(pago['H2'].v).toBe('15/09/2026');
-    expect(pago['I2'].v).toBe('Outubro/26');
-    expect(pago['J2'].v).toBe('02/10/2026');
+    expect(pago['I2'].v).toBe('15/09/2026');
+    expect(pago['J2'].v).toBe('Outubro/26');
+    expect(pago['K2'].v).toBe('02/10/2026');
     // Sem data de baixa, cai no vencimento em vez de ficar em branco.
-    expect(pago['J3'].v).toBe('');
-    expect(pago['I3'].v).toBe('Agosto/26');
+    expect(pago['K3'].v).toBe('');
+    expect(pago['J3'].v).toBe('Agosto/26');
     // Valor Recebido preenchido só na aba Pago.
-    expect(pago['L2'].t).toBe('n');
-    expect(pago['L2'].z).toBe('R$ #,##0.00');
+    expect(pago['M2'].t).toBe('n');
+    expect(pago['M2'].z).toBe('R$ #,##0.00');
   });
 
   it('monta o nome do arquivo com base, período e data', () => {

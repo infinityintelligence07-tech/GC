@@ -40,7 +40,12 @@ export type ForecastExportRow = {
 // Excel exibe conforme o idioma da máquina (R$ 15.231,12 em pt-BR).
 const MONEY_FMT = 'R$ #,##0.00';
 
+/** Coluna livre para anotações de quem recebe a planilha. Fica sempre na frente. */
+const COLUNA_EDICAO = '';
+const LARGURA_EDICAO = 18;
+
 const COLUNAS_BASE = [
+  COLUNA_EDICAO,
   'Aluno',
   'WhatsApp',
   'Email',
@@ -104,6 +109,7 @@ function competencia(r: ForecastExportRow): string {
 /** Largura da coluna medida pelo texto que o Excel vai mostrar, não pelo valor cru. */
 function larguraColunas(linhas: Record<string, unknown>[], colunas: readonly string[]) {
   return colunas.map((col) => {
+    if (col === COLUNA_EDICAO) return { wch: LARGURA_EDICAO };
     let max = col.length;
     for (const linha of linhas) {
       const v = linha[col];
@@ -177,7 +183,14 @@ function montarAba(rows: ForecastExportRow[], colunas: readonly string[]): XLSX.
   const ws = XLSX.utils.json_to_sheet(linhas, { header: [...colunas] });
   aplicarFormatoMoeda(ws, colunas);
   ws['!cols'] = larguraColunas(linhas, colunas);
-  if (linhas.length > 0 && ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] };
+  if (linhas.length > 0 && ws['!ref']) {
+    // Filtro só nas colunas de dados: a coluna de anotações não tem cabeçalho
+    // para filtrar, e as linhas escondidas somem por inteiro de qualquer forma.
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    ws['!autofilter'] = {
+      ref: XLSX.utils.encode_range({ s: { r: range.s.r, c: range.s.c + 1 }, e: range.e }),
+    };
+  }
   return ws;
 }
 
