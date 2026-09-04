@@ -136,21 +136,13 @@ export default function DashboardPage() {
   const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
   const [kaminoForecastTotals, setKaminoForecastTotals] = useState<KaminoDashboardForecastTotals | null>(null);
 
-  // No IAM, a fonte dos valores é a carteira GC (alunos importados/aprovados):
+  // A fonte dos valores é sempre a carteira GC (alunos importados/aprovados):
   // a planilha cadastra os contratos, cancelamento conciliado debita e contrato
-  // IAM aprovado na Conciliação passa a contar. O espelho Kamino permanece como
-  // fonte autoritativa somente na empresa Liberty.
-  const { companies, activeCompanyId } = useCompanyStore();
-  const isLibertyCompany =
-    (companies.find((c) => c.id === activeCompanyId)?.slug ?? '').toLowerCase() === 'liberty';
-
-  const usesKaminoAuthoritativeForecast =
-    isLibertyCompany &&
-    mode === 'performance' &&
-    forecastIndex === 0 &&
-    dateBasis === 'vencimento' &&
-    tagFilters.length === 0 &&
-    scoreFilter === null;
+  // IAM aprovado na Conciliação passa a contar. Desde 02/09/2026 a Liberty foi
+  // zerada e repovoada pela planilha "Liberty e Begin | 2026", então o espelho
+  // Kamino deixou de ser autoritativo em qualquer empresa.
+  const { activeCompanyId } = useCompanyStore();
+  const usesKaminoAuthoritativeForecast = false;
 
   useEffect(() => {
     if (!usesKaminoAuthoritativeForecast) {
