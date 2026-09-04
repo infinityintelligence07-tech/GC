@@ -166,6 +166,12 @@ export interface AC {
   metaTaxaEmDiaBase?: number;
   /** ISO — quando a meta de Taxa em Dia foi definida. */
   metaTaxaEmDiaEm?: string;
+  /** Valor (R$) "Em Dia + Novos" do mês registrado no início do mês — marca da fita. */
+  emDiaNovosBase?: number;
+  /** Mês (YYYY-MM, Brasília) a que `emDiaNovosBase` se refere; mês diferente = refazer a marca. */
+  emDiaNovosBaseMes?: string;
+  /** Meta (R$) do mês para "Em Dia + Novos" na carteira do assessor — fim da fita. */
+  emDiaNovosMeta?: number;
 }
 
 export interface Product {
@@ -208,7 +214,7 @@ export interface FinancialRules {
   metaTaxaEmDiaBase?: number;
   /** ISO — quando a meta de Taxa em Dia foi definida. */
   metaTaxaEmDiaEm?: string;
-  /** Participação "Em Dia + Novos" (%) registrada no início do mês — marca da fita do Dashboard. */
+  /** Participação "Em Dia + Novos" (%) do mês registrada no início do mês — marca da fita do Dashboard. */
   emDiaNovosBase?: number;
   /** Mês (YYYY-MM, Brasília) a que `emDiaNovosBase` se refere; mês diferente = refazer a marca. */
   emDiaNovosBaseMes?: string;

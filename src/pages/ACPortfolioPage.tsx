@@ -39,7 +39,7 @@ import {
 } from '@/lib/cancellationIndicators';
 import { statusColors } from '@/lib/statusColors';
 import { NaoSomaBadge } from '@/components/NaoSomaBadge';
-import { getTodayBrasilia, calcularDiasVencido, dueDateForDisplay } from '@/lib/brasiliaDate';
+import { getTodayBrasilia, getTodayStringBrasilia, calcularDiasVencido, dueDateForDisplay } from '@/lib/brasiliaDate';
 import { getDisplayInstallmentValue, normalizeSearch } from '@/lib/utils';
 import { getTagStyle } from '@/lib/tagColors';
 import {
@@ -51,6 +51,8 @@ import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagR
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
+import RibbonGauge from '@/components/ui/RibbonGauge';
+import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 
 function ScoreStars({ score }: { score: number }) {
@@ -710,6 +712,73 @@ export default function ACPortfolioPage() {
     : '0.0';
   const pctEmDia = pct(emDia.length);
   const pctInadimplente = pct(inadimplentes);
+  // ── Card "Em Dia + Novos · mês vigente" (fita) ────────────────────────────
+  // Recorte pelo mês atual (Brasília): só entram alunos com parcela vencendo
+  // no mês; o valor soma somente as parcelas do mês (pagas + em aberto), e a
+  // participação (%) é sobre os alunos com vencimento no mês (Em Dia + Novos
+  // + Inadimplentes). Independe do filtro de vencimento da Previsão.
+  const mesAtualKey = getTodayStringBrasilia().slice(0, 7); // YYYY-MM
+  const mesAtualLabel = (() => {
+    const [y, m] = mesAtualKey.split('-').map(Number);
+    const nome = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long' });
+    return `${nome.charAt(0).toUpperCase()}${nome.slice(1)}/${y}`;
+  })();
+  const _instNoMes = (i: { dueDate: string }) => i.dueDate.slice(0, 7) === mesAtualKey;
+  const _temParcelaNoMes = (s: Student) => s.installments.some(_instNoMes);
+  const sumMes = (arr: Student[], onlyPaid?: boolean) =>
+    arr.reduce((acc, s) => {
+      const okPaid = (i: { paid: boolean }) => onlyPaid == null || i.paid === onlyPaid;
+      if (s.statusCancelamento === 'cancelado') {
+        return acc + s.installments
+          .filter((i) => _instNoMes(i) && okPaid(i) && (i.tags ?? []).includes('multa-cancelamento'))
+          .reduce((a, i) => a + i.value, 0);
+      }
+      if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
+      return acc + s.installments
+        .filter((i) => _instNoMes(i) && okPaid(i) && !isInstallmentExcludedFromAcPortfolio(s, i))
+        .reduce((a, i) => a + i.value, 0);
+    }, 0);
+  const _statusInadimplente: StudentStatus[] = ['Vencido 1', 'Vencido 2', 'À Negativar', 'Negativado'];
+  const mesEmDiaNovos = kpiStudents.filter(
+    (s) => (s.status === 'Em Dia' || s.status === 'Aluno Novo') && !_isSolic(s) && _temParcelaNoMes(s),
+  );
+  const mesInadimplentes = kpiStudents.filter(
+    (s) => _statusInadimplente.includes(s.status) && !_isSolic(s) && _temParcelaNoMes(s),
+  );
+  const mesTotalComposicao = mesEmDiaNovos.length + mesInadimplentes.length;
+  const pctEmDiaNovosMes = mesTotalComposicao > 0
+    ? ((mesEmDiaNovos.length / mesTotalComposicao) * 100).toFixed(1)
+    : '0.0';
+  const mesEmDiaNovosValue = sumMes(mesEmDiaNovos);
+  const mesEmDiaNovosPago = sumMes(mesEmDiaNovos, true);
+
+  // Meta (R$) do mês por assessor: fim da escala da fita. Editável pelo admin
+  // (lápis no card); sem meta salva usa o padrão do app.
+  const emDiaNovosMeta = ac?.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO;
+  const pctMetaEmDiaNovos = emDiaNovosMeta > 0 ? (mesEmDiaNovosValue / emDiaNovosMeta) * 100 : 0;
+  const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
+
+  // Marca do início do mês (por assessor): valor (R$) registrado na primeira
+  // visualização do mês (admin ou o próprio assessor), gravada em
+  // `acs.em_dia_novos_base(_mes)`. Mês novo = marca refeita.
+  const emDiaNovosBaseAtual =
+    ac && ac.emDiaNovosBaseMes === mesAtualKey ? ac.emDiaNovosBase : undefined;
+  const emDiaNovosBasePct =
+    emDiaNovosBaseAtual != null && emDiaNovosMeta > 0 ? (emDiaNovosBaseAtual / emDiaNovosMeta) * 100 : undefined;
+  const fixarBaseEmDiaNovos =
+    !!ac &&
+    (currentUser?.role === 'admin' || canMutatePortfolio) &&
+    mesTotalComposicao > 0 &&
+    ac.emDiaNovosBaseMes !== mesAtualKey;
+  useEffect(() => {
+    if (!fixarBaseEmDiaNovos || !ac) return;
+    updateAC(ac.id, {
+      emDiaNovosBase: Math.round(mesEmDiaNovosValue * 100) / 100,
+      emDiaNovosBaseMes: mesAtualKey,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixarBaseEmDiaNovos, mesAtualKey, ac?.id]);
+
   const paidCount = (s: Student) => s.installments.filter((i) => i.paid).length;
 
   const revertPct = acCases.length > 0 ? Math.round((revertidos.length / acCases.length) * 100) : 0;
@@ -776,8 +845,32 @@ export default function ACPortfolioPage() {
           </div>
         </div>
 
-        {/* Velocímetro da meta mensal de Taxa em Dia (centralizado no topo) */}
-        <div className="hidden sm:flex flex-1 justify-center">
+        {canMutatePortfolio ? (
+          <NotificationBell acId={ac.id} onOpenStudent={handleOpenStudentFromNotif} />
+        ) : (
+          <div className="shrink-0 px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-[10px] font-semibold text-amber-800">
+            Somente leitura
+          </div>
+        )}
+      </div>
+
+      {!canMutatePortfolio && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-900">
+          <Eye size={14} className="shrink-0" />
+          <span>
+            Você está visualizando a carteira de <strong>{ac.name}</strong>. Alterações só são permitidas na sua própria carteira.
+          </span>
+        </div>
+      )}
+
+      {/* ── 0b. Velocímetro + fita do mês + taxas ────────────────────────────── */}
+      {/* Esquerda: velocímetro da meta de Taxa em Dia do assessor.
+          Centro: "Em Dia + Novos" do mês atual com fita reta (ponteiro ao vivo,
+          marca = início do mês, refeita quando o mês vira). O card homônimo da
+          linha de KPIs abaixo continua igual.
+          Direita: Taxa Em Dia e Taxa Inadimplente empilhados. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_minmax(180px,220px)] gap-2.5 sm:gap-3 items-stretch">
+        <div className="hidden sm:flex items-center justify-center rounded-2xl bg-card border border-border saas-shadow-md px-3 py-2">
           <MetaTaxaEmDiaHeader
             taxaAtual={Number(pctEmDia)}
             meta={ac.metaTaxaEmDia}
@@ -796,23 +889,105 @@ export default function ACPortfolioPage() {
           />
         </div>
 
-        {canMutatePortfolio ? (
-          <NotificationBell acId={ac.id} onOpenStudent={handleOpenStudentFromNotif} />
-        ) : (
-          <div className="shrink-0 px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-[10px] font-semibold text-amber-800">
-            Somente leitura
+        <div
+          onClick={() => setStatusFilter(statusFilter === 'Em Dia' ? '' : 'Em Dia')}
+          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 flex flex-col ${statusFilter === 'Em Dia' ? 'ring-2 ring-teal-500/50' : ''}`}
+        >
+          <div className="flex items-start justify-between mb-2 gap-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">
+              Em Dia + Novos · {mesAtualLabel}
+            </p>
+            <div className="flex items-center gap-1 shrink-0">
+              <NaoSomaBadge title='Recorte do mês vigente: só parcelas com vencimento neste mês. O card "Em Dia + Novos" abaixo mostra o saldo em aberto de todos os meses.' />
+              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos_mes' ? null : 'emdia_novos_mes'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
+                <Info size={14} />
+              </button>
+            </div>
           </div>
-        )}
-      </div>
-
-      {!canMutatePortfolio && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-900">
-          <Eye size={14} className="shrink-0" />
-          <span>
-            Você está visualizando a carteira de <strong>{ac.name}</strong>. Alterações só são permitidas na sua própria carteira.
-          </span>
+          <div className="flex items-end justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="kpi-value text-teal-600" title={`${formatCurrency(mesEmDiaNovosValue)} vencendo em ${mesAtualLabel} (pagas + em aberto)`}>
+                <span className="hidden sm:inline">{formatCurrency(mesEmDiaNovosValue)}</span>
+                <span className="sm:hidden">{formatCurrencyCompact(mesEmDiaNovosValue)}</span>
+              </p>
+              <p className="text-[11px] text-muted-foreground truncate mt-1">
+                {mesEmDiaNovos.length} alunos
+                {mesEmDiaNovosPago > 0 && (
+                  <span className="text-emerald-600"> · {formatCurrencyCompact(mesEmDiaNovosPago)} pago</span>
+                )}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-0.5 shrink-0">
+              <p className="text-sm font-bold text-teal-600" title={`${mesEmDiaNovos.length} de ${mesTotalComposicao} alunos com vencimento em ${mesAtualLabel}`}>{pctEmDiaNovosMes}% <span className="text-[10px] font-medium text-muted-foreground">dos alunos do mês</span></p>
+              <MetaValorEditor
+                value={emDiaNovosMeta}
+                titulo={ac.name}
+                canEdit={currentUser?.role === 'admin'}
+                onSave={(meta) => updateAC(ac.id, { emDiaNovosMeta: meta })}
+              />
+            </div>
+          </div>
+          <div className="mt-auto pt-2">
+            <RibbonGauge
+              value={pctMetaEmDiaNovos}
+              baseline={emDiaNovosBasePct}
+              baselineLabel="Início do mês"
+              ticks={[0, 25, 50, 75, 100]}
+              pointerColor="#0d9488"
+              formatValue={(p) => `${p.toFixed(1).replace('.', ',')}% da meta`}
+              formatTick={(p) => formatCurrencyCompact((emDiaNovosMeta * p) / 100)}
+              footer={
+                <p className="text-[9px] text-muted-foreground text-center -mt-0.5 leading-tight">
+                  {faltaMetaEmDiaNovos > 0 ? (
+                    <>Falta <span className="font-semibold text-foreground">{formatCurrency(faltaMetaEmDiaNovos)}</span> para a meta</>
+                  ) : (
+                    <span className="font-semibold text-emerald-600">Meta atingida · {formatCurrency(mesEmDiaNovosValue - emDiaNovosMeta)} acima</span>
+                  )}
+                  {emDiaNovosBaseAtual != null && (
+                    <>
+                      {' · '}Início do mês {formatCurrencyCompact(emDiaNovosBaseAtual)}{' '}
+                      <span className={mesEmDiaNovosValue - emDiaNovosBaseAtual >= 0 ? 'text-emerald-600 font-semibold' : 'text-red-600 font-semibold'}>
+                        ({mesEmDiaNovosValue - emDiaNovosBaseAtual >= 0 ? '+' : '−'}{formatCurrencyCompact(Math.abs(mesEmDiaNovosValue - emDiaNovosBaseAtual))})
+                      </span>
+                    </>
+                  )}
+                </p>
+              }
+            />
+          </div>
+          {infoStatus === 'emdia_novos_mes' && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
+              <p>
+                Somente {mesAtualLabel}, carteira de {ac.name}: alunos Em Dia / Novos com parcela vencendo neste mês e
+                valor das parcelas do mês (pagas + em aberto). A fita vai de R$ 0 até a meta de {formatCurrency(emDiaNovosMeta)};
+                o ponteiro mostra quanto da meta o valor de agora alcança e a marca tracejada é o valor registrado no
+                início do mês{emDiaNovosBaseAtual != null ? ` (${formatCurrency(emDiaNovosBaseAtual)})` : ''}.
+                Quando o mês vira, a marca é refeita automaticamente. O percentual ao lado do valor é a participação
+                sobre os {mesTotalComposicao} alunos com vencimento no mês.
+              </p>
+            </div>
+          )}
         </div>
-      )}
+
+        <div className="grid grid-cols-2 lg:grid-cols-1 gap-2.5 sm:gap-3">
+          <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-emerald-500 border border-emerald-600 transition-transform hover:-translate-y-0.5">
+            <div className="flex items-start justify-between mb-2 gap-2">
+              <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Em Dia</p>
+              <TrendingUp size={16} className="text-white/50 shrink-0" />
+            </div>
+            <p className="kpi-value text-white">{pctEmDia}%</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate" title={`${emDia.length} alunos em dia de ${carteiraTotalAlunos} alunos da Carteira Total`}>{emDia.length} de {carteiraTotalAlunos} alunos</p>
+          </div>
+          <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
+            <div className="flex items-start justify-between mb-2 gap-2">
+              <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
+              <TrendingDown size={16} className="text-white/50 shrink-0" />
+            </div>
+            <p className="kpi-value text-white">{pctInadimplente}%</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate" title={`${inadimplentes} alunos inadimplentes de ${carteiraTotalAlunos} alunos da Carteira Total`}>{inadimplentes} de {carteiraTotalAlunos} alunos</p>
+          </div>
+        </div>
+      </div>
 
       {/* ── 1. Modo de Análise ──────────────────────────────────────────────────── */}
       {/* No desktop os botões ficam no cabeçalho, ao lado do seletor de empresa. */}
@@ -1068,9 +1243,9 @@ export default function ACPortfolioPage() {
       )}
 
       {/* ── 4. Indicadores (KPIs Row 1) ──────────────────────────────────────── */}
-      {/* Ordem: Carteira Total → Em Dia + Novos → Em Dia → Alunos Novos → Taxa Em Dia */}
+      {/* Ordem: Carteira Total → Em Dia + Novos → Em Dia → Alunos Novos (Taxa Em Dia está no bloco do topo) */}
       {/* Cards clicáveis — ao clicar aplicam o filtro de status correspondente na lista de alunos abaixo */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <button
           type="button"
           onClick={() => { setStatusFilter(''); setKpiCardFilter(''); setTagFilters([]); }}
@@ -1197,20 +1372,11 @@ export default function ACPortfolioPage() {
             </div>
           )}
         </div>
-
-        <div className="min-w-0 rounded-2xl p-4 sm:p-5 saas-shadow-md bg-emerald-500 border border-emerald-600 transition-transform hover:-translate-y-0.5">
-          <div className="flex items-start justify-between mb-2 gap-2">
-            <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Em Dia</p>
-            <TrendingUp size={16} className="text-white/50 shrink-0" />
-          </div>
-          <p className="kpi-value text-white">{pctEmDia}%</p>
-          <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {totalComposicao}</p>
-        </div>
       </div>
 
       {/* ── Indicadores Row 2 ────────────────────────────────────────────────── */}
-      {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado → Taxa Inadimplente */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+      {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado (Taxa Inadimplente está no bloco do topo) */}
+      <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {[
           { key: 'v1', label: 'Vencido 1', value: v1Value, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos com parcelas vencidas entre 1 e 30 dias. Representa o primeiro estágio de inadimplência, onde ações de cobrança preventiva podem evitar a evolução do atraso.', filter: 'Vencido 1' as StudentStatus },
           { key: 'v2', label: 'Vencido 2', value: v2Value, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos com parcelas vencidas entre 31 e 60 dias. Neste estágio a inadimplência é mais crítica e requer ações de cobrança mais intensivas para recuperação do valor.', filter: 'Vencido 2' as StudentStatus },
@@ -1253,16 +1419,6 @@ export default function ACPortfolioPage() {
             </div>
           );
         })}
-
-        {/* Taxa Inadimplente — mesmo tamanho dos outros (full red) */}
-        <div className="min-w-0 rounded-2xl p-4 sm:p-5 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
-          <div className="flex items-start justify-between mb-2 gap-2">
-            <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
-            <TrendingDown size={16} className="text-white/50 shrink-0" />
-          </div>
-          <p className="kpi-value text-white">{pctInadimplente}%</p>
-          <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {totalComposicao}</p>
-        </div>
       </div>
 
       {/* ── KPIs: Solicitação + Pendências + Revertidos + Boletos Antecipados ─ */}

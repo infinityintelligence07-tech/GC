@@ -83,6 +83,9 @@ async function fetchAll(activeCompanyId?: string | null) {
     metaTaxaEmDia: r.meta_taxa_em_dia != null ? Number(r.meta_taxa_em_dia) : undefined,
     metaTaxaEmDiaBase: r.meta_taxa_em_dia_base != null ? Number(r.meta_taxa_em_dia_base) : undefined,
     metaTaxaEmDiaEm: r.meta_taxa_em_dia_em ?? undefined,
+    emDiaNovosBase: r.em_dia_novos_base != null ? Number(r.em_dia_novos_base) : undefined,
+    emDiaNovosBaseMes: r.em_dia_novos_base_mes ?? undefined,
+    emDiaNovosMeta: r.em_dia_novos_meta != null ? Number(r.em_dia_novos_meta) : undefined,
   }));
 
   const products: Product[] = (productsRes.data ?? []).map((r: any) => ({

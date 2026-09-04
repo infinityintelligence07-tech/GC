@@ -591,27 +591,58 @@ export default function DashboardPage() {
   const pctCarteira = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
   const pctEmDia = pct(emDia.length);
   const pctInadimplente = pct(inadimplentes);
-  const pctEmDiaNovos = pct(emDia.length + alunosNovos.length);
-
-  // ── Fita "Em Dia + Novos": marca do início do mês ─────────────────────────
-  // O ponteiro segue o valor ao vivo; a marca de partida é a participação
-  // registrada na primeira visualização de cada mês (Brasília). Quando o mês
-  // vira, a marca é refeita com o valor daquele momento — gravada em
-  // financial_rules para todos os usuários da empresa verem a mesma referência.
+  // ── Card "Em Dia + Novos · mês vigente" (fita) ────────────────────────────
+  // Recorte pelo mês atual (Brasília): só entram alunos com parcela vencendo
+  // no mês; o valor soma somente as parcelas do mês (pagas + em aberto), e a
+  // participação (%) é sobre os alunos com vencimento no mês (Em Dia + Novos
+  // + Inadimplentes). Independe do filtro de vencimento da Previsão.
   const mesAtualKey = getTodayStringBrasilia().slice(0, 7); // YYYY-MM
   const mesAtualLabel = (() => {
     const [y, m] = mesAtualKey.split('-').map(Number);
     const nome = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long' });
     return `${nome.charAt(0).toUpperCase()}${nome.slice(1)}/${y}`;
   })();
+  const _instNoMes = (i: { dueDate: string }) => i.dueDate.slice(0, 7) === mesAtualKey;
+  const _temParcelaNoMes = (s: Student) => s.installments.some(_instNoMes);
+  const sumMes = (arr: Student[], onlyPaid?: boolean) =>
+    arr.reduce((acc, s) => {
+      const okPaid = (i: { paid: boolean }) => onlyPaid == null || i.paid === onlyPaid;
+      if (s.statusCancelamento === 'cancelado') {
+        return acc + s.installments
+          .filter((i) => _instNoMes(i) && okPaid(i) && (i.tags ?? []).includes('multa-cancelamento'))
+          .reduce((a, i) => a + i.value, 0);
+      }
+      if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
+      return acc + s.installments
+        .filter((i) => _instNoMes(i) && okPaid(i) && !isInstallmentExcludedFromFinancialTotals(s, i))
+        .reduce((a, i) => a + i.value, 0);
+    }, 0);
+  const _statusInadimplente: StudentStatus[] = ['Vencido 1', 'Vencido 2', 'À Negativar', 'Negativado'];
+  const mesEmDiaNovos = kpiStudents.filter(
+    (s) => (s.status === 'Em Dia' || s.status === 'Aluno Novo') && !_isSolic(s) && _temParcelaNoMes(s),
+  );
+  const mesInadimplentes = kpiStudents.filter(
+    (s) => _statusInadimplente.includes(s.status) && !_isSolic(s) && _temParcelaNoMes(s),
+  );
+  const mesTotalComposicao = mesEmDiaNovos.length + mesInadimplentes.length;
+  const pctEmDiaNovosMes = mesTotalComposicao > 0
+    ? ((mesEmDiaNovos.length / mesTotalComposicao) * 100).toFixed(1)
+    : '0.0';
+  const mesEmDiaNovosValue = sumMes(mesEmDiaNovos);
+  const mesEmDiaNovosPago = sumMes(mesEmDiaNovos, true);
+
+  // Marca do início do mês: participação (%) registrada na primeira
+  // visualização de cada mês (Brasília). Quando o mês vira, a marca é refeita
+  // com o valor daquele momento — gravada em financial_rules para toda a
+  // empresa. (A meta em R$ existe só na Carteira do Assessor.)
   const emDiaNovosBaseAtual =
     rules.emDiaNovosBaseMes === mesAtualKey ? rules.emDiaNovosBase : undefined;
   const fixarBaseEmDiaNovos =
-    currentUser?.role === 'admin' && totalComposicao > 0 && rules.emDiaNovosBaseMes !== mesAtualKey;
+    currentUser?.role === 'admin' && mesTotalComposicao > 0 && rules.emDiaNovosBaseMes !== mesAtualKey;
   useEffect(() => {
     if (!fixarBaseEmDiaNovos) return;
     setRules({
-      emDiaNovosBase: Math.round(Number(pctEmDiaNovos) * 10) / 10,
+      emDiaNovosBase: Math.round(Number(pctEmDiaNovosMes) * 10) / 10,
       emDiaNovosBaseMes: mesAtualKey,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1199,7 +1230,7 @@ export default function DashboardPage() {
               Em Dia + Novos · {mesAtualLabel}
             </p>
             <div className="flex items-center gap-1 shrink-0">
-              <NaoSomaBadge title='Mesma composição do card "Em Dia + Novos" abaixo (Em Dia + Alunos Novos). Este card só acompanha a evolução no mês.' />
+              <NaoSomaBadge title='Recorte do mês vigente: só parcelas com vencimento neste mês. O card "Em Dia + Novos" abaixo mostra o saldo em aberto de todos os meses.' />
               <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos_mes' ? null : 'emdia_novos_mes'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
                 <Info size={14} />
               </button>
@@ -1207,17 +1238,22 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-end justify-between gap-3 flex-wrap">
             <div className="min-w-0">
-              <p className="kpi-value text-teal-600" title={formatCurrency(emDiaValue + alunosNovosValue)}>
-                <span className="hidden sm:inline">{formatCurrency(emDiaValue + alunosNovosValue)}</span>
-                <span className="sm:hidden">{formatCurrencyCompact(emDiaValue + alunosNovosValue)}</span>
+              <p className="kpi-value text-teal-600" title={`${formatCurrency(mesEmDiaNovosValue)} vencendo em ${mesAtualLabel} (pagas + em aberto)`}>
+                <span className="hidden sm:inline">{formatCurrency(mesEmDiaNovosValue)}</span>
+                <span className="sm:hidden">{formatCurrencyCompact(mesEmDiaNovosValue)}</span>
               </p>
-              <p className="text-[11px] text-muted-foreground truncate mt-1">{emDia.length + alunosNovos.length} alunos</p>
+              <p className="text-[11px] text-muted-foreground truncate mt-1">
+                {mesEmDiaNovos.length} alunos
+                {mesEmDiaNovosPago > 0 && (
+                  <span className="text-emerald-600"> · {formatCurrencyCompact(mesEmDiaNovosPago)} pago</span>
+                )}
+              </p>
             </div>
-            <p className="text-sm font-bold text-teal-600 shrink-0">{pctEmDiaNovos}%</p>
+            <p className="text-sm font-bold text-teal-600 shrink-0" title={`${mesEmDiaNovos.length} de ${mesTotalComposicao} alunos com vencimento em ${mesAtualLabel}`}>{pctEmDiaNovosMes}%</p>
           </div>
           <div className="mt-auto pt-2">
             <RibbonGauge
-              value={Number(pctEmDiaNovos)}
+              value={Number(pctEmDiaNovosMes)}
               baseline={emDiaNovosBaseAtual}
               baselineLabel="Início do mês"
               ticks={[0, 25, 50, 75, 100]}
@@ -1227,8 +1263,9 @@ export default function DashboardPage() {
           {infoStatus === 'emdia_novos_mes' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
               <p>
-                Participação de "Em Dia + Novos" na carteira ao longo de {mesAtualLabel}. O ponteiro mostra o valor
-                de agora; a marca tracejada é o valor registrado no início do mês
+                Somente {mesAtualLabel}: alunos Em Dia / Novos com parcela vencendo neste mês, valor das parcelas do mês
+                (pagas + em aberto) e participação sobre os {mesTotalComposicao} alunos com vencimento no mês. O ponteiro
+                mostra o valor de agora; a marca tracejada é o valor registrado no início do mês
                 {emDiaNovosBaseAtual != null ? ` (${emDiaNovosBaseAtual.toFixed(1).replace('.', ',')}%)` : ''}.
                 Quando o mês vira, a marca é refeita automaticamente.
               </p>
@@ -1243,7 +1280,7 @@ export default function DashboardPage() {
               <TrendingUp size={16} className="text-white/50 shrink-0" />
             </div>
             <p className="kpi-value text-white">{pctEmDia}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate">{emDia.length} de {totalComposicao}</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate" title={`${emDia.length} alunos em dia de ${carteiraTotalAlunos} alunos da Carteira Total`}>{emDia.length} de {carteiraTotalAlunos} alunos</p>
           </div>
           <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
             <div className="flex items-start justify-between mb-2 gap-2">
@@ -1251,7 +1288,7 @@ export default function DashboardPage() {
               <TrendingDown size={16} className="text-white/50 shrink-0" />
             </div>
             <p className="kpi-value text-white">{pctInadimplente}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate">{inadimplentes} de {totalComposicao}</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate" title={`${inadimplentes} alunos inadimplentes de ${carteiraTotalAlunos} alunos da Carteira Total`}>{inadimplentes} de {carteiraTotalAlunos} alunos</p>
           </div>
         </div>
       </div>
