@@ -103,7 +103,6 @@ export default function ACPortfolioPage() {
   const [productFilter, setProductFilter] = useState('');
   const [statusFilter, setStatusFilterRaw] = useState('');
   const [kpiCardFilter, setKpiCardFilter] = useState<'' | 'revertidos' | 'boletos_antecipados' | 'pendente'>('');
-  const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -337,28 +336,21 @@ export default function ACPortfolioPage() {
   }, [mode, perfPreset, perfCustomStart, perfCustomEnd, acStudents]);
 
   // ── Forecast custom dates ──────────────────────────────────────────────────
-  const [forecastCustomStart, setForecastCustomStart] = useState(currentMonthStart);
-  const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
+  // Vencimento inicia sem datas (= toda a carteira); ao trocar para Data de
+  // Pagamento o período vira o mês corrente.
+  const [forecastCustomStart, setForecastCustomStart] = useState('');
+  const [forecastCustomEnd, setForecastCustomEnd] = useState('');
+  const forecastSemPeriodo = !forecastCustomStart && !forecastCustomEnd;
 
-  // ── Forecast helpers (Brasília) ───────────────────────────────────────────
-  // Índices: 0=Todos, 1=Hoje, 2=Amanhã, 3=2Dias, 4=3Dias, 5=7Dias, 6=Personalizado
+  // ── Forecast helpers ──────────────────────────────────────────────────────
+  // Período Início/Fim (mesmo controle nas duas bases). Sem as duas datas
+  // preenchidas → toda a carteira.
   const getForecastRange = (): { start: Date; end: Date } | null => {
-    const today = getTodayBrasilia();
-    if (forecastIndex === 0) return null; // Todos
-    if (forecastIndex === 6) { // Personalizado
-      if (!forecastCustomStart || !forecastCustomEnd) return null;
-      return {
-        start: new Date(forecastCustomStart + 'T00:00:00'),
-        end: new Date(forecastCustomEnd + 'T23:59:59'),
-      };
-    }
-    const offsetMap: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 5 };
-    const offset = offsetMap[forecastIndex] ?? 0;
-    const target = new Date(today);
-    target.setDate(target.getDate() + offset);
-    const end = new Date(target);
-    end.setHours(23, 59, 59, 999);
-    return { start: target, end };
+    if (!forecastCustomStart || !forecastCustomEnd) return null;
+    return {
+      start: new Date(forecastCustomStart + 'T00:00:00'),
+      end: new Date(forecastCustomEnd + 'T23:59:59'),
+    };
   };
 
   // Exclui Renda Extra (já saída da carteira) e Cancelados conciliados
@@ -383,7 +375,7 @@ export default function ACPortfolioPage() {
     : [];
 
   const getForecastTotals = () => {
-    const range = forecastIndex === 0 ? null : getForecastRange();
+    const range = getForecastRange();
     let total = 0, aVencer = 0, pago = 0;
     let totalReal = 0, pagoReal = 0;
     let qtd = 0;
@@ -538,7 +530,6 @@ export default function ACPortfolioPage() {
   const carteiraTotalAlunos = carteiraTotais.qtdAlunosAVencer;
 
   const hasInstallmentInForecastRange = (student: Student): boolean => {
-    if (forecastIndex === 0) return true;
     const range = getForecastRange();
     if (!range) return true;
     return student.installments.some((i) => {
@@ -561,7 +552,7 @@ export default function ACPortfolioPage() {
       return acStudents;
     }
     return acStudents.filter(hasInstallmentInForecastRange);
-  }, [acStudents, mode, forecastIndex, forecastCustomStart, forecastCustomEnd, kpiCardFilter]);
+  }, [acStudents, mode, forecastCustomStart, forecastCustomEnd, kpiCardFilter]);
 
   const setStatusFilter = (v: string) => {
     setStatusFilterRaw(v);
@@ -659,20 +650,8 @@ export default function ACPortfolioPage() {
   const mediaCarteira = calcularMediaDiasPagamento(allPaidInstallments);
 
   // ── KPI derivations ───────────────────────────────────────────────────────
-  // Filtro "Data de Vencimento" (forecastIndex) também aplicado aos KPIs de status.
-  const _fcRange = (() => {
-    const today = getTodayBrasilia();
-    if (forecastIndex === 0) return null;
-    if (forecastIndex === 6) {
-      if (!forecastCustomStart || !forecastCustomEnd) return null;
-      return { start: new Date(forecastCustomStart + 'T00:00:00'), end: new Date(forecastCustomEnd + 'T23:59:59') };
-    }
-    const offsetMap: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 5 };
-    const offset = offsetMap[forecastIndex] ?? 0;
-    const target = new Date(today); target.setDate(target.getDate() + offset);
-    const end = new Date(target); end.setHours(23, 59, 59, 999);
-    return { start: target, end };
-  })();
+  // Filtro "Data de Vencimento" (Início/Fim) também aplicado aos KPIs de status.
+  const _fcRange = getForecastRange();
   const _instInRange = (i: { dueDate: string }) => {
     if (!_fcRange) return true;
     const due = new Date(i.dueDate + 'T00:00:00');
@@ -1003,7 +982,7 @@ export default function ACPortfolioPage() {
               </div>
               <div className="inline-flex rounded-lg bg-muted p-0.5">
                 <button
-                  onClick={() => { setDateBasis('vencimento'); setForecastIndex(0); }}
+                  onClick={() => { setDateBasis('vencimento'); setForecastCustomStart(''); setForecastCustomEnd(''); }}
                   className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
                     dateBasis === 'vencimento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
@@ -1011,7 +990,10 @@ export default function ACPortfolioPage() {
                   Vencimento
                 </button>
                 <button
-                  onClick={() => { setDateBasis('pagamento'); setForecastIndex(6); }}
+                  onClick={() => {
+                    setDateBasis('pagamento');
+                    if (forecastSemPeriodo) { setForecastCustomStart(currentMonthStart); setForecastCustomEnd(currentMonthEnd); }
+                  }}
                   className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
                     dateBasis === 'pagamento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
@@ -1026,36 +1008,32 @@ export default function ACPortfolioPage() {
                 : 'Títulos pagos no período (carteira do assessor)'}
             </p>
             <div className="flex gap-1 mb-4 flex-wrap items-center">
-              {dateBasis === 'vencimento' &&
-                ['Todos', 'Hoje', 'Amanhã', '2 Dias', '3 Dias', '5 Dias', 'Personalizado'].map((p, i) => (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground">Início:</span>
+                <input type="date" value={forecastCustomStart} onChange={(e) => setForecastCustomStart(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
+                <span className="text-[10px] text-muted-foreground ml-1">Fim:</span>
+                <input type="date" value={forecastCustomEnd} onChange={(e) => setForecastCustomEnd(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
+                {forecastSemPeriodo ? (
+                  <span className="text-[10px] text-muted-foreground ml-1">
+                    {dateBasis === 'vencimento' ? 'toda a carteira' : 'todos os pagamentos'}
+                  </span>
+                ) : (
                   <button
-                    key={p}
-                    onClick={() => setForecastIndex(i)}
-                    className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
-                      forecastIndex === i
-                        ? 'iam-gradient text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:text-foreground'
-                    }`}
+                    type="button"
+                    onClick={() => { setForecastCustomStart(''); setForecastCustomEnd(''); }}
+                    className="ml-1 px-2 py-1 rounded-md text-[10px] font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title={dateBasis === 'vencimento' ? 'Limpar período (toda a carteira)' : 'Limpar período (todos os pagamentos)'}
                   >
-                    {p}
+                    Limpar
                   </button>
-                ))}
-              {(forecastIndex === 6 || dateBasis === 'pagamento') && (
-                <div className="flex items-center gap-1.5 ml-2">
-                  <span className="text-[10px] text-muted-foreground">Início:</span>
-                  <input type="date" value={forecastCustomStart} onChange={(e) => setForecastCustomStart(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
-                  <span className="text-[10px] text-muted-foreground ml-1">Fim:</span>
-                  <input type="date" value={forecastCustomEnd} onChange={(e) => setForecastCustomEnd(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
-                </div>
-              )}
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => {
-                  const periodLabels = ['Todos', 'Hoje', 'Amanhã', '2 Dias', '3 Dias', '5 Dias', 'Personalizado'];
-                  const periodLabel =
-                    dateBasis === 'pagamento' || forecastIndex === 6
-                      ? `Personalizado ${forecastCustomStart || '…'} a ${forecastCustomEnd || '…'}`
-                      : periodLabels[forecastIndex] || 'Todos';
+                  const periodLabel = forecastSemPeriodo
+                    ? 'Todos'
+                    : `Personalizado ${forecastCustomStart || '…'} a ${forecastCustomEnd || '…'}`;
                   const rows = carteiraTotais.details;
                   if (!rows.length) {
                     toast.message('Nenhum registro para exportar no período selecionado.');

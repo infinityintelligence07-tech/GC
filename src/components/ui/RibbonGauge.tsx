@@ -29,6 +29,10 @@ interface RibbonGaugeProps {
   pointerColor?: string;
   /** Rótulo do ponteiro e dos tooltips (recebe o % da escala). Padrão: "59,4%". */
   formatValue?: (pct: number) => string;
+  /** Texto exibido acima do ponteiro. Se ausente, usa `formatValue(value)`. */
+  pointerLabel?: string;
+  /** Cor do texto do ponteiro. `'gradient'` = cor da fita na posição do ponteiro. Padrão: foreground. */
+  pointerLabelColor?: string | 'gradient';
   /** Rótulo das marcas (recebe o % da escala). Padrão: "50%". */
   formatTick?: (pct: number) => string;
   /** Rodapé customizado. `null` oculta; ausente usa o rodapé padrão (início do mês · Δ pp). */
@@ -42,6 +46,35 @@ const fmtPct = (n: number) => {
 };
 const defaultFormat = (p: number) => `${fmtPct(p)}%`;
 
+/** Paradas do gradiente da fita (posição % → cor), na ordem. */
+const GRADIENT_STOPS: Array<[number, string]> = [
+  [0, '#dc2626'],
+  [40, '#facc15'],
+  [70, '#4ade80'],
+  [100, '#15803d'],
+];
+
+const hexToRgb = (hex: string): [number, number, number] => {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+
+/** Cor da fita na posição `pct` (0–100), interpolando as paradas do gradiente. */
+function ribbonColorAt(pct: number): string {
+  const p = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0));
+  for (let i = 1; i < GRADIENT_STOPS.length; i++) {
+    const [p0, c0] = GRADIENT_STOPS[i - 1];
+    const [p1, c1] = GRADIENT_STOPS[i];
+    if (p > p1) continue;
+    const t = p1 === p0 ? 0 : (p - p0) / (p1 - p0);
+    const a = hexToRgb(c0);
+    const b = hexToRgb(c1);
+    const mix = a.map((v, k) => Math.round(v + (b[k] - v) * t));
+    return `rgb(${mix[0]}, ${mix[1]}, ${mix[2]})`;
+  }
+  return GRADIENT_STOPS[GRADIENT_STOPS.length - 1][1];
+}
+
 export default function RibbonGauge({
   value,
   baseline,
@@ -52,6 +85,8 @@ export default function RibbonGauge({
   pointerColor = 'hsl(var(--foreground))',
   formatValue = defaultFormat,
   formatTick = defaultFormat,
+  pointerLabel,
+  pointerLabelColor,
   footer,
   className,
 }: RibbonGaugeProps) {
@@ -74,6 +109,13 @@ export default function RibbonGauge({
   // Evita o rótulo da meta colidir com o do ponteiro quando estão próximos.
   const goalLabelNearPointer = hasGoal && Math.abs(gx - px) < 38;
   const delta = hasBase ? v - clamp(baseline as number) : 0;
+  const labelText = pointerLabel ?? formatValue(v);
+  const labelFill =
+    pointerLabelColor === 'gradient' ? ribbonColorAt(v) : pointerLabelColor ?? 'hsl(var(--foreground))';
+  // Rótulos longos (ex.: "R$ 387.570,80") precisam de mais folga nas bordas
+  // para não sair da viewBox.
+  const longLabel = labelText.length > 8;
+  const labelAnchor = v < (longLabel ? 22 : 10) ? 'start' : v > (longLabel ? 78 : 90) ? 'end' : 'middle';
   const uid = `rg-${Math.round(v * 10)}-${hasBase ? Math.round((baseline as number) * 10) : 'x'}`;
 
   const aria = hasBase
@@ -169,13 +211,13 @@ export default function RibbonGauge({
           <text
             x={px}
             y={barY - 11.5}
-            textAnchor={v < 10 ? 'start' : v > 90 ? 'end' : 'middle'}
+            textAnchor={labelAnchor}
             fontSize={9}
             fontWeight={800}
-            fill="hsl(var(--foreground))"
+            fill={labelFill}
             style={{ letterSpacing: '-0.01em' }}
           >
-            {formatValue(v)}
+            {labelText}
           </text>
         </g>
       </svg>

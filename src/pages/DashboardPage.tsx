@@ -10,6 +10,7 @@ import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag,
 import { useState, useEffect, useRef } from 'react';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge from '@/components/ui/RibbonGauge';
+import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
 import { Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { getTodayBrasilia, getTodayStringBrasilia } from '@/lib/brasiliaDate';
@@ -71,7 +72,6 @@ function BotaoRelatorio({ onClick, className = '' }: { onClick: () => void; clas
 export default function DashboardPage() {
   const { students, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals, rules, setRules, currentUser } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
-  const [forecastIndex, setForecastIndex] = useState(0);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
   const [acFilter, setAcFilter] = useState('');
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
@@ -132,8 +132,11 @@ export default function DashboardPage() {
   })();
 
   // ── Forecast custom dates ─────────────────────────────────────────────────
-  const [forecastCustomStart, setForecastCustomStart] = useState(currentMonthStart);
-  const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
+  // Vencimento inicia sem datas (= toda a carteira, visão canônica do card);
+  // ao trocar para Data de Pagamento o período vira o mês corrente.
+  const [forecastCustomStart, setForecastCustomStart] = useState('');
+  const [forecastCustomEnd, setForecastCustomEnd] = useState('');
+  const forecastSemPeriodo = !forecastCustomStart && !forecastCustomEnd;
   const [kaminoForecastTotals, setKaminoForecastTotals] = useState<KaminoDashboardForecastTotals | null>(null);
 
   // A fonte dos valores é sempre a carteira GC (alunos importados/aprovados):
@@ -429,20 +432,11 @@ export default function DashboardPage() {
   const mediaCarteira = calcularMediaDiasPagamento(allPaidInstallments);
 
   // ── KPI derivations ───────────────────────────────────────────────────────
-  // Aplica o filtro "Data de Vencimento" (forecastIndex) também aos KPIs de status:
+  // Aplica o filtro "Data de Vencimento" (Início/Fim) também aos KPIs de status:
   // só conta alunos que possuem ao menos uma parcela com dueDate dentro do range.
   const _fcRange = (() => {
-    const today = getTodayBrasilia();
-    if (forecastIndex === 0) return null;
-    if (forecastIndex === 6) {
-      if (!forecastCustomStart || !forecastCustomEnd) return null;
-      return { start: new Date(forecastCustomStart + 'T00:00:00'), end: new Date(forecastCustomEnd + 'T23:59:59') };
-    }
-    const offsetMap: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 5 };
-    const offset = offsetMap[forecastIndex] ?? 0;
-    const target = new Date(today); target.setDate(target.getDate() + offset);
-    const end = new Date(target); end.setHours(23, 59, 59, 999);
-    return { start: target, end };
+    if (!forecastCustomStart || !forecastCustomEnd) return null;
+    return { start: new Date(forecastCustomStart + 'T00:00:00'), end: new Date(forecastCustomEnd + 'T23:59:59') };
   })();
   const _instInRange = (i: { dueDate: string }) => {
     if (!_fcRange) return true;
@@ -588,11 +582,10 @@ export default function DashboardPage() {
   const pctCarteira = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
   const pctEmDia = pct(emDia.length);
   const pctInadimplente = pct(inadimplentes);
-  // ── Card "Em Dia + Novos · mês vigente" (fita) ────────────────────────────
+  // ── Fita "Em Dia + Novos · mês vigente" ───────────────────────────────────
   // Recorte pelo mês atual (Brasília): só entram alunos com parcela vencendo
-  // no mês; o valor soma somente as parcelas do mês (pagas + em aberto), e a
-  // participação (%) é sobre os alunos com vencimento no mês (Em Dia + Novos
-  // + Inadimplentes). Independe do filtro de vencimento da Previsão.
+  // no mês; o valor soma somente as parcelas do mês (pagas + em aberto).
+  // Independe do filtro de vencimento da Previsão.
   const mesAtualKey = getTodayStringBrasilia().slice(0, 7); // YYYY-MM
   const mesAtualLabel = (() => {
     const [y, m] = mesAtualKey.split('-').map(Number);
@@ -614,75 +607,34 @@ export default function DashboardPage() {
         .filter((i) => _instNoMes(i) && okPaid(i) && !isInstallmentExcludedFromFinancialTotals(s, i))
         .reduce((a, i) => a + i.value, 0);
     }, 0);
-  const _statusInadimplente: StudentStatus[] = ['Vencido 1', 'Vencido 2', 'À Negativar', 'Negativado'];
   const mesEmDiaNovos = kpiStudents.filter(
     (s) => (s.status === 'Em Dia' || s.status === 'Aluno Novo') && !_isSolic(s) && _temParcelaNoMes(s),
   );
-  const mesInadimplentes = kpiStudents.filter(
-    (s) => _statusInadimplente.includes(s.status) && !_isSolic(s) && _temParcelaNoMes(s),
-  );
-  const mesTotalComposicao = mesEmDiaNovos.length + mesInadimplentes.length;
-  const pctEmDiaNovosMes = mesTotalComposicao > 0
-    ? ((mesEmDiaNovos.length / mesTotalComposicao) * 100).toFixed(1)
-    : '0.0';
   const mesEmDiaNovosValue = sumMes(mesEmDiaNovos);
-  const mesEmDiaNovosPago = sumMes(mesEmDiaNovos, true);
 
-  // Marca do início do mês: participação (%) registrada na primeira
-  // visualização de cada mês (Brasília). Quando o mês vira, a marca é refeita
-  // com o valor daquele momento — gravada em financial_rules para toda a
-  // empresa. (A meta em R$ existe só na Carteira do Assessor.)
-  const emDiaNovosBaseAtual =
-    rules.emDiaNovosBaseMes === mesAtualKey ? rules.emDiaNovosBase : undefined;
-  const fixarBaseEmDiaNovos =
-    currentUser?.role === 'admin' && mesTotalComposicao > 0 && rules.emDiaNovosBaseMes !== mesAtualKey;
-  useEffect(() => {
-    if (!fixarBaseEmDiaNovos) return;
-    setRules({
-      emDiaNovosBase: Math.round(Number(pctEmDiaNovosMes) * 10) / 10,
-      emDiaNovosBaseMes: mesAtualKey,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fixarBaseEmDiaNovos, mesAtualKey]);
+  // Meta (R$) do mês da empresa: traço em 2/3 da fita, editável pelo admin
+  // (lápis ao lado da fita); sem meta salva usa o padrão do app. A fita vai
+  // até 150% da meta para sobrar espaço à direita quando a meta é superada.
+  const emDiaNovosMeta = rules.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO;
+  const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
+  const ESCALA_FITA = 1.5;
+  const fitaMax = emDiaNovosMeta * ESCALA_FITA;
+  const pctMetaEmDiaNovos = fitaMax > 0 ? (mesEmDiaNovosValue / fitaMax) * 100 : 0;
+  const pctFitaMeta = 100 / ESCALA_FITA;
+  /** Rótulo em "% da meta" a partir do % da escala da fita (tooltips). */
+  const fmtPctMeta = (pctEscala: number) => `${(pctEscala * ESCALA_FITA).toFixed(1).replace('.', ',')}% da meta`;
 
   // ── Forecast (filtro isolado: só afeta este card) ─────────────────────────
-  // Índices: 0=Todos, 1=Hoje, 2=Amanhã, 3=2Dias, 4=3Dias, 5=7Dias, 6=Personalizado
-  // Regras — cada botão mostra APENAS o dia exato:
-  //   Todos      → toda a carteira de parcelas não pagas
-  //   Hoje       → parcelas com dueDate = hoje (Brasília)
-  //   Amanhã     → parcelas com dueDate = amanhã (dia único)
-  //   2 Dias     → parcelas com dueDate = daqui 2 dias (dia único)
-  //   3 Dias     → parcelas com dueDate = daqui 3 dias (dia único)
-  //   7 Dias     → parcelas com dueDate = daqui 7 dias (dia único)
-  //   Personal.  → intervalo entre as datas escolhidas
-  const getForecastRange = (): { start: Date; end: Date } | null => {
-    const today = getTodayBrasilia();
-    // Todos
-    if (forecastIndex === 0) return null;
-    // Personalizado
-    if (forecastIndex === 6) {
-      if (!forecastCustomStart || !forecastCustomEnd) return null;
-      return {
-        start: new Date(forecastCustomStart + 'T00:00:00'),
-        end: new Date(forecastCustomEnd + 'T23:59:59'),
-      };
-    }
-    // Hoje / Amanhã / 2 Dias / 3 Dias / 7 Dias → dia único
-    const offsetMap: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 5 };
-    const offset = offsetMap[forecastIndex] ?? 0;
-    const target = new Date(today);
-    target.setDate(target.getDate() + offset);
-    const end = new Date(target);
-    end.setHours(23, 59, 59, 999);
-    return { start: target, end };
-  };
+  // Período Início/Fim (mesmo controle nas duas bases). Sem as duas datas
+  // preenchidas → toda a carteira.
+  const getForecastRange = (): { start: Date; end: Date } | null => _fcRange;
 
   // Exclui Renda Extra (saída de Conciliar Exclusão) e Cancelados conciliados
   // do bloco "Data de Vencimento" — forecastBase definido acima (alinhado ao modal).
   // Retorna totais da projeção: A Vencer/Vencido (não pagas), Pago (pagas) e soma (total).
   // "Todos" → toda a carteira; demais → filtrado por dueDate dentro do range.
   const getForecastTotals = () => {
-    const range = forecastIndex === 0 ? null : getForecastRange();
+    const range = getForecastRange();
     let total = 0, aVencer = 0, pago = 0;
     let totalReal = 0, pagoReal = 0;
     let qtd = 0;
@@ -879,7 +831,7 @@ export default function DashboardPage() {
   // "Extrato do Card" na página Extrato de Conferência.
   const isCanonicalCardView =
     mode === 'performance' &&
-    forecastIndex === 0 &&
+    forecastSemPeriodo &&
     dateBasis === 'vencimento' &&
     !acFilter &&
     !productFilter &&
@@ -1217,9 +1169,10 @@ export default function DashboardPage() {
       {/* ── 0. Cabeçalho de saúde da carteira ───────────────────────────────── */}
       {/* Esquerda: velocímetro da meta mensal de Taxa em Dia (mesmo componente
           da Carteira do Assessor, com a meta gravada em financial_rules).
-          Centro: card "Em Dia + Novos" do MÊS ATUAL, com fita (ponteiro = agora;
-          marca = início do mês, refeita quando o mês vira). O card homônimo da
-          linha de KPIs abaixo continua igual.
+          Centro: só a fita "Em Dia + Novos" do MÊS ATUAL (sem card): ponteiro
+          com o valor em R$ colorido conforme a posição na fita, traço = meta
+          da empresa (editável pelo lápis). O card homônimo da linha de KPIs
+          abaixo continua igual.
           Direita: Taxa Em Dia e Taxa Inadimplente empilhados. */}
       <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_minmax(180px,220px)] gap-2.5 sm:gap-3 items-stretch">
         <div className="hidden sm:flex items-center justify-center rounded-2xl bg-card border border-border saas-shadow-md px-3 py-2">
@@ -1243,53 +1196,36 @@ export default function DashboardPage() {
 
         <div
           onClick={() => setKpiModalKey('emdia_novos')}
-          className="min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 flex flex-col"
+          className="min-w-0 cursor-pointer flex flex-col justify-center px-1 sm:px-2"
+          title={`Em Dia + Novos · ${mesAtualLabel}: ${formatCurrency(mesEmDiaNovosValue)} (${mesEmDiaNovos.length} alunos, parcelas do mês pagas + em aberto). Clique para ver os alunos.`}
         >
-          <div className="flex items-start justify-between mb-2 gap-2">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">
-              Em Dia + Novos · {mesAtualLabel}
-            </p>
-            <div className="flex items-center gap-1 shrink-0">
-              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos_mes' ? null : 'emdia_novos_mes'); }} className="text-muted-foreground/50 hover:text-muted-foreground" title='Recorte do mês vigente: só parcelas com vencimento neste mês. O card "Em Dia + Novos" abaixo mostra o saldo em aberto de todos os meses.'>
-                <Info size={14} />
-              </button>
-            </div>
-          </div>
-          <div className="flex items-end justify-between gap-3 flex-wrap">
-            <div className="min-w-0">
-              <p className="kpi-value text-teal-600" title={`${formatCurrency(mesEmDiaNovosValue)} vencendo em ${mesAtualLabel} (pagas + em aberto)`}>
-                <span className="hidden sm:inline">{formatCurrency(mesEmDiaNovosValue)}</span>
-                <span className="sm:hidden">{formatCurrencyCompact(mesEmDiaNovosValue)}</span>
-              </p>
-              <p className="text-[11px] text-muted-foreground truncate mt-1">
-                {mesEmDiaNovos.length} alunos
-                {mesEmDiaNovosPago > 0 && (
-                  <span className="text-emerald-600"> · {formatCurrencyCompact(mesEmDiaNovosPago)} pago</span>
-                )}
-              </p>
-            </div>
-            <p className="text-sm font-bold text-teal-600 shrink-0" title={`${mesEmDiaNovos.length} de ${mesTotalComposicao} alunos com vencimento em ${mesAtualLabel}`}>{pctEmDiaNovosMes}%</p>
-          </div>
-          <div className="mt-auto pt-2">
-            <RibbonGauge
-              value={Number(pctEmDiaNovosMes)}
-              baseline={emDiaNovosBaseAtual}
-              baselineLabel="Início do mês"
-              ticks={[0, 25, 50, 75, 100]}
-              pointerColor="#0d9488"
+          <div className="flex items-center justify-end gap-2 mb-0.5">
+            <MetaValorEditor
+              value={emDiaNovosMeta}
+              titulo="Dashboard geral"
+              canEdit={currentUser?.role === 'admin'}
+              onSave={(meta) => setRules({ emDiaNovosMeta: meta })}
             />
           </div>
-          {infoStatus === 'emdia_novos_mes' && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
-              <p>
-                Somente {mesAtualLabel}: alunos Em Dia / Novos com parcela vencendo neste mês, valor das parcelas do mês
-                (pagas + em aberto) e participação sobre os {mesTotalComposicao} alunos com vencimento no mês. O ponteiro
-                mostra o valor de agora; a marca tracejada é o valor registrado no início do mês
-                {emDiaNovosBaseAtual != null ? ` (${emDiaNovosBaseAtual.toFixed(1).replace('.', ',')}%)` : ''}.
-                Quando o mês vira, a marca é refeita automaticamente.
+          <RibbonGauge
+            value={pctMetaEmDiaNovos}
+            goal={pctFitaMeta}
+            goalLabel=""
+            ticks={[]}
+            pointerColor="#0d9488"
+            pointerLabel={formatCurrency(mesEmDiaNovosValue)}
+            pointerLabelColor="gradient"
+            formatValue={fmtPctMeta}
+            footer={
+              <p className="text-[11px] text-muted-foreground text-center leading-tight">
+                {faltaMetaEmDiaNovos > 0 ? (
+                  <>Falta <span className="font-semibold text-foreground">{formatCurrency(faltaMetaEmDiaNovos)}</span> para a meta</>
+                ) : (
+                  <span className="font-semibold text-emerald-600">Meta atingida · {formatCurrency(mesEmDiaNovosValue - emDiaNovosMeta)} acima</span>
+                )}
               </p>
-            </div>
-          )}
+            }
+          />
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-1 gap-2.5 sm:gap-3">
@@ -1341,7 +1277,7 @@ export default function DashboardPage() {
               </div>
               <div className="inline-flex rounded-lg bg-muted p-0.5">
                 <button
-                  onClick={() => { setDateBasis('vencimento'); setForecastIndex(0); }}
+                  onClick={() => { setDateBasis('vencimento'); setForecastCustomStart(''); setForecastCustomEnd(''); }}
                   className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
                     dateBasis === 'vencimento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
@@ -1349,7 +1285,10 @@ export default function DashboardPage() {
                   Vencimento
                 </button>
                 <button
-                  onClick={() => { setDateBasis('pagamento'); setForecastIndex(6); }}
+                  onClick={() => {
+                    setDateBasis('pagamento');
+                    if (forecastSemPeriodo) { setForecastCustomStart(currentMonthStart); setForecastCustomEnd(currentMonthEnd); }
+                  }}
                   className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
                     dateBasis === 'pagamento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
@@ -1364,36 +1303,32 @@ export default function DashboardPage() {
                 : `Títulos pagos no período ${acFilter ? `(${acFilter})` : '(carteira GC)'}`}
             </p>
             <div className="flex gap-1 mb-2 flex-wrap items-center">
-              {dateBasis === 'vencimento' &&
-                ['Todos', 'Hoje', 'Amanhã', '2 Dias', '3 Dias', '5 Dias', 'Personalizado'].map((p, i) => (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground">Início:</span>
+                <input type="date" value={forecastCustomStart} onChange={(e) => setForecastCustomStart(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
+                <span className="text-[10px] text-muted-foreground ml-1">Fim:</span>
+                <input type="date" value={forecastCustomEnd} onChange={(e) => setForecastCustomEnd(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
+                {forecastSemPeriodo ? (
+                  <span className="text-[10px] text-muted-foreground ml-1">
+                    {dateBasis === 'vencimento' ? 'toda a carteira' : 'todos os pagamentos'}
+                  </span>
+                ) : (
                   <button
-                    key={p}
-                    onClick={() => setForecastIndex(i)}
-                    className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
-                      forecastIndex === i
-                        ? 'iam-gradient text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:text-foreground'
-                    }`}
+                    type="button"
+                    onClick={() => { setForecastCustomStart(''); setForecastCustomEnd(''); }}
+                    className="ml-1 px-2 py-1 rounded-md text-[10px] font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title={dateBasis === 'vencimento' ? 'Limpar período (toda a carteira)' : 'Limpar período (todos os pagamentos)'}
                   >
-                    {p}
+                    Limpar
                   </button>
-                ))}
-              {(forecastIndex === 6 || dateBasis === 'pagamento') && (
-                <div className="flex items-center gap-1.5 ml-2">
-                  <span className="text-[10px] text-muted-foreground">Início:</span>
-                  <input type="date" value={forecastCustomStart} onChange={(e) => setForecastCustomStart(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
-                  <span className="text-[10px] text-muted-foreground ml-1">Fim:</span>
-                  <input type="date" value={forecastCustomEnd} onChange={(e) => setForecastCustomEnd(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
-                </div>
-              )}
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => {
-                  const periodLabels = ['Todos', 'Hoje', 'Amanhã', '2 Dias', '3 Dias', '5 Dias', 'Personalizado'];
-                  const periodLabel =
-                    dateBasis === 'pagamento' || forecastIndex === 6
-                      ? `Personalizado ${forecastCustomStart || '…'} a ${forecastCustomEnd || '…'}`
-                      : periodLabels[forecastIndex] || 'Todos';
+                  const periodLabel = forecastSemPeriodo
+                    ? 'Todos'
+                    : `Personalizado ${forecastCustomStart || '…'} a ${forecastCustomEnd || '…'}`;
                   const rows = forecastTotaisBase.details;
                   if (!rows.length) {
                     toast.message('Nenhum registro para exportar no período selecionado.');
