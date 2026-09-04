@@ -34,6 +34,7 @@ import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
 import DashboardReportModal, { type DashboardReportSection } from '@/components/ui/DashboardReportModal';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import { entradaForaDasParcelas, entradaNoPeriodo, entradaPaidDate } from '@/lib/pagoFormaFilter';
+import { retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
 import { toast } from 'sonner';
 
 type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'pendente' | 'tag' | 'revertidos';
@@ -540,6 +541,10 @@ export default function DashboardPage() {
       countsInFinancialTotals(s) &&
       !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão'),
   );
+  // Cancelados: só o valor retido (pago + multa − estorno) entra no card Pago.
+  const canceladosBase = baseStudents.filter(
+    (s) => s.statusCancelamento === 'cancelado' && countsInFinancialTotals(s),
+  );
   const carteiraModalStudents = forecastBase.filter((s) =>
     s.installments.some((i) => !i.paid && _instInRange(i) && !isInstallmentExcludedFromFinancialTotals(s, i)),
   );
@@ -821,6 +826,29 @@ export default function DashboardPage() {
           value: i.value,
           paidValue: 0,
         });
+      });
+    });
+    // Contratos cancelados: ficam fora do A Vencer, mas o que a empresa ficou
+    // de fato (pago + multa − estorno − abatimento) entra no Pago, na data em
+    // que o cancelamento foi concluído.
+    canceladosBase.forEach((st) => {
+      const retido = valorRetidoCancelamento(st, cancellationCases, conciliacaoItems);
+      if (!retido || retido.valor <= 0) return;
+      if (!retidoNoPeriodo(retido, range)) return;
+      total += retido.valor;
+      totalReal += retido.valor;
+      pago += retido.valor;
+      pagoReal += retido.valor;
+      qtd += 1;
+      qtdAlunosSet.add(st.id);
+      bumpAc(st.ac, retido.valor, retido.valor, st.id);
+      pushDetail(st, {
+        bucket: 'pago',
+        installmentNumber: 0,
+        dueDate: retido.data,
+        value: retido.valor,
+        paidValue: retido.valor,
+        paidDate: retido.data || undefined,
       });
     });
     const perAcList = Object.entries(perAc)

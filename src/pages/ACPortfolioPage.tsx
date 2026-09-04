@@ -31,6 +31,7 @@ import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendent
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import { entradaForaDasParcelas, entradaNoPeriodo, entradaPaidDate } from '@/lib/pagoFormaFilter';
+import { retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
 import { toast } from 'sonner';
 import {
   isCancellationCaseInRange,
@@ -369,6 +370,17 @@ export default function ACPortfolioPage() {
       countsInAcPortfolioTotals(s) &&
       !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
   );
+  // Cancelados: saem da carteira (acStudents), mas o valor retido no
+  // cancelamento (pago + multa − estorno) entra no card Pago do assessor.
+  const canceladosBase = ac
+    ? students.filter(
+        (s) =>
+          s.ac === ac.name &&
+          s.statusCancelamento === 'cancelado' &&
+          countsInAcPortfolioTotals(s) &&
+          studentMatchesTagFilter(s, tagFilters),
+      )
+    : [];
 
   const getForecastTotals = () => {
     const range = forecastIndex === 0 ? null : getForecastRange();
@@ -494,6 +506,27 @@ export default function ACPortfolioPage() {
           value: i.value,
           paidValue: 0,
         });
+      });
+    });
+    // Contratos cancelados: fora do A Vencer; o que a empresa ficou de fato
+    // (pago + multa − estorno − abatimento) entra no Pago na data da conclusão.
+    canceladosBase.forEach((st) => {
+      const retido = valorRetidoCancelamento(st, cancellationCases, conciliacaoItems);
+      if (!retido || retido.valor <= 0) return;
+      if (!retidoNoPeriodo(retido, range)) return;
+      total += retido.valor;
+      totalReal += retido.valor;
+      pago += retido.valor;
+      pagoReal += retido.valor;
+      qtd += 1;
+      qtdAlunosSet.add(st.id);
+      pushDetail(st, {
+        bucket: 'pago',
+        installmentNumber: 0,
+        dueDate: retido.data,
+        value: retido.valor,
+        paidValue: retido.valor,
+        paidDate: retido.data || undefined,
       });
     });
     return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, qtdAlunosAVencer: qtdAlunosAVencerSet.size, details };
