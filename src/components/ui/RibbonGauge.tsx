@@ -21,6 +21,10 @@ interface RibbonGaugeProps {
   baselineLabel?: string;
   /** Marcas exibidas abaixo da fita (%). */
   ticks?: number[];
+  /** Posição (%) de uma marca de meta — traço sólido com rótulo acima da fita. */
+  goal?: number;
+  /** Rótulo da marca de meta. */
+  goalLabel?: string;
   /** Cor do ponteiro (CSS). */
   pointerColor?: string;
   /** Rótulo do ponteiro e dos tooltips (recebe o % da escala). Padrão: "59,4%". */
@@ -43,6 +47,8 @@ export default function RibbonGauge({
   baseline,
   baselineLabel = 'Referência',
   ticks = [0, 50, 100],
+  goal,
+  goalLabel = 'Meta',
   pointerColor = 'hsl(var(--foreground))',
   formatValue = defaultFormat,
   formatTick = defaultFormat,
@@ -63,6 +69,10 @@ export default function RibbonGauge({
   const px = xOf(v);
   const hasBase = baseline != null && Number.isFinite(baseline);
   const bx = hasBase ? xOf(baseline as number) : 0;
+  const hasGoal = goal != null && Number.isFinite(goal);
+  const gx = hasGoal ? xOf(goal as number) : 0;
+  // Evita o rótulo da meta colidir com o do ponteiro quando estão próximos.
+  const goalLabelNearPointer = hasGoal && Math.abs(gx - px) < 38;
   const delta = hasBase ? v - clamp(baseline as number) : 0;
   const uid = `rg-${Math.round(v * 10)}-${hasBase ? Math.round((baseline as number) * 10) : 'x'}`;
 
@@ -102,6 +112,34 @@ export default function RibbonGauge({
             </g>
           );
         })}
+
+        {hasGoal && (
+          <g>
+            <title>{`${goalLabel}: ${formatValue(goal as number)}`}</title>
+            <line
+              x1={gx}
+              x2={gx}
+              y1={barY - 4}
+              y2={barY + barH + 4}
+              stroke="hsl(var(--foreground))"
+              strokeWidth={1.75}
+              strokeLinecap="round"
+            />
+            {!goalLabelNearPointer && (
+              <text
+                x={gx}
+                y={barY - 6.5}
+                textAnchor="middle"
+                fontSize={7}
+                fontWeight={700}
+                fill="hsl(var(--foreground))"
+                style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}
+              >
+                {goalLabel}
+              </text>
+            )}
+          </g>
+        )}
 
         {hasBase && (
           <g>

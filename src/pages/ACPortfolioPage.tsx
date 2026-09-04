@@ -755,16 +755,23 @@ export default function ACPortfolioPage() {
   // Meta (R$) do mês por assessor: fim da escala da fita. Editável pelo admin
   // (lápis no card); sem meta salva usa o padrão do app.
   const emDiaNovosMeta = ac?.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO;
-  const pctMetaEmDiaNovos = emDiaNovosMeta > 0 ? (mesEmDiaNovosValue / emDiaNovosMeta) * 100 : 0;
   const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
+  // A fita vai até 150% da meta (a meta fica em 2/3 da escala) para haver
+  // espaço à direita quando o assessor passar da meta.
+  const ESCALA_FITA = 1.5;
+  const fitaMax = emDiaNovosMeta * ESCALA_FITA;
+  const pctFita = (valor: number) => (fitaMax > 0 ? (valor / fitaMax) * 100 : 0);
+  const pctMetaEmDiaNovos = pctFita(mesEmDiaNovosValue);
+  const pctFitaMeta = 100 / ESCALA_FITA;
+  /** Rótulo em "% da meta" a partir do % da escala da fita. */
+  const fmtPctMeta = (pctEscala: number) => `${((pctEscala * ESCALA_FITA)).toFixed(1).replace('.', ',')}% da meta`;
 
   // Marca do início do mês (por assessor): valor (R$) registrado na primeira
   // visualização do mês (admin ou o próprio assessor), gravada em
   // `acs.em_dia_novos_base(_mes)`. Mês novo = marca refeita.
   const emDiaNovosBaseAtual =
     ac && ac.emDiaNovosBaseMes === mesAtualKey ? ac.emDiaNovosBase : undefined;
-  const emDiaNovosBasePct =
-    emDiaNovosBaseAtual != null && emDiaNovosMeta > 0 ? (emDiaNovosBaseAtual / emDiaNovosMeta) * 100 : undefined;
+  const emDiaNovosBasePct = emDiaNovosBaseAtual != null ? pctFita(emDiaNovosBaseAtual) : undefined;
   const fixarBaseEmDiaNovos =
     !!ac &&
     (currentUser?.role === 'admin' || canMutatePortfolio) &&
@@ -932,10 +939,12 @@ export default function ACPortfolioPage() {
               value={pctMetaEmDiaNovos}
               baseline={emDiaNovosBasePct}
               baselineLabel="Início do mês"
-              ticks={[0, 25, 50, 75, 100]}
+              goal={pctFitaMeta}
+              goalLabel="Meta"
+              ticks={[0, pctFitaMeta / 2, pctFitaMeta, 100]}
               pointerColor="#0d9488"
-              formatValue={(p) => `${p.toFixed(1).replace('.', ',')}% da meta`}
-              formatTick={(p) => formatCurrencyCompact((emDiaNovosMeta * p) / 100)}
+              formatValue={fmtPctMeta}
+              formatTick={(p) => formatCurrencyCompact((fitaMax * p) / 100)}
               footer={
                 <p className="text-[9px] text-muted-foreground text-center -mt-0.5 leading-tight">
                   {faltaMetaEmDiaNovos > 0 ? (
@@ -959,8 +968,9 @@ export default function ACPortfolioPage() {
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
               <p>
                 Somente {mesAtualLabel}, carteira de {ac.name}: alunos Em Dia / Novos com parcela vencendo neste mês e
-                valor das parcelas do mês (pagas + em aberto). A fita vai de R$ 0 até a meta de {formatCurrency(emDiaNovosMeta)};
-                o ponteiro mostra quanto da meta o valor de agora alcança e a marca tracejada é o valor registrado no
+                valor das parcelas do mês (pagas + em aberto). A fita vai de R$ 0 até {formatCurrency(fitaMax)} (150% da
+                meta de {formatCurrency(emDiaNovosMeta)}, marcada com o traço "Meta"), deixando espaço à direita para quem
+                passar da meta; o ponteiro mostra quanto da meta o valor de agora alcança e a marca tracejada é o valor registrado no
                 início do mês{emDiaNovosBaseAtual != null ? ` (${formatCurrency(emDiaNovosBaseAtual)})` : ''}.
                 Quando o mês vira, a marca é refeita automaticamente. O percentual ao lado do valor é a participação
                 sobre os {mesTotalComposicao} alunos com vencimento no mês.
