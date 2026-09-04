@@ -15,6 +15,7 @@ import { X, Download, Upload, FileText, Trash2 } from 'lucide-react';
 import CurrencyInput from '@/components/ui/CurrencyInput';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompanyStore } from '@/store/useCompanyStore';
+import { findUnicoAlunoPorNome } from '@/lib/nomeAluno';
 
 interface Props {
   onClose: () => void;
@@ -32,7 +33,7 @@ const FUNNEL_TO_STAGE: Record<FunnelStage, CancellationStage> = {
 };
 
 export default function ImportExternalCancellationModal({ onClose }: Props) {
-  const { addCancellationCase, rules, acs, products } = useAppStore();
+  const { addCancellationCase, rules, acs, products, students } = useAppStore();
   const activeAcs = acs.filter((a) => a.active).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   const sortedProducts = [...products].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
@@ -161,8 +162,14 @@ export default function ImportExternalCancellationModal({ onClose }: Props) {
       observacoes.trim() ? `\nObservações do assessor:\n${observacoes.trim()}` : null,
     ].filter(Boolean).join('\n');
 
+    // Aluno "externo" que na verdade já tem ficha na base (ex.: veio do IAM
+    // Control pago à vista): vincula pelo id para o cancelamento finalizar a
+    // ficha certa e não gerar um espelho solto na lista de alunos.
+    const fichaExistente = findUnicoAlunoPorNome(students, nome);
+
     const newCase: CancellationCase = {
       id: '',
+      studentId: fichaExistente?.id,
       studentName: nome.trim(),
       studentWhatsapp: whatsapp || undefined,
       ac: activeAcs.find((a) => a.id === acId)?.name ?? '',

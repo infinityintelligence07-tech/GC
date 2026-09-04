@@ -804,7 +804,7 @@ export const useAppStore = create<AppState>()(
       students: state.students.map((st) => {
         if (st.cancellationCaseId !== caseId && st.id !== cancCase.studentId) return st;
         // Revert: volta o status para Automático (auto-calc reprocessa Em Dia/Vencido/etc.)
-        const autoStatus = calculateAutoStatus(st.installments);
+        const autoStatus = calculateStudentAutoStatus(st);
         return {
           ...st,
           status: autoStatus,
@@ -823,7 +823,7 @@ export const useAppStore = create<AppState>()(
       (cancCase.studentId ? s.students.find((st) => st.id === cancCase.studentId) : undefined)
       ?? s.students.find((st) => st.cancellationCaseId === caseId);
     if (linkedStudent) {
-      const autoStatus = calculateAutoStatus(linkedStudent.installments);
+      const autoStatus = calculateStudentAutoStatus(linkedStudent);
       updateStudentDb(linkedStudent.id, {
         status: autoStatus,
         statusMode: 'Automático',
@@ -1471,7 +1471,7 @@ export const useAppStore = create<AppState>()(
         const alvo = linked;
         const now = new Date().toISOString();
         const previousStatus = alvo.statusAntesCancelamento;
-        const restoredStatus = previousStatus || calculateAutoStatus(alvo.installments);
+        const restoredStatus = previousStatus || calculateStudentAutoStatus(alvo);
         const historyEntry = { date: now, type: 'Sistema' as const, text: `Caso de cancelamento excluído. Status restaurado para "${restoredStatus}".` };
         const updates: Partial<Student> = {
           statusCancelamento: null,
@@ -1807,17 +1807,50 @@ export function isRecompraOuFundoParcela(
   });
 }
 
-export function calculateAutoStatus(installments: Installment[]): StudentStatus {
+/**
+ * Ficha de Recompra (Fundo): contrato à parte cujas parcelas — mesmo com tag
+ * recompra/fundo — SÃO o fluxo normal dela. A exclusão de parcela recompra do
+ * cálculo de Vencido vale só para ficha comum com parcela antiga reaberta.
+ */
+export function isRecompraFichaProduct(product?: string | null): boolean {
+  return /recompra/i.test(product ?? '');
+}
+
+/** Status automático da ficha — recompra conta as próprias parcelas como vencidas. */
+export function calculateStudentAutoStatus(
+  student: Pick<Student, 'installments' | 'product'>,
+): StudentStatus {
+  return calculateAutoStatus(student.installments ?? [], {
+    includeRecompraParcelas: isRecompraFichaProduct(student.product),
+  });
+}
+
+/** Versão histórica de `calculateStudentAutoStatus`. */
+export function calculateStudentAutoStatusAt(
+  student: Pick<Student, 'installments' | 'product'>,
+  referenceDate: Date,
+): StudentStatus {
+  return calculateAutoStatusAt(student.installments ?? [], referenceDate, {
+    includeRecompraParcelas: isRecompraFichaProduct(student.product),
+  });
+}
+
+export function calculateAutoStatus(
+  installments: Installment[],
+  opts?: { includeRecompraParcelas?: boolean },
+): StudentStatus {
   const today = getTodayBrasilia();
   const tagsCatalog = useAppStore.getState().studentTags;
   const paid = installments.filter((i) => i.paid);
   const unpaid = installments.filter((i) => !i.paid);
   // Pago: todas pagas (inclui recompra quitada)
   if (unpaid.length === 0 && installments.length > 0 && paid.length === installments.length) return 'Pago';
-  // Vencido = só parcelas do fluxo normal (recompra/fundo ficam de fora)
+  // Vencido = só parcelas do fluxo normal (recompra/fundo ficam de fora).
+  // `includeRecompraParcelas`: status conjunto contrato original + recompra
+  // vinculada — aí a parcela da recompra vencida conta como vencida.
   const overdueInstallments = unpaid.filter(
     (i) =>
-      !isRecompraOuFundoParcela(i, tagsCatalog) &&
+      (opts?.includeRecompraParcelas || !isRecompraOuFundoParcela(i, tagsCatalog)) &&
       effectiveDueDate(i.dueDate).getTime() < today.getTime(),
   );
   // Aluno Novo (regra item 4): 0 pagamentos de parcelas E nenhuma vencida ainda.
@@ -1863,7 +1896,11 @@ export function formatCurrencyCompact(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 }
 
-export function calculateAutoStatusAt(installments: Installment[], referenceDate: Date): StudentStatus {
+export function calculateAutoStatusAt(
+  installments: Installment[],
+  referenceDate: Date,
+  opts?: { includeRecompraParcelas?: boolean },
+): StudentStatus {
   const ref = new Date(referenceDate);
   ref.setHours(23, 59, 59, 999);
   const refDayStart = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
@@ -1881,10 +1918,11 @@ export function calculateAutoStatusAt(installments: Installment[], referenceDate
     return 'Pago';
   }
 
-  // Vencido = fluxo normal apenas (recompra/fundo não interferem).
+  // Vencido = fluxo normal apenas (recompra/fundo não interferem),
+  // salvo quando a própria ficha é de recompra (`includeRecompraParcelas`).
   const overdueAtRef = unpaidAtRef.filter(
     (i) =>
-      !isRecompraOuFundoParcela(i, tagsCatalog) &&
+      (opts?.includeRecompraParcelas || !isRecompraOuFundoParcela(i, tagsCatalog)) &&
       effectiveDueDate(i.dueDate).getTime() < refDayStart.getTime()
   );
 

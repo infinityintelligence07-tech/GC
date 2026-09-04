@@ -1,5 +1,5 @@
 import type { Student, StudentStatus, StatusCancelamento, Installment } from '@/types';
-import { calculateAutoStatus } from '@/store/useAppStore';
+import { calculateStudentAutoStatus } from '@/store/useAppStore';
 import {
   cancelamentoOverridesFinancialStatus,
   isStudentFullyPaid,
@@ -116,7 +116,7 @@ export function resolveStudentDisplayStatus(student: Student): StudentStatus {
     // Quitado à vista não tem parcelas, e calculateAutoStatus só recebe o array:
     // sem esta linha o contrato pago integralmente sairia como "Em Dia".
     if (isStudentFullyPaid(student)) return 'Pago';
-    return calculateAutoStatus(student.installments);
+    return calculateStudentAutoStatus(student);
   }
   return student.status;
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Activity, History, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useAppStore, calculateAutoStatus, calculateAutoStatusAt } from '@/store/useAppStore';
+import { useAppStore, calculateStudentAutoStatus, calculateStudentAutoStatusAt } from '@/store/useAppStore';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 import ACRankingCard from '@/components/ui/ACRankingCard';
 import { Button } from '@/components/ui/button';
@@ -75,7 +75,7 @@ export default function RankingPage() {
           s.statusMode === 'Automático' &&
           s.status !== 'Negativado' &&
           !cancelamentoOverridesFinancialStatus(s)
-            ? { ...s, status: calculateAutoStatus(s.installments) }
+            ? { ...s, status: calculateStudentAutoStatus(s) }
             : { ...s, status: resolveStudentDisplayStatus(s) },
         ),
         hiddenKeys,
@@ -99,7 +99,7 @@ export default function RankingPage() {
           status:
             s.status === 'Negativado' || cancelamentoOverridesFinancialStatus(s)
               ? resolveStudentDisplayStatus(s)
-              : calculateAutoStatusAt(s.installments, ref),
+              : calculateStudentAutoStatusAt(s, ref),
         })),
       hiddenKeys,
       students,

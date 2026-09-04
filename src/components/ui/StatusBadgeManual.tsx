@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, CheckCircle2 } from 'lucide-react';
 import { Student, StudentStatus, canEditTab } from '@/types';
 import { statusColors } from '@/lib/statusColors';
-import { calculateAutoStatus, useAppStore } from '@/store/useAppStore';
+import { calculateStudentAutoStatus, useAppStore } from '@/store/useAppStore';
 import { toast } from 'sonner';
 import FinancialModal from '@/components/modals/FinancialModal';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -79,7 +79,7 @@ export default function StatusBadgeManual({ student, status, readOnly = false }:
       key: 'inadimplencia-automatica',
       label: 'Voltar para inadimplência',
       action: () => {
-        const restoredStatus = calculateAutoStatus(student.installments);
+        const restoredStatus = calculateStudentAutoStatus(student);
         if (!window.confirm(`Deseja tirar este aluno de "Negativado" e voltar para o status automático "${restoredStatus}"?`)) return;
         const now = new Date().toISOString();
         updateStudent(student.id, {

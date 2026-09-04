@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Student, StudentStatus, StudentTag, canEditTab } from '@/types';
-import { useAppStore, formatCurrency, calculateAutoStatus, calcularScoreComportamento } from '@/store/useAppStore';
+import { useAppStore, formatCurrency, calculateStudentAutoStatus, calcularScoreComportamento } from '@/store/useAppStore';
 import { cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente } from '@/lib/studentDisplayStatus';
 import StudentModal from '@/components/modals/StudentModal';
@@ -22,6 +22,8 @@ import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
 import { getDisplayInstallmentValue, normalizeSearch, toDisplayName } from '@/lib/utils';
 import { needsIamGcConciliacaoApproval } from '@/lib/iamPendenteConciliacao';
+import { resolveStudentDisplayStatusVinculado, type StatusVinculado } from '@/lib/recompraVinculo';
+import { isRecompraFicha } from '@/lib/recompraConciliacao';
 
 
 // ── Score stars renderer ───────────────────────────────────────────────────────
@@ -196,14 +198,14 @@ export default function StudentsPage() {
         return;
       }
       if (s.statusMode === 'Automático') {
-        const autoStatus = calculateAutoStatus(s.installments);
+        const autoStatus = calculateStudentAutoStatus(s);
         if (autoStatus !== s.status) updateStudent(s.id, { status: autoStatus });
       } else {
         // Safety net: se foi marcado manualmente como não-vencido (ex.: "Em Dia")
         // mas surgiu parcela vencida depois, reverte p/ Automático apontando vencido.
         // Não aplica a Pendente (pagamento fora de boleto / IAM).
         if (s.status === 'Pendente') return;
-        const autoStatus = calculateAutoStatus(s.installments);
+        const autoStatus = calculateStudentAutoStatus(s);
         const isOverdueNow = autoStatus === 'Vencido 1' || autoStatus === 'Vencido 2';
         const manualSaysNotOverdue = s.status !== 'Vencido 1' && s.status !== 'Vencido 2';
         if (isOverdueNow && manualSaysNotOverdue) {
@@ -266,15 +268,18 @@ export default function StudentsPage() {
     };
     // "Negativado" é sempre preservado, mesmo quando statusMode='Automático'
     // (evita rebaixamento visual durante a janela até o safety-net corrigir).
-    const baseStatus = resolveStudentDisplayStatus(safe);
-    const withStatus = { ...safe, status: baseStatus };
+    // Recompra vinculada ↔ contrato original leem o mesmo status (união das
+    // parcelas dos dois lados): devendo em um, devendo nos dois.
+    const vinculo = resolveStudentDisplayStatusVinculado(safe, students);
+    const withStatus = { ...safe, status: vinculo.status };
     const filtered = tagFilters.length > 0 ? applyTagFilterToStudent(withStatus, tagFilters) : withStatus;
     return {
       ...filtered,
       _score: calcularScoreComportamento(safe.installments),
       _mirrorCaseId: undefined as string | undefined,
+      _vinculo: vinculo as StatusVinculado | undefined,
     };
-  }), ...mirrorStudents];
+  }), ...mirrorStudents.map((m) => ({ ...m, _vinculo: undefined as StatusVinculado | undefined }))];
 
 
   const filtered = processedStudents.filter((s) => {
@@ -725,6 +730,28 @@ export default function StudentsPage() {
                               {student.product}
                             </span>
                           )}
+                          {(() => {
+                            const grp = student._vinculo?.group;
+                            if (!grp) return null;
+                            if (isRecompraFicha(student)) {
+                              return (
+                                <span
+                                  className="inline-flex items-center gap-1 w-fit text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 leading-none"
+                                  title={`Recompra vinculada ao contrato "${grp.original.product}". Status lido em conjunto com o contrato original: devendo em um, devendo nos dois.`}
+                                >
+                                  <RotateCcw size={9} /> Vinculada a {grp.original.product}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span
+                                className="inline-flex items-center gap-1 w-fit text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 leading-none"
+                                title={`${grp.recompras.length} recompra(s) vinculada(s) a este contrato. Status lido em conjunto: devendo em um, devendo nos dois.`}
+                              >
+                                <RotateCcw size={9} /> {grp.recompras.length === 1 ? '1 recompra vinculada' : `${grp.recompras.length} recompras vinculadas`}
+                              </span>
+                            );
+                          })()}
                           {isMirrorRow && (
                             <span className="text-[9px] text-sky-700/80 leading-none">Espelho do caso em Cancelamentos</span>
                           )}
@@ -768,7 +795,7 @@ export default function StudentsPage() {
                                   </span>
                                 );
                               }
-                              const display = resolveStudentDisplayStatus(student);
+                              const display = student._vinculo?.status ?? resolveStudentDisplayStatus(student);
                               return (
                                 <span
                                   className={`text-[10px] font-semibold px-2 py-1 rounded-lg max-w-full whitespace-normal break-words leading-snug ${statusColors[display] ?? 'bg-muted'}`}
@@ -788,16 +815,21 @@ export default function StudentsPage() {
                               ) : (
                                 <>
                                   <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                                    <StatusBadgeManual student={student} status={resolveStudentDisplayStatus(student)} />
+                                    <StatusBadgeManual student={student} status={student._vinculo?.status ?? resolveStudentDisplayStatus(student)} />
                                     {student.status !== 'Em Dia' && student.status !== 'Pago' && student.status !== 'Pendente' && student.status !== 'Solicitação Cancelamento' && (() => {
-                                      const dias = calcularDiasVencido(student.installments);
+                                      // Com vínculo recompra ↔ original, o atraso é o do conjunto.
+                                      const instsAtraso = student._vinculo?.group ? student._vinculo.installments : student.installments;
+                                      const dias = calcularDiasVencido(instsAtraso);
                                       const due = nextDueDateUi(student);
+                                      const viaVinculo = !!student._vinculo?.group && (calcularDiasVencido(student.installments) ?? 0) < (dias ?? 0);
                                       return dias && dias > 0 ? (
                                         <span
                                           className="text-[9px] font-bold text-destructive shrink-0"
-                                          title={due.rolledFromWeekend
-                                            ? `${dias} dia(s) desde o vencimento efetivo (${fmtDateBR(due.displayIso)}). Contrato: ${fmtDateBR(due.originalIso)}.`
-                                            : `${dias} dia(s) em atraso`}
+                                          title={viaVinculo
+                                            ? `${dias} dia(s) em atraso no contrato vinculado (${isRecompraFicha(student) ? 'contrato original' : 'recompra'}).`
+                                            : due.rolledFromWeekend
+                                              ? `${dias} dia(s) desde o vencimento efetivo (${fmtDateBR(due.displayIso)}). Contrato: ${fmtDateBR(due.originalIso)}.`
+                                              : `${dias} dia(s) em atraso`}
                                         >
                                           {dias}d
                                         </span>

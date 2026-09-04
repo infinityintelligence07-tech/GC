@@ -13,6 +13,7 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import type { AC, Product, Student, StudentTag, FinancialRules } from '@/types';
 import { rowToStudent, rowToCancellationCase, rowToAppUser, rowToAntecipacaoItem, rowToConciliacaoItem, rowToConciliacaoImportError } from '@/lib/supabaseMutations';
 import { isProductExcludedFromGc } from '@/lib/acEsteira';
+import { normalizeNomeAluno } from '@/lib/nomeAluno';
 
 function isStudentHiddenFromGc(s: Student): boolean {
   if (isProductExcludedFromGc(s.product)) return true;
@@ -204,7 +205,9 @@ export function useSupabaseSync() {
       // aluno com contratos de treinamentos diferentes), casar por nome
       // vincularia o caso ao contrato errado — então o fallback é ignorado.
       // Além disso, o vínculo por nome nunca é persistido no banco.
-      const normalize = (s: string) => (s ?? '').trim().toLowerCase();
+      // Comparação sem acento: "Marina Brandão" (caso importado) precisa casar
+      // com "MARINA BRANDAO" (ficha vinda do IAM).
+      const normalize = normalizeNomeAluno;
       const nameCount = new Map<string, number>();
       for (const s of students) {
         const n = normalize(s.name);

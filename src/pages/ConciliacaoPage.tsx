@@ -1613,9 +1613,9 @@ export default function ConciliacaoPage() {
       if (it.tipo === 'iam_pendente' && it.studentId) {
         const st = useAppStore.getState().students.find((s) => s.id === it.studentId);
         if (st && !st.iamGcConciliadoAt) {
-          const { calculateAutoStatus } = await import('@/store/useAppStore');
+          const { calculateStudentAutoStatus } = await import('@/store/useAppStore');
           const revisor = currentUser?.name ?? 'Conciliação';
-          updateStudent(st.id, buildIamGcApprovalStudentPatch(st, calculateAutoStatus(st.installments), revisor));
+          updateStudent(st.id, buildIamGcApprovalStudentPatch(st, calculateStudentAutoStatus(st), revisor));
         }
       }
     }
@@ -1653,9 +1653,9 @@ export default function ConciliacaoPage() {
       if (it.tipo === 'iam_pendente' && it.studentId) {
         const st = useAppStore.getState().students.find((s) => s.id === it.studentId);
         if (st && !st.iamGcConciliadoAt) {
-          const { calculateAutoStatus } = await import('@/store/useAppStore');
+          const { calculateStudentAutoStatus } = await import('@/store/useAppStore');
           const revisor = currentUser?.name ?? 'Conciliação';
-          updateStudent(st.id, buildIamGcApprovalStudentPatch(st, calculateAutoStatus(st.installments), revisor));
+          updateStudent(st.id, buildIamGcApprovalStudentPatch(st, calculateStudentAutoStatus(st), revisor));
         }
         conciliar(it.id, undefined, { silent: true });
       } else {

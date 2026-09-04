@@ -67,7 +67,9 @@ export function valorRetidoCancelamento(
   const item = findItem(caso.id, items);
   if (item) {
     const d = item.depois ?? {};
-    const pago = num(d.totalPagoEfetivo ?? d.totalPago);
+    // Caso importado (PIX/cartão à vista) não grava totalPago no item — o
+    // valor pago fica no próprio caso.
+    const pago = num(d.totalPagoEfetivo ?? d.totalPago ?? caso.totalPagoAteMomento);
     const estorno = num(d.estornoAluno);
     const abatimento = num(d.abatimentoValor);
     const multa = num(d.multaCancelamento);

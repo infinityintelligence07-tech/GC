@@ -1,4 +1,4 @@
-import { useAppStore, formatCurrency, formatCurrencyCompact, calculateAutoStatus, calculateAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, getInstallmentFinancialValueExport } from '@/store/useAppStore';
+import { useAppStore, formatCurrency, formatCurrencyCompact, calculateStudentAutoStatus, calculateStudentAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, getInstallmentFinancialValueExport } from '@/store/useAppStore';
 import ACRankingCard from '@/components/ui/ACRankingCard';
 import { NaoSomaBadge } from '@/components/NaoSomaBadge';
 import ReversalRankingMirror from '@/components/ui/ReversalRankingMirror';
@@ -354,8 +354,8 @@ export default function DashboardPage() {
         }
         if (s.statusMode === 'Automático') {
           const st = isTodaySnapshot
-            ? calculateAutoStatus(s.installments)
-            : calculateAutoStatusAt(s.installments, refDate);
+            ? calculateStudentAutoStatus(s)
+            : calculateStudentAutoStatusAt(s, refDate);
           return { ...s, status: st as StudentStatus };
         }
         return s;
@@ -381,7 +381,7 @@ export default function DashboardPage() {
               : s;
         }
         if (s.statusMode === 'Automático') {
-          return { ...s, status: calculateAutoStatus(s.installments) } as Student;
+          return { ...s, status: calculateStudentAutoStatus(s) } as Student;
         }
         return s;
       });

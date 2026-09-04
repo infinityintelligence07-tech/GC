@@ -75,7 +75,7 @@ export default function MetaValorEditor({ value, titulo, canEdit, onSave, label 
             />
           </label>
           <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug">
-            A fita vai de R$ 0 até 150% da meta (a meta fica marcada em 2/3 da escala); o ponteiro mostra quanto da meta o valor "Em Dia + Novos" do mês já alcança.
+            A fita vai de R$ 0 até 150% da meta (o traço marca a meta em 2/3 da escala); o ponteiro mostra quanto da meta o acumulado "Em Dia + Novos" do dia 01 até hoje já alcança.
           </p>
           <div className="flex justify-end gap-2 mt-3">
             <button

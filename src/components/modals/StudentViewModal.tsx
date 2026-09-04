@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Student, canEditTab } from '@/types';
-import { calculateAutoStatus, formatCurrency, calcularScoreComportamento, calcularMediaDiasPagamento } from '@/store/useAppStore';
+import { calculateStudentAutoStatus, formatCurrency, calcularScoreComportamento, calcularMediaDiasPagamento } from '@/store/useAppStore';
 import { statusColors } from '@/lib/statusColors';
 import { X, User, Phone, Mail, MapPin, FileText, CreditCard, Calendar, TrendingUp, Star, Tag, Hash, Info, Plus, Check, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
@@ -122,7 +122,7 @@ export default function StudentViewModal({ student, onClose, extraSections, head
     });
   };
   const handleRevertNegativadoToAutomatic = () => {
-    const restoredStatus = calculateAutoStatus(currentStudent.installments);
+    const restoredStatus = calculateStudentAutoStatus(currentStudent);
     if (!window.confirm(`Deseja tirar este aluno de "Negativado" e voltar para o status automático "${restoredStatus}"?`)) return;
     const now = new Date().toISOString();
     updateStudent(currentStudent.id, {

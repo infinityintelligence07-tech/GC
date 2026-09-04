@@ -125,7 +125,7 @@ export default function RibbonGauge({
               strokeWidth={1.75}
               strokeLinecap="round"
             />
-            {!goalLabelNearPointer && (
+            {goalLabel && !goalLabelNearPointer && (
               <text
                 x={gx}
                 y={barY - 6.5}
