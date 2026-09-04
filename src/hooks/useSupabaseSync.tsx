@@ -349,13 +349,24 @@ export function useSupabaseSync() {
       }).catch(console.error);
 
       // Persistência em background do que foi reconciliado (só onde mudou e
-      // apenas quando o vínculo veio do studentId — nunca do fallback por nome)
+      // apenas quando o vínculo veio do studentId — nunca do fallback por nome).
+      // Compara os CAMPOS gravados, não a identidade do objeto: a reconciliação
+      // também troca `status` em memória (badge "Solicitação Cancelamento"),
+      // que não é persistido aqui. Comparar por identidade fazia cada reload
+      // regravar os mesmos valores → updated_at mudava → realtime → novo
+      // reload → regravar... um loop infinito de PATCHes a cada poucos segundos.
       const { updateStudentDb } = await import('@/lib/supabaseMutations');
       for (let i = 0; i < students.length; i++) {
         const before = students[i];
         const after = studentsReconciled[i] as any;
         if (before === after) continue;
         if (after.__fallbackByName) continue;
+        const mudouVinculo =
+          (before.statusCancelamento ?? 'nenhum') !== (after.statusCancelamento ?? 'nenhum') ||
+          (before.cancellationCaseId ?? null) !== (after.cancellationCaseId ?? null);
+        const mudouStatusOrfao =
+          after.__orphanCleanup && (before.status !== after.status || before.statusMode !== after.statusMode);
+        if (!mudouVinculo && !mudouStatusOrfao) continue;
         updateStudentDb(after.id, {
           statusCancelamento: after.statusCancelamento,
           cancellationCaseId: after.cancellationCaseId,

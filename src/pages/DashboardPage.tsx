@@ -1230,8 +1230,7 @@ export default function DashboardPage() {
               Em Dia + Novos · {mesAtualLabel}
             </p>
             <div className="flex items-center gap-1 shrink-0">
-              <NaoSomaBadge title='Recorte do mês vigente: só parcelas com vencimento neste mês. O card "Em Dia + Novos" abaixo mostra o saldo em aberto de todos os meses.' />
-              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos_mes' ? null : 'emdia_novos_mes'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
+              <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos_mes' ? null : 'emdia_novos_mes'); }} className="text-muted-foreground/50 hover:text-muted-foreground" title='Recorte do mês vigente: só parcelas com vencimento neste mês. O card "Em Dia + Novos" abaixo mostra o saldo em aberto de todos os meses.'>
                 <Info size={14} />
               </button>
             </div>
