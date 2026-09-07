@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore, formatCurrency, formatCurrencyCompact, calculateStudentAutoStatus, calculateStudentAutoStatusAt, calcularScoreComportamento, calcularMediaDiasPagamento, calculateChurnRisk, calculateRendaExtraMetrics } from '@/store/useAppStore';
-import { Student, StudentStatus, MOTIVOS_CANCELAMENTO, Notification } from '@/types';
+import { Installment, Student, StudentStatus, MOTIVOS_CANCELAMENTO, Notification } from '@/types';
 import StudentModal from '@/components/modals/StudentModal';
 import StudentViewModal from '@/components/modals/StudentViewModal';
 import FinancialModal from '@/components/modals/FinancialModal';
@@ -101,6 +101,18 @@ export default function ACPortfolioPage() {
   const [search, setSearch] = useState('');
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
   const [productFilter, setProductFilter] = useState('');
+  // Filtro por data de cadastro (enrollmentDate, YYYY-MM-DD). Só uma ponta
+  // preenchida = a partir de / até; as duas vazias = sem filtro.
+  const [cadastroStart, setCadastroStart] = useState('');
+  const [cadastroEnd, setCadastroEnd] = useState('');
+  const matchesCadastro = (s: Student) => {
+    if (!cadastroStart && !cadastroEnd) return true;
+    const d = (s.enrollmentDate || '').slice(0, 10);
+    if (!d) return false;
+    if (cadastroStart && d < cadastroStart) return false;
+    if (cadastroEnd && d > cadastroEnd) return false;
+    return true;
+  };
   const [statusFilter, setStatusFilterRaw] = useState('');
   const [kpiCardFilter, setKpiCardFilter] = useState<'' | 'revertidos' | 'boletos_antecipados' | 'pendente'>('');
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
@@ -272,6 +284,7 @@ export default function ACPortfolioPage() {
     const applyLocalFilters = (arr: Student[]) =>
       arr.filter((s) => {
         if (productFilter && s.product !== productFilter) return false;
+        if (!matchesCadastro(s)) return false;
         if (scoreFilter !== null && calcularScoreComportamento(s.installments) !== scoreFilter) return false;
         if (statusFilter) {
           if (statusFilter === 'cancelado') {
@@ -306,7 +319,7 @@ export default function ACPortfolioPage() {
     } else {
       setKpiStudents(applyLocalFilters(stripRendaExtraConciliada(stripCancelados(acStudents))));
     }
-  }, [mode, historicoEnd, acStudents, statusFilter, productFilter, scoreFilter]);
+  }, [mode, historicoEnd, acStudents, statusFilter, productFilter, scoreFilter, cadastroStart, cadastroEnd]);
 
   // ── Performance mode: installment-level KPIs ─────────────────────────────
   const [perfKpis, setPerfKpis] = useState({ toReceiveCount: 0, toReceiveValue: 0, overdueValue: 0 });
@@ -584,6 +597,7 @@ export default function ACPortfolioPage() {
     }
     if (scoreFilter !== null && calcularScoreComportamento(s.installments) !== scoreFilter) return false;
     if (productFilter && s.product !== productFilter) return false;
+    if (!matchesCadastro(s)) return false;
 
     if (kpiCardFilter === 'revertidos') {
       return revertidosStudentIds.has(s.id);
@@ -682,27 +696,38 @@ export default function ACPortfolioPage() {
     return dias !== null && dias > 65;
   });
 
-  const sumUnpaid = (arr: Student[]) =>
+  const sumUnpaid = (arr: Student[], extra: (i: Installment) => boolean = () => true) =>
     arr.reduce((acc, s) => {
       if (s.statusCancelamento === 'cancelado') {
         return acc + s.installments
-          .filter((i) => !i.paid && _instInRange(i) && (i.tags ?? []).includes('multa-cancelamento'))
+          .filter((i) => !i.paid && _instInRange(i) && extra(i) && (i.tags ?? []).includes('multa-cancelamento'))
           .reduce((a, i) => a + i.value, 0);
       }
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
       return acc + s.installments
-        .filter((i) => !i.paid && _instInRange(i) && !isInstallmentExcludedFromAcPortfolio(s, i))
+        .filter((i) => !i.paid && _instInRange(i) && extra(i) && !isInstallmentExcludedFromAcPortfolio(s, i))
         .reduce((a, i) => a + i.value, 0);
     }, 0);
+  // Parcela já vencida na data de referência (hoje ou o "fim" do Histórico).
+  const _refDayMs = (() => {
+    if (mode === 'historico' && historicoEnd) return new Date(historicoEnd + 'T00:00:00').getTime();
+    const d = getTodayBrasilia();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  })();
+  const _isOverdue = (i: Installment) => new Date(i.dueDate + 'T00:00:00').getTime() < _refDayMs;
+  const sumOverdue = (arr: Student[]) => sumUnpaid(arr, _isOverdue);
 
-  // Todo card de status soma o saldo em aberto inteiro (vencido + a vencer),
-  // na mesma régua da Carteira Total. Enquanto Vencido 1/2 e Negativado
-  // mostravam só a fatia já vencida, as parcelas futuras desses alunos
-  // entravam no total e não apareciam em card nenhum.
+  // Regra dos cards de status (mesma da Dashboard):
+  //   Vencido 1 / Vencido 2 → SOMENTE a(s) parcela(s) já vencida(s). O aluno
+  //     ficou inadimplente numa parcela; o resto do contrato segue a vencer.
+  //   À Negativar / Negativado → saldo em aberto inteiro (vencido + a vencer),
+  //     porque o contrato todo vai para negativação.
+  //   Em Dia / Novos / Cancelamento → saldo em aberto inteiro.
   const emDiaValue = sumUnpaid(emDia);
   const alunosNovosValue = sumUnpaid(alunosNovos);
-  const v1Value = sumUnpaid(vencido1);
-  const v2Value = sumUnpaid(vencido2);
+  const v1Value = sumOverdue(vencido1);
+  const v2Value = sumOverdue(vencido2);
   const anValue = sumUnpaid(aNegativar);
   const negValue = sumUnpaid(negativado);
   const solicCancValue = sumUnpaid(solicitacaoCancelamento);
@@ -1130,6 +1155,37 @@ export default function ACPortfolioPage() {
                 ))}
                 <option value="cancelamento_solicitado">Cancelamento solicitado</option>
               </select>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-semibold text-muted-foreground">Cadastro:</span>
+              <span className="text-[10px] text-muted-foreground">de</span>
+              <input
+                type="date"
+                value={cadastroStart}
+                max={cadastroEnd || undefined}
+                onChange={(e) => setCadastroStart(e.target.value)}
+                className="input-field text-xs py-1 px-2 w-32"
+                title="Data de cadastro (contrato) a partir de"
+              />
+              <span className="text-[10px] text-muted-foreground">até</span>
+              <input
+                type="date"
+                value={cadastroEnd}
+                min={cadastroStart || undefined}
+                onChange={(e) => setCadastroEnd(e.target.value)}
+                className="input-field text-xs py-1 px-2 w-32"
+                title="Data de cadastro (contrato) até"
+              />
+              {(cadastroStart || cadastroEnd) && (
+                <button
+                  type="button"
+                  onClick={() => { setCadastroStart(''); setCadastroEnd(''); }}
+                  className="px-2 py-1 rounded-md text-[10px] font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title="Limpar filtro de data de cadastro"
+                >
+                  Limpar
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-1 flex-wrap">
               <Star size={11} className="text-amber-400 fill-amber-400" />

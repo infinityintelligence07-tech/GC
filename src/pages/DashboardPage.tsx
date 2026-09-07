@@ -11,7 +11,7 @@ import { useState, useEffect, useRef } from 'react';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge from '@/components/ui/RibbonGauge';
 import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
-import { Student, StudentStatus } from '@/types';
+import { Installment, Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { getTodayBrasilia, getTodayStringBrasilia } from '@/lib/brasiliaDate';
 import { getTagStyle } from '@/lib/tagColors';
@@ -490,27 +490,32 @@ export default function DashboardPage() {
     return oldest !== null && oldest > 65;
   });
 
-  const sumUnpaid = (arr: Student[]) =>
+  const sumUnpaid = (arr: Student[], extra: (i: Installment) => boolean = () => true) =>
     arr.reduce((acc, s) => {
       if (s.statusCancelamento === 'cancelado') {
         return acc + s.installments
-          .filter((i) => !i.paid && _instInRange(i) && (i.tags ?? []).includes('multa-cancelamento'))
+          .filter((i) => !i.paid && _instInRange(i) && extra(i) && (i.tags ?? []).includes('multa-cancelamento'))
           .reduce((a, i) => a + i.value, 0);
       }
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
       return acc + s.installments
-        .filter((i) => !i.paid && _instInRange(i) && !isInstallmentExcludedFromFinancialTotals(s, i))
+        .filter((i) => !i.paid && _instInRange(i) && extra(i) && !isInstallmentExcludedFromFinancialTotals(s, i))
         .reduce((a, i) => a + i.value, 0);
     }, 0);
+  // Parcela já vencida na data de referência (hoje ou o "fim" do Histórico).
+  const _isOverdue = (i: Installment) => new Date(i.dueDate + 'T00:00:00').getTime() < _refDayMs;
+  const sumOverdue = (arr: Student[]) => sumUnpaid(arr, _isOverdue);
 
-  // Todo card de status soma o saldo em aberto inteiro (vencido + a vencer),
-  // na mesma régua da Carteira Total. Enquanto Vencido 1/2 e Negativado
-  // mostravam só a fatia já vencida, as parcelas futuras desses alunos
-  // entravam no total e não apareciam em card nenhum.
+  // Regra dos cards de status:
+  //   Vencido 1 / Vencido 2 → SOMENTE a(s) parcela(s) já vencida(s). O aluno
+  //     ficou inadimplente numa parcela; o resto do contrato segue a vencer.
+  //   À Negativar / Negativado → saldo em aberto inteiro (vencido + a vencer),
+  //     porque o contrato todo vai para negativação.
+  //   Em Dia / Novos / Cancelamento → saldo em aberto inteiro.
   const emDiaValue = sumUnpaid(emDia);
   const alunosNovosValue = sumUnpaid(alunosNovos);
-  const v1Value = sumUnpaid(vencido1);
-  const v2Value = sumUnpaid(vencido2);
+  const v1Value = sumOverdue(vencido1);
+  const v2Value = sumOverdue(vencido2);
   const anValue = sumUnpaid(aNegativar);
   const negValue = sumUnpaid(negativado);
   const solicCancValue = sumUnpaid(solicitacaoCancelamento);
@@ -549,9 +554,9 @@ export default function DashboardPage() {
       case 'novos':
         return { title: 'Alunos Novos', students: alunosNovos, valueMode: 'unpaid' };
       case 'v1':
-        return { title: 'Vencido 1', students: vencido1, valueMode: 'unpaid' };
+        return { title: 'Vencido 1', students: vencido1, valueMode: 'overdue' };
       case 'v2':
-        return { title: 'Vencido 2', students: vencido2, valueMode: 'unpaid' };
+        return { title: 'Vencido 2', students: vencido2, valueMode: 'overdue' };
       case 'an':
         return { title: 'À Negativar', students: aNegativar, valueMode: 'unpaid' };
       case 'neg':
