@@ -547,6 +547,20 @@ export default function DashboardPage() {
   // filterCarteiraActiveStudents) mas some da Carteira Total, que só conta quem
   // tem parcela em aberto. É a diferença entre a soma dos cards e o total.
   const solicCancQuitados = solicitacaoCancelamento.filter(isStudentFullyPaid).length;
+  // Composição da base (mesmo recorte de AC/produto/tag): quitados fora do funil de
+  // cancelamento e cancelados não têm saldo, por isso ficam fora dos 100% da carteira.
+  // Exibidos no card para deixar claro quantos alunos a base tem no total.
+  const carteiraCancelados = mode === 'historico'
+    ? 0
+    : baseStudents.filter((s) => s.statusCancelamento === 'cancelado').length;
+  const carteiraQuitados = mode === 'historico'
+    ? 0
+    : baseStudents.filter(
+        (s) =>
+          s.statusCancelamento !== 'cancelado' &&
+          !matchesCancelamentoFilter(s, cancellationCases) &&
+          (s.status === 'Pago' || isStudentFullyPaid(s)),
+      ).length;
   const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
   // Mesma base do card "Carteira Total" — pendência IAM excluída por parcela, não por aluno.
@@ -1701,15 +1715,25 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mt-1 gap-2">
             <p
               className="text-[11px] text-muted-foreground truncate"
-              title={
+              title={[
+                `${carteiraTotalAlunos} alunos com parcela em aberto (compõem o valor da Carteira Total).`,
                 solicCancQuitados > 0
-                  ? `${carteiraTotalAlunos} alunos com parcela em aberto + ${solicCancQuitados} com contrato quitado aguardando fechamento do cancelamento (R$ 0,00). Soma dos cards de status: ${carteiraTotalAlunos + solicCancQuitados}.`
-                  : undefined
-              }
+                  ? `${solicCancQuitados} com contrato quitado aguardando fechamento do cancelamento (R$ 0,00). Soma dos cards de status: ${carteiraTotalAlunos + solicCancQuitados}.`
+                  : '',
+                carteiraQuitados > 0 ? `${carteiraQuitados} quitados (à vista ou todas as parcelas pagas) — sem saldo, fora da carteira.` : '',
+                carteiraCancelados > 0 ? `${carteiraCancelados} cancelados — fora da carteira.` : '',
+                `Base total: ${carteiraTotalAlunos + solicCancQuitados + carteiraQuitados + carteiraCancelados} alunos.`,
+              ].filter(Boolean).join(' ')}
             >
               {carteiraTotalAlunos} alunos
               {solicCancQuitados > 0 && (
-                <span className="text-muted-foreground/80"> + {solicCancQuitados} quitados em cancelamento</span>
+                <span className="text-muted-foreground/80"> · {solicCancQuitados} quitados em cancelamento</span>
+              )}
+              {carteiraQuitados > 0 && (
+                <span className="text-muted-foreground/80"> · {carteiraQuitados} quitados</span>
+              )}
+              {carteiraCancelados > 0 && (
+                <span className="text-muted-foreground/80"> · {carteiraCancelados} cancelados</span>
               )}
             </p>
             <p className="text-[11px] font-semibold text-primary shrink-0">100%</p>

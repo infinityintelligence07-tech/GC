@@ -392,8 +392,15 @@ export default function ACPortfolioPage() {
     )
     : [];
 
-  const getForecastTotals = () => {
-    const range = getForecastRange();
+  // `opts` permite reutilizar o mesmo cálculo com outro período/base (ex.: fita
+  // "Pago · mês vigente" usa 01 → hoje por data de pagamento, independente dos
+  // controles da Previsão).
+  const getForecastTotals = (opts?: {
+    range?: { start: Date; end: Date } | null;
+    basis?: 'vencimento' | 'pagamento';
+  }) => {
+    const range = opts?.range !== undefined ? opts.range : getForecastRange();
+    const basis = opts?.basis ?? dateBasis;
     let total = 0, aVencer = 0, pago = 0;
     let totalReal = 0, pagoReal = 0;
     let qtd = 0;
@@ -422,7 +429,7 @@ export default function ACPortfolioPage() {
       // à vista/cartão só serve para nunca somar no A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
       st.installments.forEach((i) => {
-        if (dateBasis === 'pagamento') {
+        if (basis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
           if (!isBaixaRegistradaNoGc(st, i, baixasGcIndex)) return;
           if (range) {
@@ -728,6 +735,22 @@ export default function ACPortfolioPage() {
   // Total, que só conta quem tem parcela em aberto. É a diferença entre a soma
   // dos cards e o total.
   const solicCancQuitados = solicitacaoCancelamento.filter(isStudentFullyPaid).length;
+  // Composição da base do assessor: quitados fora do funil de cancelamento e
+  // cancelados não têm saldo (ficam fora dos 100%), mas entram na contagem da base.
+  const carteiraCancelados = mode === 'historico' || !ac ? 0 : canceladosBase.length;
+  const carteiraQuitados = mode === 'historico' || !ac
+    ? 0
+    : students.filter(
+        (s) =>
+          s.ac === ac.name &&
+          s.statusCancelamento !== 'cancelado' &&
+          countsInAcPortfolioTotals(s) &&
+          !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students) &&
+          studentMatchesTagFilter(s, tagFilters) &&
+          fcMatchesCadastro(s) &&
+          !matchesCancelamentoFilter(s, cancellationCases) &&
+          (s.status === 'Pago' || isStudentFullyPaid(s)),
+      ).length;
 
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
   // Boletos Antecipados: com período, inclui também alunos cujas parcelas no período
@@ -747,32 +770,21 @@ export default function ACPortfolioPage() {
     : '0.0';
   const pctEmDia = pct(emDia.length);
   const pctInadimplente = pct(inadimplentes);
-  // ── Card "Em Dia + Novos · mês vigente" (fita de meta) ────────────────────
-  // Acumulado do dia 01 até hoje (Brasília): soma as parcelas dos alunos
-  // Em Dia / Novos com vencimento entre o 1º dia do mês e a data atual (pagas
-  // + em aberto). Como o intervalo recomeça no dia 1, o card zera sozinho a
-  // cada virada de mês. Independe do filtro de vencimento da Previsão.
+  // ── Card "Pago · mês vigente" (fita de meta) ─────────────────────────────
+  // Acumulado do dia 01 até hoje (Brasília) do card PAGO do assessor, por data
+  // de pagamento e com a mesma regra do card (só baixas feitas no GC e
+  // conciliadas — src/lib/pagoGc.ts — mais o retido de cancelamento
+  // conciliado). Como o intervalo recomeça no dia 1, zera sozinho a cada
+  // virada de mês. Independe dos controles de período/base da Previsão.
   const hojeKey = getTodayStringBrasilia(); // YYYY-MM-DD
   const mesAtualKey = hojeKey.slice(0, 7); // YYYY-MM
   const periodoMesLabel = `01/${mesAtualKey.slice(5, 7)} a ${hojeKey.slice(8, 10)}/${hojeKey.slice(5, 7)}`;
-  const _instAteHoje = (i: { dueDate: string }) =>
-    i.dueDate.slice(0, 7) === mesAtualKey && i.dueDate.slice(0, 10) <= hojeKey;
-  const sumMesAteHoje = (arr: Student[]) =>
-    arr.reduce((acc, s) => {
-      if (s.statusCancelamento === 'cancelado') {
-        return acc + s.installments
-          .filter((i) => _instAteHoje(i) && (i.tags ?? []).includes('multa-cancelamento'))
-          .reduce((a, i) => a + i.value, 0);
-      }
-      if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
-      return acc + s.installments
-        .filter((i) => _instAteHoje(i) && !isInstallmentExcludedFromAcPortfolio(s, i))
-        .reduce((a, i) => a + i.value, 0);
-    }, 0);
-  const mesEmDiaNovos = kpiStudents.filter(
-    (s) => (s.status === 'Em Dia' || s.status === 'Aluno Novo') && !_isSolic(s) && s.installments.some(_instAteHoje),
-  );
-  const mesEmDiaNovosValue = sumMesAteHoje(mesEmDiaNovos);
+  const pagoMesTotais = getForecastTotals({
+    range: { start: new Date(`${mesAtualKey}-01T00:00:00`), end: new Date(`${hojeKey}T23:59:59`) },
+    basis: 'pagamento',
+  });
+  const mesEmDiaNovosValue = pagoMesTotais.pago;
+  const mesPagoAlunos = pagoMesTotais.qtdAlunos;
 
   // Meta (R$) do mês por assessor: marcada em 2/3 da fita. Editável pelo admin
   // (lápis no card); sem meta salva usa o padrão do app.
@@ -873,9 +885,8 @@ export default function ACPortfolioPage() {
 
       {/* ── 0b. Velocímetro + fita do mês + taxas ────────────────────────────── */}
       {/* Esquerda: velocímetro da meta de Taxa em Dia do assessor.
-          Centro: "Em Dia + Novos" do mês atual com fita reta (ponteiro ao vivo,
-          marca = início do mês, refeita quando o mês vira). O card homônimo da
-          linha de KPIs abaixo continua igual.
+          Centro: "Pago" do mês atual (01 → hoje, por data de pagamento) com
+          fita reta de meta; zera quando o mês vira.
           Direita: Taxa Em Dia e Taxa Inadimplente empilhados. */}
       <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_minmax(180px,220px)] gap-2.5 sm:gap-3 items-stretch">
         <div className="hidden sm:flex items-center justify-center rounded-2xl bg-card border border-border saas-shadow-md px-3 py-2">
@@ -901,12 +912,11 @@ export default function ACPortfolioPage() {
         </div>
 
         <div
-          onClick={() => setStatusFilter(statusFilter === 'Em Dia' ? '' : 'Em Dia')}
-          className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 flex flex-col ${statusFilter === 'Em Dia' ? 'ring-2 ring-teal-500/50' : ''}`}
+          className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative flex flex-col"
         >
           <div className="flex items-start justify-between mb-1.5 gap-2">
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide truncate">
-              Em Dia + Novos · {periodoMesLabel}
+              Pago · {periodoMesLabel}
             </p>
             <div className="flex items-center gap-2 shrink-0">
               <MetaValorEditor
@@ -930,7 +940,7 @@ export default function ACPortfolioPage() {
               goal={pctFitaMeta}
               formatValue={fmtPctMeta}
               footer={
-                <p className="text-[10px] text-muted-foreground mt-1 leading-tight" title={`${formatCurrency(mesEmDiaNovosValue)} de ${formatCurrency(emDiaNovosMeta)} (${mesEmDiaNovos.length} alunos, ${periodoMesLabel})`}>
+                <p className="text-[10px] text-muted-foreground mt-1 leading-tight" title={`${formatCurrency(mesEmDiaNovosValue)} de ${formatCurrency(emDiaNovosMeta)} (${mesPagoAlunos} alunos, ${periodoMesLabel})`}>
                   {faltaMetaEmDiaNovos > 0 ? (
                     <>Falta <span className="font-medium text-foreground">{formatCurrency(faltaMetaEmDiaNovos)}</span></>
                   ) : (
@@ -943,10 +953,10 @@ export default function ACPortfolioPage() {
           {infoStatus === 'emdia_novos_mes' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
               <p>
-                Acumulado de {periodoMesLabel} na carteira de {ac.name}: {formatCurrency(mesEmDiaNovosValue)} em parcelas
-                (pagas + em aberto) de {mesEmDiaNovos.length} alunos Em Dia / Novos com vencimento entre o dia 01 e hoje.
+                Pago de {periodoMesLabel} na carteira de {ac.name}: {formatCurrency(mesEmDiaNovosValue)} recebidos de {mesPagoAlunos} alunos,
+                por data de pagamento — mesma regra do card Pago (só baixas feitas no GC e conciliadas, mais o retido de cancelamento conciliado).
                 A fita vai de R$ 0 até {formatCurrency(fitaMax)}; o traço marca a meta de {formatCurrency(emDiaNovosMeta)}
-                e o ponteiro mostra o valor acumulado até agora. Zera automaticamente todo dia 1º.
+                e o ponteiro mostra o acumulado até agora. Zera automaticamente todo dia 1º.
               </p>
             </div>
           )}
@@ -1288,15 +1298,25 @@ export default function ACPortfolioPage() {
           <div className="flex items-center justify-between mt-1 gap-2">
             <p
               className="text-[11px] text-muted-foreground truncate"
-              title={
+              title={[
+                `${carteiraTotalAlunos} alunos com parcela em aberto (compõem o valor da Carteira Total).`,
                 solicCancQuitados > 0
-                  ? `${carteiraTotalAlunos} alunos com parcela em aberto + ${solicCancQuitados} com contrato quitado aguardando fechamento do cancelamento (R$ 0,00). Soma dos cards de status: ${carteiraTotalAlunos + solicCancQuitados}.`
-                  : undefined
-              }
+                  ? `${solicCancQuitados} com contrato quitado aguardando fechamento do cancelamento (R$ 0,00). Soma dos cards de status: ${carteiraTotalAlunos + solicCancQuitados}.`
+                  : '',
+                carteiraQuitados > 0 ? `${carteiraQuitados} quitados (à vista ou todas as parcelas pagas) — sem saldo, fora da carteira.` : '',
+                carteiraCancelados > 0 ? `${carteiraCancelados} cancelados — fora da carteira.` : '',
+                `Base total: ${carteiraTotalAlunos + solicCancQuitados + carteiraQuitados + carteiraCancelados} alunos.`,
+              ].filter(Boolean).join(' ')}
             >
               {carteiraTotalAlunos} alunos
               {solicCancQuitados > 0 && (
-                <span className="text-muted-foreground/80"> + {solicCancQuitados} quitados em cancelamento</span>
+                <span className="text-muted-foreground/80"> · {solicCancQuitados} quitados em cancelamento</span>
+              )}
+              {carteiraQuitados > 0 && (
+                <span className="text-muted-foreground/80"> · {carteiraQuitados} quitados</span>
+              )}
+              {carteiraCancelados > 0 && (
+                <span className="text-muted-foreground/80"> · {carteiraCancelados} cancelados</span>
               )}
             </p>
             <p className="text-[11px] font-semibold text-primary shrink-0">100%</p>

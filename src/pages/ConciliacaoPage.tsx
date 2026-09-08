@@ -15,6 +15,7 @@ import { canEditTab } from '@/types';
 import ImportConciliacaoModal from '@/components/modals/ImportConciliacaoModal';
 import FinancialModal from '@/components/modals/FinancialModal';
 import HistoryModal from '@/components/modals/HistoryModal';
+import IamConciliarDataPagamentoModal, { type IamDataPagamentoAjuste } from '@/components/modals/IamConciliarDataPagamentoModal';
 import { updateStudentDb, createConciliacaoItemDb } from '@/lib/supabaseMutations';
 import CurrencyInput from '@/components/ui/CurrencyInput';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -1547,6 +1548,37 @@ export default function ConciliacaoPage() {
   // Modal de confirmação para cancelamento (mostra checklist + pergunta boletos)
   const [cancelConfirm, setCancelConfirm] = useState<{ group: Group; caseRef: import('@/types').CancellationCase } | null>(null);
   const [cancelConfirmBoletos, setCancelConfirmBoletos] = useState<boolean | null>(null);
+  // Modal IAM CONTROL → GC: confere/edita a data do pagamento antes de conciliar.
+  const [iamDataModal, setIamDataModal] = useState<{ group: Group; student: Student } | null>(null);
+
+  const handleConciliarIamComData = async (ajuste: IamDataPagamentoAjuste | null) => {
+    if (!iamDataModal) return;
+    const { group, student } = iamDataModal;
+    if (ajuste) {
+      const updateStudent = useAppStore.getState().updateStudent;
+      const atual = useAppStore.getState().students.find((s) => s.id === student.id) ?? student;
+      const installments = atual.installments.map((i) => {
+        const nova = ajuste.paidDates[i.number];
+        return nova && i.paid ? { ...i, paidDate: nova } : i;
+      });
+      const revisor = currentUser?.name ?? 'Conciliação';
+      await updateStudent(atual.id, {
+        ...(ajuste.enrollmentDate ? { enrollmentDate: ajuste.enrollmentDate } : {}),
+        ...(Object.keys(ajuste.paidDates).length > 0 ? { installments } : {}),
+        history: [
+          ...atual.history,
+          {
+            date: new Date().toISOString(),
+            type: 'Sistema' as const,
+            text: `Data do pagamento ajustada na Conciliação por ${revisor} antes de conciliar o contrato IAM: ${ajuste.descricoes.join('; ')}.`,
+          },
+        ],
+      });
+    }
+    await executeConciliarGrupo(group);
+    setIamDataModal(null);
+    toast.success(ajuste ? 'Data aprovada e contrato IAM conciliado.' : 'Contrato IAM conciliado.');
+  };
 
   const handleConciliarGrupo = async (group: Group) => {
     if (!canConciliarEdit) {
@@ -1564,6 +1596,14 @@ export default function ConciliacaoPage() {
       if (caseRef) {
         setCancelConfirmBoletos(null);
         setCancelConfirm({ group, caseRef });
+        return;
+      }
+    }
+    // IAM CONTROL → GC: confere a data do pagamento (editável) antes de conciliar.
+    if (group.items.every((i) => i.tipo === 'iam_pendente') && group.studentId) {
+      const st = useAppStore.getState().students.find((s) => s.id === group.studentId);
+      if (st) {
+        setIamDataModal({ group, student: st });
         return;
       }
     }
@@ -3357,6 +3397,15 @@ export default function ConciliacaoPage() {
 
       {historyStudent && (
         <HistoryModal student={historyStudent} onClose={() => setHistoryStudent(null)} />
+      )}
+
+      {/* ─── Modal: IAM CONTROL → GC — data do pagamento antes de conciliar ── */}
+      {iamDataModal && (
+        <IamConciliarDataPagamentoModal
+          student={iamDataModal.student}
+          onClose={() => setIamDataModal(null)}
+          onConciliar={handleConciliarIamComData}
+        />
       )}
 
       {/* ─── Modal: Reprovar Conciliação ──────────────────────────────────── */}

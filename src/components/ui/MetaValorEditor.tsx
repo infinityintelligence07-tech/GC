@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { formatCurrency } from '@/store/useAppStore';
 
-/** Meta padrão (R$) da fita "Em Dia + Novos · mês vigente" quando ainda não há meta salva. */
+/** Meta padrão (R$) da fita "Pago · mês vigente" quando ainda não há meta salva. */
 export const EM_DIA_NOVOS_META_PADRAO = 144500;
 
 interface MetaValorEditorProps {
@@ -18,7 +18,7 @@ interface MetaValorEditorProps {
 
 /**
  * Botão de lápis + popover para editar uma meta em reais. Usado no card
- * "Em Dia + Novos · mês vigente" (Dashboard e Carteira do Assessor).
+ * "Pago · mês vigente" (Carteira do Assessor).
  */
 export default function MetaValorEditor({ value, titulo, canEdit, onSave, label = 'Meta' }: MetaValorEditorProps) {
   const [open, setOpen] = useState(false);
@@ -59,7 +59,7 @@ export default function MetaValorEditor({ value, titulo, canEdit, onSave, label 
 
       {open && (
         <div className="absolute right-0 top-full z-30 mt-1 w-64 rounded-xl border border-border bg-card p-3 shadow-lg text-left cursor-default">
-          <p className="text-[11px] font-semibold text-foreground mb-2">{label} Em Dia + Novos — {titulo}</p>
+          <p className="text-[11px] font-semibold text-foreground mb-2">{label} Pago do mês — {titulo}</p>
           <label className="block text-[10px] text-muted-foreground">
             {label} do mês (R$)
             <input
@@ -75,7 +75,7 @@ export default function MetaValorEditor({ value, titulo, canEdit, onSave, label 
             />
           </label>
           <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug">
-            A fita vai de R$ 0 até 150% da meta (o traço marca a meta em 2/3 da escala); o ponteiro mostra quanto da meta o acumulado "Em Dia + Novos" do dia 01 até hoje já alcança.
+            A fita vai de R$ 0 até 150% da meta (o traço marca a meta em 2/3 da escala); o ponteiro mostra quanto da meta o Pago do dia 01 até hoje (baixas feitas no GC e conciliadas) já alcança.
           </p>
           <div className="flex justify-end gap-2 mt-3">
             <button
