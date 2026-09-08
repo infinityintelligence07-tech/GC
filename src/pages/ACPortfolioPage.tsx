@@ -728,6 +728,10 @@ export default function ACPortfolioPage() {
   const alunosNovosValue = sumUnpaid(alunosNovos);
   const v1Value = sumOverdue(vencido1);
   const v2Value = sumOverdue(vencido2);
+  // Parcelas futuras dos alunos em Vencido 1/2: ficam fora do valor do card,
+  // mas seguem na Carteira Total — mostradas como sub-linha para a soma fechar.
+  const v1AVencer = Math.max(0, sumUnpaid(vencido1) - v1Value);
+  const v2AVencer = Math.max(0, sumUnpaid(vencido2) - v2Value);
   const anValue = sumUnpaid(aNegativar);
   const negValue = sumUnpaid(negativado);
   const solicCancValue = sumUnpaid(solicitacaoCancelamento);
@@ -1398,11 +1402,11 @@ export default function ACPortfolioPage() {
       {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado (Taxa Inadimplente está no bloco do topo) */}
       <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { key: 'v1', label: 'Vencido 1', value: v1Value, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos com parcelas vencidas entre 1 e 30 dias. Representa o primeiro estágio de inadimplência, onde ações de cobrança preventiva podem evitar a evolução do atraso.', filter: 'Vencido 1' as StudentStatus },
-          { key: 'v2', label: 'Vencido 2', value: v2Value, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos com parcelas vencidas entre 31 e 60 dias. Neste estágio a inadimplência é mais crítica e requer ações de cobrança mais intensivas para recuperação do valor.', filter: 'Vencido 2' as StudentStatus },
-          { key: 'an', label: 'À Negativar', value: anValue, count: aNegativar.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos com inadimplência prolongada que estão próximos de serem negativados nos órgãos de proteção ao crédito. Última oportunidade de negociação antes da negativação.', filter: 'À Negativar' as StudentStatus },
-          { key: 'neg', label: 'Negativado', value: negValue, count: negativado.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos que já foram negativados nos órgãos de proteção ao crédito. Requer acompanhamento para eventual acordo e retirada da negativação.', filter: 'Negativado' as StudentStatus },
-        ].map(({ key, label, value, count, color, text, desc, filter }) => {
+          { key: 'v1', label: 'Vencido 1', value: v1Value, aVencer: v1AVencer, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos com parcelas vencidas entre 1 e 30 dias. O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 1' as StudentStatus },
+          { key: 'v2', label: 'Vencido 2', value: v2Value, aVencer: v2AVencer, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos com parcelas vencidas entre 31 e 60 dias. O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 2' as StudentStatus },
+          { key: 'an', label: 'À Negativar', value: anValue, aVencer: 0, count: aNegativar.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos com inadimplência prolongada que estão próximos de serem negativados nos órgãos de proteção ao crédito. Última oportunidade de negociação antes da negativação.', filter: 'À Negativar' as StudentStatus },
+          { key: 'neg', label: 'Negativado', value: negValue, aVencer: 0, count: negativado.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos que já foram negativados nos órgãos de proteção ao crédito. Requer acompanhamento para eventual acordo e retirada da negativação.', filter: 'Negativado' as StudentStatus },
+        ].map(({ key, label, value, aVencer, count, color, text, desc, filter }) => {
           const isStaleAN = key === 'an' && aNegativarStale;
           const cardCls = isStaleAN
             ? `min-w-0 rounded-2xl p-4 sm:p-5 saas-shadow-md bg-red-500 border border-red-600 transition-all hover:-translate-y-0.5 relative cursor-pointer hover:ring-2 hover:ring-red-400/40 ${statusFilter === filter ? 'ring-2 ring-white/50' : ''}`
@@ -1428,7 +1432,10 @@ export default function ACPortfolioPage() {
                 <span className="sm:hidden">{formatCurrencyCompact(value)}</span>
               </p>
               <div className="flex items-center justify-between mt-1 gap-2">
-                <p className={subCls}>{count} alunos</p>
+                <p className={subCls} title={aVencer > 0 ? `${count} alunos · a vencer ${formatCurrency(aVencer)}` : undefined}>
+                  {count} alunos
+                  {aVencer > 0 && <span className="text-muted-foreground/80"> · a vencer {formatCurrency(aVencer)}</span>}
+                </p>
                 <p className={pctCls}>{pct(count)}%</p>
               </div>
               {infoStatus === key && (
