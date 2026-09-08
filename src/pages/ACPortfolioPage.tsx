@@ -48,6 +48,7 @@ import {
   studentMatchesTagKpiGroup,
   applyTagKpiGroupToStudent,
 } from '@/lib/tagKpis';
+import { isParcelaAntecipada } from '@/lib/parcelaAntecipada';
 import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagRefs } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
@@ -729,7 +730,12 @@ export default function ACPortfolioPage() {
   const solicCancQuitados = solicitacaoCancelamento.filter(isStudentFullyPaid).length;
 
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
-  const tagKpis = computeTagKpis(kpiStudentsScoped, studentTags, _instInRange);
+  // Boletos Antecipados: com período, inclui também alunos cujas parcelas no período
+  // são só boletos antecipados (já baixados) — o escopo padrão exige parcela em aberto.
+  const tagKpiStudents = _fcRange
+    ? kpiStudents.filter((s) => s.installments.some((i) => (!i.paid || isParcelaAntecipada(i)) && _instInRange(i)))
+    : kpiStudentsScoped;
+  const tagKpis = computeTagKpis(tagKpiStudents, studentTags, _instInRange);
 
   // Novos + Em Dia + Inadimplentes usam a mesma base para as % fecharem em 100%.
   // Cancelamento/Pendência ficam nos cards próprios e não entram nesta conta.

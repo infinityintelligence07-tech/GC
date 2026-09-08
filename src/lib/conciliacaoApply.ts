@@ -87,6 +87,27 @@ function renumberInstallmentsAfterConciliacao(
 }
 
 /**
+ * Preserva a marca de boleto antecipado (`antecipada`) que exista no aluno atual
+ * quando o rascunho foi montado sem ela (modal aberto antes da marcação, snapshot
+ * antigo etc.). Casa a parcela paga pelo par vencimento + valor; se o rascunho
+ * já traz a chave (marcou/desmarcou de propósito), respeita o rascunho.
+ */
+function preserveAntecipadaFlags(next: Installment[], current: Installment[]): Installment[] {
+  const marcadas = current.filter((c) => c.paid && c.antecipada);
+  if (marcadas.length === 0) return next;
+  const usados = new Set<number>();
+  return next.map((inst) => {
+    if (!inst.paid || Object.prototype.hasOwnProperty.call(inst, 'antecipada')) return inst;
+    const idx = marcadas.findIndex(
+      (c, i) => !usados.has(i) && c.dueDate === inst.dueDate && Math.abs((c.value ?? 0) - (inst.value ?? 0)) < 0.005,
+    );
+    if (idx < 0) return inst;
+    usados.add(idx);
+    return { ...inst, antecipada: true };
+  });
+}
+
+/**
  * Aplica o `depois._after` do item rascunho no aluno e adiciona uma entrada
  * no histórico informando a efetivação. Retorna true se aplicou.
  */
@@ -127,7 +148,7 @@ export function applyConciliacaoEfetivacao(
         ? (snapshot!.installments as Installment[])
         : student.installments) ?? [];
     const { installments: renum, changes } = renumberInstallmentsAfterConciliacao(
-      updates.installments as Installment[],
+      preserveAntecipadaFlags(updates.installments as Installment[], student.installments ?? []),
       prevInst,
     );
     updates.installments = renum;

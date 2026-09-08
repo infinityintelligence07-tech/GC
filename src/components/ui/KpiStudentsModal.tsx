@@ -10,8 +10,15 @@ import {
   getOperationalPendenteTipoLabel,
 } from '@/lib/studentDisplayStatus';
 import { isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
+import { ANTECIPADA_BADGE_CLASS, ANTECIPADA_LABEL, isParcelaAntecipada } from '@/lib/parcelaAntecipada';
 
-export type KpiValueMode = 'unpaid' | 'overdue' | 'operational_pendente';
+/**
+ * - unpaid: parcelas em aberto
+ * - overdue: parcelas em aberto já vencidas
+ * - operational_pendente: pendências operacionais (entrada/PIX/link)
+ * - boletos_antecipados: parcelas em aberto + parcelas marcadas como boleto antecipado (já baixadas)
+ */
+export type KpiValueMode = 'unpaid' | 'overdue' | 'operational_pendente' | 'boletos_antecipados';
 
 export default function KpiStudentsModal({
   title,
@@ -38,6 +45,7 @@ export default function KpiStudentsModal({
     dueDate: string;
     entradaValor: number;
     pendenciaValor: number;
+    antecipada: boolean;
   };
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -48,7 +56,9 @@ export default function KpiStudentsModal({
         ? getOperationalPendenteInstallments(s)
         : s.installments;
     const unpaid = source.filter((i) => {
-      if (i.paid || !instInRange(i)) return false;
+      if (!instInRange(i)) return false;
+      // Boletos antecipados já constam como pagos para a empresa, mas seguem no KPI.
+      if (i.paid && !(valueMode === 'boletos_antecipados' && isParcelaAntecipada(i))) return false;
       if (valueMode !== 'operational_pendente' && isInstallmentExcludedFromFinancialTotals(s, i)) return false;
       if (valueMode === 'overdue') {
         return new Date(i.dueDate + 'T00:00:00').getTime() < todayMs;
@@ -68,6 +78,7 @@ export default function KpiStudentsModal({
         dueDate: i.dueDate,
         entradaValor: isEntrada ? i.value : valueMode === 'operational_pendente' && paidEntrada > 0.0049 ? paidEntrada : 0,
         pendenciaValor: isEntrada ? 0 : i.value,
+        antecipada: isParcelaAntecipada(i),
       });
     });
   });
@@ -84,6 +95,7 @@ export default function KpiStudentsModal({
   const totalEntrada = rows.reduce((acc, r) => acc + r.entradaValor, 0);
   const totalPendencia = rows.reduce((acc, r) => acc + r.pendenciaValor, 0);
   const total = totalEntrada + totalPendencia;
+  const totalAntecipado = rows.filter((r) => r.antecipada).reduce((acc, r) => acc + r.entradaValor + r.pendenciaValor, 0);
   const fmtDate = (iso: string) => {
     if (!iso) return '—';
     const [y, m, d] = iso.split('-');
@@ -119,7 +131,12 @@ export default function KpiStudentsModal({
                   Pendência: <span className="font-semibold text-primary">{formatCurrency(totalPendencia)}</span>
                 </>
               ) : (
-                <> · Total: <span className="font-semibold text-primary">{formatCurrency(total)}</span></>
+                <>
+                  {' · '}Total: <span className="font-semibold text-primary">{formatCurrency(total)}</span>
+                  {valueMode === 'boletos_antecipados' && totalAntecipado > 0.0049 && (
+                    <> · Antecipado: <span className="font-semibold text-sky-700">{formatCurrency(totalAntecipado)}</span></>
+                  )}
+                </>
               )}
             </p>
           </div>
@@ -180,7 +197,12 @@ export default function KpiStudentsModal({
                     {valueMode === 'operational_pendente' && (
                       <td className="px-4 py-2 text-xs text-muted-foreground">{r.tipo}</td>
                     )}
-                    <td className="px-4 py-2 text-xs text-center text-muted-foreground tabular-nums">{r.installmentNumber || '—'}</td>
+                    <td className="px-4 py-2 text-xs text-center text-muted-foreground tabular-nums">
+                      {r.installmentNumber || '—'}
+                      {r.antecipada && (
+                        <span className={`ml-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded ${ANTECIPADA_BADGE_CLASS}`}>{ANTECIPADA_LABEL}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-xs text-foreground tabular-nums">{fmtDate(r.dueDate)}</td>
                     {valueMode === 'operational_pendente' ? (
                       <>

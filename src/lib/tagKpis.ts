@@ -1,9 +1,12 @@
-// KPI combinado: Boletos Antecipados (tags Fundo / TMF / Antecipação).
-// Considera SOMENTE as parcelas em aberto marcadas com alguma dessas tags (por parcela) ou,
-// quando a tag está no nível do aluno, todas as parcelas em aberto dele.
+// KPI combinado: Boletos Antecipados (tags Fundo / TMF / Antecipação + parcelas `antecipada`).
+// Considera as parcelas em aberto marcadas com alguma dessas tags (por parcela) ou,
+// quando a tag está no nível do aluno, todas as parcelas em aberto dele — e também
+// toda parcela marcada como boleto antecipado (`antecipada: true`, baixa do banco/fundo),
+// mesmo que já conste como paga para a empresa.
 // Não interfere nos demais indicadores — uma parcela pode aparecer aqui e em outros KPIs.
 
-import type { Student, StudentTag } from '@/types';
+import type { Installment, Student, StudentTag } from '@/types';
+import { isParcelaAntecipada } from '@/lib/parcelaAntecipada';
 
 export type TagKpiGroupKey = 'fundo_tmf_antecipacao';
 
@@ -50,7 +53,7 @@ export function computeTagKpis(
   students.forEach((s) => {
     const studentLevel = tagsHitGroup(s.tags, refs, group.matchers);
     const relevant = (s.installments || []).filter(
-      (i) => !i.paid && instInRange(i) && (studentLevel || tagsHitGroup(i.tags, refs, group.matchers)),
+      (i) => instInRange(i) && isBoletoAntecipadoKpiInstallment(i, studentLevel, refs, group.matchers),
     );
     if (relevant.length === 0) return;
     const sum = relevant.reduce((a, i) => a + (i.value || 0), 0);
@@ -98,6 +101,21 @@ function tagsHitGroup(tags: string[] | null | undefined, refs: Set<string>, matc
 }
 
 /**
+ * Parcela entra no KPI Boletos Antecipados se:
+ *  - está em aberto e tem tag do grupo (na parcela ou no aluno), ou
+ *  - está marcada como boleto antecipado (`antecipada`), mesmo já baixada.
+ */
+function isBoletoAntecipadoKpiInstallment(
+  i: Installment,
+  studentLevel: boolean,
+  refs: Set<string>,
+  matchers: string[],
+): boolean {
+  if (isParcelaAntecipada(i)) return true;
+  return !i.paid && (studentLevel || tagsHitGroup(i.tags, refs, matchers));
+}
+
+/**
  * Aluno conta no KPI do grupo se tiver a tag no nível do aluno OU em alguma parcela
  * (OR entre Fundo/TMF/Antecipação — igual ao card).
  */
@@ -109,8 +127,10 @@ export function studentMatchesTagKpiGroup(
   const group = TAG_KPI_GROUPS.find((g) => g.key === key);
   if (!group) return false;
   const refs = getTagKpiGroupRefs(studentTags, key);
-  if (tagsHitGroup(student.tags, refs, group.matchers)) return true;
-  return (student.installments || []).some((i) => !i.paid && tagsHitGroup(i.tags, refs, group.matchers));
+  const studentLevel = tagsHitGroup(student.tags, refs, group.matchers);
+  return (student.installments || []).some((i) =>
+    isBoletoAntecipadoKpiInstallment(i, studentLevel, refs, group.matchers),
+  );
 }
 
 /**
@@ -126,8 +146,8 @@ export function applyTagKpiGroupToStudent(
   if (!group) return student;
   const refs = getTagKpiGroupRefs(studentTags, key);
   const studentLevel = tagsHitGroup(student.tags, refs, group.matchers);
-  const relevant = (student.installments || []).filter(
-    (i) => !i.paid && (studentLevel || tagsHitGroup(i.tags, refs, group.matchers)),
+  const relevant = (student.installments || []).filter((i) =>
+    isBoletoAntecipadoKpiInstallment(i, studentLevel, refs, group.matchers),
   );
   if (relevant.length === 0) return { ...student, installments: [] };
   const avgValue = relevant.reduce((a, i) => a + (i.value || 0), 0) / relevant.length;
@@ -135,7 +155,7 @@ export function applyTagKpiGroupToStudent(
     ...student,
     installments: relevant,
     totalInstallments: relevant.length,
-    paidInstallments: 0,
+    paidInstallments: relevant.filter((i) => i.paid).length,
     installmentValue: avgValue,
   };
 }

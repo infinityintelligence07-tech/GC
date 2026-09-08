@@ -16,6 +16,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, L
 import { getTodayBrasilia, getTodayStringBrasilia, createdAtInRange } from '@/lib/brasiliaDate';
 import { getTagStyle } from '@/lib/tagColors';
 import { computeTagKpis } from '@/lib/tagKpis';
+import { isParcelaAntecipada } from '@/lib/parcelaAntecipada';
 import { studentMatchesTagFilter, applyTagFilterToStudent } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import { supabase } from '@/integrations/supabase/client';
@@ -565,7 +566,12 @@ export default function DashboardPage() {
   );
 
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
-  const tagKpis = computeTagKpis(kpiStudentsScoped, studentTags, _instInRange);
+  // Boletos Antecipados: com período, inclui também alunos cujas parcelas no período
+  // são só boletos antecipados (já baixados) — o escopo padrão exige parcela em aberto.
+  const tagKpiStudents = _fcRange
+    ? kpiStudents.filter((s) => s.installments.some((i) => (!i.paid || isParcelaAntecipada(i)) && _instInRange(i)))
+    : kpiStudentsScoped;
+  const tagKpis = computeTagKpis(tagKpiStudents, studentTags, _instInRange);
 
   const kpiModalConfig: { title: string; students: Student[]; valueMode: KpiValueMode } | null = (() => {
     switch (kpiModalKey) {
@@ -591,7 +597,7 @@ export default function DashboardPage() {
         return { title: 'Pendências', students: pendentes, valueMode: 'operational_pendente' };
       case 'tag':
         return tagKpis[0]
-          ? { title: tagKpis[0].label, students: tagKpis[0].students, valueMode: 'unpaid' as KpiValueMode }
+          ? { title: tagKpis[0].label, students: tagKpis[0].students, valueMode: 'boletos_antecipados' as KpiValueMode }
           : null;
       case 'revertidos':
       case null:

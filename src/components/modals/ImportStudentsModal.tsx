@@ -5,6 +5,7 @@ import { useAppStore, generateInstallments, calculateInstallmentValue, calculate
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { Student, StudentStatus, Installment, CancellationCase, AC, Product } from '@/types';
 import { createProduct, createAC, createStudentTag } from '@/lib/supabaseMutations';
+import { canonicalProduct } from '@/lib/canonicalProduct';
 import { useConfirm } from '@/hooks/useConfirm';
 import { withSyncSuspended } from '@/hooks/useSupabaseSync';
 import { toast } from 'sonner';
@@ -1114,7 +1115,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
         const whatsapp = normalizeString(newRaw['Telefone']);
         const email = normalizeString(newRaw['E-mail']);
         const acName = normalizeString(newRaw['Assessor']);
-        const produto = normalizeString(newRaw['Classificação']) || 'Sem Treinamento';
+        const produto = canonicalProduct(normalizeString(newRaw['Classificação'])) || 'Sem Treinamento';
 
         const newErrors: string[] = [];
         if (!acName) newErrors.push('Assessor vazio');
@@ -1479,7 +1480,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
     for (const row of json) {
       // Linhas sem Pessoa viram a ficha "Sem Nome" (agrupadas por Classificação).
       const nome = normalizeString(row['Pessoa']) || 'Sem Nome';
-      const produto = normalizeString(row['Classificação']) || KAMINO_TAG_ONLY_PRODUCT;
+      const produto = canonicalProduct(normalizeString(row['Classificação'])) || KAMINO_TAG_ONLY_PRODUCT;
       // Contratos Liberty têm gestão própria na empresa Liberty. Fora dela,
       // as linhas são descartadas para não duplicar a carteira Liberty no IAM.
       if (!isLibertyCompany && produto.toLowerCase() === 'liberty') {
@@ -1511,7 +1512,7 @@ export default function ImportStudentsModal({ isOpen, onClose }: ImportStudentsM
         (s) => s.name.trim().toLowerCase() === nameKey && isRecompraClassificacao(s.product || ''),
       );
       for (const row of recompraRows) {
-        const cleanRow = { ...row, Classificação: normalizeString(row['Classificação']) };
+        const cleanRow = { ...row, Classificação: canonicalProduct(normalizeString(row['Classificação'])) };
         if (fichaRecompra) {
           const produto = fichaRecompra.product || 'Fundo - Receita (Recompra)';
           const key = `${nameKey}||${produto.toLowerCase()}`;

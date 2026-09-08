@@ -639,6 +639,14 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       .reduce((acc, i) => acc + ((i as { paidValue?: number }).paidValue ?? i.value), 0),
     [flowInstallments],
   );
+  /** Boletos antecipados (banco/fundo): baixados para a empresa, mas não pagos pelo aluno. */
+  const totalAntecipado = useMemo(
+    () => flowInstallments
+      .filter(isParcelaAntecipada)
+      .reduce((acc, i) => acc + i.value, 0),
+    [flowInstallments],
+  );
+  const hasAntecipado = totalAntecipado > 0.0049;
   const entradaValor = finance.downPayment ?? 0;
   const hasEntrada = finance.paidEntrada && entradaValor > 0.0049;
   const entradaPendenteValor = useMemo(
@@ -1748,6 +1756,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               const cols = 5
                 + (hasEntrada ? 1 : 0)
                 + (hasEntradaPendente ? 1 : 0)
+                + (hasAntecipado ? 1 : 0)
                 + (encargosHistoricoTotal > 0.0049 ? 1 : 0)
                 + (hasAtribuidos ? 1 : 0);
               const colsClass =
@@ -1831,6 +1840,15 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   {formatCurrency(totalOverdueSemEncargos)}
                 </p>
               </div>
+              {hasAntecipado && (
+                <div
+                  className="p-2 bg-sky-50 border border-sky-300 rounded-lg"
+                  title="Boletos antecipados (banco/fundo): baixados para a empresa, mas ainda não pagos pelo aluno. Entram no card Boletos Antecipados da dashboard."
+                >
+                  <p className="text-[9px] text-sky-700 uppercase tracking-wide">{ANTECIPADA_LABEL}</p>
+                  <p className="text-xs font-bold text-sky-700">{formatCurrency(totalAntecipado)}</p>
+                </div>
+              )}
               <div
                 className="p-2 bg-violet-50 border border-violet-300 rounded-lg"
                 title="Parcelas já pagas + créditos de abatimento recebidos de outros contratos (a entrada não entra neste saldo)"

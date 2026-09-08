@@ -44,6 +44,22 @@ function isRecompraClassificacao(produto) {
   return /recompra|antecipa[cç][aã]o|\bfundo\b/i.test(produto);
 }
 
+/**
+ * Nome canônico do produto — espelha public.gc_canonical_product no banco.
+ * A Kamino classifica como "Pmr"/"Pnl" e o IAM Control manda o nome por
+ * extenso; no GC o produto é um só (PMR / PNL).
+ */
+export function canonicalProduct(produto) {
+  const p = String(produto ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (p === 'pmr' || p.startsWith('programacao mental')) return 'PMR';
+  if (p === 'pnl' || p.startsWith('programacao neurolinguistica') || p.startsWith('programacao neuro-linguistica')) return 'PNL';
+  return String(produto ?? '').trim();
+}
+
 function analyzeCentroCusto(cc) {
   const lower = cc.toLowerCase();
   const hasAntecipacao = /antecipa[cç][aã]o/.test(lower);
@@ -134,7 +150,7 @@ export function parseKaminoFile(filePath, acNames = []) {
 
   for (const row of json) {
     const nome = normalizeString(row.Pessoa) || 'Sem Nome';
-    const produto = normalizeString(row.Classificação) || 'Sem Treinamento';
+    const produto = canonicalProduct(normalizeString(row.Classificação)) || 'Sem Treinamento';
     if (isRecompraClassificacao(produto)) {
       const k = nome.toLowerCase();
       if (!recompraPending.has(k)) recompraPending.set(k, []);
