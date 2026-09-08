@@ -346,10 +346,9 @@ export default function ACPortfolioPage() {
   }, [mode, perfPreset, perfCustomStart, perfCustomEnd, acStudents]);
 
   // ── Forecast custom dates ──────────────────────────────────────────────────
-  // Vencimento inicia sem datas (= toda a carteira); ao trocar para Data de
-  // Pagamento o período vira o mês corrente.
-  const [forecastCustomStart, setForecastCustomStart] = useState('');
-  const [forecastCustomEnd, setForecastCustomEnd] = useState('');
+  // Abre no mês vigente (01 → último dia). "Limpar" volta a toda a carteira.
+  const [forecastCustomStart, setForecastCustomStart] = useState(currentMonthStart);
+  const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
   const forecastSemPeriodo = !forecastCustomStart && !forecastCustomEnd;
   // Filtro do card por data de cadastro NO SISTEMA (created_at): só entram
   // fichas cadastradas no intervalo. Independente do filtro da tabela.
@@ -735,22 +734,9 @@ export default function ACPortfolioPage() {
   // Total, que só conta quem tem parcela em aberto. É a diferença entre a soma
   // dos cards e o total.
   const solicCancQuitados = solicitacaoCancelamento.filter(isStudentFullyPaid).length;
-  // Composição da base do assessor: quitados fora do funil de cancelamento e
-  // cancelados não têm saldo (ficam fora dos 100%), mas entram na contagem da base.
+  // Cancelados do assessor não têm saldo (ficam fora dos 100%), mas são exibidos
+  // no card para deixar claro que existem na base.
   const carteiraCancelados = mode === 'historico' || !ac ? 0 : canceladosBase.length;
-  const carteiraQuitados = mode === 'historico' || !ac
-    ? 0
-    : students.filter(
-        (s) =>
-          s.ac === ac.name &&
-          s.statusCancelamento !== 'cancelado' &&
-          countsInAcPortfolioTotals(s) &&
-          !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students) &&
-          studentMatchesTagFilter(s, tagFilters) &&
-          fcMatchesCadastro(s) &&
-          !matchesCancelamentoFilter(s, cancellationCases) &&
-          (s.status === 'Pago' || isStudentFullyPaid(s)),
-      ).length;
 
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
   // Boletos Antecipados: com período, inclui também alunos cujas parcelas no período
@@ -1013,7 +999,11 @@ export default function ACPortfolioPage() {
               </div>
               <div className="inline-flex rounded-lg bg-muted p-0.5">
                 <button
-                  onClick={() => { setDateBasis('vencimento'); setForecastCustomStart(''); setForecastCustomEnd(''); }}
+                  onClick={() => {
+                    setDateBasis('vencimento');
+                    setForecastCustomStart(currentMonthStart);
+                    setForecastCustomEnd(currentMonthEnd);
+                  }}
                   className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${dateBasis === 'vencimento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                 >
@@ -1303,17 +1293,12 @@ export default function ACPortfolioPage() {
                 solicCancQuitados > 0
                   ? `${solicCancQuitados} com contrato quitado aguardando fechamento do cancelamento (R$ 0,00). Soma dos cards de status: ${carteiraTotalAlunos + solicCancQuitados}.`
                   : '',
-                carteiraQuitados > 0 ? `${carteiraQuitados} quitados (à vista ou todas as parcelas pagas) — sem saldo, fora da carteira.` : '',
                 carteiraCancelados > 0 ? `${carteiraCancelados} cancelados — fora da carteira.` : '',
-                `Base total: ${carteiraTotalAlunos + solicCancQuitados + carteiraQuitados + carteiraCancelados} alunos.`,
               ].filter(Boolean).join(' ')}
             >
               {carteiraTotalAlunos} alunos
               {solicCancQuitados > 0 && (
                 <span className="text-muted-foreground/80"> · {solicCancQuitados} quitados em cancelamento</span>
-              )}
-              {carteiraQuitados > 0 && (
-                <span className="text-muted-foreground/80"> · {carteiraQuitados} quitados</span>
               )}
               {carteiraCancelados > 0 && (
                 <span className="text-muted-foreground/80"> · {carteiraCancelados} cancelados</span>

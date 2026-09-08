@@ -86,6 +86,7 @@ export default function DashboardPage() {
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [paymentDetailModal, setPaymentDetailModal] = useState<null | 'pago' | 'recebido'>(null);
   const [pagoAlunosModalOpen, setPagoAlunosModalOpen] = useState(false);
+  const [pagoMesModalOpen, setPagoMesModalOpen] = useState(false);
   // Aluno clicado dentro do modal do card Pago → abre a Gestão Financeira
   // (fluxo de pagamento). Mesma regra da aba Alunos: admin/conciliação
   // concilia na hora; demais perfis mandam o ajuste para a Conciliação.
@@ -146,10 +147,9 @@ export default function DashboardPage() {
   })();
 
   // ── Forecast custom dates ─────────────────────────────────────────────────
-  // Vencimento inicia sem datas (= toda a carteira, visão canônica do card);
-  // ao trocar para Data de Pagamento o período vira o mês corrente.
-  const [forecastCustomStart, setForecastCustomStart] = useState('');
-  const [forecastCustomEnd, setForecastCustomEnd] = useState('');
+  // Abre no mês vigente (01 → último dia). "Limpar" volta a toda a carteira.
+  const [forecastCustomStart, setForecastCustomStart] = useState(currentMonthStart);
+  const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
   const forecastSemPeriodo = !forecastCustomStart && !forecastCustomEnd;
   // Filtro do card por data de cadastro NO SISTEMA (created_at): só entram
   // fichas cadastradas no intervalo (mesmo controle da carteira do AC).
@@ -547,20 +547,11 @@ export default function DashboardPage() {
   // filterCarteiraActiveStudents) mas some da Carteira Total, que só conta quem
   // tem parcela em aberto. É a diferença entre a soma dos cards e o total.
   const solicCancQuitados = solicitacaoCancelamento.filter(isStudentFullyPaid).length;
-  // Composição da base (mesmo recorte de AC/produto/tag): quitados fora do funil de
-  // cancelamento e cancelados não têm saldo, por isso ficam fora dos 100% da carteira.
-  // Exibidos no card para deixar claro quantos alunos a base tem no total.
+  // Cancelados (mesmo recorte de AC/produto/tag) não têm saldo, por isso ficam fora dos
+  // 100% da carteira; exibidos no card para deixar claro que existem na base.
   const carteiraCancelados = mode === 'historico'
     ? 0
     : baseStudents.filter((s) => s.statusCancelamento === 'cancelado').length;
-  const carteiraQuitados = mode === 'historico'
-    ? 0
-    : baseStudents.filter(
-        (s) =>
-          s.statusCancelamento !== 'cancelado' &&
-          !matchesCancelamentoFilter(s, cancellationCases) &&
-          (s.status === 'Pago' || isStudentFullyPaid(s)),
-      ).length;
   const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
   // Mesma base do card "Carteira Total" — pendência IAM excluída por parcela, não por aluno.
@@ -631,12 +622,8 @@ export default function DashboardPage() {
   const pctCarteira = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
   const pctEmDia = pct(emDia.length);
   const pctInadimplente = pct(inadimplentes);
-  // ── Fita "Em Dia + Novos · mês vigente" ───────────────────────────────────
-  // Mesma regra da carteira do AC: acumulado do dia 01 até HOJE (Brasília).
-  // Só entram alunos Em Dia / Novos com parcela vencendo entre o 1º dia do mês
-  // e a data atual; o valor soma somente essas parcelas (pagas + em aberto).
-  // Como o intervalo recomeça no dia 1, a fita zera sozinha na virada do mês.
-  // Independe do filtro de vencimento da Previsão.
+  // ── Fita "Pago · mês vigente" (período/rótulos) ───────────────────────────
+  // Valor calculado mais abaixo (pagoMesTotais), depois de getForecastTotals.
   const hojeKey = getTodayStringBrasilia(); // YYYY-MM-DD
   const mesAtualKey = hojeKey.slice(0, 7); // YYYY-MM
   const mesAtualLabel = (() => {
@@ -645,38 +632,6 @@ export default function DashboardPage() {
     return `${nome.charAt(0).toUpperCase()}${nome.slice(1)}/${y}`;
   })();
   const periodoMesLabel = `01/${mesAtualKey.slice(5, 7)} a ${hojeKey.slice(8, 10)}/${hojeKey.slice(5, 7)}`;
-  const _instNoMes = (i: { dueDate: string }) =>
-    i.dueDate.slice(0, 7) === mesAtualKey && i.dueDate.slice(0, 10) <= hojeKey;
-  const _temParcelaNoMes = (s: Student) => s.installments.some(_instNoMes);
-  const sumMes = (arr: Student[], onlyPaid?: boolean) =>
-    arr.reduce((acc, s) => {
-      const okPaid = (i: { paid: boolean }) => onlyPaid == null || i.paid === onlyPaid;
-      if (s.statusCancelamento === 'cancelado') {
-        return acc + s.installments
-          .filter((i) => _instNoMes(i) && okPaid(i) && (i.tags ?? []).includes('multa-cancelamento'))
-          .reduce((a, i) => a + i.value, 0);
-      }
-      if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
-      return acc + s.installments
-        .filter((i) => _instNoMes(i) && okPaid(i) && !isInstallmentExcludedFromFinancialTotals(s, i))
-        .reduce((a, i) => a + i.value, 0);
-    }, 0);
-  const mesEmDiaNovos = kpiStudents.filter(
-    (s) => (s.status === 'Em Dia' || s.status === 'Aluno Novo') && !_isSolic(s) && _temParcelaNoMes(s),
-  );
-  const mesEmDiaNovosValue = sumMes(mesEmDiaNovos);
-
-  // Meta (R$) do mês da empresa: traço em 2/3 da fita, editável pelo admin
-  // (lápis ao lado da fita); sem meta salva usa o padrão do app. A fita vai
-  // até 150% da meta para sobrar espaço à direita quando a meta é superada.
-  const emDiaNovosMeta = rules.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO;
-  const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
-  const ESCALA_FITA = 1.5;
-  const fitaMax = emDiaNovosMeta * ESCALA_FITA;
-  const pctMetaEmDiaNovos = fitaMax > 0 ? (mesEmDiaNovosValue / fitaMax) * 100 : 0;
-  const pctFitaMeta = 100 / ESCALA_FITA;
-  /** Rótulo em "% da meta" a partir do % da escala da fita (tooltips). */
-  const fmtPctMeta = (pctEscala: number) => `${(pctEscala * ESCALA_FITA).toFixed(1).replace('.', ',')}% da meta`;
 
   // ── Forecast (filtro isolado: só afeta este card) ─────────────────────────
   // Período Início/Fim (mesmo controle nas duas bases). Sem as duas datas
@@ -687,8 +642,14 @@ export default function DashboardPage() {
   // do bloco "Data de Vencimento" — forecastBase definido acima (alinhado ao modal).
   // Retorna totais da projeção: A Vencer/Vencido (não pagas), Pago (pagas) e soma (total).
   // "Todos" → toda a carteira; demais → filtrado por dueDate dentro do range.
-  const getForecastTotals = () => {
-    const range = getForecastRange();
+  // `opts` permite reutilizar o cálculo com outro período/base (fita "Pago ·
+  // mês vigente": 01 → hoje por data de pagamento, independente dos controles).
+  const getForecastTotals = (opts?: {
+    range?: { start: Date; end: Date } | null;
+    basis?: 'vencimento' | 'pagamento';
+  }) => {
+    const range = opts?.range !== undefined ? opts.range : getForecastRange();
+    const basis = opts?.basis ?? dateBasis;
     let total = 0, aVencer = 0, pago = 0;
     let totalReal = 0, pagoReal = 0;
     let qtd = 0;
@@ -730,7 +691,7 @@ export default function DashboardPage() {
       // A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
       st.installments.forEach((i) => {
-        if (dateBasis === 'pagamento') {
+        if (basis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
           if (!baixaGc(st, i)) return;
           if (range) {
@@ -840,6 +801,31 @@ export default function DashboardPage() {
       .sort((a, b) => b.pagoReal - a.pagoReal);
     return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, qtdAlunosAVencer: qtdAlunosAVencerSet.size, perAcList, details };
   };
+
+  // ── Fita "Pago · mês vigente" ─────────────────────────────────────────────
+  // Mesma regra da Carteira do AC: Pago do dia 01 até HOJE (Brasília), por data
+  // de pagamento, com a regra do card Pago (só baixas feitas no GC e
+  // conciliadas — src/lib/pagoGc.ts — mais o retido de cancelamento
+  // conciliado). Como o intervalo recomeça no dia 1, zera sozinho na virada do
+  // mês. Independe dos controles de período/base da Previsão.
+  const pagoMesTotais = getForecastTotals({
+    range: { start: new Date(`${mesAtualKey}-01T00:00:00`), end: new Date(`${hojeKey}T23:59:59`) },
+    basis: 'pagamento',
+  });
+  const mesEmDiaNovosValue = pagoMesTotais.pago;
+  const mesPagoAlunos = pagoMesTotais.qtdAlunos;
+
+  // Meta (R$) do mês da empresa: traço em 2/3 da fita, editável pelo admin
+  // (lápis ao lado da fita); sem meta salva usa o padrão do app. A fita vai
+  // até 150% da meta para sobrar espaço à direita quando a meta é superada.
+  const emDiaNovosMeta = rules.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO;
+  const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
+  const ESCALA_FITA = 1.5;
+  const fitaMax = emDiaNovosMeta * ESCALA_FITA;
+  const pctMetaEmDiaNovos = fitaMax > 0 ? (mesEmDiaNovosValue / fitaMax) * 100 : 0;
+  const pctFitaMeta = 100 / ESCALA_FITA;
+  /** Rótulo em "% da meta" a partir do % da escala da fita (tooltips). */
+  const fmtPctMeta = (pctEscala: number) => `${(pctEscala * ESCALA_FITA).toFixed(1).replace('.', ',')}% da meta`;
 
   // Carteira Total (card azul) = A Vencer / Vencido da projeção (mesmo valor do card laranja).
   const forecastTotaisBase = getForecastTotals();
@@ -1209,10 +1195,10 @@ export default function DashboardPage() {
       {/* ── 0. Cabeçalho de saúde da carteira ───────────────────────────────── */}
       {/* Esquerda: velocímetro da meta mensal de Taxa em Dia (mesmo componente
           da Carteira do Assessor, com a meta gravada em financial_rules).
-          Centro: só a fita "Em Dia + Novos" do MÊS ATUAL (sem card): ponteiro
-          com o valor em R$ colorido conforme a posição na fita, traço = meta
-          da empresa (editável pelo lápis). O card homônimo da linha de KPIs
-          abaixo continua igual.
+          Centro: só a fita "Pago" do MÊS ATUAL (01 → hoje, por data de
+          pagamento, regra do card Pago; sem card): ponteiro com o valor em R$
+          colorido conforme a posição na fita, traço = meta da empresa
+          (editável pelo lápis). Clique abre a lista de alunos pagos no mês.
           Direita: Taxa Em Dia e Taxa Inadimplente empilhados. */}
       <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_minmax(180px,220px)] gap-2.5 sm:gap-3 items-stretch">
         <div className="hidden sm:flex items-center justify-center rounded-2xl bg-card border border-border saas-shadow-md px-3 py-2">
@@ -1238,13 +1224,13 @@ export default function DashboardPage() {
         </div>
 
         <div
-          onClick={() => setKpiModalKey('emdia_novos')}
+          onClick={() => setPagoMesModalOpen(true)}
           className="min-w-0 cursor-pointer flex flex-col justify-center gap-1.5 px-1 sm:px-2"
-          title={`Em Dia + Novos · ${mesAtualLabel} (${periodoMesLabel}): ${formatCurrency(mesEmDiaNovosValue)} (${mesEmDiaNovos.length} alunos, parcelas com vencimento de 01 até hoje, pagas + em aberto). Clique para ver os alunos.`}
+          title={`Pago · ${mesAtualLabel} (${periodoMesLabel}): ${formatCurrency(mesEmDiaNovosValue)} recebidos de ${mesPagoAlunos} alunos, por data de pagamento — só baixas feitas no GC e conciliadas (mais retido de cancelamento conciliado). Zera todo dia 1º. Clique para ver os alunos.`}
         >
           <div className="flex items-center justify-between gap-2">
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide truncate">
-              Em Dia + Novos · {periodoMesLabel}
+              Pago · {periodoMesLabel}
             </p>
             <MetaValorEditor
               value={emDiaNovosMeta}
@@ -1272,6 +1258,16 @@ export default function DashboardPage() {
             }
           />
         </div>
+        {/* Fora do card clicável para o clique no overlay/fechar não reabrir o modal. */}
+        {pagoMesModalOpen && (
+          <PagoAlunosModal
+            details={pagoMesTotais.details}
+            totalPago={mesEmDiaNovosValue}
+            periodoLabel={periodoMesLabel}
+            onSelectStudent={(id) => setPagoFinancialStudentId(id)}
+            onClose={() => setPagoMesModalOpen(false)}
+          />
+        )}
 
         <div className="grid grid-cols-2 lg:grid-cols-1 gap-2.5 sm:gap-3">
           <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-emerald-500 border border-emerald-600 transition-transform hover:-translate-y-0.5">
@@ -1322,7 +1318,11 @@ export default function DashboardPage() {
               </div>
               <div className="inline-flex rounded-lg bg-muted p-0.5">
                 <button
-                  onClick={() => { setDateBasis('vencimento'); setForecastCustomStart(''); setForecastCustomEnd(''); }}
+                  onClick={() => {
+                    setDateBasis('vencimento');
+                    setForecastCustomStart(currentMonthStart);
+                    setForecastCustomEnd(currentMonthEnd);
+                  }}
                   className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
                     dateBasis === 'vencimento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
@@ -1720,17 +1720,12 @@ export default function DashboardPage() {
                 solicCancQuitados > 0
                   ? `${solicCancQuitados} com contrato quitado aguardando fechamento do cancelamento (R$ 0,00). Soma dos cards de status: ${carteiraTotalAlunos + solicCancQuitados}.`
                   : '',
-                carteiraQuitados > 0 ? `${carteiraQuitados} quitados (à vista ou todas as parcelas pagas) — sem saldo, fora da carteira.` : '',
                 carteiraCancelados > 0 ? `${carteiraCancelados} cancelados — fora da carteira.` : '',
-                `Base total: ${carteiraTotalAlunos + solicCancQuitados + carteiraQuitados + carteiraCancelados} alunos.`,
               ].filter(Boolean).join(' ')}
             >
               {carteiraTotalAlunos} alunos
               {solicCancQuitados > 0 && (
                 <span className="text-muted-foreground/80"> · {solicCancQuitados} quitados em cancelamento</span>
-              )}
-              {carteiraQuitados > 0 && (
-                <span className="text-muted-foreground/80"> · {carteiraQuitados} quitados</span>
               )}
               {carteiraCancelados > 0 && (
                 <span className="text-muted-foreground/80"> · {carteiraCancelados} cancelados</span>
