@@ -57,6 +57,88 @@ export const IAM_GC_CARTEIRA_LABEL: Record<IamGcCarteira, string> = {
   liberty: 'Liberty',
 };
 
+function foldProduct(product?: string | null): string {
+  return String(product ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+/** Status da fila IAM CONTROL → GC (rótulo atual do contrato). */
+export type IamFilaStatus = 'pendente' | 'pago' | 'para_conciliar';
+
+export function resolveIamFilaStatus(status?: string | null): IamFilaStatus | 'outros' {
+  const s = normalizeIamContratoStatus(status);
+  if (isIamPendenteStatus(status)) return 'pendente';
+  // CONCILIADO no IAM = venda já reconhecida/paga do lado deles, aguardando o GC.
+  if (s === 'CONCILIADO') return 'pago';
+  if (s === 'PARA_CONCILIAR') return 'para_conciliar';
+  return 'outros';
+}
+
+export const IAM_FILA_STATUS_LABEL: Record<IamFilaStatus, string> = {
+  pendente: 'Pendente',
+  pago: 'Pago / Conciliado',
+  para_conciliar: 'Para conciliar',
+};
+
+/** Canal de origem inferido pelo treinamento (GC não recebe o canal da venda). */
+export type IamOrigemGrupo = 'eventos' | 'time_vendas' | 'masterclass' | 'outros';
+
+export function classifyIamTreinamentoOrigem(product?: string | null): IamOrigemGrupo {
+  const n = foldProduct(product);
+  if (!n) return 'outros';
+  if (n.includes('masterclass') || n.includes('master class') || /(^|[^a-z0-9])mc([\s_-]|$)/.test(n)) {
+    return 'masterclass';
+  }
+  if (
+    n.includes('leader skills') ||
+    n.includes('lider skills') ||
+    n.includes('leaderskills') ||
+    n.includes('plano e acao') ||
+    n === 'pea' ||
+    n.startsWith('pea ') ||
+    n.endsWith(' pea') ||
+    n.includes(' pea ') ||
+    /\bpea\b/.test(n) ||
+    n === 'liberty' ||
+    n.includes('liberty begin') ||
+    (n.includes('liberty') && !n.includes('evento'))
+  ) {
+    return 'time_vendas';
+  }
+  if (
+    n.includes('missao governar') ||
+    n.includes('confronto') ||
+    n.includes('trainer') ||
+    n.includes('programacao neurolinguistica') ||
+    n.includes('pnl') ||
+    n.includes('imersao')
+  ) {
+    return 'eventos';
+  }
+  return 'outros';
+}
+
+export const IAM_ORIGEM_LABEL: Record<IamOrigemGrupo, string> = {
+  eventos: 'Eventos',
+  time_vendas: 'Time de vendas',
+  masterclass: 'Masterclass',
+  outros: 'Outros',
+};
+
+/** Rótulo estável do evento (agrupa variantes tipo Confronto / Confronto 2). */
+export function iamEventoProdutoLabel(product?: string | null): string {
+  const n = foldProduct(product);
+  if (n.includes('missao governar')) return 'Missão Governar';
+  const confrontoNum = n.match(/confronto\s*(\d+)/);
+  if (confrontoNum) return `Confronto ${confrontoNum[1]}`;
+  if (n.includes('confronto')) return 'Confronto';
+  const raw = String(product ?? '').trim();
+  return raw || 'Outro evento';
+}
+
 /** Aluno importado/sincronizado pelo IAM Control. */
 export function isIamControlStudent(student: Student): boolean {
   return student.iamControlAlunoId != null && Number.isFinite(student.iamControlAlunoId);

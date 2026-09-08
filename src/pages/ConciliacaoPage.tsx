@@ -26,8 +26,15 @@ import { isCancelamentoEspelhoItem, groupBlocksEspelhoConciliacao, isCancelament
 import {
   buildIamGcApprovalStudentPatch,
   IAM_GC_CARTEIRA_LABEL,
+  IAM_FILA_STATUS_LABEL,
+  IAM_ORIGEM_LABEL,
   resolveIamGcCarteira,
+  resolveIamFilaStatus,
+  classifyIamTreinamentoOrigem,
+  iamEventoProdutoLabel,
   type IamGcCarteira,
+  type IamFilaStatus,
+  type IamOrigemGrupo,
 } from '@/lib/iamPendenteConciliacao';
 import { pushContratoConciliado } from '@/lib/iamControlSync';
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
@@ -927,6 +934,18 @@ function resolveItemIamCarteira(i: ConciliacaoItem, students: Student[]): IamGcC
   return resolveIamGcCarteira(product);
 }
 
+function resolveItemIamProduct(i: ConciliacaoItem, students: Student[]): string {
+  const st = i.studentId ? students.find((s) => s.id === i.studentId) : undefined;
+  return st?.product ?? String((i.depois as Record<string, unknown>)?.product ?? '');
+}
+
+function resolveItemIamFilaStatus(i: ConciliacaoItem, students: Student[]): IamFilaStatus | 'outros' {
+  const st = i.studentId ? students.find((s) => s.id === i.studentId) : undefined;
+  const live = st?.iamControlContratoStatus;
+  const fromAntes = String((i.antes as Record<string, unknown>)?.iam_control_contrato_status ?? '');
+  return resolveIamFilaStatus(live || fromAntes);
+}
+
 const IAM_CARTEIRA_BADGE: Record<IamGcCarteira, string> = {
   iam: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200',
   liberty: 'bg-sky-50 text-sky-700 border border-sky-200',
@@ -1213,6 +1232,9 @@ export default function ConciliacaoPage() {
   const [histCadastroExternoOnly, setHistCadastroExternoOnly] = useState(false);
   // IAM CONTROL → GC: carteira do contrato pelo treinamento (Liberty x IAM).
   const [iamCarteiraFilter, setIamCarteiraFilter] = useState<'todas' | IamGcCarteira>('todas');
+  const [iamStatusFilter, setIamStatusFilter] = useState<'todos' | IamFilaStatus>('todos');
+  const [iamOrigemFilter, setIamOrigemFilter] = useState<'todas' | IamOrigemGrupo>('todas');
+  const [iamEventoFilter, setIamEventoFilter] = useState<string>('todos');
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<ConciliacaoGrupoFilter>('todos');
   const [erroStatusFilter, setErroStatusFilter] = useState<'pendente' | 'resolvido' | 'ignorado' | 'todos'>('pendente');
@@ -1299,8 +1321,20 @@ export default function ConciliacaoPage() {
       .filter((i) => {
         if (flow !== 'iam-control-gc' || i.tipo !== 'iam_pendente' || iamCarteiraFilter === 'todas') return true;
         return resolveItemIamCarteira(i, students) === iamCarteiraFilter;
+      })
+      .filter((i) => {
+        if (flow !== 'iam-control-gc' || i.tipo !== 'iam_pendente' || iamStatusFilter === 'todos') return true;
+        return resolveItemIamFilaStatus(i, students) === iamStatusFilter;
+      })
+      .filter((i) => {
+        if (flow !== 'iam-control-gc' || i.tipo !== 'iam_pendente' || iamOrigemFilter === 'todas') return true;
+        return classifyIamTreinamentoOrigem(resolveItemIamProduct(i, students)) === iamOrigemFilter;
+      })
+      .filter((i) => {
+        if (flow !== 'iam-control-gc' || i.tipo !== 'iam_pendente' || iamOrigemFilter !== 'eventos' || iamEventoFilter === 'todos') return true;
+        return iamEventoProdutoLabel(resolveItemIamProduct(i, students)) === iamEventoFilter;
       });
-  }, [items, tab, tipoFilter, search, flow, cancelGcFilter, histCadastroExternoOnly, iamCarteiraFilter, students, cancellationCases]);
+  }, [items, tab, tipoFilter, search, flow, cancelGcFilter, histCadastroExternoOnly, iamCarteiraFilter, iamStatusFilter, iamOrigemFilter, iamEventoFilter, students, cancellationCases]);
 
   // Contagem por aluno distinto em cada carteira (fila IAM CONTROL → GC).
   const iamCarteiraCounts = useMemo(() => {
@@ -1318,6 +1352,73 @@ export default function ConciliacaoPage() {
     }
     return { todas: keys.todas.size, iam: keys.iam.size, liberty: keys.liberty.size };
   }, [items, students]);
+
+  const iamFilaBase = useMemo(() => {
+    return items.filter((i) => {
+      if (i.tipo !== 'iam_pendente') return false;
+      if (tab === 'historico') return i.status === 'conciliado' || i.status === 'reprovado';
+      return i.status === 'pendente' || i.status === 'aprovado';
+    }).filter((i) => iamCarteiraFilter === 'todas' || resolveItemIamCarteira(i, students) === iamCarteiraFilter);
+  }, [items, students, tab, iamCarteiraFilter]);
+
+  const iamStatusCounts = useMemo(() => {
+    const keys: Record<'todos' | IamFilaStatus, Set<string>> = {
+      todos: new Set(),
+      pendente: new Set(),
+      pago: new Set(),
+      para_conciliar: new Set(),
+    };
+    for (const i of iamFilaBase) {
+      const key = i.studentId ?? i.studentName;
+      keys.todos.add(key);
+      const st = resolveItemIamFilaStatus(i, students);
+      if (st !== 'outros') keys[st].add(key);
+    }
+    return {
+      todos: keys.todos.size,
+      pendente: keys.pendente.size,
+      pago: keys.pago.size,
+      para_conciliar: keys.para_conciliar.size,
+    };
+  }, [iamFilaBase, students]);
+
+  const iamOrigemCounts = useMemo(() => {
+    const keys: Record<'todas' | IamOrigemGrupo, Set<string>> = {
+      todas: new Set(),
+      eventos: new Set(),
+      time_vendas: new Set(),
+      masterclass: new Set(),
+      outros: new Set(),
+    };
+    for (const i of iamFilaBase) {
+      if (iamStatusFilter !== 'todos' && resolveItemIamFilaStatus(i, students) !== iamStatusFilter) continue;
+      const key = i.studentId ?? i.studentName;
+      keys.todas.add(key);
+      keys[classifyIamTreinamentoOrigem(resolveItemIamProduct(i, students))].add(key);
+    }
+    return {
+      todas: keys.todas.size,
+      eventos: keys.eventos.size,
+      time_vendas: keys.time_vendas.size,
+      masterclass: keys.masterclass.size,
+      outros: keys.outros.size,
+    };
+  }, [iamFilaBase, students, iamStatusFilter]);
+
+  const iamEventoOpcoes = useMemo(() => {
+    const keys = new Map<string, Set<string>>();
+    for (const i of iamFilaBase) {
+      if (iamStatusFilter !== 'todos' && resolveItemIamFilaStatus(i, students) !== iamStatusFilter) continue;
+      if (classifyIamTreinamentoOrigem(resolveItemIamProduct(i, students)) !== 'eventos') continue;
+      const label = iamEventoProdutoLabel(resolveItemIamProduct(i, students));
+      const set = keys.get(label) ?? new Set<string>();
+      set.add(i.studentId ?? i.studentName);
+      keys.set(label, set);
+    }
+    return [...keys.entries()]
+      .map(([label, set]) => ({ label, n: set.size }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  }, [iamFilaBase, students, iamStatusFilter]);
 
   const filteredErrors = useMemo(() => {
     return importErrors
@@ -2214,6 +2315,82 @@ export default function ConciliacaoPage() {
             >
               Liberty ({iamCarteiraCounts.liberty})
             </button>
+            <span className="hidden sm:block w-px h-6 bg-border mx-0.5" aria-hidden />
+            {([
+              ['todos', 'Todos os status', iamStatusCounts.todos],
+              ['pendente', IAM_FILA_STATUS_LABEL.pendente, iamStatusCounts.pendente],
+              ['pago', IAM_FILA_STATUS_LABEL.pago, iamStatusCounts.pago],
+              ['para_conciliar', IAM_FILA_STATUS_LABEL.para_conciliar, iamStatusCounts.para_conciliar],
+            ] as const).map(([id, label, n]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setIamStatusFilter(id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                  iamStatusFilter === id
+                    ? 'bg-card text-foreground border-border shadow-sm'
+                    : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+                }`}
+              >
+                {label} ({n})
+              </button>
+            ))}
+            <span className="hidden sm:block w-px h-6 bg-border mx-0.5" aria-hidden />
+            {([
+              ['todas', 'Todos os canais', iamOrigemCounts.todas],
+              ['eventos', IAM_ORIGEM_LABEL.eventos, iamOrigemCounts.eventos],
+              ['time_vendas', IAM_ORIGEM_LABEL.time_vendas, iamOrigemCounts.time_vendas],
+              ['masterclass', IAM_ORIGEM_LABEL.masterclass, iamOrigemCounts.masterclass],
+              ['outros', IAM_ORIGEM_LABEL.outros, iamOrigemCounts.outros],
+            ] as const).map(([id, label, n]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setIamOrigemFilter(id);
+                  setIamEventoFilter('todos');
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                  iamOrigemFilter === id
+                    ? id === 'eventos'
+                      ? 'bg-violet-100 text-violet-800 border-violet-300 shadow-sm'
+                      : 'bg-card text-foreground border-border shadow-sm'
+                    : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+                }`}
+              >
+                {label} ({n})
+              </button>
+            ))}
+            {iamOrigemFilter === 'eventos' && iamEventoOpcoes.length > 0 && (
+              <>
+                <span className="hidden sm:block w-px h-6 bg-border mx-0.5" aria-hidden />
+                <button
+                  type="button"
+                  onClick={() => setIamEventoFilter('todos')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                    iamEventoFilter === 'todos'
+                      ? 'bg-violet-100 text-violet-800 border-violet-300 shadow-sm'
+                      : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+                  }`}
+                >
+                  Todos os eventos
+                </button>
+                {iamEventoOpcoes.map((ev) => (
+                  <button
+                    key={ev.label}
+                    type="button"
+                    onClick={() => setIamEventoFilter(ev.label)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
+                      iamEventoFilter === ev.label
+                        ? 'bg-violet-100 text-violet-800 border-violet-300 shadow-sm'
+                        : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70'
+                    }`}
+                  >
+                    {ev.label} ({ev.n})
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         )}
         {flow === 'cancelamentos-gc' && tab === 'cancelamentos' && (

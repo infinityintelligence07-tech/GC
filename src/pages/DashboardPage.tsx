@@ -9,7 +9,7 @@ import { getCurrentMonthDates } from '@/lib/periodFilter';
 import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity, FileText, AlertTriangle, Download } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
-import RibbonGauge from '@/components/ui/RibbonGauge';
+import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
 import { Installment, Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -1220,12 +1220,12 @@ export default function DashboardPage() {
 
         <div
           onClick={() => setKpiModalKey('emdia_novos')}
-          className="min-w-0 cursor-pointer flex flex-col justify-center px-1 sm:px-2"
+          className="min-w-0 cursor-pointer flex flex-col justify-center gap-1.5 px-1 sm:px-2"
           title={`Em Dia + Novos · ${mesAtualLabel} (${periodoMesLabel}): ${formatCurrency(mesEmDiaNovosValue)} (${mesEmDiaNovos.length} alunos, parcelas com vencimento de 01 até hoje, pagas + em aberto). Clique para ver os alunos.`}
         >
-          <div className="flex items-center justify-between gap-2 mb-0.5">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">
-              Em Dia + Novos · {mesAtualLabel} · {periodoMesLabel}
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide truncate">
+              Em Dia + Novos · {periodoMesLabel}
             </p>
             <MetaValorEditor
               value={emDiaNovosMeta}
@@ -1234,21 +1234,20 @@ export default function DashboardPage() {
               onSave={(meta) => setRules({ emDiaNovosMeta: meta })}
             />
           </div>
+          <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>
+            {formatCurrency(mesEmDiaNovosValue)}
+          </p>
           <RibbonGauge
+            variant="minimal"
             value={pctMetaEmDiaNovos}
             goal={pctFitaMeta}
-            goalLabel=""
-            ticks={[]}
-            pointerColor="#0d9488"
-            pointerLabel={formatCurrency(mesEmDiaNovosValue)}
-            pointerLabelColor="gradient"
             formatValue={fmtPctMeta}
             footer={
-              <p className="text-[11px] text-muted-foreground text-center leading-tight">
+              <p className="text-[10px] text-muted-foreground mt-1 leading-tight">
                 {faltaMetaEmDiaNovos > 0 ? (
-                  <>Falta <span className="font-semibold text-foreground">{formatCurrency(faltaMetaEmDiaNovos)}</span> para a meta</>
+                  <>Falta <span className="font-medium text-foreground">{formatCurrency(faltaMetaEmDiaNovos)}</span></>
                 ) : (
-                  <span className="font-semibold text-emerald-600">Meta atingida · {formatCurrency(mesEmDiaNovosValue - emDiaNovosMeta)} acima</span>
+                  <span className="font-medium text-emerald-600">Meta atingida · +{formatCurrency(mesEmDiaNovosValue - emDiaNovosMeta)}</span>
                 )}
               </p>
             }

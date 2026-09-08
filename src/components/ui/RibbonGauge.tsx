@@ -37,6 +37,12 @@ interface RibbonGaugeProps {
   formatTick?: (pct: number) => string;
   /** Rodapé customizado. `null` oculta; ausente usa o rodapé padrão (início do mês · Δ pp). */
   footer?: ReactNode;
+  /**
+   * `minimal`: só a barra — trilho neutro fino, preenchimento na cor da fita
+   * na posição do valor, ponto no valor e traço fino na meta. Sem ponteiro,
+   * rótulos ou marcas; quem chama exibe o valor por fora.
+   */
+  variant?: 'default' | 'minimal';
   className?: string;
 }
 
@@ -60,7 +66,7 @@ const hexToRgb = (hex: string): [number, number, number] => {
 };
 
 /** Cor da fita na posição `pct` (0–100), interpolando as paradas do gradiente. */
-function ribbonColorAt(pct: number): string {
+export function ribbonColorAt(pct: number): string {
   const p = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0));
   for (let i = 1; i < GRADIENT_STOPS.length; i++) {
     const [p0, c0] = GRADIENT_STOPS[i - 1];
@@ -73,6 +79,48 @@ function ribbonColorAt(pct: number): string {
     return `rgb(${mix[0]}, ${mix[1]}, ${mix[2]})`;
   }
   return GRADIENT_STOPS[GRADIENT_STOPS.length - 1][1];
+}
+
+function MinimalRibbon({
+  value,
+  goal,
+  goalLabel,
+  formatValue,
+  footer,
+  className,
+}: Pick<RibbonGaugeProps, 'value' | 'goal' | 'goalLabel' | 'footer' | 'className'> & { formatValue: (pct: number) => string }) {
+  const W = 300;
+  const H = 8;
+  const padX = 3;
+  const barH = 4;
+  const barY = (H - barH) / 2;
+  const innerW = W - padX * 2;
+  const clamp = (n: number) => Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
+  const xOf = (p: number) => padX + (innerW * clamp(p)) / 100;
+  const v = clamp(value);
+  const px = xOf(v);
+  const color = ribbonColorAt(v);
+  const hasGoal = goal != null && Number.isFinite(goal);
+  const gx = hasGoal ? xOf(goal as number) : 0;
+
+  return (
+    <div className={className}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={formatValue(v)} style={{ display: 'block' }}>
+        <rect x={padX} y={barY} width={innerW} height={barH} rx={barH / 2} fill="hsl(var(--muted))" />
+        {px - padX > 0 && (
+          <rect x={padX} y={barY} width={Math.max(barH, px - padX)} height={barH} rx={barH / 2} fill={color} />
+        )}
+        {hasGoal && (
+          <g>
+            <title>{`${goalLabel || 'Meta'}: ${formatValue(goal as number)}`}</title>
+            <line x1={gx} x2={gx} y1={barY - 1.5} y2={barY + barH + 1.5} stroke="hsl(var(--foreground))" strokeWidth={1} strokeLinecap="round" opacity={0.45} />
+          </g>
+        )}
+        <circle cx={px} cy={barY + barH / 2} r={3} fill={color} stroke="hsl(var(--card))" strokeWidth={1.2} />
+      </svg>
+      {footer}
+    </div>
+  );
 }
 
 export default function RibbonGauge({
@@ -88,8 +136,14 @@ export default function RibbonGauge({
   pointerLabel,
   pointerLabelColor,
   footer,
+  variant = 'default',
   className,
 }: RibbonGaugeProps) {
+  if (variant === 'minimal') {
+    return (
+      <MinimalRibbon value={value} goal={goal} goalLabel={goalLabel} formatValue={formatValue} footer={footer} className={className} />
+    );
+  }
   const W = 300;
   const padX = 10;
   const barY = 18;

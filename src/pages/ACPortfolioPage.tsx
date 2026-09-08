@@ -52,7 +52,7 @@ import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagR
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
-import RibbonGauge from '@/components/ui/RibbonGauge';
+import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 
@@ -762,11 +762,6 @@ export default function ACPortfolioPage() {
   // cada virada de mês. Independe do filtro de vencimento da Previsão.
   const hojeKey = getTodayStringBrasilia(); // YYYY-MM-DD
   const mesAtualKey = hojeKey.slice(0, 7); // YYYY-MM
-  const mesAtualLabel = (() => {
-    const [y, m] = mesAtualKey.split('-').map(Number);
-    const nome = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long' });
-    return `${nome.charAt(0).toUpperCase()}${nome.slice(1)}/${y}`;
-  })();
   const periodoMesLabel = `01/${mesAtualKey.slice(5, 7)} a ${hojeKey.slice(8, 10)}/${hojeKey.slice(5, 7)}`;
   const _instAteHoje = (i: { dueDate: string }) =>
     i.dueDate.slice(0, 7) === mesAtualKey && i.dueDate.slice(0, 10) <= hojeKey;
@@ -917,10 +912,9 @@ export default function ACPortfolioPage() {
           onClick={() => setStatusFilter(statusFilter === 'Em Dia' ? '' : 'Em Dia')}
           className={`min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-teal-500 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-teal-500/30 flex flex-col ${statusFilter === 'Em Dia' ? 'ring-2 ring-teal-500/50' : ''}`}
         >
-          <div className="flex items-start justify-between mb-2 gap-2">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">
-              Em Dia + Novos · {mesAtualLabel}
-              <span className="normal-case font-medium text-muted-foreground/80"> · {periodoMesLabel}</span>
+          <div className="flex items-start justify-between mb-1.5 gap-2">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide truncate">
+              Em Dia + Novos · {periodoMesLabel}
             </p>
             <div className="flex items-center gap-2 shrink-0">
               <MetaValorEditor
@@ -934,22 +928,21 @@ export default function ACPortfolioPage() {
               </button>
             </div>
           </div>
-          <div className="mt-auto pt-1">
+          <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums mb-1.5" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>
+            {formatCurrency(mesEmDiaNovosValue)}
+          </p>
+          <div className="mt-auto">
             <RibbonGauge
+              variant="minimal"
               value={pctMetaEmDiaNovos}
               goal={pctFitaMeta}
-              goalLabel=""
-              ticks={[]}
-              pointerColor="#0d9488"
-              pointerLabel={formatCurrency(mesEmDiaNovosValue)}
-              pointerLabelColor="gradient"
               formatValue={fmtPctMeta}
               footer={
-                <p className="text-[11px] text-muted-foreground text-center leading-tight" title={`${formatCurrency(mesEmDiaNovosValue)} de ${formatCurrency(emDiaNovosMeta)} (${mesEmDiaNovos.length} alunos, ${periodoMesLabel})`}>
+                <p className="text-[10px] text-muted-foreground mt-1 leading-tight" title={`${formatCurrency(mesEmDiaNovosValue)} de ${formatCurrency(emDiaNovosMeta)} (${mesEmDiaNovos.length} alunos, ${periodoMesLabel})`}>
                   {faltaMetaEmDiaNovos > 0 ? (
-                    <>Falta <span className="font-semibold text-foreground">{formatCurrency(faltaMetaEmDiaNovos)}</span> para a meta</>
+                    <>Falta <span className="font-medium text-foreground">{formatCurrency(faltaMetaEmDiaNovos)}</span></>
                   ) : (
-                    <span className="font-semibold text-emerald-600">Meta atingida · {formatCurrency(mesEmDiaNovosValue - emDiaNovosMeta)} acima</span>
+                    <span className="font-medium text-emerald-600">Meta atingida · +{formatCurrency(mesEmDiaNovosValue - emDiaNovosMeta)}</span>
                   )}
                 </p>
               }
