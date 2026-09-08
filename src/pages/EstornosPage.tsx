@@ -1186,14 +1186,44 @@ export default function EstornosPage() {
               </button>
             </div>
             <div className="p-5 space-y-2">
+              {/* Topo: data/hora do lançamento pelo usuário (checkbox "Sim") */}
+              <div
+                className={`rounded-xl border p-3 ${
+                  logRow.lancadoAt
+                    ? 'border-emerald-200 bg-emerald-50'
+                    : 'border-border bg-muted/40'
+                }`}
+              >
+                <p
+                  className={`text-[10px] font-semibold uppercase tracking-wide ${
+                    logRow.lancadoAt ? 'text-emerald-800' : 'text-muted-foreground'
+                  }`}
+                >
+                  Lançado para pagamento
+                </p>
+                {logRow.lancadoAt ? (
+                  <p className="text-xs font-semibold text-foreground mt-0.5">
+                    {formatDateTimeBR(logRow.lancadoAt)}
+                    {logRow.lancadoPorNome ? (
+                      <span className="font-medium text-muted-foreground"> · {logRow.lancadoPorNome}</span>
+                    ) : null}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Ainda não lançado
+                    {logRow.createdAt ? (
+                      <> · estorno gerado em {formatDateTimeBR(logRow.createdAt)}</>
+                    ) : null}
+                  </p>
+                )}
+              </div>
+
               {(() => {
                 const entries = getRowLogEntries(logRow);
                 if (entries.length === 0) {
                   return (
-                    <p className="text-xs text-muted-foreground text-center">
-                      {logRow.lancadoPorNome
-                        ? `Lançado por ${logRow.lancadoPorNome}${logRow.lancadoAt ? ' em ' + formatDateTimeBR(logRow.lancadoAt) : ''}.`
-                        : 'Nenhuma alteração registrada nesta parcela ainda.'}
+                    <p className="text-xs text-muted-foreground text-center pt-1">
+                      Nenhuma alteração registrada nesta parcela ainda.
                     </p>
                   );
                 }

@@ -103,6 +103,15 @@ export function toShortName(raw?: string | null): string {
   return `${first} ${last}`;
 }
 
+/** Classe de fonte para o nome no card de cancelamento (nome completo, sem ellipsis). */
+export function cancellationCardNameFontClass(raw?: string | null): string {
+  if (!raw) return 'text-[12px]';
+  const len = raw.trim().length;
+  if (len > 36) return 'text-[10px]';
+  if (len > 26) return 'text-[11px]';
+  return 'text-[12px]';
+}
+
 /** Classe de fonte recomendada para o nome curto de um card, evitando ellipsis. */
 export function shortNameFontClass(raw?: string | null): string {
   if (!raw) return "text-[12px]";

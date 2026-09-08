@@ -46,7 +46,7 @@ import { openIamControlContrato } from '@/lib/iamControlContrato';
 import TermoCancelamentoModal from '@/components/modals/TermoCancelamentoModal';
 import { getIamTermoStatus, isIamTermoAssinado } from '@/lib/iamControlTermo';
 import { toast } from 'sonner';
-import { toShortName, shortNameFontClass, getInstallmentOutstanding } from '@/lib/utils';
+import { cancellationCardNameFontClass, getInstallmentOutstanding } from '@/lib/utils';
 import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
 import ExternalCancellationViewModal from '@/components/modals/ExternalCancellationViewModal';
 import CancelDivergenceEditModal from '@/components/modals/CancelDivergenceEditModal';
@@ -505,10 +505,10 @@ function CancellationCard({
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p
-            className={`${shortNameFontClass(c.studentName)} font-semibold text-foreground truncate`}
+            className={`${cancellationCardNameFontClass(c.studentName)} font-semibold text-foreground break-words leading-snug`}
             title={c.studentName}
           >
-            {toShortName(c.studentName)}
+            {c.studentName}
           </p>
           {(student?.product || c.treinamento) && (
             <p className="text-[9px] text-muted-foreground/80 truncate mt-0.5" title="Treinamento">
