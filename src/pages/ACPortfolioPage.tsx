@@ -40,7 +40,7 @@ import {
 } from '@/lib/cancellationIndicators';
 import { statusColors } from '@/lib/statusColors';
 import { NaoSomaBadge } from '@/components/NaoSomaBadge';
-import { getTodayBrasilia, getTodayStringBrasilia, calcularDiasVencido, dueDateForDisplay } from '@/lib/brasiliaDate';
+import { getTodayBrasilia, getTodayStringBrasilia, calcularDiasVencido, dueDateForDisplay, createdAtInRange } from '@/lib/brasiliaDate';
 import { getDisplayInstallmentValue, normalizeSearch } from '@/lib/utils';
 import { getTagStyle } from '@/lib/tagColors';
 import {
@@ -101,18 +101,12 @@ export default function ACPortfolioPage() {
   const [search, setSearch] = useState('');
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
   const [productFilter, setProductFilter] = useState('');
-  // Filtro por data de cadastro (enrollmentDate, YYYY-MM-DD). Só uma ponta
-  // preenchida = a partir de / até; as duas vazias = sem filtro.
+  // Filtro por data de cadastro NO SISTEMA (students.created_at, dia em
+  // Brasília) — não é a data do contrato. Só uma ponta preenchida = a partir
+  // de / até; as duas vazias = sem filtro.
   const [cadastroStart, setCadastroStart] = useState('');
   const [cadastroEnd, setCadastroEnd] = useState('');
-  const matchesCadastro = (s: Student) => {
-    if (!cadastroStart && !cadastroEnd) return true;
-    const d = (s.enrollmentDate || '').slice(0, 10);
-    if (!d) return false;
-    if (cadastroStart && d < cadastroStart) return false;
-    if (cadastroEnd && d > cadastroEnd) return false;
-    return true;
-  };
+  const matchesCadastro = (s: Student) => createdAtInRange(s.createdAt, cadastroStart, cadastroEnd);
   const [statusFilter, setStatusFilterRaw] = useState('');
   const [kpiCardFilter, setKpiCardFilter] = useState<'' | 'revertidos' | 'boletos_antecipados' | 'pendente'>('');
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
@@ -354,6 +348,12 @@ export default function ACPortfolioPage() {
   const [forecastCustomStart, setForecastCustomStart] = useState('');
   const [forecastCustomEnd, setForecastCustomEnd] = useState('');
   const forecastSemPeriodo = !forecastCustomStart && !forecastCustomEnd;
+  // Filtro do card por data de cadastro NO SISTEMA (created_at): só entram
+  // fichas cadastradas no intervalo. Independente do filtro da tabela.
+  const [fcCadastroStart, setFcCadastroStart] = useState('');
+  const [fcCadastroEnd, setFcCadastroEnd] = useState('');
+  const fcSemCadastro = !fcCadastroStart && !fcCadastroEnd;
+  const fcMatchesCadastro = (s: Student) => createdAtInRange(s.createdAt, fcCadastroStart, fcCadastroEnd);
 
   // ── Forecast helpers ──────────────────────────────────────────────────────
   // Período Início/Fim (mesmo controle nas duas bases). Sem as duas datas
@@ -373,7 +373,8 @@ export default function ACPortfolioPage() {
       isStudentInAcPortfolio(s) &&
       s.statusCancelamento !== 'cancelado' &&
       countsInAcPortfolioTotals(s) &&
-      !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão')
+      !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão') &&
+      fcMatchesCadastro(s)
   );
   // Cancelados: saem da carteira (acStudents), mas o valor retido no
   // cancelamento (pago + multa − estorno) entra no card Pago do assessor.
@@ -383,7 +384,8 @@ export default function ACPortfolioPage() {
         s.ac === ac.name &&
         s.statusCancelamento === 'cancelado' &&
         countsInAcPortfolioTotals(s) &&
-        studentMatchesTagFilter(s, tagFilters),
+        studentMatchesTagFilter(s, tagFilters) &&
+        fcMatchesCadastro(s),
     )
     : [];
 
@@ -1060,12 +1062,29 @@ export default function ACPortfolioPage() {
                   </button>
                 )}
               </div>
+              <div className="flex items-center gap-1.5" title="Só fichas cadastradas no sistema nesse intervalo (data de criação da ficha, não a data do contrato)">
+                <span className="text-[10px] text-muted-foreground">Cadastro:</span>
+                <input type="date" value={fcCadastroStart} max={fcCadastroEnd || undefined} onChange={(e) => setFcCadastroStart(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
+                <span className="text-[10px] text-muted-foreground ml-1">até</span>
+                <input type="date" value={fcCadastroEnd} min={fcCadastroStart || undefined} onChange={(e) => setFcCadastroEnd(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
+                {!fcSemCadastro && (
+                  <button
+                    type="button"
+                    onClick={() => { setFcCadastroStart(''); setFcCadastroEnd(''); }}
+                    className="ml-1 px-2 py-1 rounded-md text-[10px] font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="Limpar filtro de cadastro"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => {
-                  const periodLabel = forecastSemPeriodo
+                  const periodLabel = (forecastSemPeriodo
                     ? 'Todos'
-                    : `Personalizado ${forecastCustomStart || '…'} a ${forecastCustomEnd || '…'}`;
+                    : `Personalizado ${forecastCustomStart || '…'} a ${forecastCustomEnd || '…'}`)
+                    + (fcSemCadastro ? '' : ` · cadastro ${fcCadastroStart || '…'} a ${fcCadastroEnd || '…'}`);
                   const rows = carteiraTotais.details;
                   if (!rows.length) {
                     toast.message('Nenhum registro para exportar no período selecionado.');

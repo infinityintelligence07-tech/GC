@@ -128,6 +128,7 @@ export function rowToStudent(r: any): Student {
     iamControlPendenteTipo: (r.iam_control_pendente_tipo as 'LINK' | 'PIX' | null) ?? undefined,
     iamControlPendenteLink: r.iam_control_pendente_link ?? undefined,
     iamGcConciliadoAt: r.iam_gc_conciliado_at ?? undefined,
+    createdAt: r.created_at ?? undefined,
   };
 }
 

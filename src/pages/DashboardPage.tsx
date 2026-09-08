@@ -13,7 +13,7 @@ import RibbonGauge from '@/components/ui/RibbonGauge';
 import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
 import { Installment, Student, StudentStatus } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { getTodayBrasilia, getTodayStringBrasilia } from '@/lib/brasiliaDate';
+import { getTodayBrasilia, getTodayStringBrasilia, createdAtInRange } from '@/lib/brasiliaDate';
 import { getTagStyle } from '@/lib/tagColors';
 import { computeTagKpis } from '@/lib/tagKpis';
 import { studentMatchesTagFilter, applyTagFilterToStudent } from '@/lib/tagFilter';
@@ -137,6 +137,12 @@ export default function DashboardPage() {
   const [forecastCustomStart, setForecastCustomStart] = useState('');
   const [forecastCustomEnd, setForecastCustomEnd] = useState('');
   const forecastSemPeriodo = !forecastCustomStart && !forecastCustomEnd;
+  // Filtro do card por data de cadastro NO SISTEMA (created_at): só entram
+  // fichas cadastradas no intervalo (mesmo controle da carteira do AC).
+  const [fcCadastroStart, setFcCadastroStart] = useState('');
+  const [fcCadastroEnd, setFcCadastroEnd] = useState('');
+  const fcSemCadastro = !fcCadastroStart && !fcCadastroEnd;
+  const fcMatchesCadastro = (s: Student) => createdAtInRange(s.createdAt, fcCadastroStart, fcCadastroEnd);
   const [kaminoForecastTotals, setKaminoForecastTotals] = useState<KaminoDashboardForecastTotals | null>(null);
 
   // A fonte dos valores é sempre a carteira GC (alunos importados/aprovados):
@@ -534,11 +540,12 @@ export default function DashboardPage() {
     (s) =>
       s.statusCancelamento !== 'cancelado' &&
       countsInFinancialTotals(s) &&
-      !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão'),
+      !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão') &&
+      fcMatchesCadastro(s),
   );
   // Cancelados: só o valor retido (pago + multa − estorno) entra no card Pago.
   const canceladosBase = baseStudents.filter(
-    (s) => s.statusCancelamento === 'cancelado' && countsInFinancialTotals(s),
+    (s) => s.statusCancelamento === 'cancelado' && countsInFinancialTotals(s) && fcMatchesCadastro(s),
   );
   const carteiraModalStudents = forecastBase.filter((s) =>
     s.installments.some((i) => !i.paid && _instInRange(i) && !isInstallmentExcludedFromFinancialTotals(s, i)),
@@ -1343,12 +1350,29 @@ export default function DashboardPage() {
                   </button>
                 )}
               </div>
+              <div className="flex items-center gap-1.5" title="Só fichas cadastradas no sistema nesse intervalo (data de criação da ficha, não a data do contrato)">
+                <span className="text-[10px] text-muted-foreground">Cadastro:</span>
+                <input type="date" value={fcCadastroStart} max={fcCadastroEnd || undefined} onChange={(e) => setFcCadastroStart(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
+                <span className="text-[10px] text-muted-foreground ml-1">até</span>
+                <input type="date" value={fcCadastroEnd} min={fcCadastroStart || undefined} onChange={(e) => setFcCadastroEnd(e.target.value)} className="input-field text-xs py-1 px-2 w-32" />
+                {!fcSemCadastro && (
+                  <button
+                    type="button"
+                    onClick={() => { setFcCadastroStart(''); setFcCadastroEnd(''); }}
+                    className="ml-1 px-2 py-1 rounded-md text-[10px] font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="Limpar filtro de cadastro"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => {
-                  const periodLabel = forecastSemPeriodo
+                  const periodLabel = (forecastSemPeriodo
                     ? 'Todos'
-                    : `Personalizado ${forecastCustomStart || '…'} a ${forecastCustomEnd || '…'}`;
+                    : `Personalizado ${forecastCustomStart || '…'} a ${forecastCustomEnd || '…'}`)
+                    + (fcSemCadastro ? '' : ` · cadastro ${fcCadastroStart || '…'} a ${fcCadastroEnd || '…'}`);
                   const rows = forecastTotaisBase.details;
                   if (!rows.length) {
                     toast.message('Nenhum registro para exportar no período selecionado.');

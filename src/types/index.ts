@@ -145,6 +145,8 @@ export interface Student {
   iamControlPendenteLink?: string;
   /** Aprovado na Conciliação GC — passa a contar nos totais financeiros. */
   iamGcConciliadoAt?: string;
+  /** Data/hora em que a ficha foi criada no sistema (students.created_at, ISO). Somente leitura. */
+  createdAt?: string;
 }
 
 export interface AC {

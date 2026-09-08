@@ -17,6 +17,20 @@ export function getTodayStringBrasilia(): string {
   }).format(new Date());
 }
 
+/**
+ * Filtro por data de cadastro NO SISTEMA (students.created_at, dia em Brasília).
+ * `start`/`end` em YYYY-MM-DD; só uma ponta preenchida = a partir de / até;
+ * as duas vazias = sem filtro. Ficha sem created_at só passa sem filtro.
+ */
+export function createdAtInRange(createdAt: string | undefined, start: string, end: string): boolean {
+  if (!start && !end) return true;
+  const d = createdAt ? toDateStringBrasilia(createdAt) : '';
+  if (!d) return false;
+  if (start && d < start) return false;
+  if (end && d > end) return false;
+  return true;
+}
+
 /** Converte um instante ISO (ex.: created_at) para a data civil em Brasília, YYYY-MM-DD. */
 export function toDateStringBrasilia(iso: string): string {
   const d = new Date(iso);
