@@ -17,6 +17,18 @@ export function getTodayStringBrasilia(): string {
   }).format(new Date());
 }
 
+/** Converte um instante ISO (ex.: created_at) para a data civil em Brasília, YYYY-MM-DD. */
+export function toDateStringBrasilia(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
 /**
  * Retorna um Date cujo dia/mês/ano corresponde ao "hoje" em Brasília,
  * com horas zeradas (00:00:00.000).

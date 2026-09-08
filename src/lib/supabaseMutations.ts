@@ -458,7 +458,7 @@ export async function updateStudentDb(id: string, data: Partial<Student>) {
         wroteFromStaleState = true;
         console.warn(
           `[studentWriteGuard] Gravação a partir de estado desatualizado do aluno ${id}. ` +
-            `Campos financeiros ignorados para não sobrescrever dados mais novos: ${dropped.join(', ')}`
+          `Campos financeiros ignorados para não sobrescrever dados mais novos: ${dropped.join(', ')}`
         );
       }
     }

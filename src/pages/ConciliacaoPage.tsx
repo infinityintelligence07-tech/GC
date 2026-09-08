@@ -29,6 +29,7 @@ import {
   resolveIamGcCarteira,
   type IamGcCarteira,
 } from '@/lib/iamPendenteConciliacao';
+import { pushContratoConciliado } from '@/lib/iamControlSync';
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -1616,6 +1617,8 @@ export default function ConciliacaoPage() {
           const { calculateStudentAutoStatus } = await import('@/store/useAppStore');
           const revisor = currentUser?.name ?? 'Conciliação';
           updateStudent(st.id, buildIamGcApprovalStudentPatch(st, calculateStudentAutoStatus(st), revisor));
+          // Espelha a aprovação no IAM Control (contrato → CONCILIADO lá também).
+          pushContratoConciliado(st.id, revisor);
         }
       }
     }
@@ -1656,6 +1659,8 @@ export default function ConciliacaoPage() {
           const { calculateStudentAutoStatus } = await import('@/store/useAppStore');
           const revisor = currentUser?.name ?? 'Conciliação';
           updateStudent(st.id, buildIamGcApprovalStudentPatch(st, calculateStudentAutoStatus(st), revisor));
+          // Espelha a aprovação no IAM Control (contrato → CONCILIADO lá também).
+          pushContratoConciliado(st.id, revisor);
         }
         conciliar(it.id, undefined, { silent: true });
       } else {

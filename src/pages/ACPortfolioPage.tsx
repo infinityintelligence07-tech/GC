@@ -379,12 +379,12 @@ export default function ACPortfolioPage() {
   // cancelamento (pago + multa − estorno) entra no card Pago do assessor.
   const canceladosBase = ac
     ? students.filter(
-        (s) =>
-          s.ac === ac.name &&
-          s.statusCancelamento === 'cancelado' &&
-          countsInAcPortfolioTotals(s) &&
-          studentMatchesTagFilter(s, tagFilters),
-      )
+      (s) =>
+        s.ac === ac.name &&
+        s.statusCancelamento === 'cancelado' &&
+        countsInAcPortfolioTotals(s) &&
+        studentMatchesTagFilter(s, tagFilters),
+    )
     : [];
 
   const getForecastTotals = () => {
@@ -939,6 +939,8 @@ export default function ACPortfolioPage() {
               goalLabel=""
               ticks={[]}
               pointerColor="#0d9488"
+              pointerLabel={formatCurrency(mesEmDiaNovosValue)}
+              pointerLabelColor="gradient"
               formatValue={fmtPctMeta}
               footer={
                 <p className="text-[11px] text-muted-foreground text-center leading-tight" title={`${formatCurrency(mesEmDiaNovosValue)} de ${formatCurrency(emDiaNovosMeta)} (${mesEmDiaNovos.length} alunos, ${periodoMesLabel})`}>
@@ -957,7 +959,7 @@ export default function ACPortfolioPage() {
                 Acumulado de {periodoMesLabel} na carteira de {ac.name}: {formatCurrency(mesEmDiaNovosValue)} em parcelas
                 (pagas + em aberto) de {mesEmDiaNovos.length} alunos Em Dia / Novos com vencimento entre o dia 01 e hoje.
                 A fita vai de R$ 0 até {formatCurrency(fitaMax)}; o traço marca a meta de {formatCurrency(emDiaNovosMeta)}
-                e o ponteiro mostra quanto da meta já foi alcançado. Zera automaticamente todo dia 1º.
+                e o ponteiro mostra o valor acumulado até agora. Zera automaticamente todo dia 1º.
               </p>
             </div>
           )}
@@ -1015,9 +1017,8 @@ export default function ACPortfolioPage() {
               <div className="inline-flex rounded-lg bg-muted p-0.5">
                 <button
                   onClick={() => { setDateBasis('vencimento'); setForecastCustomStart(''); setForecastCustomEnd(''); }}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
-                    dateBasis === 'vencimento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${dateBasis === 'vencimento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   Vencimento
                 </button>
@@ -1026,9 +1027,8 @@ export default function ACPortfolioPage() {
                     setDateBasis('pagamento');
                     if (forecastSemPeriodo) { setForecastCustomStart(currentMonthStart); setForecastCustomEnd(currentMonthEnd); }
                   }}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
-                    dateBasis === 'pagamento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${dateBasis === 'pagamento' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   Pagamento
                 </button>
@@ -1201,9 +1201,8 @@ export default function ACPortfolioPage() {
                 <button
                   key={String(v)}
                   onClick={() => setScoreFilter(v)}
-                  className={`text-[10px] px-2 py-0.5 rounded transition-all ${
-                    scoreFilter === v ? 'bg-amber-400 text-white font-semibold' : 'text-muted-foreground hover:bg-muted'
-                  }`}
+                  className={`text-[10px] px-2 py-0.5 rounded transition-all ${scoreFilter === v ? 'bg-amber-400 text-white font-semibold' : 'text-muted-foreground hover:bg-muted'
+                    }`}
                 >
                   {v === null ? 'Todos' : v === 0 ? `N ${scoreDistribution(0)}%` : `${v}★ ${scoreDistribution(v)}%`}
                 </button>
@@ -1252,9 +1251,8 @@ export default function ACPortfolioPage() {
               <button
                 key={String(v)}
                 onClick={() => setScoreFilter(v)}
-                className={`text-[10px] px-2 py-0.5 rounded transition-all ${
-                  scoreFilter === v ? 'bg-amber-400 text-white font-semibold' : 'text-muted-foreground hover:bg-muted'
-                }`}
+                className={`text-[10px] px-2 py-0.5 rounded transition-all ${scoreFilter === v ? 'bg-amber-400 text-white font-semibold' : 'text-muted-foreground hover:bg-muted'
+                  }`}
               >
                 {v === null ? 'Todos' : v === 0 ? `N ${scoreDistribution(0)}%` : `${v}★ ${scoreDistribution(v)}%`}
               </button>
@@ -1783,43 +1781,43 @@ export default function ACPortfolioPage() {
                               );
                             }
                             return (
-                            <>
-                              {isRendaExtraAtivo(student) && student.rendaExtraStatus !== 'Conciliar Exclusão' ? (
-                                <span className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-purple-100 text-purple-700 border border-purple-300">
-                                  Renda Extra
-                                </span>
-                              ) : (
-                                <>
-                                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                                    <StatusBadgeManual student={student} status={tableStatus} readOnly={!canMutatePortfolio} />
-                                    {tableStatus !== 'Em Dia' && tableStatus !== 'Pago' && tableStatus !== 'Pendente' && tableStatus !== 'Solicitação Cancelamento' && (() => {
-                                      const dias = calcularDiasVencido(student.installments);
-                                      const due = nextDueDateUi(student);
-                                      return dias && dias > 0 ? (
-                                        <span
-                                          className="text-[9px] font-bold text-destructive shrink-0"
-                                          title={due.rolledFromWeekend
-                                            ? `${dias} dia(s) desde o vencimento efetivo (${fmtDateBR(due.displayIso)}). Contrato: ${fmtDateBR(due.originalIso)}.`
-                                            : `${dias} dia(s) em atraso`}
-                                        >
-                                          {dias}d
-                                        </span>
-                                      ) : null;
-                                    })()}
-                                  </div>
-                                  {isRendaExtraAtivo(student) && student.rendaExtraStatus === 'Conciliar Exclusão' && (
-                                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit bg-slate-200 text-slate-600 border border-slate-300">
-                                      Renda Extra
-                                    </span>
-                                  )}
-                                </>
-                              )}
-                              {student.statusCancelamento === 'revertido' && student.status !== 'Pago' && cancelStatusConfig.revertido && (
-                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit ${cancelStatusConfig.revertido.color}`}>
-                                  {cancelStatusConfig.revertido.label}
-                                </span>
-                              )}
-                            </>
+                              <>
+                                {isRendaExtraAtivo(student) && student.rendaExtraStatus !== 'Conciliar Exclusão' ? (
+                                  <span className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-purple-100 text-purple-700 border border-purple-300">
+                                    Renda Extra
+                                  </span>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                      <StatusBadgeManual student={student} status={tableStatus} readOnly={!canMutatePortfolio} />
+                                      {tableStatus !== 'Em Dia' && tableStatus !== 'Pago' && tableStatus !== 'Pendente' && tableStatus !== 'Solicitação Cancelamento' && (() => {
+                                        const dias = calcularDiasVencido(student.installments);
+                                        const due = nextDueDateUi(student);
+                                        return dias && dias > 0 ? (
+                                          <span
+                                            className="text-[9px] font-bold text-destructive shrink-0"
+                                            title={due.rolledFromWeekend
+                                              ? `${dias} dia(s) desde o vencimento efetivo (${fmtDateBR(due.displayIso)}). Contrato: ${fmtDateBR(due.originalIso)}.`
+                                              : `${dias} dia(s) em atraso`}
+                                          >
+                                            {dias}d
+                                          </span>
+                                        ) : null;
+                                      })()}
+                                    </div>
+                                    {isRendaExtraAtivo(student) && student.rendaExtraStatus === 'Conciliar Exclusão' && (
+                                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit bg-slate-200 text-slate-600 border border-slate-300">
+                                        Renda Extra
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                                {student.statusCancelamento === 'revertido' && student.status !== 'Pago' && cancelStatusConfig.revertido && (
+                                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit ${cancelStatusConfig.revertido.color}`}>
+                                    {cancelStatusConfig.revertido.label}
+                                  </span>
+                                )}
+                              </>
                             );
                           })()}
                         </div>

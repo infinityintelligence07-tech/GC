@@ -47,6 +47,25 @@ export function pushStudentStatus(studentIds: string | string[]): void {
     .catch((err) => console.warn('[IAM Control] push-status falhou:', err));
 }
 
+/**
+ * Espelha no IAM Control a aprovação de um contrato na fila IAM CONTROL → GC:
+ * pede ao IAM para marcar o contrato como CONCILIADO. Fire-and-forget — o
+ * resultado (confirmado ou recusado) fica registrado no histórico da ficha
+ * pela própria edge function.
+ */
+export function pushContratoConciliado(studentIds: string | string[], conciliadoPor?: string): void {
+  const ids = (Array.isArray(studentIds) ? studentIds : [studentIds]).filter(Boolean);
+  if (ids.length === 0) return;
+  void supabase.functions
+    .invoke('iam-control-push-conciliacao', {
+      body: { student_ids: ids, conciliado_por: conciliadoPor ?? 'Conciliação GC', conciliado_em: new Date().toISOString() },
+    })
+    .then(({ error }) => {
+      if (error) console.warn('[IAM Control] push-conciliacao falhou:', error);
+    })
+    .catch((err) => console.warn('[IAM Control] push-conciliacao falhou:', err));
+}
+
 export async function pushAllStatuses(): Promise<Record<string, unknown>> {
   const { data, error } = await supabase.functions.invoke('iam-control-push-status');
   if (error) throw error;
