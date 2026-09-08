@@ -5,7 +5,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { supabase } from '@/integrations/supabase/client';
 import { saveCancellationCaseNotesDb } from '@/lib/supabaseMutations';
-import { downloadCancellationPdf, openCancellationPdf, isViewableInBrowser } from '@/lib/openCancellationPdf';
+import { downloadCancellationPdf, openCancellationPdf, isViewableInBrowser, humanizeStorageError } from '@/lib/openCancellationPdf';
 import { toast } from 'sonner';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -131,8 +131,8 @@ export default function CaseNotesPanel({ caseRef }: Props) {
       } else {
         await downloadCancellationPdf(a.url, a.name);
       }
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Não foi possível abrir o arquivo.');
+    } catch (err: unknown) {
+      toast.error(humanizeStorageError(err));
     }
   };
 

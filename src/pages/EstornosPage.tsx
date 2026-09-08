@@ -61,6 +61,18 @@ function formatDateBR(iso: string): string {
   try { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('pt-BR'); } catch { return iso; }
 }
 
+/** Máscara CPF (000.000.000-00) ou CNPJ se passar de 11 dígitos. */
+function maskCpfCnpj(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 14);
+  if (d.length <= 11) {
+    if (d.length <= 3) return d;
+    if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+    if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+    return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  }
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+}
+
 function formatLogEntryText(e: RefundLogEntry): string {
   switch (e.action) {
     case 'marcou':
@@ -92,10 +104,7 @@ function formatDateTimeBR(iso: string): string {
 }
 
 interface EditRefundForm {
-  studentName: string;
-  ac: string;
-  product: string;
-  quantidadeInscricoes: string;
+  cpf: string;
   installmentDate: string;
   installmentValue: string;
   totalValue: string;
@@ -120,10 +129,7 @@ export default function EstornosPage() {
   const [editScopePrompt, setEditScopePrompt] = useState(false);
   const [editScope, setEditScope] = useState<'current' | 'following'>('current');
   const [editForm, setEditForm] = useState<EditRefundForm>({
-    studentName: '',
-    ac: '',
-    product: '',
-    quantidadeInscricoes: '1',
+    cpf: '',
     installmentDate: '',
     installmentValue: '0',
     totalValue: '0',
@@ -189,11 +195,13 @@ export default function EstornosPage() {
         const overrides = p.refundOverrides ?? {};
         list.push({
           caseId: c.id,
-          studentName: overrides.studentName ?? c.studentName,
-          cpf: st?.cpf ?? '',
-          ac: overrides.ac ?? c.ac,
-          product: overrides.product ?? st?.product ?? (c as any).treinamento ?? undefined,
-          quantidadeInscricoes: overrides.quantidadeInscricoes ?? c.quantidadeInscricoes,
+          // Nome / AC / treinamento / inscrições vêm sempre do cadastro (caso + aluno).
+          // Overrides antigos desses campos são ignorados de propósito.
+          studentName: c.studentName,
+          cpf: (st?.cpf || overrides.cpf || '').trim(),
+          ac: c.ac,
+          product: st?.product ?? (c as any).treinamento ?? undefined,
+          quantidadeInscricoes: c.quantidadeInscricoes,
           totalCase: Number(overrides.totalValue ?? plan.totalValue ?? 0),
           installmentIndex: idx + 1,
           totalInstallments: plan.installments.length,
@@ -421,16 +429,11 @@ export default function EstornosPage() {
   };
 
   const openEdit = (r: RefundRow) => {
-    const c = cancellationCases.find((x) => x.id === r.caseId);
-    const student = students.find((s) => s.id === c?.studentId) ?? students.find((s) => s.cancellationCaseId === r.caseId);
     setEditScopePrompt(false);
     setEditScope('current');
     setEditRow(r);
     setEditForm({
-      studentName: r.studentName,
-      ac: r.ac ?? '',
-      product: r.product ?? student?.product ?? c?.treinamento ?? '',
-      quantidadeInscricoes: String(r.quantidadeInscricoes ?? 1),
+      cpf: maskCpfCnpj(r.cpf ?? ''),
       installmentDate: r.date,
       installmentValue: String(r.value),
       totalValue: String(r.totalCase),
@@ -459,25 +462,12 @@ export default function EstornosPage() {
 
     const installment = c.refundPlan.installments[editRow.installmentIndex - 1];
     if (!installment) return;
-    const studentName = editForm.studentName.trim();
-    const ac = editForm.ac.trim();
-    const product = editForm.product.trim();
-    const quantity = Number.parseInt(editForm.quantidadeInscricoes, 10);
+    const cpf = maskCpfCnpj(editForm.cpf.trim());
     const installmentValue = Number(editForm.installmentValue.replace(',', '.'));
     const totalValue = Number(editForm.totalValue.replace(',', '.'));
 
-    if (!studentName) {
-      setEditError('Informe o nome do aluno.');
-      setEditScopePrompt(false);
-      return;
-    }
     if (!editForm.installmentDate) {
       setEditError('Informe a data da parcela.');
-      setEditScopePrompt(false);
-      return;
-    }
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      setEditError('A quantidade de inscrições deve ser um número inteiro maior que zero.');
       setEditScopePrompt(false);
       return;
     }
@@ -500,18 +490,12 @@ export default function EstornosPage() {
     const prevMethod = editRow.paymentMethod;
     const prevType = editRow.pixKeyType || '—';
     const prevKey = editRow.pixKey;
-    const prevName = editRow.studentName;
-    const prevAc = editRow.ac ?? '';
-    const prevProduct = editRow.product ?? '';
-    const prevQuantity = editRow.quantidadeInscricoes ?? 1;
+    const prevCpf = maskCpfCnpj(editRow.cpf ?? '');
     const prevTotal = editRow.totalCase;
     const changes: string[] = [];
 
-    if (prevName !== studentName) changes.push(`Aluno: ${prevName || '—'} → ${studentName}`);
-    if (prevAc !== ac) changes.push(`Assessor: ${prevAc || '—'} → ${ac || '—'}`);
-    if (prevProduct !== product) changes.push(`Treinamento: ${prevProduct || '—'} → ${product || '—'}`);
-    if (prevQuantity !== quantity) {
-      changes.push(`Inscrições: ${prevQuantity} → ${quantity}`);
+    if (prevCpf !== cpf) {
+      changes.push(`CPF: ${prevCpf || '—'} → ${cpf || '—'}`);
     }
     if (installment.date !== editForm.installmentDate) {
       changes.push(`Data da parcela: ${formatDateBR(installment.date)} → ${formatDateBR(editForm.installmentDate)}`);
@@ -549,10 +533,7 @@ export default function EstornosPage() {
     const selectedIndex = editRow.installmentIndex - 1;
 
     const sharedOverrides = {
-      studentName,
-      ac,
-      product,
-      quantidadeInscricoes: quantity,
+      cpf: cpf || undefined,
       totalValue,
       paymentMethod: editForm.paymentMethod,
       pixKeyType: editForm.paymentMethod === 'pix' ? editForm.pixKeyType : undefined,
@@ -565,13 +546,24 @@ export default function EstornosPage() {
       if (!shouldApplyShared) return p;
 
       const prevLog: RefundLogEntry[] = Array.isArray(p.lancadoLog) ? (p.lancadoLog as RefundLogEntry[]) : [];
+      const prevOverrides = p.refundOverrides ?? {};
+      // Remove overrides de cadastro (nome/AC/treinamento/inscrições) — passam a
+      // vir sempre do caso/aluno; mantém só campos editáveis do estorno.
+      const {
+        studentName: _sn,
+        ac: _ac,
+        product: _prod,
+        quantidadeInscricoes: _qi,
+        ...restOverrides
+      } = prevOverrides;
+
       return {
         ...p,
         ...(idx === selectedIndex
           ? { date: editForm.installmentDate, value: installmentValue }
           : {}),
         refundOverrides: {
-          ...(p.refundOverrides ?? {}),
+          ...restOverrides,
           ...sharedOverrides,
         },
         lancadoLog: idx === selectedIndex ? [...prevLog, logEntry] : prevLog,
@@ -587,6 +579,17 @@ export default function EstornosPage() {
     );
 
     updateCancellationCase(c.id, { refundPlan: nextPlan });
+
+    // CPF faz parte do cadastro do aluno: altera a ficha para valer em todo o GC.
+    if (prevCpf !== cpf) {
+      const linked =
+        (c.studentId ? students.find((s) => s.id === c.studentId) : undefined)
+        ?? students.find((s) => s.cancellationCaseId === c.id);
+      if (linked) {
+        void updateStudent(linked.id, { cpf });
+      }
+    }
+
     logActivity({
       action: 'estorno.dados_alterados',
       entity: 'cancellation',
@@ -970,41 +973,41 @@ export default function EstornosPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-semibold uppercase text-muted-foreground">Nome do aluno</label>
-                  <input
-                    type="text"
-                    value={editForm.studentName}
-                    onChange={(e) => setEditForm((f) => ({ ...f, studentName: e.target.value }))}
-                    className="input-field text-xs w-full mt-1"
-                  />
+                  <p className="mt-1 text-xs font-medium text-foreground rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    {editRow.studentName || '—'}
+                  </p>
                 </div>
                 <div>
                   <label className="text-[10px] font-semibold uppercase text-muted-foreground">Assessor</label>
-                  <input
-                    type="text"
-                    value={editForm.ac}
-                    onChange={(e) => setEditForm((f) => ({ ...f, ac: e.target.value }))}
-                    className="input-field text-xs w-full mt-1"
-                  />
+                  <p className="mt-1 text-xs font-medium text-foreground rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    {editRow.ac || '—'}
+                  </p>
                 </div>
                 <div>
                   <label className="text-[10px] font-semibold uppercase text-muted-foreground">Treinamento</label>
-                  <input
-                    type="text"
-                    value={editForm.product}
-                    onChange={(e) => setEditForm((f) => ({ ...f, product: e.target.value }))}
-                    className="input-field text-xs w-full mt-1"
-                  />
+                  <p className="mt-1 text-xs font-medium text-foreground rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    {editRow.product || '—'}
+                  </p>
                 </div>
                 <div>
                   <label className="text-[10px] font-semibold uppercase text-muted-foreground">Quantidade de inscrições</label>
+                  <p className="mt-1 text-xs font-medium text-foreground rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    {editRow.quantidadeInscricoes ?? '—'}
+                  </p>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-semibold uppercase text-muted-foreground">CPF</label>
                   <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={editForm.quantidadeInscricoes}
-                    onChange={(e) => setEditForm((f) => ({ ...f, quantidadeInscricoes: e.target.value }))}
+                    type="text"
+                    inputMode="numeric"
+                    value={editForm.cpf}
+                    onChange={(e) => setEditForm((f) => ({ ...f, cpf: maskCpfCnpj(e.target.value) }))}
+                    placeholder="000.000.000-00"
                     className="input-field text-xs w-full mt-1"
                   />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Nome, assessor, treinamento e inscrições vêm do cadastro no GC. Alterar o CPF aqui atualiza a ficha do aluno.
+                  </p>
                 </div>
               </div>
 

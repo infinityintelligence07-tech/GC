@@ -1,8 +1,9 @@
 import { X, Eye, Download, FileText } from 'lucide-react';
 import type { CancellationCase } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
-import { openCancellationPdf, downloadCancellationPdf } from '@/lib/openCancellationPdf';
+import { openCancellationPdf, downloadCancellationPdf, humanizeStorageError } from '@/lib/openCancellationPdf';
 import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
+import { toast } from 'sonner';
 
 interface Props {
   caseRef: CancellationCase;
@@ -112,13 +113,25 @@ export default function ExternalCancellationViewModal({ caseRef, onClose }: Prop
               <h3 className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Contrato (PDF)</h3>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => openCancellationPdf(c.contractPdfUrl!, 'contrato.pdf')}
+                  onClick={async () => {
+                    try {
+                      await openCancellationPdf(c.contractPdfUrl!, 'contrato.pdf');
+                    } catch (err) {
+                      toast.error(humanizeStorageError(err));
+                    }
+                  }}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition-all"
                 >
                   <Eye size={12} /> Visualizar contrato
                 </button>
                 <button
-                  onClick={() => downloadCancellationPdf(c.contractPdfUrl!, 'contrato.pdf')}
+                  onClick={async () => {
+                    try {
+                      await downloadCancellationPdf(c.contractPdfUrl!, 'contrato.pdf');
+                    } catch (err) {
+                      toast.error(humanizeStorageError(err));
+                    }
+                  }}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold text-muted-foreground bg-muted hover:text-foreground transition-all"
                   title="Baixar contrato"
                 >

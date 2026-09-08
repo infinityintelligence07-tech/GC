@@ -72,24 +72,45 @@ function candidatePaths(pathOrUrl: string): string[] {
   return out;
 }
 
+/** Mensagem amigável para erros do Storage (ex.: "Object not found"). */
+export function humanizeStorageError(err: unknown, fallback = 'Não foi possível abrir o arquivo.'): string {
+  const raw =
+    (err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string'
+      ? (err as { message: string }).message
+      : err instanceof Error
+        ? err.message
+        : typeof err === 'string'
+          ? err
+          : '') || '';
+  const msg = raw.trim();
+  if (!msg) return fallback;
+  if (/object not found|not found|no such file|404/i.test(msg)) {
+    return 'Arquivo não encontrado no armazenamento. O anexo foi registrado, mas o PDF não está mais no servidor — anexe de novo pela observação.';
+  }
+  if (/row-level security|permission|not authorized|unauthorized|403/i.test(msg)) {
+    return 'Sem permissão para abrir este arquivo. Confira se você está na empresa certa e com acesso a Cancelamentos.';
+  }
+  return msg;
+}
+
 async function getSignedUrl(path: string, download?: string | boolean): Promise<string> {
   const { data, error } = await supabase.storage
     .from(BUCKET)
     .createSignedUrl(path, SIGNED_URL_TTL, download ? { download: typeof download === 'string' ? download : true } : undefined);
   if (error || !data?.signedUrl) {
-    throw new Error(error?.message ?? 'Não foi possível gerar o link do arquivo.');
+    throw new Error(humanizeStorageError(error, 'Não foi possível gerar o link do arquivo.'));
   }
   return data.signedUrl;
 }
 
 async function getSignedUrlFromCandidates(pathOrUrl: string, download?: string | boolean): Promise<string> {
   const paths = candidatePaths(pathOrUrl);
-  let lastError = 'Arquivo não encontrado no storage.';
+  let lastError = 'Arquivo não encontrado no armazenamento.';
   for (const path of paths) {
     try {
       return await getSignedUrl(path, download);
     } catch (err: unknown) {
-      lastError = err instanceof Error ? err.message : lastError;
+      lastError = humanizeStorageError(err, lastError);
     }
   }
   throw new Error(lastError);
@@ -107,7 +128,7 @@ async function fetchPdfBlob(pathOrUrl: string): Promise<Blob> {
   for (const path of paths) {
     const { data, error } = await supabase.storage.from(BUCKET).download(path);
     if (!error && data) return data;
-    lastError = error?.message ?? lastError;
+    lastError = humanizeStorageError(error, lastError);
   }
   throw new Error(lastError);
 }

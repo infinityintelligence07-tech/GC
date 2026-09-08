@@ -503,6 +503,8 @@ export interface RefundPlanInstallment {
     ac?: string;
     product?: string;
     quantidadeInscricoes?: number;
+    /** CPF do beneficiário do estorno (quando sem ficha de aluno ou override pontual). */
+    cpf?: string;
     totalValue?: number;
     paymentMethod?: RefundPaymentMethod;
     pixKeyType?: RefundPixKeyType;
