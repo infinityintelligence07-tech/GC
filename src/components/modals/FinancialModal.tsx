@@ -1,11 +1,12 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, Installment, canConfirmarPagamento, canEditTab } from '@/types';
 import { useAppStore, formatCurrency, generateInstallments, isRecompraOuFundoParcela } from '@/store/useAppStore';
 import { registrarConciliacao, useConciliacaoStore, buildStudentSnapshot } from '@/store/useConciliacaoStore';
-import { X, ToggleLeft, ToggleRight, Edit2, Check, Zap, DollarSign, ArrowLeft, FileText, CheckCircle2, Lock, Copy, Trash2, AlertOctagon, BadgeCheck, Clock } from 'lucide-react';
+import { X, ToggleLeft, ToggleRight, Edit2, Check, Zap, DollarSign, ArrowLeft, FileText, CheckCircle2, Lock, Copy, Trash2, AlertOctagon, BadgeCheck, Clock, Paperclip } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
 import { toast } from 'sonner';
-import TermoAditivoModal, { type TermoAnexadoInfo } from './TermoAditivoModal';
+import TermoAditivoModal from './TermoAditivoModal';
+import { RENEG_ANEXO_ACCEPT, uploadRenegTermoAnexado, type TermoAnexadoInfo } from '@/lib/renegTermoAnexo';
 import { openCancellationPdf } from '@/lib/openCancellationPdf';
 import CurrencyInput from '@/components/ui/CurrencyInput';
 import StudentDraftBanner from '@/components/ui/StudentDraftBanner';
@@ -442,6 +443,24 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     setTermoPending(signed);
     const mode = renegMode !== 'none' ? renegMode : 'detailed';
     persistRenegStandby(mode, signed);
+  };
+
+  // Anexo direto do contrato/termo já assinado (sem passar pelo modal do termo).
+  const anexoContratoInputRef = useRef<HTMLInputElement>(null);
+  const [anexoContratoBusy, setAnexoContratoBusy] = useState(false);
+  const anexarContratoAssinado = async (file: File | undefined) => {
+    if (!file) return;
+    setAnexoContratoBusy(true);
+    try {
+      const info = await uploadRenegTermoAnexado(student.id, file);
+      markTermoAnexado(info);
+      toast.success('Contrato anexado — Confirmar liberado.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao anexar o contrato.');
+    } finally {
+      setAnexoContratoBusy(false);
+      if (anexoContratoInputRef.current) anexoContratoInputRef.current.value = '';
+    }
   };
 
   const abrirTermoAnexado = async () => {
@@ -1556,6 +1575,15 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           </div>
         )}
 
+        {/* Input oculto do anexo do contrato assinado — usado pelos botões "Anexar contrato" e "Trocar anexo". */}
+        <input
+          ref={anexoContratoInputRef}
+          type="file"
+          accept={RENEG_ANEXO_ACCEPT}
+          className="hidden"
+          onChange={(e) => void anexarContratoAssinado(e.target.files?.[0])}
+        />
+
         {termoPending && renegMode !== 'none' && (
           <div className="mx-6 mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 flex items-start gap-2.5 fade-in shadow-sm">
             <Clock size={16} className="text-sky-700 mt-0.5 shrink-0" />
@@ -1585,10 +1613,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTermoModal(true)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
+                    onClick={() => anexoContratoInputRef.current?.click()}
+                    disabled={anexoContratoBusy}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors disabled:opacity-60"
                   >
-                    Trocar anexo
+                    <Paperclip size={11} /> {anexoContratoBusy ? 'Enviando…' : 'Trocar anexo'}
                   </button>
                 </div>
               )}
@@ -3239,19 +3268,35 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       <Clock size={12} /> Rascunho
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setTermoModal(true)}
-                    className="w-full flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-purple-700 hover:bg-purple-50 border border-purple-200 transition-colors"
-                    title="Gerar termo de renegociação (PDF, copiar link de assinatura ou anexar termo já assinado)"
-                  >
-                    <FileText size={12} /> Gerar Termo de Renegociação
-                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTermoModal(true)}
+                      className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-purple-700 hover:bg-purple-50 border border-purple-200 transition-colors"
+                      title="Gerar termo de renegociação (PDF, copiar link de assinatura)"
+                    >
+                      <FileText size={12} /> Gerar Termo de Renegociação
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => anexoContratoInputRef.current?.click()}
+                      disabled={anexoContratoBusy}
+                      className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 border border-emerald-200 transition-colors disabled:opacity-60"
+                      title="Anexar o contrato/termo já assinado (PDF ou imagem, até 10 MB). Libera o Confirmar."
+                    >
+                      <Paperclip size={12} />
+                      {anexoContratoBusy
+                        ? 'Enviando…'
+                        : termoAssinado && termoPending?.anexoPath
+                          ? 'Trocar contrato anexado'
+                          : 'Anexar contrato já assinado'}
+                    </button>
+                  </div>
                   {!termoAssinado && (
                     <p className="text-[10px] text-center text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
                       {termoAguardandoAssinatura
                         ? 'Aguardando assinatura do termo. O Confirmar libera quando o sistema identificar a assinatura ou quando você anexar o termo assinado.'
-                        : 'Gere o termo, copie o link e envie ao aluno — ou anexe o termo/contrato já assinado. Só assim o Confirmar é liberado.'}
+                        : 'Gere o termo, copie o link e envie ao aluno — ou use "Anexar contrato já assinado". Só assim o Confirmar é liberado.'}
                     </p>
                   )}
                 </div>

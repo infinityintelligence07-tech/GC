@@ -7,7 +7,7 @@ import DashDateFilter, { AnalysisModeToggle, DashFilterMode, PerfPreset, getPerf
 import HeaderActions from '@/components/layout/HeaderActions';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
 import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag, Camera, Activity, FileText, AlertTriangle, Download } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
@@ -33,8 +33,9 @@ import {
 } from '@/lib/cancellationIndicators';
 import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
 import DashboardReportModal, { type DashboardReportSection } from '@/components/ui/DashboardReportModal';
+import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
-import { entradaForaDasParcelas, entradaNoPeriodo, entradaPaidDate } from '@/lib/pagoFormaFilter';
+import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
 import { retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
 import { toast } from 'sonner';
 
@@ -72,6 +73,8 @@ function BotaoRelatorio({ onClick, className = '' }: { onClick: () => void; clas
 export default function DashboardPage() {
   const { students, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals, rules, setRules, currentUser } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
+  // Baixas registradas no GC (Conciliação) — regra do card Pago.
+  const baixasGcIndex = useMemo(() => buildBaixasGcIndex(conciliacaoItems), [conciliacaoItems]);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
   const [acFilter, setAcFilter] = useState('');
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
@@ -80,6 +83,7 @@ export default function DashboardPage() {
   const [infoStatus, setInfoStatus] = useState<string | null>(null);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [paymentDetailModal, setPaymentDetailModal] = useState<null | 'pago' | 'recebido'>(null);
+  const [pagoAlunosModalOpen, setPagoAlunosModalOpen] = useState(false);
   const [kpiModalKey, setKpiModalKey] = useState<KpiModalKey | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const lastCardSnapshotRef = useRef<string | null>(null);
@@ -661,6 +665,8 @@ export default function DashboardPage() {
     let qtd = 0;
     const qtdAlunosSet = new Set<string>();
     const qtdAlunosAVencerSet = new Set<string>();
+    // Card Pago: só baixa registrada no GC e conciliada (ver src/lib/pagoGc.ts).
+    const baixaGc = (st: Student, i: Installment) => isBaixaRegistradaNoGc(st, i, baixasGcIndex);
     // Breakdown por Assessor (usado no modo Pagamento)
     const perAc: Record<string, { pago: number; pagoReal: number; qtd: number; alunos: Set<string> }> = {};
     const bumpAc = (acName: string, valor: number, real: number, studentId: string) => {
@@ -690,35 +696,14 @@ export default function DashboardPage() {
       });
     };
     forecastBase.forEach((st) => {
-      // Entrada recebida que não virou parcela (IAM à vista/cartão, cadastro
-      // manual, importação Kamino, IAM parcelado com entrada) entra DIRETO no
-      // card Pago em qualquer base (vencimento/pagamento), com a data da
-      // matrícula como data de recebimento para o filtro de período. Contrato
-      // IAM quitado à vista/cartão além disso nunca soma no A Vencer/Vencido.
+      // Entrada de venda (downPayment) NÃO entra no Pago: não é baixa feita no
+      // GC. Contrato IAM quitado à vista/cartão só serve para nunca somar no
+      // A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
-      if (entradaNoPeriodo(st, range)) {
-        const entrada = entradaForaDasParcelas(st, quitadoAvista);
-        if (entrada > 0) {
-          total += entrada;
-          totalReal += entrada;
-          pago += entrada;
-          pagoReal += entrada;
-          qtd += 1;
-          qtdAlunosSet.add(st.id);
-          bumpAc(st.ac, entrada, entrada, st.id);
-          pushDetail(st, {
-            bucket: 'pago',
-            installmentNumber: 0,
-            dueDate: entradaPaidDate(st),
-            value: entrada,
-            paidValue: entrada,
-            paidDate: entradaPaidDate(st) || undefined,
-          });
-        }
-      }
       st.installments.forEach((i) => {
         if (dateBasis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
+          if (!baixaGc(st, i)) return;
           if (range) {
             const pd = new Date(i.paidDate + 'T00:00:00');
             if (pd < range.start || pd > range.end) return;
@@ -744,6 +729,9 @@ export default function DashboardPage() {
 
         // Vencimento: em aberto pelo dueDate; pago somente se paidDate estiver no período.
         if (i.paid) {
+          // Paga sem baixa no GC (veio paga da planilha/IAM/Kamino): fora do
+          // Pago e também fora do A Vencer.
+          if (!baixaGc(st, i)) return;
           if (!i.paidDate) {
             if (range) return;
           } else if (range) {
@@ -795,10 +783,12 @@ export default function DashboardPage() {
     });
     // Contratos cancelados: ficam fora do A Vencer, mas o que a empresa ficou
     // de fato (pago + multa − estorno − abatimento) entra no Pago, na data em
-    // que o cancelamento foi concluído.
+    // que o cancelamento foi concluído — só quando o cancelamento passou pela
+    // Conciliação do GC (fonte 'conciliacao'); cancelamento antigo/importado
+    // sem item conciliado fica de fora.
     canceladosBase.forEach((st) => {
       const retido = valorRetidoCancelamento(st, cancellationCases, conciliacaoItems);
-      if (!retido || retido.valor <= 0) return;
+      if (!retido || retido.valor <= 0 || retido.fonte !== 'conciliacao') return;
       if (!retidoNoPeriodo(retido, range)) return;
       total += retido.valor;
       totalReal += retido.valor;
@@ -1486,15 +1476,33 @@ export default function DashboardPage() {
                       {kaminoTotalsPending ? '…' : formatCurrency(aVencer)}
                     </p>
                   </div>
-                  <div className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setPagoAlunosModalOpen(true)}
+                    disabled={kaminoTotalsPending}
+                    className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0 text-left hover:bg-emerald-100/60 hover:border-emerald-300 transition-all cursor-pointer disabled:cursor-default disabled:hover:bg-emerald-50/60"
+                    title="Clique para ver os alunos e o valor pago"
+                  >
                     <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Pago</p>
                     <p className="kpi-value-fit text-emerald-700 mt-0.5" title={kaminoTotalsPending ? 'Carregando totais Kamino…' : formatCurrency(pago)}>
                       {kaminoTotalsPending ? '…' : formatCurrency(pago)}
                     </p>
                     <p className="text-[10px] font-semibold text-emerald-700 mt-0">
-                      boletos, entradas e demais recebimentos
+                      baixas feitas no GC e conciliadas · clique p/ alunos
                     </p>
-                  </div>
+                  </button>
+                  {pagoAlunosModalOpen && (
+                    <PagoAlunosModal
+                      details={details}
+                      totalPago={pago}
+                      periodoLabel={
+                        forecastCustomStart && forecastCustomEnd
+                          ? `${forecastCustomStart.split('-').reverse().join('/')} a ${forecastCustomEnd.split('-').reverse().join('/')}`
+                          : 'Toda a carteira'
+                      }
+                      onClose={() => setPagoAlunosModalOpen(false)}
+                    />
+                  )}
                 </div>
               );
             })()}

@@ -30,7 +30,7 @@ import {
 import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
-import { entradaForaDasParcelas, entradaNoPeriodo, entradaPaidDate } from '@/lib/pagoFormaFilter';
+import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
 import { retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
 import { toast } from 'sonner';
 import {
@@ -196,6 +196,8 @@ export default function ACPortfolioPage() {
   // Alunos com caso na coluna "PROCON ou Judicial" ou "Finalizado" saem da
   // carteira do assessor (continuam visíveis na aba Alunos).
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
+  // Baixas registradas no GC (Conciliação) — regra do card Pago.
+  const baixasGcIndex = useMemo(() => buildBaixasGcIndex(conciliacaoItems), [conciliacaoItems]);
   const hiddenFromPortfolioKeys = getHiddenFromAcPortfolioKeys(
     cancellationCases,
     conciliacaoItems,
@@ -414,34 +416,14 @@ export default function ACPortfolioPage() {
       });
     };
     forecastBase.forEach((st) => {
-      // Entrada recebida que não virou parcela (IAM à vista/cartão, cadastro
-      // manual, importação Kamino, IAM parcelado com entrada) entra DIRETO no
-      // Pago em qualquer base, com a matrícula como data de recebimento para o
-      // período — mesma regra da Dashboard. Contrato IAM quitado à vista/cartão
-      // além disso nunca soma no A Vencer/Vencido.
+      // Entrada de venda (downPayment) NÃO entra no Pago: não é baixa feita no
+      // GC — mesma regra da Dashboard (src/lib/pagoGc.ts). Contrato IAM quitado
+      // à vista/cartão só serve para nunca somar no A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
-      if (entradaNoPeriodo(st, range)) {
-        const entrada = entradaForaDasParcelas(st, quitadoAvista);
-        if (entrada > 0) {
-          total += entrada;
-          totalReal += entrada;
-          pago += entrada;
-          pagoReal += entrada;
-          qtd += 1;
-          qtdAlunosSet.add(st.id);
-          pushDetail(st, {
-            bucket: 'pago',
-            installmentNumber: 0,
-            dueDate: entradaPaidDate(st),
-            value: entrada,
-            paidValue: entrada,
-            paidDate: entradaPaidDate(st) || undefined,
-          });
-        }
-      }
       st.installments.forEach((i) => {
         if (dateBasis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
+          if (!isBaixaRegistradaNoGc(st, i, baixasGcIndex)) return;
           if (range) {
             const pd = new Date(i.paidDate + 'T00:00:00');
             if (pd < range.start || pd > range.end) return;
@@ -466,6 +448,9 @@ export default function ACPortfolioPage() {
 
         // Vencimento: em aberto pelo dueDate; pago somente se paidDate estiver no período.
         if (i.paid) {
+          // Paga sem baixa no GC (veio paga da planilha/IAM/Kamino): fora do
+          // Pago e também fora do A Vencer.
+          if (!isBaixaRegistradaNoGc(st, i, baixasGcIndex)) return;
           if (!i.paidDate) {
             // Sem data de pagamento: só entra em "Todos".
             if (range) return;
@@ -516,10 +501,11 @@ export default function ACPortfolioPage() {
       });
     });
     // Contratos cancelados: fora do A Vencer; o que a empresa ficou de fato
-    // (pago + multa − estorno − abatimento) entra no Pago na data da conclusão.
+    // (pago + multa − estorno − abatimento) entra no Pago na data da conclusão,
+    // só quando o cancelamento passou pela Conciliação do GC.
     canceladosBase.forEach((st) => {
       const retido = valorRetidoCancelamento(st, cancellationCases, conciliacaoItems);
-      if (!retido || retido.valor <= 0) return;
+      if (!retido || retido.valor <= 0 || retido.fonte !== 'conciliacao') return;
       if (!retidoNoPeriodo(retido, range)) return;
       total += retido.valor;
       totalReal += retido.valor;
@@ -1145,7 +1131,7 @@ export default function ACPortfolioPage() {
                       {formatCurrency(pago)}
                     </p>
                     <p className="text-[10px] font-semibold text-emerald-700 mt-0">
-                      por data de pagamento · boletos, entradas e demais recebimentos
+                      por data de pagamento · só baixas feitas no GC e conciliadas
                     </p>
                   </div>
                 </div>

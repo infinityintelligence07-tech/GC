@@ -1,9 +1,11 @@
 import type { Student } from '@/types';
 
 /**
- * Regra do card "Pago" (Dashboard e Carteira do AC): TUDO o que foi pago entra
- * no card, independente da forma (boleto, à vista, cartão, PIX/link, entrada
- * de cadastro manual/Kamino). Não existe mais filtro por forma de pagamento.
+ * Helpers de ENTRADA (downPayment) fora das parcelas.
+ *
+ * Desde 08/09/2026 o card "Pago" (Dashboard e Carteira do AC) NÃO soma mais a
+ * entrada de venda: só entram baixas registradas no GC e conciliadas — ver
+ * `src/lib/pagoGc.ts`. Estas funções ficam para outros usos/relatórios.
  */
 
 /**

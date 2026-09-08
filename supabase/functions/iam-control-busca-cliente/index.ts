@@ -5,7 +5,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
  * payload bruto, para investigar por que um aluno não subiu no pull.
  * Somente leitura — não grava nada no GC.
  *
- * POST { nome: string, max_paginas?: number }
+ * POST { nome?: string, nomes?: string[], cpfs?: string[], max_paginas?: number }
  */
 
 const TAMANHO_PAGINA = 200;
@@ -32,6 +32,10 @@ function normalizar(s: unknown): string {
     .toUpperCase()
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function soDigitos(s: unknown): string {
+  return String(s ?? '').replace(/\D/g, '');
 }
 
 async function buscarPagina(apiUrl: string, token: string, page: number) {
@@ -62,17 +66,22 @@ Deno.serve(async (req: Request) => {
   if (!token) return json(500, { ok: false, error: 'Secret IAM_CONTROL_WEBHOOK_TOKEN nao configurado.' });
 
   let nomes: string[] = [];
+  let cpfs: string[] = [];
   let maxPaginas = MAX_PAGINAS_CAP;
   try {
     const corpo = await req.json();
     const lista = Array.isArray(corpo?.nomes) ? corpo.nomes : [corpo?.nome];
     nomes = lista.map(normalizar).filter((n: string) => n.length >= 3);
+    const listaCpf = Array.isArray(corpo?.cpfs) ? corpo.cpfs : [corpo?.cpf];
+    cpfs = listaCpf.map(soDigitos).filter((c: string) => c.length >= 11);
     const m = Number(corpo?.max_paginas);
     if (Number.isFinite(m) && m > 0) maxPaginas = Math.min(Math.floor(m), MAX_PAGINAS_CAP);
   } catch {
-    // corpo inválido → nomes vazio
+    // corpo inválido → listas vazias
   }
-  if (nomes.length === 0) return json(400, { ok: false, error: 'Informe "nome" (ou "nomes") com pelo menos 3 letras.' });
+  if (nomes.length === 0 && cpfs.length === 0) {
+    return json(400, { ok: false, error: 'Informe "nome"/"nomes" (3+ letras) ou "cpf"/"cpfs" (11 dígitos).' });
+  }
 
   const encontrados: unknown[] = [];
   let totalPaginas = 1;
@@ -86,7 +95,10 @@ Deno.serve(async (req: Request) => {
       totalClientes += clientes.length;
       for (const c of clientes) {
         const nomeCliente = normalizar(c.nome ?? c.name);
-        if (nomes.some((n) => nomeCliente.includes(n))) encontrados.push({ pagina: page, cliente: c });
+        const cpfCliente = soDigitos(c.cpf);
+        const bateNome = nomes.some((n) => nomeCliente.includes(n));
+        const bateCpf = cpfCliente.length >= 11 && cpfs.includes(cpfCliente);
+        if (bateNome || bateCpf) encontrados.push({ pagina: page, por: bateCpf ? 'cpf' : 'nome', cliente: c });
       }
       page++;
       if (page > totalPaginas || clientes.length === 0) break;
@@ -103,6 +115,7 @@ Deno.serve(async (req: Request) => {
   return json(200, {
     ok: true,
     procurados: nomes,
+    cpfs_procurados: cpfs,
     paginas_lidas: page - 1,
     total_paginas: totalPaginas,
     clientes_lidos: totalClientes,

@@ -2,20 +2,16 @@ import { useMemo, useRef, useState } from 'react';
 import { X, Download, Link2, Check, Copy, Paperclip, FileText } from 'lucide-react';
 import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
-import { useCompanyStore } from '@/store/useCompanyStore';
-import { supabase } from '@/integrations/supabase/client';
 import { createIamAditivoTermo } from '@/lib/iamControlTermo';
+import {
+  RENEG_ANEXO_ACCEPT as ANEXO_ACCEPT,
+  uploadRenegTermoAnexado,
+  type TermoAnexadoInfo,
+} from '@/lib/renegTermoAnexo';
 import { toast } from 'sonner';
 import logoIAM from '@/assets/logo-iam-blue.png';
 
-const ANEXO_MAX_BYTES = 10 * 1024 * 1024;
-const ANEXO_ACCEPT = '.pdf,image/*';
-
-export interface TermoAnexadoInfo {
-  /** Path no bucket `cancellation-docs`. */
-  path: string;
-  nomeArquivo: string;
-}
+export type { TermoAnexadoInfo };
 
 export interface TermoRenegociacaoOriginalValues {
   valorVenda: number;
@@ -375,23 +371,11 @@ export default function TermoAditivoModal({
 
   const handleAnexarAssinado = async (file: File | undefined) => {
     if (!file) return;
-    if (file.size > ANEXO_MAX_BYTES) {
-      toast.error('Arquivo muito grande. Limite de 10 MB.');
-      return;
-    }
     setAnexoBusy(true);
     try {
-      const activeCompanyId = useCompanyStore.getState().activeCompanyId;
-      if (!activeCompanyId) throw new Error('Empresa ativa não identificada.');
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const path = `${activeCompanyId}/termos-renegociacao/${student.id}/${Date.now()}_${safeName}`;
-      const { error } = await supabase.storage.from('cancellation-docs').upload(path, file, {
-        contentType: file.type || 'application/pdf',
-        upsert: false,
-      });
-      if (error) throw error;
+      const info = await uploadRenegTermoAnexado(student.id, file);
       toast.success('Termo assinado anexado. Confirmar liberado.');
-      onTermoAnexado?.({ path, nomeArquivo: file.name });
+      onTermoAnexado?.(info);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Falha ao anexar o termo.');
     } finally {
