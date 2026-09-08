@@ -11,7 +11,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
-import { Installment, Student, StudentStatus } from '@/types';
+import { Installment, Student, StudentStatus, canEditTab } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { getTodayBrasilia, getTodayStringBrasilia, createdAtInRange } from '@/lib/brasiliaDate';
 import { getTagStyle } from '@/lib/tagColors';
@@ -34,6 +34,7 @@ import {
 import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
 import DashboardReportModal, { type DashboardReportSection } from '@/components/ui/DashboardReportModal';
 import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
+import FinancialModal from '@/components/modals/FinancialModal';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
 import { retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
@@ -84,6 +85,14 @@ export default function DashboardPage() {
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [paymentDetailModal, setPaymentDetailModal] = useState<null | 'pago' | 'recebido'>(null);
   const [pagoAlunosModalOpen, setPagoAlunosModalOpen] = useState(false);
+  // Aluno clicado dentro do modal do card Pago → abre a Gestão Financeira
+  // (fluxo de pagamento). Mesma regra da aba Alunos: admin/conciliação
+  // concilia na hora; demais perfis mandam o ajuste para a Conciliação.
+  const [pagoFinancialStudentId, setPagoFinancialStudentId] = useState<string | null>(null);
+  const pagoFinancialStudent = pagoFinancialStudentId ? students.find((s) => s.id === pagoFinancialStudentId) ?? null : null;
+  const pagoFinancialImmediate =
+    currentUser?.role === 'admin' || currentUser?.role === 'conciliacao' || canEditTab(currentUser, 'conciliacao');
+  const pagoFinancialReadOnly = !(pagoFinancialImmediate || canEditTab(currentUser, 'alunos'));
   const [kpiModalKey, setKpiModalKey] = useState<KpiModalKey | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const lastCardSnapshotRef = useRef<string | null>(null);
@@ -1500,7 +1509,16 @@ export default function DashboardPage() {
                           ? `${forecastCustomStart.split('-').reverse().join('/')} a ${forecastCustomEnd.split('-').reverse().join('/')}`
                           : 'Toda a carteira'
                       }
+                      onSelectStudent={(id) => setPagoFinancialStudentId(id)}
                       onClose={() => setPagoAlunosModalOpen(false)}
+                    />
+                  )}
+                  {pagoFinancialStudent && (
+                    <FinancialModal
+                      student={pagoFinancialStudent}
+                      onClose={() => setPagoFinancialStudentId(null)}
+                      immediateApply={pagoFinancialImmediate}
+                      readOnly={pagoFinancialReadOnly}
                     />
                   )}
                 </div>

@@ -10,6 +10,8 @@ interface PagoAlunosModalProps {
   totalPago: number;
   /** Texto do período/filtro ativo, ex.: "01/09/2026 a 08/09/2026" ou "Toda a carteira". */
   periodoLabel?: string;
+  /** Clique no nome do aluno → abre o fluxo de pagamento (Gestão Financeira). */
+  onSelectStudent?: (studentId: string) => void;
   onClose: () => void;
 }
 
@@ -42,7 +44,7 @@ const tituloLabel = (row: ForecastExportRow) => {
  * lista os alunos que geraram recebimento no período e quanto cada um pagou.
  * Cada linha expande para mostrar os títulos (parcelas, entrada, retido).
  */
-export default function PagoAlunosModal({ details, totalPago, periodoLabel, onClose }: PagoAlunosModalProps) {
+export default function PagoAlunosModal({ details, totalPago, periodoLabel, onSelectStudent, onClose }: PagoAlunosModalProps) {
   const [busca, setBusca] = useState('');
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
 
@@ -153,7 +155,13 @@ export default function PagoAlunosModal({ details, totalPago, periodoLabel, onCl
                 filtrados.map((a) => {
                   const aberto = abertos.has(a.studentId);
                   return (
-                    <FragmentRow key={a.studentId} aluno={a} aberto={aberto} onToggle={() => toggle(a.studentId)} />
+                    <FragmentRow
+                      key={a.studentId}
+                      aluno={a}
+                      aberto={aberto}
+                      onToggle={() => toggle(a.studentId)}
+                      onSelect={onSelectStudent ? () => onSelectStudent(a.studentId) : undefined}
+                    />
                   );
                 })
               )}
@@ -165,7 +173,17 @@ export default function PagoAlunosModal({ details, totalPago, periodoLabel, onCl
   );
 }
 
-function FragmentRow({ aluno, aberto, onToggle }: { aluno: AlunoPago; aberto: boolean; onToggle: () => void }) {
+function FragmentRow({
+  aluno,
+  aberto,
+  onToggle,
+  onSelect,
+}: {
+  aluno: AlunoPago;
+  aberto: boolean;
+  onToggle: () => void;
+  onSelect?: () => void;
+}) {
   const mostraRecebido = Math.abs(aluno.recebido - aluno.valorPago) >= 0.01;
   return (
     <>
@@ -174,7 +192,21 @@ function FragmentRow({ aluno, aberto, onToggle }: { aluno: AlunoPago; aberto: bo
           <div className="flex items-center gap-1.5 min-w-0">
             {aberto ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
             <div className="min-w-0">
-              <p className="font-medium truncate">{aluno.studentName}</p>
+              {onSelect ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelect();
+                  }}
+                  className="font-medium truncate text-left text-primary hover:underline max-w-full"
+                  title="Abrir fluxo de pagamento"
+                >
+                  {aluno.studentName}
+                </button>
+              ) : (
+                <p className="font-medium truncate">{aluno.studentName}</p>
+              )}
               {aluno.product && <p className="text-[10px] text-muted-foreground truncate">{aluno.product}</p>}
             </div>
           </div>

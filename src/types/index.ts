@@ -44,6 +44,12 @@ export interface Installment {
   /** Momento em que o pagamento foi registrado no sistema (clique/confirmação). */
   paidMarkedAt?: string;
   paidValue?: number;          // valor efetivamente pago (com juros/desconto). Se ausente ou igual a `value`, considerar pagamento exato.
+  /**
+   * Boleto antecipado (banco/fundo): a baixa veio da antecipação do recebível, não de
+   * pagamento do aluno. Continua `paid: true` para os totais, mas é exibida como
+   * "Antecipado" (azul claro) em vez de "Pago".
+   */
+  antecipada?: boolean;
   // Recompra / Antecipação de Recebíveis
   tipoParcela?: TipoParcela;   // 'propria' (default) | 'antecipada'
   valorReal?: number;          // valor original da parcela

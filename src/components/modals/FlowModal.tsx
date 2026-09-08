@@ -2,6 +2,13 @@ import { useState } from 'react';
 import { Student } from '@/types';
 import { formatCurrency, useAppStore } from '@/store/useAppStore';
 import { getTagStyle } from '@/lib/tagColors';
+import {
+  ANTECIPADA_BADGE_CLASS,
+  ANTECIPADA_CHIP_CLASS,
+  ANTECIPADA_LABEL,
+  ANTECIPADA_TEXT_CLASS,
+  isParcelaAntecipada,
+} from '@/lib/parcelaAntecipada';
 import { X, Tag } from 'lucide-react';
 
 interface Props {
@@ -88,11 +95,14 @@ export default function FlowModal({ student, onClose }: Props) {
                 const isDuplicada = isRecompraOuFundo && (dateCount.get(inst.dueDate) || 0) > 1;
                 // Recompra/Fundo é sempre tratada como pendente (nunca vencida visualmente)
                 const isOverdue = !inst.paid && !isRecompraOuFundo && new Date(inst.dueDate) < today;
+                const isAntecipada = isParcelaAntecipada(inst);
                 return (
                   <div
                     key={inst.number}
                     className={`relative flex flex-col items-center p-3 rounded-xl border min-w-[110px] ${
-                      inst.paid
+                      isAntecipada
+                        ? ANTECIPADA_CHIP_CLASS
+                        : inst.paid
                         ? 'border-emerald-300 bg-emerald-50'
                         : isOverdue
                           ? 'border-red-300 bg-red-50'
@@ -120,7 +130,7 @@ export default function FlowModal({ student, onClose }: Props) {
                       }
                       return (
                         <span className={`text-xs font-bold mt-1 ${
-                          inst.paid ? 'text-emerald-600' : isOverdue ? 'text-red-600' : 'text-foreground'
+                          isAntecipada ? ANTECIPADA_TEXT_CLASS : inst.paid ? 'text-emerald-600' : isOverdue ? 'text-red-600' : 'text-foreground'
                         }`}>
                           {formatCurrency(inst.value)}
                         </span>
@@ -130,15 +140,17 @@ export default function FlowModal({ student, onClose }: Props) {
                       Venc: {new Date(inst.dueDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                     </span>
                     {inst.paid && inst.paidDate && (
-                      <span className="text-[9px] text-emerald-700 mt-0.5 font-semibold">
-                        Pago: {new Date(inst.paidDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                      <span className={`text-[9px] mt-0.5 font-semibold ${isAntecipada ? ANTECIPADA_TEXT_CLASS : 'text-emerald-700'}`}>
+                        {isAntecipada ? 'Baixa' : 'Pago'}: {new Date(inst.paidDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                       </span>
                     )}
                     <div className="flex gap-1 mt-1 flex-wrap justify-center">
                       <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded ${
-                        inst.paid ? 'bg-emerald-100 text-emerald-700' : isOverdue ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'
+                        isAntecipada
+                          ? ANTECIPADA_BADGE_CLASS
+                          : inst.paid ? 'bg-emerald-100 text-emerald-700' : isOverdue ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'
                       }`}>
-                        {inst.paid ? '✓ Pago' : isOverdue ? 'Vencido' : 'Pendente'}
+                        {isAntecipada ? ANTECIPADA_LABEL : inst.paid ? '✓ Pago' : isOverdue ? 'Vencido' : 'Pendente'}
                       </span>
                       {inst.tipoParcela === 'antecipada' && (
                         <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200">

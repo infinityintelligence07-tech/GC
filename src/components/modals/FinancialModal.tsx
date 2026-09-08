@@ -16,6 +16,13 @@ import { getInstallmentCreditApplied, getInstallmentOutstanding, getStudentCredi
 import { isEntradaPendenciaInstallment, sumEntradaPendenteValue } from '@/lib/studentDisplayStatus';
 import { resolveStudentFinance } from '@/lib/studentFinance';
 import { getIamTermoStatus, isIamTermoAssinado } from '@/lib/iamControlTermo';
+import {
+  ANTECIPADA_BADGE_CLASS,
+  ANTECIPADA_CHIP_CLASS,
+  ANTECIPADA_LABEL,
+  ANTECIPADA_TEXT_CLASS,
+  isParcelaAntecipada,
+} from '@/lib/parcelaAntecipada';
 
 interface Props {
   student: Student;
@@ -1896,18 +1903,25 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   const isEntradaPendente = isEntradaPendenciaInstallment(inst);
                   const isRecompraFundo = isRecompraOuFundoParcela(inst, studentTags);
                   const isOverdue = !inst.paid && !isRecompraFundo && parseDateLocal(inst.dueDate) < today;
+                  const isAntecipada = isParcelaAntecipada(inst);
                   if (isEntradaPendente) return null;
                   return (
                     <div
                       key={inst.number}
                       className={`flex flex-col items-center px-2 py-1.5 rounded-lg border min-w-[80px] ${
-                        inst.paid
-                          ? 'border-emerald-300 bg-emerald-50'
-                          : isOverdue
-                            ? 'border-rose-300 bg-rose-50'
-                            : 'border-border bg-card'
+                        isAntecipada
+                          ? ANTECIPADA_CHIP_CLASS
+                          : inst.paid
+                            ? 'border-emerald-300 bg-emerald-50'
+                            : isOverdue
+                              ? 'border-rose-300 bg-rose-50'
+                              : 'border-border bg-card'
                       }`}
-                      title={`Parcela ${displayParcelLabel(inst.number)} — Venc. ${formatDateBR(inst.dueDate)}${inst.paid && inst.paidDate ? ` — Pago em ${formatDateBR(inst.paidDate)}` : ''}`}
+                      title={`Parcela ${displayParcelLabel(inst.number)} — Venc. ${formatDateBR(inst.dueDate)}${
+                        isAntecipada
+                          ? ` — Boleto antecipado (banco/fundo)${inst.paidDate ? `, baixa em ${formatDateBR(inst.paidDate)}` : ''}`
+                          : inst.paid && inst.paidDate ? ` — Pago em ${formatDateBR(inst.paidDate)}` : ''
+                      }`}
                     >
                       <span className="text-[9px] font-bold text-muted-foreground">
                         P{displayParcelLabel(inst.number)}
@@ -1946,7 +1960,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         }
                         return (
                           <span className={`text-[10px] font-bold mt-0.5 ${
-                            inst.paid ? 'text-emerald-700' : isOverdue ? 'text-rose-700' : 'text-foreground'
+                            isAntecipada ? ANTECIPADA_TEXT_CLASS : inst.paid ? 'text-emerald-700' : isOverdue ? 'text-rose-700' : 'text-foreground'
                           }`}>
                             {formatCurrency(inst.value)}
                           </span>
@@ -1956,14 +1970,16 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         Venc: {formatDateBR(inst.dueDate)}
                       </span>
                       {inst.paid && inst.paidDate && (
-                        <span className="text-[8px] text-emerald-700 font-semibold mt-0.5 leading-tight text-center">
-                          Pago: {formatDateBR(inst.paidDate)}
+                        <span className={`text-[8px] font-semibold mt-0.5 leading-tight text-center ${isAntecipada ? ANTECIPADA_TEXT_CLASS : 'text-emerald-700'}`}>
+                          {isAntecipada ? 'Baixa' : 'Pago'}: {formatDateBR(inst.paidDate)}
                         </span>
                       )}
                       <span className={`mt-0.5 text-[8px] font-semibold px-1 py-0.5 rounded ${
-                        inst.paid ? 'bg-emerald-100 text-emerald-700' : isOverdue ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
+                        isAntecipada
+                          ? ANTECIPADA_BADGE_CLASS
+                          : inst.paid ? 'bg-emerald-100 text-emerald-700' : isOverdue ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
                       }`}>
-                        {inst.paid ? '✓ Pago' : isOverdue ? 'Vencido' : 'Pendente'}
+                        {isAntecipada ? ANTECIPADA_LABEL : inst.paid ? '✓ Pago' : isOverdue ? 'Vencido' : 'Pendente'}
                       </span>
                       {/* Tags da parcela — minimalistas, no rodapé do card */}
                       {(() => {
@@ -2276,13 +2292,40 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 {student.installments.filter((i) => i.paid).map((inst) => {
                   const isEditingPaid = editingPaidDates?.number === inst.number;
                   const isAdmin = currentUser?.role === 'admin';
+                  const isAntecipada = isParcelaAntecipada(inst);
+                  const toggleAntecipada = () => {
+                    const marcar = !isAntecipada;
+                    const updated = student.installments.map((i) =>
+                      i.number === inst.number ? { ...i, antecipada: marcar ? true : undefined } : i,
+                    );
+                    updateStudent(student.id, {
+                      installments: updated,
+                      history: [
+                        ...student.history,
+                        addHistoryEntry(
+                          marcar
+                            ? `Parcela ${inst.number} marcada como boleto antecipado (${formatCurrency(inst.value)}). Baixa veio da antecipação (banco/fundo), não de pagamento do aluno.`
+                            : `Parcela ${inst.number} desmarcada como antecipada — volta a constar como paga pelo aluno (${formatCurrency(inst.value)}).`,
+                        ),
+                      ],
+                    });
+                    toast.success(marcar ? `Parcela ${inst.number} marcada como antecipada.` : `Parcela ${inst.number} volta a constar como paga.`);
+                  };
                   return (
-                  <div key={inst.number} className="flex flex-col gap-2 p-3 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                  <div
+                    key={inst.number}
+                    className={`flex flex-col gap-2 p-3 rounded-xl border ${
+                      isAntecipada ? 'border-sky-200 bg-sky-50/60' : 'border-emerald-200 bg-emerald-50/50'
+                    }`}
+                  >
                     <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <span className="text-xs font-medium text-foreground">Parcela {displayParcelLabel(inst.number)}</span>
-                      <span className="ml-2 text-[10px] text-emerald-700">
-                        Pago em {inst.paidDate ? formatDateBR(inst.paidDate) : '—'} • Venc. {formatDateBR(inst.dueDate)}
+                      {isAntecipada && (
+                        <span className={`ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded ${ANTECIPADA_BADGE_CLASS}`}>{ANTECIPADA_LABEL}</span>
+                      )}
+                      <span className={`ml-2 text-[10px] ${isAntecipada ? ANTECIPADA_TEXT_CLASS : 'text-emerald-700'}`}>
+                        {isAntecipada ? 'Baixa em' : 'Pago em'} {inst.paidDate ? formatDateBR(inst.paidDate) : '—'} • Venc. {formatDateBR(inst.dueDate)}
                         {inst.paidMarkedAt && (
                           <> • Registrado {new Date(inst.paidMarkedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</>
                         )}
@@ -2292,7 +2335,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       const hasDiff = typeof inst.paidValue === 'number' && Math.abs((inst.paidValue ?? inst.value) - inst.value) > 0.01;
                       const isJuros = hasDiff && (inst.paidValue as number) > inst.value;
                       if (!hasDiff) {
-                        return <span className="text-xs font-semibold text-emerald-700">{formatCurrency(inst.value)}</span>;
+                        return <span className={`text-xs font-semibold ${isAntecipada ? ANTECIPADA_TEXT_CLASS : 'text-emerald-700'}`}>{formatCurrency(inst.value)}</span>;
                       }
                       return (
                         <div className="flex flex-col items-end leading-tight">
@@ -2320,6 +2363,24 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         Alterar data
                       </button>
                     )}
+                    {!isEditingPaid && (
+                      <button
+                        type="button"
+                        onClick={toggleAntecipada}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-semibold border transition-colors ${
+                          isAntecipada
+                            ? 'border-sky-300 bg-sky-100 text-sky-800 hover:bg-sky-200'
+                            : 'border-sky-200 text-sky-700 hover:bg-sky-50'
+                        }`}
+                        title={
+                          isAntecipada
+                            ? 'Desmarcar: a parcela volta a constar como paga pelo aluno'
+                            : 'Marcar como boleto antecipado (banco/fundo) — exibe em azul claro como "Antecipado" em vez de "Pago"'
+                        }
+                      >
+                        {isAntecipada ? 'Desmarcar antecipado' : 'Antecipado'}
+                      </button>
+                    )}
                     <button
                       onClick={async () => {
                         const ok = await confirm({
@@ -2332,7 +2393,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         setEditingPaidDates(null);
                         const updated = student.installments.map((i) =>
                           i.number === inst.number
-                            ? { ...i, paid: false, paidDate: undefined, paidMarkedAt: undefined }
+                            ? { ...i, paid: false, paidDate: undefined, paidMarkedAt: undefined, antecipada: undefined }
                             : i
                         );
                         const paidCount = updated.filter((i) => i.paid).length;
@@ -2360,7 +2421,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         setOriginalInstallmentsRef((prev) =>
                           prev.map((i) =>
                             i.number === inst.number
-                              ? { ...i, paid: false, paidDate: undefined, paidMarkedAt: undefined }
+                              ? { ...i, paid: false, paidDate: undefined, paidMarkedAt: undefined, antecipada: undefined }
                               : i,
                           ),
                         );
