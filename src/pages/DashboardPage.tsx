@@ -588,16 +588,21 @@ export default function DashboardPage() {
   const pctEmDia = pct(emDia.length);
   const pctInadimplente = pct(inadimplentes);
   // ── Fita "Em Dia + Novos · mês vigente" ───────────────────────────────────
-  // Recorte pelo mês atual (Brasília): só entram alunos com parcela vencendo
-  // no mês; o valor soma somente as parcelas do mês (pagas + em aberto).
+  // Mesma regra da carteira do AC: acumulado do dia 01 até HOJE (Brasília).
+  // Só entram alunos Em Dia / Novos com parcela vencendo entre o 1º dia do mês
+  // e a data atual; o valor soma somente essas parcelas (pagas + em aberto).
+  // Como o intervalo recomeça no dia 1, a fita zera sozinha na virada do mês.
   // Independe do filtro de vencimento da Previsão.
-  const mesAtualKey = getTodayStringBrasilia().slice(0, 7); // YYYY-MM
+  const hojeKey = getTodayStringBrasilia(); // YYYY-MM-DD
+  const mesAtualKey = hojeKey.slice(0, 7); // YYYY-MM
   const mesAtualLabel = (() => {
     const [y, m] = mesAtualKey.split('-').map(Number);
     const nome = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long' });
     return `${nome.charAt(0).toUpperCase()}${nome.slice(1)}/${y}`;
   })();
-  const _instNoMes = (i: { dueDate: string }) => i.dueDate.slice(0, 7) === mesAtualKey;
+  const periodoMesLabel = `01/${mesAtualKey.slice(5, 7)} a ${hojeKey.slice(8, 10)}/${hojeKey.slice(5, 7)}`;
+  const _instNoMes = (i: { dueDate: string }) =>
+    i.dueDate.slice(0, 7) === mesAtualKey && i.dueDate.slice(0, 10) <= hojeKey;
   const _temParcelaNoMes = (s: Student) => s.installments.some(_instNoMes);
   const sumMes = (arr: Student[], onlyPaid?: boolean) =>
     arr.reduce((acc, s) => {
@@ -1186,14 +1191,17 @@ export default function DashboardPage() {
             meta={rules.metaTaxaEmDia}
             metaPadrao={rules.meta1}
             base={rules.metaTaxaEmDiaBase}
+            baseMes={rules.metaTaxaEmDiaBaseMes}
+            mesAtual={mesAtualKey}
             definidaEm={rules.metaTaxaEmDiaEm}
             titulo="Dashboard geral"
             canEdit={currentUser?.role === 'admin'}
             temDados={totalComposicao > 0}
-            onSave={({ meta, base, definidaEm }) =>
+            onSave={({ meta, base, baseMes, definidaEm }) =>
               setRules({
                 ...(meta != null ? { metaTaxaEmDia: meta } : {}),
                 metaTaxaEmDiaBase: base,
+                metaTaxaEmDiaBaseMes: baseMes,
                 metaTaxaEmDiaEm: definidaEm,
               })}
           />
@@ -1202,9 +1210,12 @@ export default function DashboardPage() {
         <div
           onClick={() => setKpiModalKey('emdia_novos')}
           className="min-w-0 cursor-pointer flex flex-col justify-center px-1 sm:px-2"
-          title={`Em Dia + Novos · ${mesAtualLabel}: ${formatCurrency(mesEmDiaNovosValue)} (${mesEmDiaNovos.length} alunos, parcelas do mês pagas + em aberto). Clique para ver os alunos.`}
+          title={`Em Dia + Novos · ${mesAtualLabel} (${periodoMesLabel}): ${formatCurrency(mesEmDiaNovosValue)} (${mesEmDiaNovos.length} alunos, parcelas com vencimento de 01 até hoje, pagas + em aberto). Clique para ver os alunos.`}
         >
-          <div className="flex items-center justify-end gap-2 mb-0.5">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">
+              Em Dia + Novos · {mesAtualLabel} · {periodoMesLabel}
+            </p>
             <MetaValorEditor
               value={emDiaNovosMeta}
               titulo="Dashboard geral"

@@ -6,11 +6,13 @@ import MetaTaxaEmDiaGauge from '@/components/ui/MetaTaxaEmDiaGauge';
 /**
  * Velocímetro da meta mensal de Taxa em Dia + leitura + edição da meta.
  * Usado no cabeçalho da Carteira do Assessor (meta por AC) e do Dashboard
- * (meta da empresa). O ponto de partida é gravado ao salvar a meta; quando
- * ainda não há partida gravada (meta padrão ou meta definida direto no
- * banco), a partida é fixada na taxa atual na primeira visualização de quem
- * pode editar — sem isso o início da escala acompanharia a taxa ao vivo e a
- * agulha ficaria sempre colada no começo do velocímetro.
+ * (meta da empresa).
+ *
+ * Ponto de partida (ponta esquerda da escala) = Taxa em Dia no início do mês.
+ * É fixado na primeira visualização de quem pode editar dentro de cada mês
+ * (`baseMes` diferente do mês atual → refixa na taxa do momento) e fica
+ * congelado até a próxima virada. Sem isso o início da escala acompanharia a
+ * taxa ao vivo e a agulha ficaria sempre colada no começo do velocímetro.
  */
 interface Props {
   /** Taxa em Dia atual (%), já calculada pela página. */
@@ -21,6 +23,10 @@ interface Props {
   metaPadrao: number;
   /** Ponto de partida gravado (%). Se ausente, usa a taxa atual. */
   base?: number;
+  /** Mês (YYYY-MM) a que `base` se refere. Diferente de `mesAtual` → refixar. */
+  baseMes?: string;
+  /** Mês corrente (YYYY-MM, Brasília). */
+  mesAtual: string;
   /** ISO — quando a meta foi definida. */
   definidaEm?: string;
   /** Título mostrado no popover (ex.: nome do assessor / "Dashboard geral"). */
@@ -29,7 +35,7 @@ interface Props {
   /** Há dados suficientes para a taxa atual fazer sentido (evita fixar partida em 0% de carteira vazia). */
   temDados: boolean;
   /** `meta` ausente = só fixa a partida, mantendo a meta padrão em vigor. */
-  onSave: (patch: { meta?: number; base: number; definidaEm: string }) => void;
+  onSave: (patch: { meta?: number; base: number; baseMes: string; definidaEm: string }) => void;
   size?: number;
 }
 
@@ -40,6 +46,8 @@ export default function MetaTaxaEmDiaHeader({
   meta,
   metaPadrao,
   base,
+  baseMes,
+  mesAtual,
   definidaEm,
   titulo,
   canEdit,
@@ -55,19 +63,24 @@ export default function MetaTaxaEmDiaHeader({
   const baseEfetiva = base ?? taxaAtual;
   const taxaArred = Math.round(taxaAtual * 10) / 10;
 
-  // Sem partida gravada (meta padrão ou meta salva direto no banco): fixa a
-  // partida na taxa atual, uma vez. Meta só é gravada se já existia — a meta
-  // padrão continua vindo das Configurações.
-  const fixarPartida = canEdit && temDados && base == null;
+  // Partida do mês ainda não fixada (nunca gravada ou gravada em outro mês):
+  // fixa na taxa atual, uma vez por mês. Meta só é gravada se já existia — a
+  // meta padrão continua vindo das Configurações.
+  const fixarPartida = canEdit && temDados && (base == null || baseMes !== mesAtual);
   useEffect(() => {
     if (!fixarPartida) return;
-    onSave({ meta: meta ?? undefined, base: taxaArred, definidaEm: definidaEm ?? new Date().toISOString() });
+    onSave({
+      meta: meta ?? undefined,
+      base: taxaArred,
+      baseMes: mesAtual,
+      definidaEm: definidaEm ?? new Date().toISOString(),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fixarPartida]);
+  }, [fixarPartida, mesAtual]);
 
   const abrir = () => {
     setMetaDraft(fmtPct(metaEfetiva));
-    setBaseDraft(fmtPct(taxaAtual));
+    setBaseDraft(fmtPct(baseEfetiva));
     setOpen(true);
   };
 
@@ -77,11 +90,12 @@ export default function MetaTaxaEmDiaHeader({
       toast.error('Meta inválida — informe um percentual entre 0 e 100.');
       return;
     }
-    const bRaw = baseDraft.trim() ? Number(baseDraft.replace(',', '.')) : taxaAtual;
-    const b = Number.isFinite(bRaw) ? Math.max(0, Math.min(100, bRaw)) : taxaAtual;
+    const bRaw = baseDraft.trim() ? Number(baseDraft.replace(',', '.')) : baseEfetiva;
+    const b = Number.isFinite(bRaw) ? Math.max(0, Math.min(100, bRaw)) : baseEfetiva;
     onSave({
       meta: Math.round(m * 10) / 10,
       base: Math.round(b * 10) / 10,
+      baseMes: mesAtual,
       definidaEm: new Date().toISOString(),
     });
     setOpen(false);
@@ -135,19 +149,19 @@ export default function MetaTaxaEmDiaHeader({
             />
           </label>
           <label className="block text-[10px] text-muted-foreground mt-2">
-            Ponto de partida (%) — início do velocímetro
+            Ponto de partida (%) — Taxa em Dia no início do mês
             <input
               type="number" step="0.1" min={0} max={100}
               className="input-field w-full mt-1"
               value={baseDraft}
-              placeholder={fmtPct(taxaAtual)}
+              placeholder={fmtPct(baseEfetiva)}
               onFocus={(e) => e.currentTarget.select()}
               onChange={(e) => setBaseDraft(e.target.value)}
               onKeyDown={onKey}
             />
           </label>
           <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug">
-            Pré-preenchido com a taxa atual. A escala vai da partida até o dobro da meta; o amarelo marca o meio do caminho.
+            A partida é refixada automaticamente na virada do mês com a taxa daquele momento; aqui você pode corrigi-la. A escala vai da partida até o dobro da meta; o amarelo marca o meio do caminho.
           </p>
           <div className="flex justify-end gap-2 mt-3">
             <button

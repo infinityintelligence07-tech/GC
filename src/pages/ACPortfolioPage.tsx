@@ -891,14 +891,17 @@ export default function ACPortfolioPage() {
             meta={ac.metaTaxaEmDia}
             metaPadrao={rules.meta1}
             base={ac.metaTaxaEmDiaBase}
+            baseMes={ac.metaTaxaEmDiaBaseMes}
+            mesAtual={mesAtualKey}
             definidaEm={ac.metaTaxaEmDiaEm}
             titulo={ac.name}
             canEdit={currentUser?.role === 'admin'}
             temDados={totalComposicao > 0}
-            onSave={({ meta, base, definidaEm }) =>
+            onSave={({ meta, base, baseMes, definidaEm }) =>
               updateAC(ac.id, {
                 ...(meta != null ? { metaTaxaEmDia: meta } : {}),
                 metaTaxaEmDiaBase: base,
+                metaTaxaEmDiaBaseMes: baseMes,
                 metaTaxaEmDiaEm: definidaEm,
               })}
           />

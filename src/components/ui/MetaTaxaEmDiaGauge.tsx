@@ -107,7 +107,7 @@ export default function MetaTaxaEmDiaGauge({
   // Rótulos das extremidades ficam abaixo das pontas do arco; os demais, fora do arco.
   const endLabelY = cy + stroke / 2 + fontPct * 0.9;
   const labels: Array<{ x: number; y: number; text: string; title: string; anchor: 'start' | 'middle' | 'end' }> = [
-    { x: polar(0).x, y: endLabelY, text: `${fmt(lo)}%`, title: 'Ponto de partida', anchor: 'middle' },
+    { x: polar(0).x, y: endLabelY, text: `${fmt(lo)}%`, title: 'Ponto de partida — Taxa em Dia no início do mês', anchor: 'middle' },
     { ...polar(45, outerLabelRadius), text: `${fmt((lo + m) / 2)}%`, title: 'Meio do caminho', anchor: 'middle' },
     { ...polar(90, outerLabelRadius), text: `${fmt(m)}%`, title: 'Meta do mês', anchor: 'middle' },
     { x: polar(180).x, y: endLabelY, text: `${fmt(m * 2)}%`, title: 'Dobro da meta', anchor: 'middle' },

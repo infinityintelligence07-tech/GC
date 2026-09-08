@@ -162,8 +162,10 @@ export interface AC {
   /** Meta mensal de Taxa em Dia (%) — topo do velocímetro da carteira.
    *  Se ausente, o app usa `rules.meta1`. */
   metaTaxaEmDia?: number;
-  /** Taxa em Dia (%) no momento em que a meta foi definida — início da escala. */
+  /** Taxa em Dia (%) no início do mês — ponto de partida da escala do velocímetro. */
   metaTaxaEmDiaBase?: number;
+  /** Mês (YYYY-MM, Brasília) a que `metaTaxaEmDiaBase` se refere; mês diferente = refixar a partida. */
+  metaTaxaEmDiaBaseMes?: string;
   /** ISO — quando a meta de Taxa em Dia foi definida. */
   metaTaxaEmDiaEm?: string;
   /** Valor (R$) "Em Dia + Novos" do mês registrado no início do mês — marca da fita. */
@@ -210,8 +212,10 @@ export interface FinancialRules {
   /** Meta mensal de Taxa em Dia (%) da empresa — velocímetro do Dashboard.
    *  Se ausente, o app usa `meta1`. */
   metaTaxaEmDia?: number;
-  /** Taxa em Dia (%) no momento em que a meta foi definida — início da escala. */
+  /** Taxa em Dia (%) no início do mês — ponto de partida da escala do velocímetro. */
   metaTaxaEmDiaBase?: number;
+  /** Mês (YYYY-MM, Brasília) a que `metaTaxaEmDiaBase` se refere; mês diferente = refixar a partida. */
+  metaTaxaEmDiaBaseMes?: string;
   /** ISO — quando a meta de Taxa em Dia foi definida. */
   metaTaxaEmDiaEm?: string;
   /** Participação "Em Dia + Novos" (%) do mês registrada no início do mês — marca da fita do Dashboard. */
