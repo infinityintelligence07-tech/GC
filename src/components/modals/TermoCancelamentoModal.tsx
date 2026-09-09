@@ -21,6 +21,7 @@ import {
 import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
 import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
 import TermoDadosAlunoForm from '@/components/ui/TermoDadosAlunoForm';
+import TemplateFormattedView from '@/components/ui/TemplateFormattedView';
 import { useTermoDadosAluno } from '@/hooks/useTermoDadosAluno';
 import { toast } from 'sonner';
 import logoIAM from '@/assets/logo-iam-blue.png';
@@ -292,10 +293,9 @@ export default function TermoCancelamentoModal({
               </button>
               {doc.templateText ? (
                 // Modelo editado na aba Documentos: mostra o texto final como vai
-                // para o PDF e para a ZapSign (sem o título, já exibido acima).
-                <pre className="whitespace-pre-wrap font-sans text-[11px] leading-relaxed pt-6">
-                  {doc.templateText.replace(/^\s*[^\n]*\n/, '')}
-                </pre>
+                // para o PDF e para a ZapSign (sem o título, já exibido acima),
+                // com a formatação (negrito, itálico, listas) do modelo.
+                <TemplateFormattedView text={doc.templateText} className="font-sans text-[11px] leading-relaxed pt-6" />
               ) : (
                 <>
                   <p>

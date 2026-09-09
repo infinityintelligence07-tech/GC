@@ -2,7 +2,7 @@ import { formatCurrency } from '@/store/useAppStore';
 import type { CancellationCase, RefundPaymentMethod, RefundPixKeyType, Student } from '@/types';
 import { refundPaymentMethodLabel } from '@/types';
 import { aplicarTermoTemplate } from '@/lib/termoTemplates';
-import { buildTemplatePrintHtml } from '@/lib/templateRender';
+import { buildTemplatePrintHtml, stripTemplateMarks } from '@/lib/templateRender';
 
 export type CancellationTermoVariant =
   | 'somente_estorno'
@@ -411,7 +411,8 @@ export function buildCancellationTermoInputFromCase(opts: {
 }
 
 export function cancellationTermoToPlainText(doc: CancellationTermoDocument): string {
-  if (doc.templateText) return doc.templateText;
+  // Texto puro: sem os marcadores de formatação (**negrito**, listas…).
+  if (doc.templateText) return stripTemplateMarks(doc.templateText);
   const lines = [
     doc.titulo.toUpperCase(),
     '',

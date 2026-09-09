@@ -174,6 +174,7 @@ function cancellationToRow(c: Partial<CancellationCase>): Record<string, unknown
   if ((c as any).refundPlan !== undefined) row.refund_plan = (c as any).refundPlan;
   if (c.caseNotes !== undefined) row.case_notes = c.caseNotes;
   if (c.externalImport !== undefined) row.external_import = c.externalImport;
+  if (c.abatimento !== undefined) row.abatimento = c.abatimento;
   return row;
 }
 
@@ -220,6 +221,7 @@ export function rowToCancellationCase(r: any): CancellationCase {
     refundPlan: typeof r.refund_plan === 'string' ? JSON.parse(r.refund_plan) : (r.refund_plan ?? undefined),
     caseNotes: typeof r.case_notes === 'string' ? JSON.parse(r.case_notes) : (r.case_notes ?? []),
     externalImport: r.external_import ?? false,
+    abatimento: typeof r.abatimento === 'string' ? JSON.parse(r.abatimento) : (r.abatimento ?? undefined),
   };
 }
 

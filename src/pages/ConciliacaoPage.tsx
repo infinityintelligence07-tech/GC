@@ -40,6 +40,7 @@ import {
 import { pushContratoConciliado } from '@/lib/iamControlSync';
 import type { RecompraIncorporada } from '@/lib/recompraVinculo';
 import { buildSairRenegociacaoPatch } from '@/lib/renegociacaoStatus';
+import { resolveStudentFinance, getStudentTotalPaid, getLatestCancellationCaseForStudent } from '@/lib/studentFinance';
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -984,14 +985,13 @@ function ContractSummaryPanel({ student, conciliacaoItems = [] }: { student: Stu
   });
 
   const cancellationCases = useAppStore((s) => s.cancellationCases);
-  const totalContratado = Number(student.saleValue) || 0;
-  const entrada = Number(student.downPayment) || 0;
   const totalPagoEfetivoCancelamento = conciliacaoItems
+    .filter((item) => item.tipo === 'cancelamento')
     .map((item) => item.depois as Record<string, unknown>)
     .map((depois) => {
-      if (depois?.multaDeduzidaDoPago !== true) return undefined;
       // `totalPagoEfetivo` inclui o complemento de multa; `totalPago` é só
-      // entrada + parcelas pagas (usado na linha do diff).
+      // entrada + parcelas pagas (usado na linha do diff). Publicados também
+      // nos cancelamentos sem multa (7 dias CDC) quando houve valor pago.
       const efetivo = Number(depois?.totalPagoEfetivo);
       if (Number.isFinite(efetivo)) return efetivo;
       const pago = Number(depois?.totalPago);
@@ -999,15 +999,22 @@ function ContractSummaryPanel({ student, conciliacaoItems = [] }: { student: Stu
     })
     .find((v) => v !== undefined);
   const isFineInst = (i: { tags?: string[] }) => (i.tags ?? []).includes('multa-cancelamento');
-  const pagasInst = (student.installments ?? []).filter((i) => i.paid && !isFineInst(i));
   const abertasInst = (student.installments ?? []).filter((i) => !i.paid && !isFineInst(i));
-  const pagoParcelas = pagasInst.reduce(
-    (acc, i) => acc + (typeof i.paidValue === 'number' ? i.paidValue : Number(i.value) || 0),
-    0,
-  );
+  // Mesma regra da aba Cancelamentos / modal de finalização: considera o
+  // "pago até o momento" informado no caso (ex.: R$ 3.000 pagos fora dos
+  // boletos, com ficha/Kamino em R$ 0) e a entrada embutida na P1.
+  const caseDoAluno = conciliacaoItems
+    .map((i) => i.relatedCaseId)
+    .filter((x): x is string => !!x)
+    .map((cid) => cancellationCases.find((c) => c.id === cid))
+    .find((c) => !!c)
+    ?? getLatestCancellationCaseForStudent(student.id, student.name, cancellationCases);
+  const kaminoPaid = caseDoAluno?.totalPagoAteMomento;
+  const financeAluno = resolveStudentFinance(student, { kaminoPaid });
+  const totalContratado = financeAluno.saleValue || Number(student.saleValue) || 0;
   const totalPago = totalPagoEfetivoCancelamento != null
     ? Number(totalPagoEfetivoCancelamento)
-    : entrada + pagoParcelas;
+    : getStudentTotalPaid(student, { kaminoPaid });
 
   const saldoAberto = Math.max(totalContratado - totalPago, 0);
   const parcelasAbertas = abertasInst.length;

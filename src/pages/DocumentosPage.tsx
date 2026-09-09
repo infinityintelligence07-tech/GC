@@ -40,6 +40,8 @@ import {
 } from '@/lib/managedDocuments';
 import { CANCELAMENTO_TEMPLATE_FIELDS, RENEGOCIACAO_TEMPLATE_FIELDS } from '@/lib/termoTemplates';
 import { normalizeTemplateKey } from '@/lib/templateRender';
+import TemplateFormatToolbar from '@/components/ui/TemplateFormatToolbar';
+import TemplateFormattedView from '@/components/ui/TemplateFormattedView';
 
 type EditorMode = 'create' | 'edit' | 'preview';
 
@@ -81,7 +83,10 @@ export default function DocumentosPage() {
   const [formContent, setFormContent] = useState('');
   const [formRelatedTo, setFormRelatedTo] = useState<DocumentRelation[]>([]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  /** Mostra o texto formatado (como sai no PDF) em vez do editor. */
+  const [showFormatted, setShowFormatted] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => subscribeManagedDocuments(() => setTick((t) => t + 1)), []);
 
@@ -110,6 +115,7 @@ export default function DocumentosPage() {
     setFormKind('termo');
     setFormContent('');
     setFormRelatedTo([]);
+    setShowFormatted(false);
     setEditorMode('create');
     setShowList(true);
   };
@@ -120,6 +126,7 @@ export default function DocumentosPage() {
     setFormKind(doc.kind);
     setFormContent(doc.content);
     setFormRelatedTo(doc.relatedTo ?? []);
+    setShowFormatted(false);
     setEditorMode('edit');
   };
 
@@ -129,6 +136,7 @@ export default function DocumentosPage() {
     setFormKind(doc.kind);
     setFormContent(doc.content);
     setFormRelatedTo(doc.relatedTo ?? []);
+    setShowFormatted(true);
     setEditorMode('preview');
   };
 
@@ -531,13 +539,60 @@ export default function DocumentosPage() {
                   <label className="text-[10px] font-semibold uppercase text-muted-foreground">Conteúdo</label>
                   <span className="text-[10px] text-muted-foreground">{vars.length} campos detectados</span>
                 </div>
-                <textarea
-                  value={formContent}
-                  onChange={(e) => setFormContent(e.target.value)}
-                  disabled={editorMode === 'preview'}
-                  className="input-field text-[12px] w-full min-h-[320px] font-mono leading-relaxed"
-                  placeholder="Cole ou escreva o texto do documento. Use {{CAMPO}} para variáveis."
-                />
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <TemplateFormatToolbar
+                    textareaRef={contentRef}
+                    value={formContent}
+                    onChange={setFormContent}
+                    disabled={editorMode === 'preview' || showFormatted}
+                  />
+                  <div className="inline-flex rounded-lg border border-border overflow-hidden text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setShowFormatted(false)}
+                      disabled={editorMode === 'preview'}
+                      className={`px-2.5 py-1 transition-colors disabled:opacity-60 ${
+                        !showFormatted ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-muted'
+                      }`}
+                    >
+                      {editorMode === 'preview' ? 'Texto' : 'Editar'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFormatted(true)}
+                      className={`px-2.5 py-1 border-l border-border transition-colors ${
+                        showFormatted ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-muted'
+                      }`}
+                    >
+                      Visualizar formatado
+                    </button>
+                  </div>
+                </div>
+                {showFormatted ? (
+                  <div className="rounded-lg border border-border bg-white p-5 min-h-[320px] max-h-[60vh] overflow-y-auto text-[12px] leading-relaxed text-slate-900">
+                    {formContent.trim() ? (
+                      <TemplateFormattedView text={formContent} showTitle />
+                    ) : (
+                      <p className="text-muted-foreground text-xs">Nada para visualizar ainda.</p>
+                    )}
+                  </div>
+                ) : (
+                  <textarea
+                    ref={contentRef}
+                    value={formContent}
+                    onChange={(e) => setFormContent(e.target.value)}
+                    disabled={editorMode === 'preview'}
+                    className="input-field text-[12px] w-full min-h-[320px] font-mono leading-relaxed"
+                    placeholder="Cole ou escreva o texto do documento. Use {{CAMPO}} para variáveis. Selecione um trecho e use a barra acima para negrito, itálico, sublinhado e listas."
+                  />
+                )}
+                {!showFormatted && editorMode !== 'preview' && (
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Formatação: <code>**negrito**</code>, <code>*itálico*</code>, <code>++sublinhado++</code>, linhas
+                    iniciando com <code>- </code> (marcadores) ou <code>1. </code> (numeradas). O PDF e o termo na ZapSign
+                    respeitam essa formatação.
+                  </p>
+                )}
                 {vars.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {vars.map((v) => {

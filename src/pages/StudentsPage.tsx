@@ -21,7 +21,7 @@ import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagR
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
 import { getDisplayInstallmentValue, normalizeSearch, toDisplayName } from '@/lib/utils';
-import { needsIamGcConciliacaoApproval } from '@/lib/iamPendenteConciliacao';
+import { needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { resolveStudentDisplayStatusVinculado, type StatusVinculado } from '@/lib/recompraVinculo';
 import { isRecompraFicha } from '@/lib/recompraConciliacao';
 import { isEmRenegociacao } from '@/lib/renegociacaoStatus';
@@ -190,6 +190,12 @@ export default function StudentsPage() {
         if (s.status !== 'Pendente' || s.statusMode !== 'Manual') {
           updateStudent(s.id, { status: 'Pendente', statusMode: 'Manual' });
         }
+        return;
+      }
+      // "Pendente" era o rótulo da fila IAM → GC; se o contrato virou quitado à
+      // vista (CONCILIADO, sem parcelas), ele não precisa de aprovação e é Pago.
+      if (s.status === 'Pendente' && s.statusMode === 'Manual' && isIamConciliadoQuitadoAvista(s)) {
+        updateStudent(s.id, { status: 'Pago', statusMode: 'Automático' });
         return;
       }
       if (s.status === 'Pendente') return;

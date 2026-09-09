@@ -13,7 +13,8 @@ import {
 import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
 import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
 import { aplicarTermoTemplate } from '@/lib/termoTemplates';
-import { buildTemplatePrintHtml, templateTextToZapSignMarkdown } from '@/lib/templateRender';
+import { buildTemplatePrintHtml, stripTemplateMarks, templateTextToZapSignMarkdown } from '@/lib/templateRender';
+import TemplateFormattedView from '@/components/ui/TemplateFormattedView';
 import { toast } from 'sonner';
 import logoIAM from '@/assets/logo-iam-blue.png';
 
@@ -470,7 +471,7 @@ export default function TermoAditivoModal({
               <img src={logoIAM} alt="IAM" className="w-14 h-auto" />
             </div>
             <h3 className="text-center text-sm font-bold uppercase tracking-wide">
-              {template ? template.text.split('\n')[0] : 'Termo de Renegociação'}
+              {template ? stripTemplateMarks(template.text.split('\n')[0]) : 'Termo de Renegociação'}
             </h3>
 
             {template ? (
@@ -490,10 +491,8 @@ export default function TermoAditivoModal({
                     ? `Completar dados (${dadosAluno.faltantes.length})`
                     : 'Editar dados'}
                 </button>
-                {/* Texto final do modelo (sem o título, já exibido acima). */}
-                <pre className="whitespace-pre-wrap font-sans text-[11px] leading-relaxed pt-6">
-                  {template.text.replace(/^\s*[^\n]*\n/, '')}
-                </pre>
+                {/* Texto final do modelo (sem o título, já exibido acima), com a formatação do modelo. */}
+                <TemplateFormattedView text={template.text} className="font-sans text-[11px] leading-relaxed pt-6" />
               </div>
             ) : (
             <>

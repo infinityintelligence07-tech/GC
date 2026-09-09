@@ -184,6 +184,11 @@ export default function ACPortfolioPage() {
           }
           return;
         }
+        // Quitado à vista CONCILIADO não precisa de aprovação: "Pendente" preso vira Pago.
+        if (s.status === 'Pendente' && s.statusMode === 'Manual' && isIamConciliadoQuitadoAvista(s)) {
+          updateStudent(s.id, { status: 'Pago', statusMode: 'Automático' });
+          return;
+        }
         if (s.status === 'Pendente') return;
         if (cancelamentoOverridesFinancialStatus(s)) return;
         if (s.statusMode === 'Automático') {

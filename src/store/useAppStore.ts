@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware';
 import { Student, AC, Product, FinancialRules, TabKey, StudentStatus, Installment, HistoryEntry, CancellationCase, CancellationStage, CancellationOperationalStatus, RendaExtraStatus, AppUser, StatusCancelamento, StudentTag, AbatimentoInfo } from '@/types';
 import { getTodayBrasilia, effectiveDueDate } from '@/lib/brasiliaDate';
 import { getInstallmentOutstanding } from '@/lib/utils';
-import { resolveStudentFinance, getLatestCancellationCaseForStudent } from '@/lib/studentFinance';
+import { resolveStudentFinance, getStudentTotalPaid, getLatestCancellationCaseForStudent } from '@/lib/studentFinance';
 import { cancellationCasesToResyncAc } from '@/lib/cancellationCaseAc';
 import {
   createAC, updateACDb, deleteACDb,
@@ -1018,14 +1018,25 @@ export const useAppStore = create<AppState>()(
     const pendentesArr = parcelasOrigem.filter((i) => !i.paid);
     const totalPagasValor = pagasArr.reduce((s, i) => s + (i.value ?? 0), 0);
     const totalPendentesValor = pendentesArr.reduce((s, i) => s + (i.value ?? 0), 0);
-    const entradaAluno = Number(linkedStudent?.downPayment) || 0;
+    // Entrada e total pago resolvidos com a MESMA regra do modal de finalização
+    // e da aba Cancelamentos (getStudentTotalPaid + "pago até o momento"
+    // informado no caso). Ex.: aluna pagou R$ 3.000 fora do fluxo de boletos
+    // (Kamino/ficha com 0 pago) → o card de conciliação e o estorno precisam
+    // enxergar os R$ 3.000, não R$ 0.
+    const kaminoPaidCase = Math.max(0, Number(cancCase.totalPagoAteMomento) || 0);
+    const financeAluno = linkedStudent
+      ? resolveStudentFinance(linkedStudent, { kaminoPaid: kaminoPaidCase })
+      : null;
+    const entradaAluno = financeAluno && financeAluno.paidEntrada
+      ? financeAluno.downPayment
+      : Number(linkedStudent?.downPayment) || 0;
     const totalInscricoesCase = Math.max(1, cancCase.quantidadeInscricoes ?? 1);
     const inscRevertidasCase = Math.min(Math.max(0, cancCase.inscricoesRevertidas ?? 0), totalInscricoesCase);
     const inscRestantesCase = Math.max(1, totalInscricoesCase - inscRevertidasCase);
     const proporcionalCancel = inscRevertidasCase > 0 && inscRestantesCase < totalInscricoesCase;
     const totalPagoBrutoAluno = linkedStudent
-      ? Math.round((entradaAluno + totalPagasValor) * 100) / 100
-      : Math.max(0, Number(cancCase.totalPagoAteMomento) || 0);
+      ? getStudentTotalPaid(linkedStudent, { kaminoPaid: kaminoPaidCase })
+      : kaminoPaidCase;
     const totalPagoAluno = proporcionalCancel
       ? Math.round(totalPagoBrutoAluno * inscRestantesCase / totalInscricoesCase * 100) / 100
       : totalPagoBrutoAluno;
@@ -1126,7 +1137,7 @@ export const useAppStore = create<AppState>()(
             statusCancelamento: 'em_tratamento',
             parcelas: parcelasResumoAntes,
             multaCancelamento: 0,
-            ...(fine > 0 ? { totalPago: totalPagoAluno } : {}),
+            ...(fine > 0 || totalPagoAluno > 0.0049 ? { totalPago: totalPagoAluno } : {}),
             ...(hasEstorno ? { estornoAluno: 0 } : {}),
             // Snapshot do caso ANTES da finalização — usado ao reprovar
             // conciliação para devolver o card à coluna/estado de origem.
@@ -1159,7 +1170,12 @@ export const useAppStore = create<AppState>()(
                   ...(multaComplementarPaga > 0.0049 ? { multaComplementarPaga } : {}),
                   ...(hasNegativar ? { totalNegativar, totalNegativarBase: totalPagoAluno } : {}),
                 }
-              : {}),
+              : totalPagoAluno > 0.0049
+                // Sem multa (ex.: 7 dias CDC) mas com valor pago: publica o
+                // total para o "Resumo do contrato" e para a regra do card
+                // Pago (pago − estorno) não tratarem o aluno como R$ 0 pago.
+                ? { totalPago: totalPagoAluno, totalPagoEfetivo: totalPagoFinal }
+                : {}),
             // Estorno ao aluno é publicado mesmo sem multa (ex.: 7 dias CDC),
             // sempre com o detalhamento das parcelas de devolução.
             ...(hasEstorno
@@ -1276,7 +1292,7 @@ export const useAppStore = create<AppState>()(
       set((state) => ({
         cancellationCases: state.cancellationCases.map((c) => c.id === caseId ? { ...c, ...updatedCase } : c),
         students: state.students.map((st) => {
-          if (st.cancellationCaseId !== caseId) return st;
+          if (st.cancellationCaseId !== caseId && st.id !== linkedStudent?.id) return st;
           return {
             ...st,
             statusCancelamento: 'pagamento_multa_pendente' as StatusCancelamento,
@@ -1313,13 +1329,19 @@ export const useAppStore = create<AppState>()(
     const updatedCase = { stage: 'Cancelado' as CancellationStage, operationalStatus: 'Cancelado' as CancellationOperationalStatus, funnelStage: 'Finalizado' as const, acao: 'Cancelado' as const, movedToCurrentStageAt: now, history: [...cancCase.history, entry] };
     const historyEntry: HistoryEntry = { date: now, type: 'Sistema', text: 'Conciliação de cancelamento concluída. Status completo: Cancelado.' };
 
+    // Baixa pendente = ainda existe parcela em aberto que não é a multa (mesma
+    // regra do banco em cancellation_case_finaliza_aluno). Cobre casos antigos
+    // que ficaram em 'solicitado' mesmo após "Cancelamento confirmado".
+    const precisaBaixar = (st: Student) =>
+      st.statusCancelamento === 'aguardando_conciliacao' ||
+      (st.installments ?? []).some((i) => !i.paid && !(i.tags ?? []).includes('multa-cancelamento'));
     set((state) => ({
       cancellationCases: state.cancellationCases.map((c) => c.id === caseId ? { ...c, ...updatedCase } : c),
       students: state.students.map((st) => {
-        if (st.cancellationCaseId !== caseId) return st;
+        if (st.cancellationCaseId !== caseId && st.id !== linkedStudent?.id) return st;
         // Se ainda não aplicamos as installments finais (caso multa = 0 vindo
         // direto da formalização), aplicamos agora para baixar a carteira.
-        const needsApply = st.statusCancelamento === 'aguardando_conciliacao';
+        const needsApply = precisaBaixar(st);
         return {
           ...st,
           status: 'Cancelado' as StudentStatus,
@@ -1336,7 +1358,7 @@ export const useAppStore = create<AppState>()(
     }));
     updateCancellationCaseDb(caseId, updatedCase).catch(reportDbError("salvar alteração"));
     if (linkedStudent) {
-      const needsApply = linkedStudent.statusCancelamento === 'aguardando_conciliacao';
+      const needsApply = precisaBaixar(linkedStudent);
       updateStudentDb(linkedStudent.id, {
         status: 'Cancelado' as StudentStatus,
         statusMode: 'Manual',
