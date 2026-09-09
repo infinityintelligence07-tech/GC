@@ -91,10 +91,25 @@ export function findRecomprasComSaldo(original: Student, students: Student[]): S
   );
 }
 
-/** Parcelas em aberto da recompra + soma (o que entra no saldo renegociado). */
-export function recompraSaldoAberto(recompra: Student): { parcelas: Installment[]; valor: number } {
-  const parcelas = (recompra.installments ?? []).filter((i) => !i.paid);
+/** Parcelas em aberto da ficha + soma (o que entra no saldo renegociado). */
+export function recompraSaldoAberto(ficha: Student): { parcelas: Installment[]; valor: number } {
+  const parcelas = (ficha.installments ?? []).filter((i) => !i.paid);
   return { parcelas, valor: parcelas.reduce((a, i) => a + (i.value || 0), 0) };
+}
+
+/**
+ * Outros treinamentos do mesmo aluno (fichas que não são recompra) com saldo em
+ * aberto — podem ser juntados à renegociação, mas só se o AC marcar (ao contrário
+ * da recompra vinculada, que entra por padrão).
+ */
+export function findOutrosContratosComSaldo(original: Student, students: Student[]): Student[] {
+  return students.filter(
+    (s) =>
+      !isRecompraFicha(s) &&
+      sameAluno(original, s) &&
+      contaNoStatusConjunto(s) &&
+      (s.installments ?? []).some((i) => !i.paid),
+  );
 }
 
 /** Grupo vinculado do qual a ficha faz parte (ou null se não há vínculo). */

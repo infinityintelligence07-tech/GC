@@ -1,5 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
-import { X, Download, Link2, Check, Paperclip, FileText } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { X, Download, Link2, Check, FileText, UserRoundPen } from 'lucide-react';
+import TermoDadosAlunoForm from '@/components/ui/TermoDadosAlunoForm';
+import { useTermoDadosAluno } from '@/hooks/useTermoDadosAluno';
 import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
 import {
@@ -10,15 +12,8 @@ import {
 } from '@/lib/zapsignTermo';
 import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
 import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
-import {
-  RENEG_ANEXO_ACCEPT as ANEXO_ACCEPT,
-  uploadRenegTermoAnexado,
-  type TermoAnexadoInfo,
-} from '@/lib/renegTermoAnexo';
 import { toast } from 'sonner';
 import logoIAM from '@/assets/logo-iam-blue.png';
-
-export type { TermoAnexadoInfo };
 
 export interface TermoRenegociacaoOriginalValues {
   valorVenda: number;
@@ -63,11 +58,9 @@ interface Props {
     status?: string;
     nomeDocumento?: string;
   }) => void;
-  /** Chamado quando o usuário anexa um termo/contrato já assinado (fora da ZapSign). */
-  onTermoAnexado?: (info: TermoAnexadoInfo) => void;
   /**
    * Link de assinatura de um termo já gerado na ZapSign (ao reabrir o modal).
-   * Com ele, o modal já abre com Copiar Link / WhatsApp liberados.
+   * Com ele, o modal já abre com Copiar Link liberado.
    */
   signLinkInicial?: string | null;
 }
@@ -117,20 +110,21 @@ const INSTITUTO =
   'INSTITUTO ACADEMY MIND TREINAMENTOS LTDA, pessoa jurídica de direito privado, devidamente inscrita no CNPJ nº 03.727.532/0001-13, com sede na R. Major Rehder, 248 - Vila Rehder, Americana - SP, 13465-390';
 
 export default function TermoAditivoModal({
-  student,
+  student: studentProp,
   originalValues,
   newValues,
   onClose,
   onTermoGerado,
-  onTermoAnexado,
   signLinkInicial,
 }: Props) {
   const [linkBusy, setLinkBusy] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(signLinkInicial ?? null);
   const [enviarEmail, setEnviarEmail] = useState(true);
   const [enviarWhatsapp, setEnviarWhatsapp] = useState(false);
-  const [anexoBusy, setAnexoBusy] = useState(false);
-  const anexoInputRef = useRef<HTMLInputElement>(null);
+  // Dados do aluno para o termo — abre preenchimento manual se faltar nome/CPF/e-mail/WhatsApp
+  // (mesmo fluxo do termo de cancelamento). Ao salvar, também atualiza a ficha.
+  const dadosAluno = useTermoDadosAluno({ student: studentProp });
+  const student = dadosAluno.studentEfetivo ?? studentProp;
   const signerCheck = checkStudentZapSignSigner(student);
 
   const today = useMemo(() => new Date(), []);
@@ -325,7 +319,7 @@ export default function TermoAditivoModal({
       return;
     }
     if (signLink) {
-      toast.message('Termo já gerado. Use Copiar Link ou WhatsApp para enviar ao aluno.');
+      toast.message('Termo já gerado. Use Copiar Link para enviar ao aluno.');
       return;
     }
 
@@ -380,24 +374,18 @@ export default function TermoAditivoModal({
     }
   };
 
-  const handleAnexarAssinado = async (file: File | undefined) => {
-    if (!file) return;
-    setAnexoBusy(true);
-    try {
-      const info = await uploadRenegTermoAnexado(student.id, file);
-      toast.success('Termo assinado anexado. Confirmar liberado.');
-      onTermoAnexado?.(info);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Falha ao anexar o termo.');
-    } finally {
-      setAnexoBusy(false);
-      if (anexoInputRef.current) anexoInputRef.current.value = '';
-    }
-  };
-
   return (
     <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-50 fade-in">
       <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto shadow-2xl border border-border">
+        {dadosAluno.formOpen && (
+          <TermoDadosAlunoForm
+            initial={dadosAluno.dados}
+            faltantes={dadosAluno.faltantes}
+            salvaNaFicha
+            onSave={dadosAluno.salvar}
+            onClose={() => dadosAluno.setFormOpen(false)}
+          />
+        )}
         <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card z-10">
           <h2 className="text-lg font-semibold text-foreground">Termo de Renegociação</h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted transition-colors">
@@ -413,17 +401,32 @@ export default function TermoAditivoModal({
             <h3 className="text-center text-sm font-bold uppercase tracking-wide">Termo de Renegociação</h3>
 
             <p>Pelo presente instrumento, o(a) ALUNO(A):</p>
-            <div className="space-y-0.5 pl-1">
-              <p>
+            <div className="relative space-y-0.5 pl-1">
+              <button
+                type="button"
+                onClick={() => dadosAluno.setFormOpen(true)}
+                className={`absolute right-0 top-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border transition-colors ${
+                  dadosAluno.faltantes.length > 0
+                    ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                    : 'bg-white border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+                }`}
+                title="Preencher/corrigir nome, CPF, e-mail e WhatsApp do aluno"
+              >
+                <UserRoundPen size={11} />
+                {dadosAluno.faltantes.length > 0
+                  ? `Completar dados (${dadosAluno.faltantes.length})`
+                  : 'Editar dados'}
+              </button>
+              <p className={dadosAluno.faltantes.includes('name') ? 'text-amber-700' : undefined}>
                 <span className="font-semibold">NOME COMPLETO:</span> {student.name || '—'}
               </p>
-              <p>
+              <p className={dadosAluno.faltantes.includes('cpf') ? 'text-amber-700' : undefined}>
                 <span className="font-semibold">CPF/CNPJ:</span> {student.cpf || '—'}
               </p>
-              <p>
+              <p className={dadosAluno.faltantes.includes('whatsapp') ? 'text-amber-700' : undefined}>
                 <span className="font-semibold">WHATSAPP:</span> {student.whatsapp || '—'}
               </p>
-              <p>
+              <p className={dadosAluno.faltantes.includes('email') ? 'text-amber-700' : undefined}>
                 <span className="font-semibold">EMAIL:</span> {student.email || '—'}
               </p>
             </div>
@@ -520,14 +523,15 @@ export default function TermoAditivoModal({
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-xs text-blue-800">
               Este termo documenta formalmente a renegociação, no mesmo padrão do documento institucional. Gere o PDF
-              para impressão, gere o termo no ZapSign para obter o link de assinatura ou anexe o termo já assinado.
+              para impressão ou gere o termo no ZapSign para obter o link de assinatura. Se preferir um contrato
+              assinado fora da ZapSign, use <strong>Anexar contrato</strong> na tela da renegociação.
             </p>
           </div>
 
           {!signerCheck.ok && (
             <p className="text-[11px] text-amber-700">
-              {signerCheck.motivo} Sem contato, use <strong>Anexar assinado</strong> para enviar o termo/contrato já
-              assinado.
+              {signerCheck.motivo} Cadastre e-mail ou WhatsApp na ficha do aluno para gerar o termo na ZapSign, ou anexe
+              o contrato assinado na tela da renegociação.
             </p>
           )}
 
@@ -544,8 +548,8 @@ export default function TermoAditivoModal({
 
           {signLink && (
             <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
-              Termo gerado na ZapSign. Se não escolheu envio automático, envie o link ao aluno (Copiar Link ou
-              WhatsApp). Quando ele assinar, o Confirmar da renegociação é liberado automaticamente.
+              Termo gerado na ZapSign. Se não escolheu envio automático, use Copiar Link para enviar ao aluno.
+              Quando ele assinar, o Confirmar da renegociação é liberado automaticamente.
               <div className="mt-1 text-emerald-800/80 font-mono text-[10px]">{signLink}</div>
             </div>
           )}
@@ -569,23 +573,6 @@ export default function TermoAditivoModal({
               Gerar PDF
             </button>
           )}
-          <input
-            ref={anexoInputRef}
-            type="file"
-            accept={ANEXO_ACCEPT}
-            className="hidden"
-            onChange={(e) => void handleAnexarAssinado(e.target.files?.[0])}
-          />
-          <button
-            type="button"
-            onClick={() => anexoInputRef.current?.click()}
-            disabled={anexoBusy}
-            title="Anexar termo/contrato já assinado (PDF ou imagem, até 10 MB). Libera o Confirmar."
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            <Paperclip size={16} />
-            {anexoBusy ? 'Enviando…' : 'Anexar assinado'}
-          </button>
           {signLink ? (
             <span className="px-3 py-2 rounded-lg text-sm font-medium bg-violet-50 border border-violet-200 text-violet-700 flex items-center gap-2">
               <Check size={16} /> Termo gerado
@@ -614,6 +601,7 @@ export default function TermoAditivoModal({
             whatsapp={student.whatsapp}
             titulo="Termo de Renegociação"
             disabled={linkBusy}
+            showWhatsApp={false}
           />
         </div>
       </div>

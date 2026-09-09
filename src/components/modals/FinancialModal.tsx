@@ -15,7 +15,12 @@ import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import { getInstallmentCreditApplied, getInstallmentOutstanding, getStudentCreditAppliedTotal } from '@/lib/utils';
 import { isEntradaPendenciaInstallment, sumEntradaPendenteValue } from '@/lib/studentDisplayStatus';
 import { resolveStudentFinance } from '@/lib/studentFinance';
-import { findRecomprasComSaldo, recompraSaldoAberto, type RecompraIncorporada } from '@/lib/recompraVinculo';
+import {
+  findOutrosContratosComSaldo,
+  findRecomprasComSaldo,
+  recompraSaldoAberto,
+  type RecompraIncorporada,
+} from '@/lib/recompraVinculo';
 import { deleteZapSignTermo, getZapSignTermoStatus, isZapSignTermoAssinado } from '@/lib/zapsignTermo';
 import {
   ANTECIPADA_BADGE_CLASS,
@@ -82,6 +87,8 @@ type RenegStandbyDraft = {
   renegSelected: number[];
   /** Recompras vinculadas (ids) cujo saldo entra na renegociação. Ausente = todas. */
   renegRecomprasIncluidas?: string[];
+  /** Outros treinamentos do aluno (ids) juntados à renegociação. Ausente = nenhum. */
+  renegOutrosIncluidos?: string[];
   savedAt: string;
   /** Termo de renegociação aguardando / concluído na ZapSign. */
   termo?: RenegTermoPending;
@@ -345,6 +352,15 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   );
   const toggleRenegRecompra = (id: string) =>
     setRenegRecomprasIncluidas((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // Outros treinamentos do mesmo aluno com saldo: podem ser juntados à
+  // renegociação, mas começam DESMARCADOS (o AC escolhe).
+  const outrosContratosComSaldo = useMemo(
+    () => findOutrosContratosComSaldo(student, allStudents),
+    [student, allStudents],
+  );
+  const [renegOutrosIncluidos, setRenegOutrosIncluidos] = useState<string[]>([]);
+  const toggleRenegOutro = (id: string) =>
+    setRenegOutrosIncluidos((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   // Enquanto a renegociação não começou, mantém o padrão "todas incluídas"
   // mesmo que a lista de alunos termine de carregar depois de abrir o modal.
   const recomprasIdsKey = recomprasComSaldo.map((r) => r.id).join('|');
@@ -386,6 +402,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     entradaPercent,
     renegSelected,
     renegRecomprasIncluidas,
+    renegOutrosIncluidos,
     savedAt: new Date().toISOString(),
     termo: termoOverride === undefined ? (termoPending ?? undefined) : (termoOverride ?? undefined),
   });
@@ -417,6 +434,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       // Só ids que ainda existem com saldo (a recompra pode ter sido quitada/vinculada a outro contrato).
       const validos = new Set(recomprasComSaldo.map((r) => r.id));
       setRenegRecomprasIncluidas(draft.renegRecomprasIncluidas.filter((id) => validos.has(id)));
+    }
+    if (Array.isArray(draft.renegOutrosIncluidos)) {
+      const validos = new Set(outrosContratosComSaldo.map((o) => o.id));
+      setRenegOutrosIncluidos(draft.renegOutrosIncluidos.filter((id) => validos.has(id)));
     }
     setTermoPending(draft.termo ?? null);
     setQuitacaoMode(false);
@@ -625,7 +646,20 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const [quitParcSel, setQuitParcSel] = useState<number[]>([]);
   const [quitParcVal, setQuitParcVal] = useState<Record<number, number>>({});
   const [quitParcDate, setQuitParcDate] = useState<Record<number, string>>({});
+  /** Quitação de parcelas: valor sugerido com multa/juros (vencidas) ou só o valor registrado. */
+  const [quitParcComEncargos, setQuitParcComEncargos] = useState(false);
   const todayIsoDate = () => new Date().toISOString().split('T')[0];
+  const buildQuitParcVals = (comEncargos: boolean): Record<number, number> => {
+    const vals: Record<number, number> = {};
+    unpaidInstallments.forEach((i) => {
+      vals[i.number] = comEncargos
+        ? calculateCharges(i.value, i.dueDate, i.number).total
+        : i.value;
+    });
+    return vals;
+  };
+  const quitParcValorEsperado = (i: { number: number; value: number; dueDate: string }) =>
+    quitParcComEncargos ? calculateCharges(i.value, i.dueDate, i.number).total : i.value;
   const toggleQuitParc = (n: number) => {
     const iso = todayIsoDate();
     if (quitParcSel.includes(n)) {
@@ -1136,8 +1170,17 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       })
       .filter((r) => r.parcelas.length > 0);
     const recompraValor = recomprasIncorporadas.reduce((a, r) => a + r.valor, 0);
+    // Outros treinamentos do aluno marcados pelo AC: saldo em aberto entra também.
+    const outrosIncorporados: RecompraIncorporada[] = outrosContratosComSaldo
+      .filter((o) => renegOutrosIncluidos.includes(o.id))
+      .map((o) => {
+        const { parcelas, valor } = recompraSaldoAberto(o);
+        return { studentId: o.id, studentName: o.name, product: o.product, parcelas: parcelas.map((i) => i.number), valor };
+      })
+      .filter((o) => o.parcelas.length > 0);
+    const outrosValor = outrosIncorporados.reduce((a, o) => a + o.valor, 0);
     const remainingProprio = selectedInst.reduce((acc, i) => acc + i.value, 0);
-    const remaining = remainingProprio + recompraValor;
+    const remaining = remainingProprio + recompraValor + outrosValor;
     const paidIncluded = selectedInst.filter((i) => i.paid);
     const multaValue = applyMultaReneg ? remaining * (renegMultaPercent / 100) : 0;
 
@@ -1165,6 +1208,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       remainingProprio,
       recompraValor,
       recomprasIncorporadas,
+      outrosValor,
+      outrosIncorporados,
       multaValue,
       totalJuros,
       totalWithCharges,
@@ -1226,26 +1271,31 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     const newTotal = proposedInst.length;
     // O saldo da recompra incorporada passa a fazer parte deste contrato.
     const novoSaleValue =
-      student.saleValue + renegValues.multaValue + renegValues.totalJuros + renegValues.recompraValor;
+      student.saleValue +
+      renegValues.multaValue +
+      renegValues.totalJuros +
+      renegValues.recompraValor +
+      renegValues.outrosValor;
     const recompras = renegValues.recomprasIncorporadas;
+    const outros = renegValues.outrosIncorporados;
+    const descreveFichas = (lista: RecompraIncorporada[]) =>
+      lista.map((r) => `${r.product} — ${r.parcelas.length} parcela(s) em aberto (${formatCurrency(r.valor)})`).join('; ');
     const recomprasTexto =
-      recompras.length > 0
-        ? `Recompra vinculada incluída: ${recompras
-            .map((r) => `${r.product} — ${r.parcelas.length} parcela(s) em aberto (${formatCurrency(r.valor)})`)
-            .join('; ')}. `
-        : '';
+      (recompras.length > 0 ? `Recompra vinculada incluída: ${descreveFichas(recompras)}. ` : '') +
+      (outros.length > 0 ? `Outro(s) treinamento(s) do aluno incluído(s): ${descreveFichas(outros)}. ` : '');
 
-    // Marca nas fichas de recompra que o saldo delas foi para esta renegociação
-    // (rascunho — a recompra só é zerada quando a Conciliação aprovar).
-    for (const r of recompras) {
+    // Marca nas outras fichas (recompra / outro treinamento) que o saldo delas foi
+    // para esta renegociação (rascunho — elas só são ajustadas quando a Conciliação aprovar).
+    for (const r of [...recompras, ...outros]) {
       const ficha = allStudents.find((s) => s.id === r.studentId);
       if (!ficha) continue;
+      const rotulo = recompras.includes(r) ? 'a recompra' : 'este contrato';
       updateStudent(ficha.id, {
         history: [
           ...ficha.history,
           addHistoryEntry(
             `Saldo em aberto de ${formatCurrency(r.valor)} (${r.parcelas.length} parcela(s)) incluído na renegociação do contrato ` +
-              `"${student.product}" (rascunho — a recompra só é ajustada após aprovação na Conciliação).`,
+              `"${student.product}" (rascunho — ${rotulo} só é ajustado(a) após aprovação na Conciliação).`,
           ),
         ],
       });
@@ -1281,7 +1331,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       ac: student.ac,
       resumo: `Renegociação (rascunho) — ${previousTotal}x ${formatCurrency(previousValue)} → ${newTotal}x (${keptPaid.length} pagas mantidas + ${newInstallments} novas de ${formatCurrency(renegValues.newValue)})` +
         (paidIncludedCount > 0 ? ` — ${paidIncludedCount} parcela(s) antes conciliada(s) como paga(s) foram incluídas` : '') +
-        (recompras.length > 0 ? ` — inclui recompra vinculada (${formatCurrency(renegValues.recompraValor)})` : ''),
+        (recompras.length > 0 ? ` — inclui recompra vinculada (${formatCurrency(renegValues.recompraValor)})` : '') +
+        (outros.length > 0
+          ? ` — inclui ${outros.length} outro(s) treinamento(s) (${formatCurrency(renegValues.outrosValor)})`
+          : ''),
       antes: {
         totalParcelas: previousTotal,
         valorParcela: previousValue,
@@ -1298,6 +1351,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         parcelasSelecionadas: renegValues.selectedInst.map((i) => i.number),
         parcelasPagasIncluidas: renegValues.paidIncluded.map((i) => i.number),
         recomprasIncorporadas: recompras.length > 0 ? recompras : undefined,
+        contratosIncorporados: outros.length > 0 ? outros : undefined,
         termo: termoPending
           ? {
               origem: termoPending.anexoPath ? 'anexo' : 'zapsign',
@@ -1382,9 +1436,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       .filter((i) => quitParcSel.includes(i.number) && !i.paid)
       .map((i) => {
         const valorOriginal = i.value;
-        const valorPago = quitParcVal[i.number] ?? valorOriginal;
-        const diverge = Math.abs(valorPago - valorOriginal) > 0.01;
-        return { inst: i, valorOriginal, valorPago, diverge };
+        const valorEsperado = quitParcValorEsperado(i);
+        const valorPago = quitParcVal[i.number] ?? valorEsperado;
+        const diverge = Math.abs(valorPago - valorEsperado) > 0.01;
+        return { inst: i, valorOriginal, valorEsperado, valorPago, diverge };
       });
 
     if (itens.length === 0) {
@@ -1395,12 +1450,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     const divergentes = itens.filter((x) => x.diverge);
     if (divergentes.length > 0) {
       const resumo = divergentes
-        .map((x) => `Parcela ${x.inst.number}: ${formatCurrency(x.valorOriginal)} → ${formatCurrency(x.valorPago)}`)
+        .map((x) => `Parcela ${x.inst.number}: ${formatCurrency(x.valorEsperado)} → ${formatCurrency(x.valorPago)}`)
         .join('\n');
       const ok = await confirm({
         title: 'Valor divergente detectado',
         description:
-          `Algumas parcelas estão com valor diferente do registrado:\n\n${resumo}\n\n` +
+          `Algumas parcelas estão com valor diferente do esperado${quitParcComEncargos ? ' (com encargos)' : ''}:\n\n${resumo}\n\n` +
           'Deseja enviar mesmo assim para a aba Conciliação?',
         confirmText: 'Confirmar mesmo assim',
         cancelText: 'Cancelar',
@@ -1423,7 +1478,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         ac: student.ac,
         resumo:
           `Quitação parcela ${inst.number} — ${formatCurrency(valorPago)}` +
-          (diverge ? ` (divergente do registrado ${formatCurrency(valorOriginal)})` : '') +
+          (quitParcComEncargos ? ' (com encargos)' : ' (sem encargos)') +
+          (diverge ? ` (divergente do esperado ${formatCurrency(quitParcValorEsperado(inst))})` : '') +
           ` — pago em ${formatDateBR(paidDate)}`,
         antes: { parcela: inst.number, valor: valorOriginal, paid: false },
         depois: {
@@ -1433,6 +1489,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           paidDate,
           paidMarkedAt,
           valorDivergente: diverge || undefined,
+          comEncargos: quitParcComEncargos || undefined,
         },
         autorObservacao: obs,
         executaImediatamente: false,
@@ -1443,7 +1500,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       history: [
         ...student.history,
         addHistoryEntry(
-          `Solicitação de quitação de ${itens.length} parcela(s) enviada para Conciliação: ` +
+          `Solicitação de quitação de ${itens.length} parcela(s) enviada para Conciliação` +
+            ` (${quitParcComEncargos ? 'com' : 'sem'} encargos): ` +
             itens
               .map((x) => `Parcela ${x.inst.number} (${formatCurrency(x.valorPago)}${x.diverge ? ' — divergente' : ''})`)
               .join('; ') + '.'
@@ -1458,6 +1516,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     setQuitParcSel([]);
     setQuitParcVal({});
     setQuitParcDate({});
+    setQuitParcComEncargos(false);
     onClose();
   };
 
@@ -1769,7 +1828,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                           ? 'O PDF assinado já está arquivado no GC.'
                           : 'O PDF assinado fica disponível aqui assim que a ZapSign liberar o arquivo.'
                       } Você já pode confirmar a renegociação.`
-                  : 'Pendente de assinatura do termo. O botão Confirmar fica bloqueado até o sistema identificar a assinatura ou você anexar o termo assinado.'}
+                  : 'Pendente de assinatura do termo. O botão Confirmar fica bloqueado até o sistema identificar a assinatura ou você anexar o termo feito manualmente.'}
               </p>
               {termoAssinado && termoPdfPath(termoPending) && (
                 <div className="flex flex-wrap gap-2 mt-2">
@@ -2915,16 +2974,15 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   setQuitParcelasMode(next);
                   setQuitacaoMode(false);
                   if (next) {
-                    // Pré-seleciona vencidas e pré-preenche valores com o registrado
+                    // Pré-seleciona vencidas e pré-preenche valores (padrão: sem encargos)
+                    setQuitParcComEncargos(false);
                     setQuitParcSel(overdueInstallments.map((i) => i.number));
-                    const vals: Record<number, number> = {};
                     const dates: Record<number, string> = {};
                     const iso = todayIsoDate();
                     unpaidInstallments.forEach((i) => {
-                      vals[i.number] = i.value;
                       dates[i.number] = iso;
                     });
-                    setQuitParcVal(vals);
+                    setQuitParcVal(buildQuitParcVals(false));
                     setQuitParcDate(dates);
                   }
                 }}
@@ -3022,6 +3080,48 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             <div className="border border-border rounded-xl p-4 bg-emerald-50 space-y-4">
               <h3 className="text-sm font-semibold text-emerald-700">Fluxo de Quitação de Parcelas</h3>
 
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-emerald-900">Encargos nas parcelas vencidas</span>
+                <div className="inline-flex rounded-lg overflow-hidden border border-emerald-300">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuitParcComEncargos(true);
+                      setQuitParcVal(buildQuitParcVals(true));
+                    }}
+                    className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      quitParcComEncargos
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white text-emerald-800 hover:bg-emerald-100'
+                    }`}
+                    title={`Aplicar multa ${multaPercent}% + juros ${jurosPercent}% a.m. no valor sugerido das vencidas`}
+                  >
+                    Com encargos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuitParcComEncargos(false);
+                      setQuitParcVal(buildQuitParcVals(false));
+                    }}
+                    className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      !quitParcComEncargos
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white text-emerald-800 hover:bg-emerald-100'
+                    }`}
+                    title="Usar apenas o valor registrado de cada parcela"
+                  >
+                    Sem encargos
+                  </button>
+                </div>
+              </div>
+              {quitParcComEncargos && (
+                <p className="text-[10px] text-emerald-800/90 leading-snug">
+                  Valores pré-preenchidos com multa {multaPercent}% + juros {jurosPercent}% a.m. nas vencidas
+                  (mesmos percentuais do bloco de encargos acima). Você ainda pode editar o valor pago de cada parcela.
+                </p>
+              )}
+
               <p className="text-[11px] text-emerald-800 leading-snug">
                 Selecione as parcelas a baixar. Edite o valor pago se necessário. Esta ação <strong>não baixa automaticamente</strong> — vai como rascunho para a aba <strong>Conciliação</strong>.
               </p>
@@ -3031,8 +3131,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 <div className="space-y-1.5 max-h-64 overflow-auto pr-1">
                   {unpaidInstallments.map((i) => {
                     const selected = quitParcSel.includes(i.number);
-                    const valorAtual = quitParcVal[i.number] ?? i.value;
-                    const diverge = selected && Math.abs(valorAtual - i.value) > 0.01;
+                    const valorEsperado = quitParcValorEsperado(i);
+                    const valorAtual = quitParcVal[i.number] ?? valorEsperado;
+                    const diverge = selected && Math.abs(valorAtual - valorEsperado) > 0.01;
+                    const charges = calculateCharges(i.value, i.dueDate, i.number);
+                    const temEncargo = quitParcComEncargos && charges.total - i.value > 0.01;
                     return (
                       <div
                         key={i.number}
@@ -3052,9 +3155,14 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                           </div>
                           <div className="text-[10px] text-muted-foreground">
                             Registrado: {formatCurrency(i.value)}
+                            {temEncargo && (
+                              <span className="ml-1 text-amber-700 font-semibold">
+                                · c/ encargos {formatCurrency(charges.total)}
+                              </span>
+                            )}
                             {diverge && (
                               <span className="ml-1 text-amber-700 font-semibold">
-                                · divergente ({valorAtual > i.value ? '+' : ''}{formatCurrency(valorAtual - i.value)})
+                                · divergente ({valorAtual > valorEsperado ? '+' : ''}{formatCurrency(valorAtual - valorEsperado)})
                               </span>
                             )}
                           </div>
@@ -3085,19 +3193,22 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               )}
 
               {quitParcSel.length > 0 && (() => {
-                const sumOriginal = unpaidInstallments
+                const sumEsperado = unpaidInstallments
                   .filter((i) => quitParcSel.includes(i.number))
-                  .reduce((a, i) => a + i.value, 0);
+                  .reduce((a, i) => a + quitParcValorEsperado(i), 0);
                 const sumPago = quitParcSel.reduce(
-                  (a, n) => a + (quitParcVal[n] ?? unpaidInstallments.find((i) => i.number === n)?.value ?? 0),
+                  (a, n) => {
+                    const inst = unpaidInstallments.find((i) => i.number === n);
+                    return a + (quitParcVal[n] ?? (inst ? quitParcValorEsperado(inst) : 0));
+                  },
                   0,
                 );
-                const diff = sumPago - sumOriginal;
+                const diff = sumPago - sumEsperado;
                 const hasDiff = Math.abs(diff) > 0.01;
                 return (
                   <div className={`text-[11px] p-2 rounded-lg border ${hasDiff ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-100/60 border-emerald-200 text-emerald-800'}`}>
-                    <div>Selecionadas: <strong>{quitParcSel.length}</strong></div>
-                    <div>Registrado: <strong>{formatCurrency(sumOriginal)}</strong> · Pago: <strong>{formatCurrency(sumPago)}</strong></div>
+                    <div>Selecionadas: <strong>{quitParcSel.length}</strong> · {quitParcComEncargos ? 'Com encargos' : 'Sem encargos'}</div>
+                    <div>Esperado: <strong>{formatCurrency(sumEsperado)}</strong> · Pago: <strong>{formatCurrency(sumPago)}</strong></div>
                     {hasDiff && (
                       <div className="mt-1 font-semibold">
                         ⚠ Divergência de {formatCurrency(Math.abs(diff))} ({diff > 0 ? 'a mais' : 'a menos'}). Será confirmado antes do envio.
@@ -3109,7 +3220,13 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setQuitParcelasMode(false); setQuitParcSel([]); setQuitParcVal({}); setQuitParcDate({}); }}
+                  onClick={() => {
+                    setQuitParcelasMode(false);
+                    setQuitParcSel([]);
+                    setQuitParcVal({});
+                    setQuitParcDate({});
+                    setQuitParcComEncargos(false);
+                  }}
                   className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
                 >Cancelar</button>
                 <button
@@ -3242,6 +3359,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                           {renegValues.recompraValor > 0 && (
                             <> • <span className="text-violet-700">recompra {formatCurrency(renegValues.recompraValor)}</span></>
                           )}
+                          {renegValues.outrosValor > 0 && (
+                            <> • <span className="text-amber-700">outro treinamento {formatCurrency(renegValues.outrosValor)}</span></>
+                          )}
                         </p>
                       </div>
                     );
@@ -3300,6 +3420,60 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     </div>
                   )}
 
+                  {/* Outros treinamentos do aluno: começam desmarcados, o AC escolhe juntar */}
+                  {outrosContratosComSaldo.length > 0 && (
+                    <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
+                      <div>
+                        <p className="text-xs font-semibold text-amber-900">Outros treinamentos do aluno</p>
+                        <p className="text-[10px] text-amber-800/80 leading-snug">
+                          Não entram por padrão. Marque para juntar o saldo em aberto de outro treinamento nesta mesma
+                          renegociação — as parcelas dele saem daquela ficha e passam a ser cobradas no novo plano.
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        {outrosContratosComSaldo.map((o) => {
+                          const { parcelas, valor } = recompraSaldoAberto(o);
+                          const incluido = renegOutrosIncluidos.includes(o.id);
+                          return (
+                            <label
+                              key={o.id}
+                              className={`flex items-start gap-2 text-xs cursor-pointer rounded px-2 py-1.5 border ${
+                                incluido ? 'bg-white border-amber-300' : 'bg-white/60 border-transparent opacity-80'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={incluido}
+                                onChange={() => toggleRenegOutro(o.id)}
+                                className="rounded mt-0.5"
+                              />
+                              <span className="flex-1 min-w-0">
+                                <span className="font-semibold block truncate">{o.product}</span>
+                                <span className="text-[10px] text-muted-foreground block">
+                                  {parcelas.length} parcela(s) em aberto •{' '}
+                                  {parcelas
+                                    .slice(0, 4)
+                                    .map((i) => parseDateLocal(i.dueDate).toLocaleDateString('pt-BR'))
+                                    .join(', ')}
+                                  {parcelas.length > 4 ? '…' : ''}
+                                  {o.ac && o.ac !== student.ac ? ` • AC ${o.ac}` : ''}
+                                </span>
+                              </span>
+                              <span className="font-semibold whitespace-nowrap">{formatCurrency(valor)}</span>
+                              <span
+                                className={`text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap ${
+                                  incluido ? 'bg-amber-100 text-amber-800' : 'bg-muted text-muted-foreground'
+                                }`}
+                              >
+                                {incluido ? 'Incluído' : 'Separado'}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     onClick={() => {
                       setRenegMode('detailed');
@@ -3322,10 +3496,20 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase">Resumo da Renegociação</p>
                     <div className="text-xs space-y-1">
                       <p>Saldo Devedor (vencido + a vencer): <span className="font-bold">{formatCurrency(renegValues.remaining)}</span></p>
+                      {(renegValues.recompraValor > 0 || renegValues.outrosValor > 0) && (
+                        <p className="text-muted-foreground">
+                          ↳ este treinamento: <span className="font-bold">{formatCurrency(renegValues.remainingProprio)}</span>
+                        </p>
+                      )}
                       {renegValues.recompraValor > 0 && (
                         <p className="text-violet-800">
                           ↳ inclui recompra vinculada: <span className="font-bold">{formatCurrency(renegValues.recompraValor)}</span>
-                          {' '}(treinamento {formatCurrency(renegValues.remainingProprio)})
+                        </p>
+                      )}
+                      {renegValues.outrosValor > 0 && (
+                        <p className="text-amber-800">
+                          ↳ inclui outro(s) treinamento(s) ({renegValues.outrosIncorporados.map((o) => o.product).join(', ')}):{' '}
+                          <span className="font-bold">{formatCurrency(renegValues.outrosValor)}</span>
                         </p>
                       )}
                       {applyMultaReneg && <p>Multa ({renegMultaPercent}%): <span className="font-bold text-destructive">{formatCurrency(renegValues.multaValue)}</span></p>}
@@ -3600,21 +3784,21 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       onClick={() => anexoContratoInputRef.current?.click()}
                       disabled={anexoContratoBusy}
                       className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 border border-emerald-200 transition-colors disabled:opacity-60"
-                      title="Anexar o contrato/termo já assinado (PDF ou imagem, até 10 MB). Libera o Confirmar."
+                      title="Anexar termo feito manualmente (PDF ou imagem, até 10 MB). Libera o Confirmar."
                     >
                       <Paperclip size={12} />
                       {anexoContratoBusy
                         ? 'Enviando…'
                         : termoAssinado && termoPending?.anexoPath
-                          ? 'Trocar contrato anexado'
-                          : 'Anexar contrato já assinado'}
+                          ? 'Trocar termo anexado'
+                          : 'Anexar termo feito manualmente'}
                     </button>
                   </div>
                   {!termoAssinado && (
                     <p className="text-[10px] text-center text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
                       {termoAguardandoAssinatura
-                        ? 'Aguardando assinatura do termo. Use "Ver status da assinatura" para consultar; o Confirmar libera quando a assinatura for identificada ou quando você anexar o termo assinado.'
-                        : 'Gere o termo e envie ao aluno — ou use "Anexar contrato já assinado". O botão Confirmar aparece assim que o termo for gerado.'}
+                        ? 'Aguardando assinatura do termo. Use "Ver status da assinatura" para consultar; o Confirmar libera quando a assinatura for identificada ou quando você anexar o termo feito manualmente.'
+                        : 'Gere o termo e envie ao aluno — ou use "Anexar termo feito manualmente". O botão Confirmar aparece assim que o termo for gerado.'}
                     </p>
                   )}
                 </div>

@@ -177,6 +177,7 @@ const FIELD_LABELS: Record<string, string> = {
   paidInstallments: 'Parcelas pagas',
   novasParcelas: 'Novas parcelas',
   recomprasIncorporadas: 'Recompra incluída na renegociação',
+  contratosIncorporados: 'Outro treinamento incluído na renegociação',
   termo: 'Termo de renegociação',
   parcelasPagas: 'Parcelas pagas',
   entrada: 'Entrada (obrigatória)',
@@ -332,8 +333,8 @@ function formatValue(key: string, v: unknown, parent?: Record<string, unknown>):
   }
   if (Array.isArray(v)) {
     if (v.length === 0) return '—';
-    // Recompras incorporadas à renegociação: produto, parcelas e valor
-    if (key === 'recomprasIncorporadas') {
+    // Fichas incorporadas à renegociação (recompra / outro treinamento): produto, parcelas e valor
+    if (key === 'recomprasIncorporadas' || key === 'contratosIncorporados') {
       return (v as RecompraIncorporada[])
         .map((r) => `${r.product} — ${r.parcelas?.length ?? 0} parcela(s) (${formatCurrency(r.valor)})`)
         .join('; ');
@@ -1766,13 +1767,20 @@ export default function ConciliacaoPage() {
               },
             ],
           });
-          // Recompras vinculadas incluídas na renegociação: o saldo em aberto
-          // delas agora faz parte do plano do treinamento — tira essas parcelas
-          // da recompra para não cobrar duas vezes.
+          // Fichas juntadas à renegociação (recompra vinculada e/ou outros
+          // treinamentos do aluno): o saldo em aberto delas agora faz parte do
+          // plano deste contrato — tira essas parcelas de lá para não cobrar duas vezes.
           const recompras = Array.isArray(depois?.recomprasIncorporadas)
             ? (depois.recomprasIncorporadas as RecompraIncorporada[])
             : [];
-          for (const r of recompras) {
+          const outros = Array.isArray(depois?.contratosIncorporados)
+            ? (depois.contratosIncorporados as RecompraIncorporada[])
+            : [];
+          const incorporadas = [
+            ...recompras.map((r) => ({ ...r, rotulo: 'desta recompra' })),
+            ...outros.map((r) => ({ ...r, rotulo: 'deste treinamento' })),
+          ];
+          for (const r of incorporadas) {
             const rec = useAppStore.getState().students.find((s) => s.id === r.studentId);
             if (!rec) continue;
             const alvo = new Set(r.parcelas);
@@ -1805,8 +1813,8 @@ export default function ConciliacaoPage() {
                   text:
                     `Renegociação do contrato "${st.product}" aprovada e conciliada: ${removidas} parcela(s) em aberto ` +
                     `(${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorRemovido)}) ` +
-                    `saíram desta recompra e passaram a ser cobradas no novo plano do treinamento.` +
-                    (quitada ? ' Recompra sem saldo em aberto.' : ''),
+                    `saíram ${r.rotulo} e passaram a ser cobradas no novo plano de "${st.product}".` +
+                    (quitada ? ' Ficha sem saldo em aberto.' : ''),
                 },
               ],
             });

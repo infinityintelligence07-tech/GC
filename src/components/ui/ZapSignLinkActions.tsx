@@ -13,13 +13,23 @@ interface Props {
   disabled?: boolean;
   /** Mostra também o botão de abrir o link (útil para conferir o documento). */
   showOpen?: boolean;
+  /** Botão WhatsApp (wa.me). Padrão true; o modal de renegociação oculta. */
+  showWhatsApp?: boolean;
 }
 
 /**
  * Ações para enviar o link de assinatura ao aluno: copiar, mandar pelo WhatsApp (wa.me com
  * mensagem pronta) e abrir. Usado nos modais de termo (cancelamento e renegociação).
  */
-export default function ZapSignLinkActions({ signLink, nomeAluno, whatsapp, titulo, disabled, showOpen }: Props) {
+export default function ZapSignLinkActions({
+  signLink,
+  nomeAluno,
+  whatsapp,
+  titulo,
+  disabled,
+  showOpen,
+  showWhatsApp = true,
+}: Props) {
   const [copied, setCopied] = useState(false);
   const off = disabled || !signLink;
   const waDigits = whatsappDigitsBR(whatsapp);
@@ -70,15 +80,17 @@ export default function ZapSignLinkActions({ signLink, nomeAluno, whatsapp, titu
           </>
         )}
       </button>
-      <button
-        type="button"
-        onClick={enviarWhatsApp}
-        disabled={off || !waDigits}
-        title={waDigits ? `Abrir WhatsApp de ${nomeAluno} com o link de assinatura` : 'Aluno sem WhatsApp cadastrado'}
-        className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center gap-2 disabled:opacity-50"
-      >
-        <MessageCircle size={16} /> WhatsApp
-      </button>
+      {showWhatsApp && (
+        <button
+          type="button"
+          onClick={enviarWhatsApp}
+          disabled={off || !waDigits}
+          title={waDigits ? `Abrir WhatsApp de ${nomeAluno} com o link de assinatura` : 'Aluno sem WhatsApp cadastrado'}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+        >
+          <MessageCircle size={16} /> WhatsApp
+        </button>
+      )}
       {showOpen && (
         <button
           type="button"

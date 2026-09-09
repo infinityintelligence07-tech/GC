@@ -32,7 +32,7 @@ import {
   Clock,
   CheckCircle2, AlertTriangle, Ban, LayoutGrid, List,
   Users, History, X, RotateCcw, Award, Eye, Phone, FileEdit, Trash2, Bell, UserPlus, User,
-  DollarSign, Gavel, Info, Upload, FileText, Download as DownloadIcon, ArrowRight, PencilLine,
+  DollarSign, Gavel, Info, Upload, FileText, Download as DownloadIcon, ExternalLink, ArrowRight, PencilLine,
 } from 'lucide-react';
 import { formatCurrency, formatCurrencyCompact } from '@/store/useAppStore';
 import { DatePreset, AnalysisMode, getPresetRange, getCurrentMonthDates } from '@/lib/periodFilter';
@@ -45,8 +45,6 @@ import { openCancellationPdf, downloadCancellationPdf } from '@/lib/openCancella
 import { openIamControlContrato } from '@/lib/iamControlContrato';
 import TermoCancelamentoModal from '@/components/modals/TermoCancelamentoModal';
 import {
-  buildTermoWhatsAppMessage,
-  buildWhatsAppShareUrl,
   deleteZapSignTermo,
   getZapSignTermoStatus,
   isZapSignTermoAssinado,
@@ -2707,37 +2705,16 @@ function CancellationReviewModal({
                         {termoChecking ? 'Verificando…' : 'Verificar assinatura'}
                       </button>
                       {cancelTermoPending?.urlAssinatura && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void navigator.clipboard.writeText(cancelTermoPending.urlAssinatura!);
-                              toast.success('Link copiado.');
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
-                          >
-                            Copiar link
-                          </button>
-                          {(() => {
-                            const waUrl = buildWhatsAppShareUrl(
-                              student?.whatsapp ?? caseRef.studentWhatsapp,
-                              buildTermoWhatsAppMessage({
-                                nomeAluno: caseRef.studentName,
-                                titulo: 'Termo de Cancelamento',
-                                link: cancelTermoPending.urlAssinatura!,
-                              }),
-                            );
-                            return waUrl ? (
-                              <button
-                                type="button"
-                                onClick={() => window.open(waUrl, '_blank', 'noopener,noreferrer')}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-                              >
-                                Enviar no WhatsApp
-                              </button>
-                            ) : null;
-                          })()}
-                        </>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(cancelTermoPending.urlAssinatura!);
+                            toast.success('Link copiado.');
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
+                        >
+                          Copiar link
+                        </button>
                       )}
                       <button
                         type="button"
@@ -2794,7 +2771,7 @@ function CancellationReviewModal({
                         className="p-1.5 rounded-md text-blue-700 hover:bg-blue-100 transition-colors"
                         title="Abrir link de assinatura"
                       >
-                        <DownloadIcon size={13} />
+                        <ExternalLink size={13} />
                       </button>
                     )}
                   </div>
