@@ -42,6 +42,24 @@ jobs:
       - name: Empacotar dist
         run: tar -C dist -czf gc-dist.tar.gz .
 
+      # Diagnóstico: mostra no log se a porta SSH da VPS está alcançável a partir
+      # do runner ANTES de tentar o scp. "fechada/timeout" com o site no ar =
+      # firewall/fail2ban bloqueando o IP do runner ou VPS_HOST/VPS_PORT errados
+      # (ex.: host atrás do Cloudflare — o Cloudflare não proxia SSH).
+      - name: Diagnóstico de rede (VPS)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          echo "IP público do runner: $(curl -s --max-time 10 https://api.ipify.org || echo '?')"
+          echo "Resolução de VPS_HOST: $(getent ahostsv4 "$VPS_HOST" | awk '{print $1}' | sort -u | tr '\n' ' ')"
+          if timeout 20 bash -c "</dev/tcp/$VPS_HOST/$VPS_PORT" 2>/dev/null; then
+            echo "Porta SSH da VPS: ABERTA"
+          else
+            echo "::warning::Porta SSH da VPS: FECHADA/TIMEOUT a partir do runner (firewall, fail2ban, VPS fora ou secret VPS_HOST/VPS_PORT incorreto)"
+          fi
+          echo "Site: HTTP $(curl -s -o /dev/null -w '%{http_code}' --max-time 15 https://gc.iamcontrol.com.br || echo '?')"
+
       # O runner troca de IP a cada execução e a conexão com a VPS às vezes
       # estoura o timeout padrão de 30s. Uma segunda tentativa evita perder o
       # build inteiro por causa de um soluço de rede.
@@ -58,6 +76,10 @@ jobs:
           timeout: 120s
           source: gc-dist.tar.gz
           target: /tmp
+
+      - name: Aguardar antes da 2ª tentativa
+        if: steps.scp.outcome == 'failure'
+        run: sleep 45
 
       - name: Enviar pacote (2ª tentativa)
         if: steps.scp.outcome == 'failure'
