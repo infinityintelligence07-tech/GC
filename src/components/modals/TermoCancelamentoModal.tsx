@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { X, Download, Copy, Check, Link2, FileText } from 'lucide-react';
+import { X, Download, Check, Link2, FileText } from 'lucide-react';
 import type { CancellationCase, RefundPaymentMethod, RefundPixKeyType, Student } from '@/types';
 import {
   CANCELLATION_TERMO_VARIANTS,
@@ -12,7 +12,14 @@ import {
   type CancellationTermoRefundParcel,
   type CancellationTermoVariant,
 } from '@/lib/cancellationTermoDocument';
-import { createIamCancelamentoTermo } from '@/lib/iamControlTermo';
+import {
+  buildCancelamentoTermoMarkdown,
+  checkStudentZapSignSigner,
+  createZapSignTermo,
+  describeEnvioAutomatico,
+} from '@/lib/zapsignTermo';
+import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
+import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
 import { toast } from 'sonner';
 import logoIAM from '@/assets/logo-iam-blue.png';
 
@@ -69,7 +76,11 @@ export default function TermoCancelamentoModal({
 }: TermoCancelamentoModalProps) {
   const [linkBusy, setLinkBusy] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
+  /** ZapSign envia o link por e-mail ao aluno (grátis) além do link para copiar/WhatsApp. */
+  const [enviarEmail, setEnviarEmail] = useState(true);
+  /** ZapSign envia o link por WhatsApp automaticamente (consome créditos da conta ZapSign). */
+  const [enviarWhatsapp, setEnviarWhatsapp] = useState(false);
+  const signerCheck = checkStudentZapSignSigner(student);
   /** 'auto' = modelo escolhido pelas regras de multa/estorno; senão, modelo forçado pelo usuário. */
   const [variantChoice, setVariantChoice] = useState<'auto' | CancellationTermoVariant>('auto');
 
@@ -133,41 +144,43 @@ export default function TermoCancelamentoModal({
     setTimeout(() => win.print(), 250);
   };
 
-  const copySignLink = async (url: string) => {
-    await navigator.clipboard.writeText(url);
-    setLinkCopied(true);
-    toast.success('Link de assinatura copiado. Envie para o aluno assinar.');
-  };
-
-  /** Gera o termo no ZapSign; só depois libera o botão de copiar o link. */
+  /** Gera o termo na ZapSign (direto pela API); só depois libera copiar/enviar o link. */
   const handleGenerateZapSign = async () => {
-    if (!student?.iamControlAlunoId) {
-      toast.error('Vincule o aluno ao IAM Control para gerar o termo no ZapSign.');
+    if (!student) {
+      toast.error('Ficha do aluno não encontrada — não é possível gerar o termo para assinatura.');
+      return;
+    }
+    if (!signerCheck.ok) {
+      toast.error(signerCheck.motivo ?? 'Aluno sem contato para assinatura.');
       return;
     }
     if (signLink) {
-      toast.message('Termo já gerado. Use Copiar Link para enviar ao aluno.');
+      toast.message('Termo já gerado. Use Copiar Link ou WhatsApp para enviar ao aluno.');
       return;
     }
 
     setLinkBusy(true);
     try {
-      const result = await createIamCancelamentoTermo({
+      const motivo = caseRef.motivoCancelamento || caseRef.descricaoCancelamento || caseRef.notes || '';
+      const result = await createZapSignTermo({
+        tipo: 'cancelamento',
+        nomeDocumento: `${doc.titulo} — ${doc.studentName}`,
+        markdown: buildCancelamentoTermoMarkdown(doc, { motivo, legalNotes: legalNotes ?? caseRef.legalNotes }),
         student,
-        caseRef: { ...caseRef, legalNotes: legalNotes ?? caseRef.legalNotes },
-        fineValue: multaValue,
-        totalPaid: totalPago,
-        totalContract,
-        balance,
-        semMultaCDC7,
-        document: doc,
+        cancellationCaseId: caseRef.id,
+        enviarEmail: enviarEmail && !!signerCheck.email,
+        enviarWhatsapp: enviarWhatsapp && !!signerCheck.whatsapp,
       });
-      if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo no ZapSign.');
+      if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo na ZapSign.');
       const url = result.url_assinatura || result.file_url;
       if (!url) throw new Error('Link de assinatura não disponível.');
       setSignLink(url);
-      setLinkCopied(false);
-      toast.success('Termo gerado no ZapSign. Agora você pode copiar o link.');
+      toast.success(
+        describeEnvioAutomatico({
+          email: enviarEmail && signerCheck.email ? signerCheck.email : undefined,
+          whatsapp: enviarWhatsapp && signerCheck.whatsapp ? signerCheck.whatsapp : undefined,
+        }),
+      );
       onGenerated?.({
         signUrl: url,
         plainText,
@@ -177,21 +190,9 @@ export default function TermoCancelamentoModal({
         variant: doc.variant,
       });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Falha ao gerar termo no ZapSign.');
+      toast.error(err instanceof Error ? err.message : 'Falha ao gerar termo na ZapSign.');
     } finally {
       setLinkBusy(false);
-    }
-  };
-
-  const handleCopySignLink = async () => {
-    if (!signLink) {
-      toast.error('Gere o termo no ZapSign antes de copiar o link.');
-      return;
-    }
-    try {
-      await copySignLink(signLink);
-    } catch {
-      toast.error('Não foi possível copiar o link.');
     }
   };
 
@@ -216,7 +217,6 @@ export default function TermoCancelamentoModal({
                 onChange={(e) => {
                   setVariantChoice(e.target.value as 'auto' | CancellationTermoVariant);
                   setSignLink(null);
-                  setLinkCopied(false);
                 }}
                 className="bg-transparent px-2.5 py-1.5 text-xs text-foreground focus:outline-none cursor-pointer max-w-[15rem]"
                 aria-label="Modelo do termo"
@@ -304,15 +304,27 @@ export default function TermoCancelamentoModal({
             </div>
           )}
 
-          {!student?.iamControlAlunoId && (
-            <p className="text-[11px] text-amber-700">
-              Vincule o aluno ao IAM Control para habilitar a geração do termo no ZapSign.
-            </p>
+          {!signerCheck.ok && (
+            <p className="text-[11px] text-amber-700">{signerCheck.motivo}</p>
+          )}
+
+          {!signLink && (
+            <ZapSignEnvioAutomatico
+              signer={signerCheck}
+              enviarEmail={enviarEmail}
+              enviarWhatsapp={enviarWhatsapp}
+              onChangeEmail={setEnviarEmail}
+              onChangeWhatsapp={setEnviarWhatsapp}
+              disabled={linkBusy}
+            />
           )}
 
           {signLink && (
-            <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700">
-              Termo gerado no ZapSign. Clique em Copiar Link para enviar ao aluno.
+            <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
+              Termo gerado na ZapSign. Se não escolheu envio automático, envie o link ao aluno (Copiar Link ou
+              WhatsApp). Quando ele assinar, o Confirmar é liberado automaticamente e o PDF assinado fica anexado ao
+              caso.
+              <div className="mt-1 text-emerald-800/80 font-mono text-[10px]">{signLink}</div>
             </div>
           )}
         </div>
@@ -333,7 +345,8 @@ export default function TermoCancelamentoModal({
           </button>
           <button
             onClick={() => void handleGenerateZapSign()}
-            disabled={linkBusy || !student?.iamControlAlunoId || !!signLink}
+            disabled={linkBusy || !signerCheck.ok || !!signLink}
+            title={signerCheck.ok ? 'Gerar o termo na ZapSign e obter o link de assinatura' : signerCheck.motivo}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             {linkBusy ? (
@@ -346,25 +359,17 @@ export default function TermoCancelamentoModal({
               </>
             ) : (
               <>
-                <FileText size={16} /> Gerar Termo
+                <FileText size={16} /> Gerar Termo (ZapSign)
               </>
             )}
           </button>
-          <button
-            onClick={() => void handleCopySignLink()}
-            disabled={!signLink || linkBusy}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            {linkCopied ? (
-              <>
-                <Check size={16} /> Link copiado
-              </>
-            ) : (
-              <>
-                <Copy size={16} /> Copiar Link
-              </>
-            )}
-          </button>
+          <ZapSignLinkActions
+            signLink={signLink}
+            nomeAluno={doc.studentName}
+            whatsapp={student?.whatsapp ?? caseRef.studentWhatsapp}
+            titulo={doc.titulo}
+            disabled={linkBusy}
+          />
         </div>
       </div>
     </div>

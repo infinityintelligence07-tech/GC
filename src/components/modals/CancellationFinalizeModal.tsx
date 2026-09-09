@@ -8,9 +8,16 @@ import {
   buildCancellationTermoPrintHtml,
   cancellationTermoToPlainText,
 } from '@/lib/cancellationTermoDocument';
-import { createIamCancelamentoTermo } from '@/lib/iamControlTermo';
+import {
+  buildCancelamentoTermoMarkdown,
+  checkStudentZapSignSigner,
+  createZapSignTermo,
+  describeEnvioAutomatico,
+} from '@/lib/zapsignTermo';
+import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
+import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
 import { toast } from 'sonner';
-import { X, FileText, Download, Copy, Check, Link2 } from 'lucide-react';
+import { X, FileText, Download, Check, Link2 } from 'lucide-react';
 import logoIAM from '@/assets/logo-iam-blue.png';
 
 interface Props {
@@ -38,8 +45,10 @@ export default function CancellationFinalizeModal({
   const { updateCancellationCase } = useAppStore();
   const [linkBusy, setLinkBusy] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<'reverter' | 'cancelar'>(type);
+  const [enviarEmail, setEnviarEmail] = useState(true);
+  const [enviarWhatsapp, setEnviarWhatsapp] = useState(false);
+  const signerCheck = checkStudentZapSignSigner(student);
 
   const isReverter = selectedOutcome === 'reverter';
   const titulo = isReverter ? 'Aditivo de Contrato' : 'Termo de Cancelamento';
@@ -125,46 +134,46 @@ export default function CancellationFinalizeModal({
     if (!isReverter && cancelDoc) setTimeout(() => win.print(), 250);
   };
 
-  const copySignLink = async (url: string) => {
-    await navigator.clipboard.writeText(url);
-    setLinkCopied(true);
-    toast.success('Link de assinatura copiado. Envie para o aluno assinar.');
-  };
-
   const handleGenerateZapSign = async () => {
     if (isReverter) {
       toast.error('Aditivo de contrato ainda não está integrado à ZapSign. Use Gerar PDF.');
       return;
     }
-    if (!student?.iamControlAlunoId) {
-      toast.error('Aluno sem vínculo com IAM Control.');
+    if (!student || !cancelDoc) {
+      toast.error('Ficha do aluno não encontrada — não é possível gerar o termo para assinatura.');
+      return;
+    }
+    if (!signerCheck.ok) {
+      toast.error(signerCheck.motivo ?? 'Aluno sem contato para assinatura.');
       return;
     }
     if (signLink) {
-      toast.message('Termo já gerado. Use Copiar Link para enviar ao aluno.');
+      toast.message('Termo já gerado. Use Copiar Link ou WhatsApp para enviar ao aluno.');
       return;
     }
 
     setLinkBusy(true);
     try {
-      const result = await createIamCancelamentoTermo({
+      const motivo = caseRef.motivoCancelamento || caseRef.descricaoCancelamento || caseRef.notes || '';
+      const result = await createZapSignTermo({
+        tipo: 'cancelamento',
+        nomeDocumento: `${cancelDoc.titulo} — ${cancelDoc.studentName}`,
+        markdown: buildCancelamentoTermoMarkdown(cancelDoc, { motivo, legalNotes: caseRef.legalNotes }),
         student,
-        caseRef,
-        fineValue,
-        totalPaid,
-        totalContract,
-        balance,
-        semMultaCDC7,
-        document: cancelDoc ?? undefined,
-        multaPercent,
-        estornoTotal,
+        cancellationCaseId: caseRef.id,
+        enviarEmail: enviarEmail && !!signerCheck.email,
+        enviarWhatsapp: enviarWhatsapp && !!signerCheck.whatsapp,
       });
-      if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo no ZapSign.');
+      if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo na ZapSign.');
       const url = result.url_assinatura || result.file_url;
       if (!url) throw new Error('Link de assinatura não disponível.');
       setSignLink(url);
-      setLinkCopied(false);
-      toast.success('Termo gerado no ZapSign. Agora você pode copiar o link.');
+      toast.success(
+        describeEnvioAutomatico({
+          email: enviarEmail && signerCheck.email ? signerCheck.email : undefined,
+          whatsapp: enviarWhatsapp && signerCheck.whatsapp ? signerCheck.whatsapp : undefined,
+        }),
+      );
       await updateCancellationCase(caseRef.id, {
         termTemplate: documento,
         termAttachments: [
@@ -178,21 +187,9 @@ export default function CancellationFinalizeModal({
         ],
       });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Falha ao gerar termo no ZapSign.');
+      toast.error(err instanceof Error ? err.message : 'Falha ao gerar termo na ZapSign.');
     } finally {
       setLinkBusy(false);
-    }
-  };
-
-  const handleCopySignLink = async () => {
-    if (!signLink) {
-      toast.error('Gere o termo no ZapSign antes de copiar o link.');
-      return;
-    }
-    try {
-      await copySignLink(signLink);
-    } catch {
-      toast.error('Não foi possível copiar o link.');
     }
   };
 
@@ -229,7 +226,8 @@ export default function CancellationFinalizeModal({
           </button>
           <button
             onClick={() => void handleGenerateZapSign()}
-            disabled={linkBusy || isReverter || !student?.iamControlAlunoId || !!signLink}
+            disabled={linkBusy || isReverter || !signerCheck.ok || !!signLink}
+            title={signerCheck.ok ? 'Gerar o termo na ZapSign e obter o link de assinatura' : signerCheck.motivo}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-violet-600 text-white hover:bg-violet-700 transition-all disabled:opacity-50"
           >
             {linkBusy ? (
@@ -242,34 +240,39 @@ export default function CancellationFinalizeModal({
               </>
             ) : (
               <>
-                <FileText size={12} /> Gerar Termo
+                <FileText size={12} /> Gerar Termo (ZapSign)
               </>
             )}
           </button>
-          <button
-            onClick={() => void handleCopySignLink()}
-            disabled={!signLink || linkBusy}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all disabled:opacity-50"
-          >
-            {linkCopied ? (
-              <>
-                <Check size={12} /> Link copiado
-              </>
-            ) : (
-              <>
-                <Copy size={12} /> Copiar Link
-              </>
-            )}
-          </button>
+          <ZapSignLinkActions
+            signLink={signLink}
+            nomeAluno={caseRef.studentName}
+            whatsapp={student?.whatsapp ?? caseRef.studentWhatsapp}
+            titulo={cancelDoc?.titulo ?? titulo}
+            disabled={linkBusy}
+          />
         </div>
 
-        {signLink && (
-          <div className="mb-4 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700">
-            Termo gerado no ZapSign. Clique em Copiar Link para enviar ao aluno.
+        {!isReverter && !signLink && (
+          <div className="mb-4">
+            <ZapSignEnvioAutomatico
+              signer={signerCheck}
+              enviarEmail={enviarEmail}
+              enviarWhatsapp={enviarWhatsapp}
+              onChangeEmail={setEnviarEmail}
+              onChangeWhatsapp={setEnviarWhatsapp}
+              disabled={linkBusy}
+            />
           </div>
         )}
-        {!isReverter && !student?.iamControlAlunoId && (
-          <p className="mb-4 text-[11px] text-amber-700">Vincule o aluno ao IAM Control para gerar o termo no ZapSign.</p>
+        {signLink && (
+          <div className="mb-4 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
+            Termo gerado na ZapSign. Se não escolheu envio automático, envie o link ao aluno (Copiar Link ou
+            WhatsApp). Ao assinar, o PDF assinado é anexado ao caso automaticamente.
+          </div>
+        )}
+        {!isReverter && !signerCheck.ok && (
+          <p className="mb-4 text-[11px] text-amber-700">{signerCheck.motivo}</p>
         )}
 
         {allowChooseOutcome ? (

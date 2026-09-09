@@ -24,6 +24,7 @@ import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter, isStudentFullyPaid } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
+import { resolveStudentDisplayStatusVinculado } from '@/lib/recompraVinculo';
 import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { fetchKaminoDashboardForecastTotals, type KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
 import { upsertCarteiraCardSnapshot } from '@/lib/carteiraCardExtrato';
@@ -344,6 +345,13 @@ export default function DashboardPage() {
         stripCancelados(arr.filter((s) => !ativosIds.has(s.id) && s.installments.some(isParcelaAntecipada))),
       );
     };
+    // Status automático de hoje. Recompra vinculada ↔ contrato original leem o
+    // mesmo status (mesma regra da aba Alunos/Carteira): Negativado em um lado
+    // puxa o outro; fora de vínculo, cálculo próprio da ficha.
+    const statusAutoComVinculo = (s: Student): StudentStatus => {
+      const vinculo = resolveStudentDisplayStatusVinculado(s, students);
+      return vinculo.group ? vinculo.status : calculateStudentAutoStatus(s);
+    };
     if (mode === 'historico') {
       if (!historicoEnd) { setKpiStudents([]); setPagosAntecipados([]); return; }
       const refDate = new Date(historicoEnd + 'T23:59:59');
@@ -389,7 +397,7 @@ export default function DashboardPage() {
         }
         if (s.statusMode === 'Automático') {
           const st = isTodaySnapshot
-            ? calculateStudentAutoStatus(s)
+            ? statusAutoComVinculo(s)
             : calculateStudentAutoStatusAt(s, refDate);
           return { ...s, status: st as StudentStatus };
         }
@@ -417,7 +425,7 @@ export default function DashboardPage() {
               : s;
         }
         if (s.statusMode === 'Automático') {
-          return { ...s, status: calculateStudentAutoStatus(s) } as Student;
+          return { ...s, status: statusAutoComVinculo(s) } as Student;
         }
         return s;
       });

@@ -27,7 +27,8 @@ import {
   hasActiveCancellationCase,
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
-import { getCancelamentoBadge, resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
+import { getCancelamentoBadge, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
+import { resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
@@ -260,7 +261,9 @@ export default function ACPortfolioPage() {
       })
       .filter((s) => studentMatchesTagFilter(s, tagFilters))
       .map((s) => {
-        const withStatus = { ...s, status: resolveStudentDisplayStatus(s) } as Student;
+        // Recompra vinculada ↔ contrato original leem o mesmo status (mesma
+        // regra da aba Alunos): Negativado em um lado puxa o outro.
+        const withStatus = { ...s, status: resolveStudentStatusComVinculo(s, students) } as Student;
         return tagFilters.length > 0 ? applyTagFilterToStudent(withStatus, tagFilters) : withStatus;
       });
   }, [students, ac, tagFilters, hiddenIdsKey, hiddenNamesKey, statusFilter, search, kpiCardFilter, revertidosIdsKey, revertidosStudentIds]);
@@ -437,7 +440,7 @@ export default function ACPortfolioPage() {
         product: st.product || '',
         whatsapp: st.whatsapp || '',
         email: st.email || '',
-        displayStatus: resolveStudentDisplayStatus(st),
+        displayStatus: resolveStudentStatusComVinculo(st, students),
         saleValue: Number(st.saleValue ?? 0),
         ...partial,
       });
@@ -817,7 +820,7 @@ export default function ACPortfolioPage() {
   const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
   // Display status for table rows (always current, table is independent)
-  const displayStatus = (s: Student): StudentStatus => resolveStudentDisplayStatus(s);
+  const displayStatus = (s: Student): StudentStatus => resolveStudentStatusComVinculo(s, students);
 
   if (!ac) return <div className="p-12 text-center text-muted-foreground">Selecione um assessor no menu.</div>;
 

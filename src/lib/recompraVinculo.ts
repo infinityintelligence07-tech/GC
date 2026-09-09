@@ -67,6 +67,36 @@ export function findRecomprasVinculadas(original: Student, students: Student[]):
   );
 }
 
+/**
+ * Recompra cujo saldo em aberto foi levado para a renegociação do contrato de
+ * origem (gravado em `depois.recomprasIncorporadas` do item de conciliação).
+ */
+export interface RecompraIncorporada {
+  studentId: string;
+  studentName: string;
+  product: string;
+  /** Números das parcelas da recompra que entraram no saldo renegociado. */
+  parcelas: number[];
+  /** Soma dessas parcelas. */
+  valor: number;
+}
+
+/**
+ * Recompras vinculadas que ainda têm saldo em aberto — candidatas a entrar na
+ * renegociação do contrato de origem. Fichas canceladas ficam de fora.
+ */
+export function findRecomprasComSaldo(original: Student, students: Student[]): Student[] {
+  return findRecomprasVinculadas(original, students).filter(
+    (r) => contaNoStatusConjunto(r) && (r.installments ?? []).some((i) => !i.paid),
+  );
+}
+
+/** Parcelas em aberto da recompra + soma (o que entra no saldo renegociado). */
+export function recompraSaldoAberto(recompra: Student): { parcelas: Installment[]; valor: number } {
+  const parcelas = (recompra.installments ?? []).filter((i) => !i.paid);
+  return { parcelas, valor: parcelas.reduce((a, i) => a + (i.value || 0), 0) };
+}
+
 /** Grupo vinculado do qual a ficha faz parte (ou null se não há vínculo). */
 export function getRecompraVinculoGroup(student: Student, students: Student[]): RecompraVinculoGroup | null {
   if (isRecompraFicha(student)) {
@@ -106,8 +136,12 @@ export interface StatusVinculado {
  *
  * Mantém a leitura própria quando a ficha está em cancelamento, Negativado,
  * Pendente operacional ou com status Manual — nesses casos o vínculo não
- * sobrescreve. Fora disso, o status é calculado sobre a união das parcelas do
- * grupo, e a parcela vencida da recompra conta como vencida.
+ * sobrescreve. Fora disso:
+ *  - se o outro lado do vínculo está Negativado (é o mesmo contrato), a ficha
+ *    aparece Negativado também — a recompra não pode ficar "Vencido 2" com o
+ *    treinamento de origem já negativado;
+ *  - senão, o status é calculado sobre a união das parcelas do grupo, e a
+ *    parcela vencida da recompra conta como vencida.
  */
 export function resolveStudentDisplayStatusVinculado(student: Student, students: Student[]): StatusVinculado {
   const own = resolveStudentDisplayStatus(student);
@@ -126,6 +160,23 @@ export function resolveStudentDisplayStatusVinculado(student: Student, students:
 
   const installments = getVinculoInstallments(group);
   if (installments.length === 0) return proprio(group);
+
+  const outroNegativado = [group.original, ...group.recompras].some(
+    (s) => s.id !== student.id && contaNoStatusConjunto(s) && s.status === 'Negativado',
+  );
+  if (outroNegativado) {
+    return { status: 'Negativado', installments, group, puxadoDoVinculo: own !== 'Negativado' };
+  }
+
   const status = calculateAutoStatus(installments, { includeRecompraParcelas: true });
   return { status, installments, group, puxadoDoVinculo: status !== own };
+}
+
+/**
+ * Status para tabelas/KPIs fora da aba Alunos (Carteira do AC, Dashboard):
+ * usa o vínculo quando a ficha participa de um grupo recompra ↔ original e,
+ * fora disso, a leitura própria (`resolveStudentDisplayStatus`).
+ */
+export function resolveStudentStatusComVinculo(student: Student, students: Student[]): StudentStatus {
+  return resolveStudentDisplayStatusVinculado(student, students).status;
 }

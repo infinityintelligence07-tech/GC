@@ -1,8 +1,15 @@
 import { useMemo, useRef, useState } from 'react';
-import { X, Download, Link2, Check, Copy, Paperclip, FileText } from 'lucide-react';
+import { X, Download, Link2, Check, Paperclip, FileText } from 'lucide-react';
 import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
-import { createIamAditivoTermo } from '@/lib/iamControlTermo';
+import {
+  buildRenegociacaoTermoMarkdown,
+  checkStudentZapSignSigner,
+  createZapSignTermo,
+  describeEnvioAutomatico,
+} from '@/lib/zapsignTermo';
+import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
+import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
 import {
   RENEG_ANEXO_ACCEPT as ANEXO_ACCEPT,
   uploadRenegTermoAnexado,
@@ -114,9 +121,11 @@ export default function TermoAditivoModal({
 }: Props) {
   const [linkBusy, setLinkBusy] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [enviarEmail, setEnviarEmail] = useState(true);
+  const [enviarWhatsapp, setEnviarWhatsapp] = useState(false);
   const [anexoBusy, setAnexoBusy] = useState(false);
   const anexoInputRef = useRef<HTMLInputElement>(null);
+  const signerCheck = checkStudentZapSignSigner(student);
 
   const today = useMemo(() => new Date(), []);
   const dateStr = formatDateBR(today);
@@ -303,47 +312,55 @@ export default function TermoAditivoModal({
     setTimeout(() => printWindow.print(), 250);
   };
 
-  const copySignLink = async (url: string) => {
-    await navigator.clipboard.writeText(url);
-    setLinkCopied(true);
-    toast.success('Link de assinatura copiado. Envie para o aluno assinar.');
-  };
-
-  /** Gera o termo/contrato no ZapSign; só depois libera o botão de copiar o link. */
+  /** Gera o termo na ZapSign (direto pela API); só depois libera copiar/enviar o link. */
   const handleGenerateZapSign = async () => {
-    if (!student.iamControlAlunoId) {
-      toast.error('Vincule o aluno ao IAM Control para gerar o termo no ZapSign.');
+    if (!signerCheck.ok) {
+      toast.error(signerCheck.motivo ?? 'Aluno sem contato para assinatura.');
       return;
     }
     if (signLink) {
-      toast.message('Termo já gerado. Use Copiar Link para enviar ao aluno.');
+      toast.message('Termo já gerado. Use Copiar Link ou WhatsApp para enviar ao aluno.');
       return;
     }
 
     setLinkBusy(true);
     try {
-      const result = await createIamAditivoTermo({
+      const markdown = buildRenegociacaoTermoMarkdown({
         student,
-        originalValues,
-        newValues: {
-          ...newValues,
-          totalPago,
-          qtdParcelasAberto,
-          quantidadeInscricoes: qtdInscricoes,
-          taxaJurosMes: taxaJuros,
-          diaVencimento,
-          dataEntrada: newValues.dataEntrada ?? (newValues.novaEntrada > 0.0049 ? dateStr : undefined),
-          parcelamentoLines,
-        },
+        dateStr,
+        contratoAssinado,
+        qtdInscricoes,
+        totalContratado: originalValues.valorVenda,
+        totalPago,
+        saldoAberto: newValues.novoSaldo,
+        qtdParcelasAberto,
+        totalAposReneg,
+        entradaLinha,
+        primeiraParcelaVencimento: newValues.primeiraParcelaVencimento,
+        diaVencimento,
+        parcelamentoLines,
+        taxaJurosMes: taxaJuros,
       });
-      if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo no ZapSign.');
+      const result = await createZapSignTermo({
+        tipo: 'renegociacao',
+        nomeDocumento: `Termo de Renegociação — ${student.name}`,
+        markdown,
+        student,
+        enviarEmail: enviarEmail && !!signerCheck.email,
+        enviarWhatsapp: enviarWhatsapp && !!signerCheck.whatsapp,
+      });
+      if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo na ZapSign.');
 
       const signUrl = result.url_assinatura || result.file_url;
       if (!signUrl) throw new Error('Link de assinatura não disponível.');
 
       setSignLink(signUrl);
-      setLinkCopied(false);
-      toast.success('Termo gerado no ZapSign. Agora você pode copiar o link.');
+      toast.success(
+        describeEnvioAutomatico({
+          email: enviarEmail && signerCheck.email ? signerCheck.email : undefined,
+          whatsapp: enviarWhatsapp && signerCheck.whatsapp ? signerCheck.whatsapp : undefined,
+        }),
+      );
       onTermoGerado?.({
         id: result.id,
         urlAssinatura: signUrl,
@@ -351,21 +368,9 @@ export default function TermoAditivoModal({
         nomeDocumento: result.nome_documento,
       });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Falha ao gerar termo no ZapSign.');
+      toast.error(err instanceof Error ? err.message : 'Falha ao gerar termo na ZapSign.');
     } finally {
       setLinkBusy(false);
-    }
-  };
-
-  const handleCopySignLink = async () => {
-    if (!signLink) {
-      toast.error('Gere o termo no ZapSign antes de copiar o link.');
-      return;
-    }
-    try {
-      await copySignLink(signLink);
-    } catch {
-      toast.error('Não foi possível copiar o link.');
     }
   };
 
@@ -513,16 +518,29 @@ export default function TermoAditivoModal({
             </p>
           </div>
 
-          {!student.iamControlAlunoId && (
+          {!signerCheck.ok && (
             <p className="text-[11px] text-amber-700">
-              Vincule o aluno ao IAM Control para habilitar a geração do termo no ZapSign. Sem o vínculo, use{' '}
-              <strong>Anexar assinado</strong> para enviar o termo/contrato já assinado.
+              {signerCheck.motivo} Sem contato, use <strong>Anexar assinado</strong> para enviar o termo/contrato já
+              assinado.
             </p>
+          )}
+
+          {!signLink && (
+            <ZapSignEnvioAutomatico
+              signer={signerCheck}
+              enviarEmail={enviarEmail}
+              enviarWhatsapp={enviarWhatsapp}
+              onChangeEmail={setEnviarEmail}
+              onChangeWhatsapp={setEnviarWhatsapp}
+              disabled={linkBusy}
+            />
           )}
 
           {signLink && (
             <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
-              Termo gerado no ZapSign. Clique em Copiar Link para enviar ao aluno.
+              Termo gerado na ZapSign. Se não escolheu envio automático, envie o link ao aluno (Copiar Link ou
+              WhatsApp). Quando ele assinar, o Confirmar da renegociação é liberado automaticamente.
+              <div className="mt-1 text-emerald-800/80 font-mono text-[10px]">{signLink}</div>
             </div>
           )}
         </div>
@@ -560,7 +578,8 @@ export default function TermoAditivoModal({
           </button>
           <button
             onClick={() => void handleGenerateZapSign()}
-            disabled={linkBusy || !student.iamControlAlunoId || !!signLink}
+            disabled={linkBusy || !signerCheck.ok || !!signLink}
+            title={signerCheck.ok ? 'Gerar o termo na ZapSign e obter o link de assinatura' : signerCheck.motivo}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             {linkBusy ? (
@@ -573,25 +592,17 @@ export default function TermoAditivoModal({
               </>
             ) : (
               <>
-                <FileText size={16} /> Gerar Termo
+                <FileText size={16} /> Gerar Termo (ZapSign)
               </>
             )}
           </button>
-          <button
-            onClick={() => void handleCopySignLink()}
-            disabled={!signLink || linkBusy}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            {linkCopied ? (
-              <>
-                <Check size={16} /> Link copiado
-              </>
-            ) : (
-              <>
-                <Copy size={16} /> Copiar Link
-              </>
-            )}
-          </button>
+          <ZapSignLinkActions
+            signLink={signLink}
+            nomeAluno={student.name}
+            whatsapp={student.whatsapp}
+            titulo="Termo de Renegociação"
+            disabled={linkBusy}
+          />
         </div>
       </div>
     </div>

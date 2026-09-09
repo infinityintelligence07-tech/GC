@@ -44,7 +44,12 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import { openCancellationPdf, downloadCancellationPdf } from '@/lib/openCancellationPdf';
 import { openIamControlContrato } from '@/lib/iamControlContrato';
 import TermoCancelamentoModal from '@/components/modals/TermoCancelamentoModal';
-import { getIamTermoStatus, isIamTermoAssinado } from '@/lib/iamControlTermo';
+import {
+  buildTermoWhatsAppMessage,
+  buildWhatsAppShareUrl,
+  getZapSignTermoStatus,
+  isZapSignTermoAssinado,
+} from '@/lib/zapsignTermo';
 import { toast } from 'sonner';
 import { cancellationCardNameFontClass, getInstallmentOutstanding } from '@/lib/utils';
 import CaseNotesPanel from '@/components/cancellation/CaseNotesPanel';
@@ -1601,9 +1606,38 @@ function CancellationReviewModal({
   };
   const [cancelTermoPending, setCancelTermoPending] = useState<CancelTermoPending | null>(null);
   const [termoChecking, setTermoChecking] = useState(false);
-  const termoZapAssinado = cancelTermoPending?.status === 'signed';
+  const termoZapAssinado = cancelTermoPending?.status === 'signed' || !!caseRef.termSignedByStudent;
   const termoAguardandoAssinatura = !!cancelTermoPending && !termoZapAssinado;
   const termoLiberado = termos.length > 0 || termoZapAssinado;
+
+  // Termo ZapSign já gerado para este caso (sobrevive a reload): recupera o último
+  // documento do banco para manter link/verificação disponíveis.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('zapsign_documents')
+        .select('doc_token, sign_url, status, created_at, signed_at')
+        .eq('cancellation_case_id', caseRef.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      if (data.status !== 'pending' && data.status !== 'signed') return;
+      setCancelTermoPending((prev) =>
+        prev ?? {
+          id: data.doc_token,
+          urlAssinatura: data.sign_url ?? undefined,
+          status: data.status === 'signed' ? 'signed' : 'pending',
+          createdAt: data.created_at,
+          signedAt: data.signed_at ?? undefined,
+        },
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [caseRef.id]);
   const [legalNotes, setLegalNotes] = useState<string>(caseRef.legalNotes ?? '');
   const [legalNotesSaving, setLegalNotesSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
   const legalNotesSavedAt = caseRef.legalNotesUpdatedAt;
@@ -1675,9 +1709,9 @@ function CancellationReviewModal({
     }
     setTermoChecking(true);
     try {
-      const result = await getIamTermoStatus(cancelTermoPending.id);
+      const result = await getZapSignTermoStatus(cancelTermoPending.id);
       if (!result.ok) throw new Error(result.error || 'Falha ao verificar assinatura.');
-      if (isIamTermoAssinado(result)) {
+      if (isZapSignTermoAssinado(result)) {
         markCancelTermoSigned();
       } else {
         toast.message(
@@ -1696,9 +1730,9 @@ function CancellationReviewModal({
     let cancelled = false;
     const tick = async () => {
       try {
-        const result = await getIamTermoStatus(cancelTermoPending.id!);
+        const result = await getZapSignTermoStatus(cancelTermoPending.id!);
         if (cancelled || !result.ok) return;
-        if (isIamTermoAssinado(result)) markCancelTermoSigned({ silent: true });
+        if (isZapSignTermoAssinado(result)) markCancelTermoSigned({ silent: true });
       } catch {
         /* ignore poll errors */
       }
@@ -2623,16 +2657,37 @@ function CancellationReviewModal({
                         {termoChecking ? 'Verificando…' : 'Verificar assinatura'}
                       </button>
                       {cancelTermoPending?.urlAssinatura && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void navigator.clipboard.writeText(cancelTermoPending.urlAssinatura!);
-                            toast.success('Link copiado.');
-                          }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
-                        >
-                          Copiar link
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(cancelTermoPending.urlAssinatura!);
+                              toast.success('Link copiado.');
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
+                          >
+                            Copiar link
+                          </button>
+                          {(() => {
+                            const waUrl = buildWhatsAppShareUrl(
+                              student?.whatsapp ?? caseRef.studentWhatsapp,
+                              buildTermoWhatsAppMessage({
+                                nomeAluno: caseRef.studentName,
+                                titulo: 'Termo de Cancelamento',
+                                link: cancelTermoPending.urlAssinatura!,
+                              }),
+                            );
+                            return waUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => window.open(waUrl, '_blank', 'noopener,noreferrer')}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                              >
+                                Enviar no WhatsApp
+                              </button>
+                            ) : null;
+                          })()}
+                        </>
                       )}
                       <button
                         type="button"
@@ -2976,11 +3031,11 @@ function CancellationReviewModal({
             setCancelTermoPending({
               id,
               urlAssinatura: signUrl,
-              status: isIamTermoAssinado({ status }) ? 'signed' : 'pending',
+              status: isZapSignTermoAssinado({ status }) ? 'signed' : 'pending',
               createdAt: new Date().toISOString(),
-              signedAt: isIamTermoAssinado({ status }) ? new Date().toISOString() : undefined,
+              signedAt: isZapSignTermoAssinado({ status }) ? new Date().toISOString() : undefined,
             });
-            if (!isIamTermoAssinado({ status })) {
+            if (!isZapSignTermoAssinado({ status })) {
               toast.message('Termo enviado. Confirmar fica bloqueado até a assinatura.');
             }
             await updateCancellationCase(caseRef.id, {

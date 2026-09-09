@@ -21,3 +21,7 @@ verify_jwt = false
 [functions.iam-control-contrato]
 verify_jwt = false
 
+# Webhook da ZapSign: autenticação pelo header x-webhook-token (secret ZAPSIGN_WEBHOOK_TOKEN).
+[functions.zapsign-webhook]
+verify_jwt = false
+

@@ -38,6 +38,7 @@ import {
   type IamOrigemGrupo,
 } from '@/lib/iamPendenteConciliacao';
 import { pushContratoConciliado } from '@/lib/iamControlSync';
+import type { RecompraIncorporada } from '@/lib/recompraVinculo';
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -175,6 +176,7 @@ const FIELD_LABELS: Record<string, string> = {
   totalInstallments: 'Número de parcelas',
   paidInstallments: 'Parcelas pagas',
   novasParcelas: 'Novas parcelas',
+  recomprasIncorporadas: 'Recompra incluída na renegociação',
   parcelasPagas: 'Parcelas pagas',
   entrada: 'Entrada (obrigatória)',
   downPayment: 'Entrada (obrigatória)',
@@ -329,6 +331,12 @@ function formatValue(key: string, v: unknown, parent?: Record<string, unknown>):
   }
   if (Array.isArray(v)) {
     if (v.length === 0) return '—';
+    // Recompras incorporadas à renegociação: produto, parcelas e valor
+    if (key === 'recomprasIncorporadas') {
+      return (v as RecompraIncorporada[])
+        .map((r) => `${r.product} — ${r.parcelas?.length ?? 0} parcela(s) (${formatCurrency(r.valor)})`)
+        .join('; ');
+    }
     // Resumo legível para arrays de objetos (evita "[object Object]")
     if (typeof v[0] === 'object' && v[0] !== null) {
       return `${v.length} item(ns)`;
@@ -1749,6 +1757,51 @@ export default function ConciliacaoPage() {
               },
             ],
           });
+          // Recompras vinculadas incluídas na renegociação: o saldo em aberto
+          // delas agora faz parte do plano do treinamento — tira essas parcelas
+          // da recompra para não cobrar duas vezes.
+          const recompras = Array.isArray(depois?.recomprasIncorporadas)
+            ? (depois.recomprasIncorporadas as RecompraIncorporada[])
+            : [];
+          for (const r of recompras) {
+            const rec = useAppStore.getState().students.find((s) => s.id === r.studentId);
+            if (!rec) continue;
+            const alvo = new Set(r.parcelas);
+            const restantes = rec.installments
+              .filter((i) => i.paid || !alvo.has(i.number))
+              .sort((a, b) => a.number - b.number)
+              .map((i, idx) => ({ ...i, number: idx + 1 }));
+            const removidas = rec.installments.length - restantes.length;
+            if (removidas === 0) continue;
+            const valorRemovido = rec.installments
+              .filter((i) => !i.paid && alvo.has(i.number))
+              .reduce((a, i) => a + (i.value || 0), 0);
+            const pagas = restantes.filter((i) => i.paid);
+            const quitada = restantes.every((i) => i.paid);
+            const { calculateStudentAutoStatus } = await import('@/store/useAppStore');
+            const recAtualizado = { ...rec, installments: restantes };
+            updateStudent(rec.id, {
+              installments: restantes,
+              totalInstallments: restantes.length,
+              paidInstallments: pagas.length,
+              saleValue: Math.max(0, (Number(rec.saleValue) || 0) - valorRemovido),
+              ...(rec.statusMode === 'Automático'
+                ? { status: quitada ? ('Pago' as const) : calculateStudentAutoStatus(recAtualizado) }
+                : {}),
+              history: [
+                ...rec.history,
+                {
+                  date: new Date().toISOString(),
+                  type: 'Sistema' as const,
+                  text:
+                    `Renegociação do contrato "${st.product}" aprovada e conciliada: ${removidas} parcela(s) em aberto ` +
+                    `(${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorRemovido)}) ` +
+                    `saíram desta recompra e passaram a ser cobradas no novo plano do treinamento.` +
+                    (quitada ? ' Recompra sem saldo em aberto.' : ''),
+                },
+              ],
+            });
+          }
         }
       }
       // ─── Import IAM (PENDENTE / PARA_CONCILIAR): libera carteira + dashboard ──

@@ -15,7 +15,8 @@ import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import { getInstallmentCreditApplied, getInstallmentOutstanding, getStudentCreditAppliedTotal } from '@/lib/utils';
 import { isEntradaPendenciaInstallment, sumEntradaPendenteValue } from '@/lib/studentDisplayStatus';
 import { resolveStudentFinance } from '@/lib/studentFinance';
-import { getIamTermoStatus, isIamTermoAssinado } from '@/lib/iamControlTermo';
+import { findRecomprasComSaldo, recompraSaldoAberto, type RecompraIncorporada } from '@/lib/recompraVinculo';
+import { getZapSignTermoStatus, isZapSignTermoAssinado } from '@/lib/zapsignTermo';
 import {
   ANTECIPADA_BADGE_CLASS,
   ANTECIPADA_CHIP_CLASS,
@@ -72,6 +73,8 @@ type RenegStandbyDraft = {
   entradaMode: 'valor' | 'percent';
   entradaPercent: number;
   renegSelected: number[];
+  /** Recompras vinculadas (ids) cujo saldo entra na renegociação. Ausente = todas. */
+  renegRecomprasIncluidas?: string[];
   savedAt: string;
   /** Termo de renegociação aguardando / concluído na ZapSign. */
   termo?: RenegTermoPending;
@@ -323,6 +326,26 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const [renegSelected, setRenegSelected] = useState<number[]>([]);
   const toggleRenegParcel = (n: number) =>
     setRenegSelected((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
+  // Recompras vinculadas a este contrato com saldo em aberto: entram na
+  // renegociação por padrão (é o mesmo contrato), mas o AC pode desmarcar.
+  const allStudents = useAppStore((s) => s.students);
+  const recomprasComSaldo = useMemo(
+    () => findRecomprasComSaldo(student, allStudents),
+    [student, allStudents],
+  );
+  const [renegRecomprasIncluidas, setRenegRecomprasIncluidas] = useState<string[]>(() =>
+    findRecomprasComSaldo(studentProp, useAppStore.getState().students).map((r) => r.id),
+  );
+  const toggleRenegRecompra = (id: string) =>
+    setRenegRecomprasIncluidas((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // Enquanto a renegociação não começou, mantém o padrão "todas incluídas"
+  // mesmo que a lista de alunos termine de carregar depois de abrir o modal.
+  const recomprasIdsKey = recomprasComSaldo.map((r) => r.id).join('|');
+  useEffect(() => {
+    if (renegMode !== 'none') return;
+    setRenegRecomprasIncluidas(recomprasIdsKey ? recomprasIdsKey.split('|') : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recomprasIdsKey]);
   const [termoModal, setTermoModal] = useState(false);
   const [termoPending, setTermoPending] = useState<RenegTermoPending | null>(
     () => loadRenegStandby(studentProp.id)?.termo ?? null,
@@ -355,6 +378,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     entradaMode,
     entradaPercent,
     renegSelected,
+    renegRecomprasIncluidas,
     savedAt: new Date().toISOString(),
     termo: termoOverride === undefined ? (termoPending ?? undefined) : (termoOverride ?? undefined),
   });
@@ -382,6 +406,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     setEntradaMode(draft.entradaMode);
     setEntradaPercent(draft.entradaPercent || 0);
     setRenegSelected(Array.isArray(draft.renegSelected) ? draft.renegSelected : []);
+    if (Array.isArray(draft.renegRecomprasIncluidas)) {
+      // Só ids que ainda existem com saldo (a recompra pode ter sido quitada/vinculada a outro contrato).
+      const validos = new Set(recomprasComSaldo.map((r) => r.id));
+      setRenegRecomprasIncluidas(draft.renegRecomprasIncluidas.filter((id) => validos.has(id)));
+    }
     setTermoPending(draft.termo ?? null);
     setQuitacaoMode(false);
     setQuitParcelasMode(false);
@@ -410,9 +439,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     const pending: RenegTermoPending = {
       id: info.id,
       urlAssinatura: info.urlAssinatura,
-      status: isIamTermoAssinado({ status: info.status }) ? 'signed' : 'pending',
+      status: isZapSignTermoAssinado({ status: info.status }) ? 'signed' : 'pending',
       createdAt: new Date().toISOString(),
-      signedAt: isIamTermoAssinado({ status: info.status }) ? new Date().toISOString() : undefined,
+      signedAt: isZapSignTermoAssinado({ status: info.status }) ? new Date().toISOString() : undefined,
       nomeDocumento: info.nomeDocumento,
     };
     setTermoPending(pending);
@@ -486,9 +515,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     }
     setTermoChecking(true);
     try {
-      const result = await getIamTermoStatus(termoPending.id);
+      const result = await getZapSignTermoStatus(termoPending.id);
       if (!result.ok) throw new Error(result.error || 'Falha ao verificar assinatura.');
-      if (isIamTermoAssinado(result)) {
+      if (isZapSignTermoAssinado(result)) {
         markTermoSigned();
       } else {
         toast.message(
@@ -509,9 +538,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     let cancelled = false;
     const tick = async () => {
       try {
-        const result = await getIamTermoStatus(termoPending.id!);
+        const result = await getZapSignTermoStatus(termoPending.id!);
         if (cancelled || !result.ok) return;
-        if (isIamTermoAssinado(result)) markTermoSigned();
+        if (isZapSignTermoAssinado(result)) markTermoSigned();
       } catch {
         /* ignore poll errors */
       }
@@ -1038,7 +1067,18 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     const selectedInst = renegSelected.length > 0
       ? student.installments.filter((i) => renegSelected.includes(i.number))
       : unpaidInstallments;
-    const remaining = selectedInst.reduce((acc, i) => acc + i.value, 0);
+    // Recompras vinculadas incluídas: o saldo em aberto delas entra no valor
+    // renegociado (as fichas são "um contrato só" — ver recompraVinculo.ts).
+    const recomprasIncorporadas: RecompraIncorporada[] = recomprasComSaldo
+      .filter((r) => renegRecomprasIncluidas.includes(r.id))
+      .map((r) => {
+        const { parcelas, valor } = recompraSaldoAberto(r);
+        return { studentId: r.id, studentName: r.name, product: r.product, parcelas: parcelas.map((i) => i.number), valor };
+      })
+      .filter((r) => r.parcelas.length > 0);
+    const recompraValor = recomprasIncorporadas.reduce((a, r) => a + r.valor, 0);
+    const remainingProprio = selectedInst.reduce((acc, i) => acc + i.value, 0);
+    const remaining = remainingProprio + recompraValor;
     const paidIncluded = selectedInst.filter((i) => i.paid);
     const multaValue = applyMultaReneg ? remaining * (renegMultaPercent / 100) : 0;
 
@@ -1063,6 +1103,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
     return {
       remaining,
+      remainingProprio,
+      recompraValor,
+      recomprasIncorporadas,
       multaValue,
       totalJuros,
       totalWithCharges,
@@ -1122,7 +1165,32 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     // Plano proposto (mantidas + novas). Será aplicado ao aluno na conciliação.
     const proposedInst = [...keptInst, ...newInst].map((i, idx) => ({ ...i, number: idx + 1 }));
     const newTotal = proposedInst.length;
-    const novoSaleValue = student.saleValue + renegValues.multaValue + renegValues.totalJuros;
+    // O saldo da recompra incorporada passa a fazer parte deste contrato.
+    const novoSaleValue =
+      student.saleValue + renegValues.multaValue + renegValues.totalJuros + renegValues.recompraValor;
+    const recompras = renegValues.recomprasIncorporadas;
+    const recomprasTexto =
+      recompras.length > 0
+        ? `Recompra vinculada incluída: ${recompras
+            .map((r) => `${r.product} — ${r.parcelas.length} parcela(s) em aberto (${formatCurrency(r.valor)})`)
+            .join('; ')}. `
+        : '';
+
+    // Marca nas fichas de recompra que o saldo delas foi para esta renegociação
+    // (rascunho — a recompra só é zerada quando a Conciliação aprovar).
+    for (const r of recompras) {
+      const ficha = allStudents.find((s) => s.id === r.studentId);
+      if (!ficha) continue;
+      updateStudent(ficha.id, {
+        history: [
+          ...ficha.history,
+          addHistoryEntry(
+            `Saldo em aberto de ${formatCurrency(r.valor)} (${r.parcelas.length} parcela(s)) incluído na renegociação do contrato ` +
+              `"${student.product}" (rascunho — a recompra só é ajustada após aprovação na Conciliação).`,
+          ),
+        ],
+      });
+    }
 
     updateStudent(student.id, {
       history: [
@@ -1131,6 +1199,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           `Renegociação enviada para Conciliação (rascunho — alterações ainda não efetivas). ` +
             `Saldo devedor (parcelas selecionadas): ${formatCurrency(renegValues.remaining)}` +
             (paidIncludedCount > 0 ? ` (inclui ${paidIncludedCount} parcela(s) conciliada(s) como paga(s))` : '') + `. ` +
+            recomprasTexto +
             `${applyMultaReneg ? `Multa ${renegMultaPercent}% (${formatCurrency(renegValues.multaValue)}). ` : 'Sem multa. '}` +
             `${applyJurosReneg ? `Juros ${renegJurosPercent}% a.m. (${formatCurrency(renegValues.totalJuros)}). ` : 'Sem juros. '}` +
             `Entrada: ${formatCurrency(novaEntrada)}. ` +
@@ -1152,7 +1221,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       studentName: student.name,
       ac: student.ac,
       resumo: `Renegociação (rascunho) — ${previousTotal}x ${formatCurrency(previousValue)} → ${newTotal}x (${keptPaid.length} pagas mantidas + ${newInstallments} novas de ${formatCurrency(renegValues.newValue)})` +
-        (paidIncludedCount > 0 ? ` — ${paidIncludedCount} parcela(s) antes conciliada(s) como paga(s) foram incluídas` : ''),
+        (paidIncludedCount > 0 ? ` — ${paidIncludedCount} parcela(s) antes conciliada(s) como paga(s) foram incluídas` : '') +
+        (recompras.length > 0 ? ` — inclui recompra vinculada (${formatCurrency(renegValues.recompraValor)})` : ''),
       antes: {
         totalParcelas: previousTotal,
         valorParcela: previousValue,
@@ -1168,6 +1238,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         saleValue: novoSaleValue,
         parcelasSelecionadas: renegValues.selectedInst.map((i) => i.number),
         parcelasPagasIncluidas: renegValues.paidIncluded.map((i) => i.number),
+        recomprasIncorporadas: recompras.length > 0 ? recompras : undefined,
         termo: termoPending
           ? {
               origem: termoPending.anexoPath ? 'anexo' : 'zapsign',
@@ -3085,10 +3156,66 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                           {renegValues.paidIncluded.length > 0 && (
                             <> • <span className="text-emerald-700">{renegValues.paidIncluded.length} paga(s) incluída(s)</span></>
                           )}
+                          {renegValues.recompraValor > 0 && (
+                            <> • <span className="text-violet-700">recompra {formatCurrency(renegValues.recompraValor)}</span></>
+                          )}
                         </p>
                       </div>
                     );
                   })()}
+
+                  {/* Recompra vinculada: entra junto por padrão, com opção de tirar */}
+                  {recomprasComSaldo.length > 0 && (
+                    <div className="p-3 bg-violet-50 rounded-lg border border-violet-200 space-y-2">
+                      <div>
+                        <p className="text-xs font-semibold text-violet-900">Recompra vinculada a este contrato</p>
+                        <p className="text-[10px] text-violet-800/80 leading-snug">
+                          O saldo em aberto da recompra já vem incluído na renegociação (é o mesmo contrato). Desmarque para
+                          renegociar só o treinamento e manter a recompra separada.
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        {recomprasComSaldo.map((r) => {
+                          const { parcelas, valor } = recompraSaldoAberto(r);
+                          const incluida = renegRecomprasIncluidas.includes(r.id);
+                          return (
+                            <label
+                              key={r.id}
+                              className={`flex items-start gap-2 text-xs cursor-pointer rounded px-2 py-1.5 border ${
+                                incluida ? 'bg-white border-violet-300' : 'bg-white/60 border-transparent opacity-70'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={incluida}
+                                onChange={() => toggleRenegRecompra(r.id)}
+                                className="rounded mt-0.5"
+                              />
+                              <span className="flex-1 min-w-0">
+                                <span className="font-semibold block truncate">{r.product}</span>
+                                <span className="text-[10px] text-muted-foreground block">
+                                  {parcelas.length} parcela(s) em aberto •{' '}
+                                  {parcelas
+                                    .slice(0, 4)
+                                    .map((i) => parseDateLocal(i.dueDate).toLocaleDateString('pt-BR'))
+                                    .join(', ')}
+                                  {parcelas.length > 4 ? '…' : ''}
+                                </span>
+                              </span>
+                              <span className="font-semibold whitespace-nowrap">{formatCurrency(valor)}</span>
+                              <span
+                                className={`text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap ${
+                                  incluida ? 'bg-violet-100 text-violet-700' : 'bg-muted text-muted-foreground'
+                                }`}
+                              >
+                                {incluida ? 'Incluída' : 'Separada'}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <button
                     onClick={() => {
@@ -3112,6 +3239,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase">Resumo da Renegociação</p>
                     <div className="text-xs space-y-1">
                       <p>Saldo Devedor (vencido + a vencer): <span className="font-bold">{formatCurrency(renegValues.remaining)}</span></p>
+                      {renegValues.recompraValor > 0 && (
+                        <p className="text-violet-800">
+                          ↳ inclui recompra vinculada: <span className="font-bold">{formatCurrency(renegValues.recompraValor)}</span>
+                          {' '}(treinamento {formatCurrency(renegValues.remainingProprio)})
+                        </p>
+                      )}
                       {applyMultaReneg && <p>Multa ({renegMultaPercent}%): <span className="font-bold text-destructive">{formatCurrency(renegValues.multaValue)}</span></p>}
                       {applyJurosReneg && <p>Juros ({renegJurosPercent}% a.m.): <span className="font-bold text-destructive">{formatCurrency(renegValues.totalJuros)}</span></p>}
                       <p className="border-t pt-1">Total c/ Encargos: <span className="font-bold text-primary">{formatCurrency(renegValues.totalWithCharges)}</span></p>

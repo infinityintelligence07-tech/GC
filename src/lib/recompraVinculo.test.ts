@@ -129,6 +129,38 @@ describe('vínculo recompra ↔ contrato original', () => {
     expect(calculateStudentAutoStatus(comum)).not.toMatch(/Vencido|Negativar/);
   });
 
+  it('original Negativado (manual) puxa a recompra vinculada para Negativado', () => {
+    // Caso real: Confronto negativado manualmente, recompra 0/4 com 2 parcelas
+    // vencidas aparecia "Vencido 2" — é o mesmo contrato, tem de ser Negativado.
+    const original = ficha({
+      statusMode: 'Manual',
+      status: 'Negativado',
+      installments: [parcela(1, diasAtras(400), true), parcela(2, diasAtras(130), false), parcela(3, diasAtras(100), false)],
+    });
+    const recompra = ficha({
+      product: 'Fundo - Receita (Recompra)',
+      recompraTreinamento: 'Confronto',
+      installments: [parcela(1, diasAtras(40), false, ['recompra']), parcela(2, diasAtras(10), false, ['recompra'])],
+    });
+    const r = resolveStudentDisplayStatusVinculado(recompra, [original, recompra]);
+    expect(r.status).toBe('Negativado');
+    expect(r.puxadoDoVinculo).toBe(true);
+    // O original mantém a leitura própria.
+    expect(resolveStudentDisplayStatusVinculado(original, [original, recompra]).status).toBe('Negativado');
+  });
+
+  it('recompra Negativado (manual) puxa o original automático para Negativado', () => {
+    const original = ficha({ installments: [parcela(1, diasAtras(60), true), parcela(2, diasAtras(20), false)] });
+    const recompra = ficha({
+      product: 'Fundo - Receita (Recompra)',
+      recompraTreinamento: 'Confronto',
+      statusMode: 'Manual',
+      status: 'Negativado',
+      installments: [parcela(1, diasAtras(100), false, ['recompra'])],
+    });
+    expect(resolveStudentDisplayStatusVinculado(original, [original, recompra]).status).toBe('Negativado');
+  });
+
   it('status Manual e cancelamento ativo não são sobrescritos pelo vínculo', () => {
     const manual = ficha({ statusMode: 'Manual', status: 'Em Dia', installments: [parcela(1, diasAtras(5), true)] });
     const recompra = ficha({ product: 'Fundo - Receita (Recompra)', recompraTreinamento: 'Confronto', installments: [parcela(1, diasAtras(100), false, ['recompra'])] });
