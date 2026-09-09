@@ -66,6 +66,7 @@ import {
   resolveStudentFinance,
 } from '@/lib/studentFinance';
 import { resolveOriginalCancellationAc } from '@/lib/cancellationOriginalAc';
+import { isCancellationCaseAtivo, resolveCancellationCaseAc } from '@/lib/cancellationCaseAc';
 
 // ─── Novo Funil (5 colunas fixas) ─────────────────────────────────────────────
 
@@ -529,9 +530,9 @@ function CancellationCard({
               <Phone size={9} /> {whatsapp}
             </p>
           )}
-          {(c.ac || student?.ac) && (
+          {resolveCancellationCaseAc(c, student) && (
             <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1" title="Assessor de Conta">
-              <User size={9} /> <span className="truncate">AC: {c.ac || student?.ac}</span>
+              <User size={9} /> <span className="truncate">AC: {resolveCancellationCaseAc(c, student)}</span>
             </p>
           )}
         </div>
@@ -3203,6 +3204,30 @@ export default function CancelamentosPage() {
   // (assim como admin / jurídico). Apenas a role 'ac' (N1) seria escopada — porém
   // ela hoje não tem acesso à aba (ver permissions defaults em types/index.ts).
   const cancellationCases = allCancellationCases;
+
+  // Auto-correção: casos ativos cujo AC gravado ficou para trás após a troca de carteira
+  // (ex.: assessora saiu e outra assumiu os alunos) passam a apontar para o assessor atual.
+  const acResyncDone = useRef(false);
+  useEffect(() => {
+    if (acResyncDone.current || students.length === 0 || allCancellationCases.length === 0) return;
+    acResyncDone.current = true;
+    const byId = new Map(students.map((s) => [s.id, s]));
+    const pendentes = allCancellationCases.filter((c) => {
+      if (!isCancellationCaseAtivo(c) || !c.studentId) return false;
+      const st = byId.get(c.studentId);
+      const acAtual = (st?.ac ?? '').trim();
+      return !!acAtual && acAtual !== (c.ac ?? '').trim();
+    });
+    if (pendentes.length === 0) return;
+    pendentes.forEach((c) => {
+      const acAtual = (byId.get(c.studentId!)?.ac ?? '').trim();
+      updateCancellationCase(c.id, { ac: acAtual });
+    });
+    toast.message(
+      `${pendentes.length} caso(s) de cancelamento atualizados para o assessor atual da carteira.`,
+    );
+  }, [students, allCancellationCases, updateCancellationCase]);
+
   const removeConciliacaoByCaseId = useConciliacaoStore((s) => s.removeByCaseId);
   const removeCommissionByCaseId = useCommissionsStore((s) => s.removeByCaseId);
 
@@ -3871,8 +3896,7 @@ export default function CancelamentosPage() {
     if (q && !c.studentName.toLowerCase().includes(q)) return false;
     if (acFilter !== 'all') {
       const st = students.find((s) => s.id === c.studentId);
-      const acName = (c.ac || st?.ac || '').trim();
-      if (acName !== acFilter) return false;
+      if (resolveCancellationCaseAc(c, st) !== acFilter) return false;
     }
     return true;
   };
@@ -3889,7 +3913,7 @@ export default function CancelamentosPage() {
     const set = new Set<string>();
     displayCases.forEach((c) => {
       const st = students.find((s) => s.id === c.studentId);
-      const name = (c.ac || st?.ac || '').trim();
+      const name = resolveCancellationCaseAc(c, st);
       if (name) set.add(name);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));

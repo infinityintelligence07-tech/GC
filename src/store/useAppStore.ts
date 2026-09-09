@@ -5,6 +5,7 @@ import { Student, AC, Product, FinancialRules, TabKey, StudentStatus, Installmen
 import { getTodayBrasilia, effectiveDueDate } from '@/lib/brasiliaDate';
 import { getInstallmentOutstanding } from '@/lib/utils';
 import { resolveStudentFinance, getLatestCancellationCaseForStudent } from '@/lib/studentFinance';
+import { cancellationCasesToResyncAc } from '@/lib/cancellationCaseAc';
 import {
   createAC, updateACDb, deleteACDb,
   createProduct, updateProductDb, deleteProductDb,
@@ -264,6 +265,12 @@ export const useAppStore = create<AppState>()(
       ),
     }));
     const after = before ? { ...before, ...data } : undefined;
+    // Quem assume a carteira herda os casos de cancelamento em andamento do aluno.
+    if (before && after && 'ac' in data && (data.ac ?? '').trim() !== (before.ac ?? '').trim()) {
+      cancellationCasesToResyncAc(get().cancellationCases, after, before.ac).forEach((c) => {
+        get().updateCancellationCase(c.id, { ac: (after.ac ?? '').trim() });
+      });
+    }
     const financialKeys = ['saleValue', 'downPayment', 'totalInstallments', 'paidInstallments', 'installments', 'installmentValue'] as const;
     if (after && financialKeys.some((k) => k in data)) {
       const latestCase = getLatestCancellationCaseForStudent(

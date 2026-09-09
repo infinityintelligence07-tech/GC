@@ -38,6 +38,8 @@ import {
   type ManagedDocumentKind,
   type DocumentRelation,
 } from '@/lib/managedDocuments';
+import { CANCELAMENTO_TEMPLATE_FIELDS, RENEGOCIACAO_TEMPLATE_FIELDS } from '@/lib/termoTemplates';
+import { normalizeTemplateKey } from '@/lib/templateRender';
 
 type EditorMode = 'create' | 'edit' | 'preview';
 
@@ -243,6 +245,19 @@ export default function DocumentosPage() {
   };
 
   const vars = extractTemplateVariables(formContent);
+  // Campos que os geradores de termo preenchem para os contextos marcados.
+  const camposDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    if (formRelatedTo.some((r) => r === 'cancelamento_com_multa' || r === 'cancelamento_sem_multa')) {
+      CANCELAMENTO_TEMPLATE_FIELDS.forEach((c) => set.add(c));
+    }
+    if (formRelatedTo.includes('renegociacao')) RENEGOCIACAO_TEMPLATE_FIELDS.forEach((c) => set.add(c));
+    return [...set];
+  }, [formRelatedTo]);
+  const camposDisponiveisNorm = useMemo(
+    () => new Set(camposDisponiveis.map(normalizeTemplateKey)),
+    [camposDisponiveis],
+  );
 
   return (
     <div className="space-y-5 max-w-6xl">
@@ -525,12 +540,48 @@ export default function DocumentosPage() {
                 />
                 {vars.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {vars.map((v) => (
-                      <span key={v} className="px-2 py-0.5 rounded-md text-[10px] bg-muted border border-border text-muted-foreground">
-                        {`{{${v}}}`}
-                      </span>
-                    ))}
+                    {vars.map((v) => {
+                      const conhecido = camposDisponiveis.length === 0 || camposDisponiveisNorm.has(normalizeTemplateKey(v));
+                      return (
+                        <span
+                          key={v}
+                          title={conhecido ? undefined : 'O GC não preenche este campo: ele sairá como "—" no termo.'}
+                          className={`px-2 py-0.5 rounded-md text-[10px] border ${
+                            conhecido
+                              ? 'bg-muted border-border text-muted-foreground'
+                              : 'bg-amber-50 border-amber-300 text-amber-800'
+                          }`}
+                        >
+                          {`{{${v}}}`}
+                        </span>
+                      );
+                    })}
                   </div>
+                )}
+                {camposDisponiveis.length > 0 && (
+                  <details className="mt-2 text-[10px] text-muted-foreground">
+                    <summary className="cursor-pointer select-none">
+                      Campos que o GC preenche automaticamente neste contexto ({camposDisponiveis.length})
+                    </summary>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {camposDisponiveis.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          disabled={editorMode === 'preview'}
+                          onClick={() => setFormContent((prev) => `${prev}{{${c}}}`)}
+                          title="Adicionar ao final do conteúdo"
+                          className="px-2 py-0.5 rounded-md bg-card border border-border hover:bg-muted disabled:opacity-60"
+                        >
+                          {`{{${c}}}`}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5">
+                      Ao salvar, os termos gerados (PDF e ZapSign) para este contexto passam a usar este texto. O modelo
+                      embutido sem alterações continua usando o texto institucional do GC.
+                    </p>
+                  </details>
                 )}
               </div>
 

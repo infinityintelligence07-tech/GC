@@ -283,6 +283,32 @@ export function getManagedDocument(companyId: string, id: string): ManagedDocume
   return listManagedDocuments(companyId).find((d) => d.id === id);
 }
 
+/** Modelo embutido que nunca foi alterado (conteúdo igual ao padrão do app). */
+export function isBuiltInUnchanged(doc: ManagedDocument): boolean {
+  if (!doc.builtInKey) return false;
+  const builtin = BUILTIN_TEMPLATES.find((t) => t.key === doc.builtInKey);
+  if (!builtin) return false;
+  return doc.content.trim() === builtin.content.trim();
+}
+
+/**
+ * Modelo da aba Documentos a usar na geração de um termo para o contexto
+ * (`relatedTo`). Só devolve modelo que a equipe editou ou criou: o embutido
+ * intocado devolve undefined e o gerador usa o texto institucional do código
+ * (que tem variações por multa/estorno que o modelo único não cobre).
+ * Havendo mais de um, vale o alterado mais recentemente.
+ */
+export function findManagedTemplateForRelation(
+  companyId: string,
+  relation: DocumentRelation,
+): ManagedDocument | undefined {
+  const candidatos = listManagedDocuments(companyId).filter(
+    (d) => d.relatedTo?.includes(relation) && d.content.trim().length > 0 && !isBuiltInUnchanged(d),
+  );
+  if (candidatos.length === 0) return undefined;
+  return candidatos.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+}
+
 export function createManagedDocument(
   companyId: string,
   input: {

@@ -9,6 +9,7 @@
 
 import { useAppStore } from '@/store/useAppStore';
 import type { ConciliacaoItem, Student, Installment, HistoryEntry } from '@/types';
+import { buildSairRenegociacaoPatch, lerStatusAnterior } from '@/lib/renegociacaoStatus';
 
 function num(v: unknown, fallback?: number): number | undefined {
   if (v === null || v === undefined || v === '') return fallback;
@@ -241,6 +242,16 @@ export function revertConciliacaoItem(item: ConciliacaoItem): string {
     // Nada foi aplicado ao aluno — basta descartar a proposta.
     case 'renegociacao': {
       descricao = 'rascunho da renegociação descartado (nenhuma alteração havia sido aplicada)';
+      // A ficha estava "Em Renegociação" só por causa desta proposta: volta ao
+      // status de antes (manual) ou ao Automático.
+      const saida = buildSairRenegociacaoPatch(student, 'renegociação reprovada na Conciliação', {
+        anterior: lerStatusAnterior((antes as Record<string, unknown> | undefined)?.statusAnterior),
+      });
+      if (saida) {
+        updates.status = saida.status;
+        updates.statusMode = saida.statusMode;
+        descricao += `; status voltou para "${saida.status}"`;
+      }
       break;
     }
 

@@ -12,6 +12,8 @@ import {
 } from '@/lib/zapsignTermo';
 import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
 import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
+import { aplicarTermoTemplate } from '@/lib/termoTemplates';
+import { buildTemplatePrintHtml, templateTextToZapSignMarkdown } from '@/lib/templateRender';
 import { toast } from 'sonner';
 import logoIAM from '@/assets/logo-iam-blue.png';
 
@@ -172,9 +174,76 @@ export default function TermoAditivoModal({
         }`
       : 'Entrada: R$ 0,00 (sem entrada)';
 
+  // Modelo editado na aba Documentos (relacionado a "Renegociação")? Então o
+  // termo (preview, PDF e ZapSign) é o texto dele com os campos preenchidos.
+  const template = useMemo(
+    () =>
+      aplicarTermoTemplate('renegociacao', {
+        'NOME COMPLETO': student.name || '—',
+        CPF: student.cpf || '—',
+        'E-MAIL': student.email || '—',
+        EMAIL: student.email || '—',
+        WHATSAPP: student.whatsapp || '—',
+        TREINAMENTO: student.product || '—',
+        'QUANTIDADE DE INSCRIÇÕES': String(qtdInscricoes),
+        'DATA CONTRATO': contratoAssinado,
+        'TOTAL CONTRATADO': formatCurrency(originalValues.valorVenda),
+        'TOTAL PAGO': formatCurrency(totalPago),
+        'SALDO EM ABERTO': formatCurrency(newValues.novoSaldo),
+        'QTD PARCELAS ABERTO': String(qtdParcelasAberto),
+        MULTA: formatCurrency(newValues.multaAplicada),
+        JUROS: formatCurrency(newValues.jurosAplicados),
+        'TOTAL APÓS RENEGOCIAÇÃO': formatCurrency(totalAposReneg),
+        'NOVA ENTRADA': formatCurrency(newValues.novaEntrada),
+        'DATA ENTRADA': newValues.novaEntrada > 0.0049 ? newValues.dataEntrada || dateStr : '—',
+        ENTRADA: entradaLinha,
+        'NOVAS PARCELAS': String(newValues.novasParcelas),
+        'VALOR PARCELA': formatCurrency(newValues.novoValorParcela),
+        'PRIMEIRO VENCIMENTO': newValues.primeiraParcelaVencimento || '—',
+        'DIA VENCIMENTO': String(diaVencimento),
+        'TAXA JUROS': `${taxaJuros.toLocaleString('pt-BR')}%`,
+        PARCELAMENTO: parcelamentoLines.length ? parcelamentoLines.join('\n') : '—',
+        'DATA DO TERMO': dateStr,
+        'LOCAL E DATA': `Americana/SP, ${dateStr}`,
+      }),
+    [
+      student.name,
+      student.cpf,
+      student.email,
+      student.whatsapp,
+      student.product,
+      qtdInscricoes,
+      contratoAssinado,
+      originalValues.valorVenda,
+      totalPago,
+      newValues.novoSaldo,
+      newValues.multaAplicada,
+      newValues.jurosAplicados,
+      newValues.novaEntrada,
+      newValues.dataEntrada,
+      newValues.novasParcelas,
+      newValues.novoValorParcela,
+      newValues.primeiraParcelaVencimento,
+      qtdParcelasAberto,
+      totalAposReneg,
+      entradaLinha,
+      diaVencimento,
+      taxaJuros,
+      parcelamentoLines,
+      dateStr,
+    ],
+  );
+
   const handleGeneratePDF = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+
+    if (template) {
+      printWindow.document.write(buildTemplatePrintHtml(template.text, logoIAM));
+      printWindow.document.close();
+      setTimeout(() => printWindow.print(), 250);
+      return;
+    }
 
     const parcelamentoHtml = parcelamentoLines
       .map((l) => `<p class="line">${l}</p>`)
@@ -325,22 +394,24 @@ export default function TermoAditivoModal({
 
     setLinkBusy(true);
     try {
-      const markdown = buildRenegociacaoTermoMarkdown({
-        student,
-        dateStr,
-        contratoAssinado,
-        qtdInscricoes,
-        totalContratado: originalValues.valorVenda,
-        totalPago,
-        saldoAberto: newValues.novoSaldo,
-        qtdParcelasAberto,
-        totalAposReneg,
-        entradaLinha,
-        primeiraParcelaVencimento: newValues.primeiraParcelaVencimento,
-        diaVencimento,
-        parcelamentoLines,
-        taxaJurosMes: taxaJuros,
-      });
+      const markdown = template
+        ? templateTextToZapSignMarkdown(template.text)
+        : buildRenegociacaoTermoMarkdown({
+            student,
+            dateStr,
+            contratoAssinado,
+            qtdInscricoes,
+            totalContratado: originalValues.valorVenda,
+            totalPago,
+            saldoAberto: newValues.novoSaldo,
+            qtdParcelasAberto,
+            totalAposReneg,
+            entradaLinha,
+            primeiraParcelaVencimento: newValues.primeiraParcelaVencimento,
+            diaVencimento,
+            parcelamentoLines,
+            taxaJurosMes: taxaJuros,
+          });
       const result = await createZapSignTermo({
         tipo: 'renegociacao',
         nomeDocumento: `Termo de Renegociação — ${student.name}`,
@@ -398,8 +469,34 @@ export default function TermoAditivoModal({
             <div className="flex justify-center mb-2">
               <img src={logoIAM} alt="IAM" className="w-14 h-auto" />
             </div>
-            <h3 className="text-center text-sm font-bold uppercase tracking-wide">Termo de Renegociação</h3>
+            <h3 className="text-center text-sm font-bold uppercase tracking-wide">
+              {template ? template.text.split('\n')[0] : 'Termo de Renegociação'}
+            </h3>
 
+            {template ? (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => dadosAluno.setFormOpen(true)}
+                  className={`absolute right-0 top-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border transition-colors ${
+                    dadosAluno.faltantes.length > 0
+                      ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                      : 'bg-white border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                  title="Preencher/corrigir nome, CPF, e-mail e WhatsApp do aluno"
+                >
+                  <UserRoundPen size={11} />
+                  {dadosAluno.faltantes.length > 0
+                    ? `Completar dados (${dadosAluno.faltantes.length})`
+                    : 'Editar dados'}
+                </button>
+                {/* Texto final do modelo (sem o título, já exibido acima). */}
+                <pre className="whitespace-pre-wrap font-sans text-[11px] leading-relaxed pt-6">
+                  {template.text.replace(/^\s*[^\n]*\n/, '')}
+                </pre>
+              </div>
+            ) : (
+            <>
             <p>Pelo presente instrumento, o(a) ALUNO(A):</p>
             <div className="relative space-y-0.5 pl-1">
               <button
@@ -518,8 +615,19 @@ export default function TermoAditivoModal({
                 <p>CNPJ 03.727.532/0001-13</p>
               </div>
             </div>
+            </>
+            )}
           </div>
 
+          {template ? (
+            <div className="p-4 bg-violet-50 border border-violet-200 rounded-xl">
+              <p className="text-xs text-violet-800">
+                Usando o modelo <strong>{template.nome}</strong> (v{template.versao}) da aba Documentos, relacionado a{' '}
+                <strong>Renegociação</strong>. O PDF e o termo na ZapSign saem exatamente com este texto. Para voltar
+                ao texto institucional, restaure o modelo padrão na aba Documentos.
+              </p>
+            </div>
+          ) : (
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-xs text-blue-800">
               Este termo documenta formalmente a renegociação, no mesmo padrão do documento institucional. Gere o PDF
@@ -527,6 +635,7 @@ export default function TermoAditivoModal({
               assinado fora da ZapSign, use <strong>Anexar contrato</strong> na tela da renegociação.
             </p>
           </div>
+          )}
 
           {!signerCheck.ok && (
             <p className="text-[11px] text-amber-700">

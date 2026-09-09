@@ -18,6 +18,7 @@ const STATUS_OPTIONS: (StudentStatus | 'todos')[] = [
   'À Negativar',
   'Negativado',
   'Em Negociação',
+  'Em Renegociação',
   'Excluído',
   'Pendente',
 ];

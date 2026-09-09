@@ -1,6 +1,8 @@
 import { formatCurrency } from '@/store/useAppStore';
 import type { CancellationCase, RefundPaymentMethod, RefundPixKeyType, Student } from '@/types';
 import { refundPaymentMethodLabel } from '@/types';
+import { aplicarTermoTemplate } from '@/lib/termoTemplates';
+import { buildTemplatePrintHtml } from '@/lib/templateRender';
 
 export type CancellationTermoVariant =
   | 'somente_estorno'
@@ -77,6 +79,15 @@ export interface CancellationTermoDocument {
   paragraphs: string[];
   bankLines: string[];
   showBankBlock: boolean;
+  /**
+   * Texto completo do termo quando ele vem de um modelo editado na aba
+   * Documentos (placeholders já preenchidos). Quando presente, preview, PDF,
+   * texto puro e Markdown da ZapSign usam este texto no lugar dos campos acima.
+   */
+  templateText?: string;
+  /** Nome/versão do modelo da aba Documentos usado (para exibir no preview). */
+  templateNome?: string;
+  templateVersao?: number;
 }
 
 /**
@@ -291,10 +302,11 @@ export function buildCancellationTermoDocument(input: CancellationTermoInput): C
     }
   }
 
-  return {
+  const localData = `Americana/SP, ${formatDateBRLong(dataTermo)}`;
+  const doc: CancellationTermoDocument = {
     variant,
     titulo,
-    localData: `Americana/SP, ${formatDateBRLong(dataTermo)}`,
+    localData,
     studentName: dash(input.studentName),
     cpf: dash(input.cpf),
     email: dash(input.email),
@@ -303,6 +315,43 @@ export function buildCancellationTermoDocument(input: CancellationTermoInput): C
     bankLines,
     showBankBlock,
   };
+
+  // Modelo editado na aba Documentos para este contexto? Então o termo é o
+  // texto do modelo com os campos preenchidos (o institucional acima fica como
+  // fallback quando não há modelo editado).
+  const saldoMulta = incluiMulta ? Math.max(0, Math.round((input.multaValue - input.totalPago) * 100) / 100) : 0;
+  const tpl = aplicarTermoTemplate(incluiMulta ? 'cancelamento_com_multa' : 'cancelamento_sem_multa', {
+    'TÍTULO': titulo,
+    'NOME COMPLETO': doc.studentName,
+    CPF: doc.cpf,
+    'E-MAIL': doc.email,
+    EMAIL: doc.email,
+    WHATSAPP: doc.whatsapp,
+    TREINAMENTO: treinamento,
+    'QUANTIDADE DE INSCRIÇÕES': String(qtdInsc),
+    'PORCENTAGEM DA MULTA': `${Number.isFinite(input.multaPercent) ? input.multaPercent : 0}%`,
+    'TOTAL DA MULTA': formatCurrency(input.multaValue),
+    'TOTAL PAGO': totalPago,
+    'TOTAL ESTORNO': formatCurrency(estorno),
+    'SALDO A PAGAR': formatCurrency(saldoMulta),
+    'QTD PARCELAS ESTORNO': String(qtdParcelas),
+    'VALOR PARCELA ESTORNO': valorParcela,
+    'DATAS ESTORNO': datasParcelas,
+    'DIA LIMITE ASSINATURA': formatDateBRShort(limite.toISOString().slice(0, 10)),
+    'FORMA ESTORNO': metodo,
+    'TIPO PIX': dash(input.pixKeyType),
+    'CHAVE PIX': dash(input.pixKey),
+    TITULARIDADE: input.pixOtherHolder ? dash(input.pixHolderName) : dash(input.studentName),
+    'TELEFONE TITULAR': input.pixOtherHolder ? dash(input.pixHolderPhone) : dash(input.whatsapp),
+    'DATA DO TERMO': formatDateBRLong(dataTermo),
+    'LOCAL E DATA': localData,
+  });
+  if (tpl) {
+    doc.templateText = tpl.text;
+    doc.templateNome = tpl.nome;
+    doc.templateVersao = tpl.versao;
+  }
+  return doc;
 }
 
 export function buildCancellationTermoInputFromCase(opts: {
@@ -362,6 +411,7 @@ export function buildCancellationTermoInputFromCase(opts: {
 }
 
 export function cancellationTermoToPlainText(doc: CancellationTermoDocument): string {
+  if (doc.templateText) return doc.templateText;
   const lines = [
     doc.titulo.toUpperCase(),
     '',
@@ -380,6 +430,7 @@ export function cancellationTermoToPlainText(doc: CancellationTermoDocument): st
 }
 
 export function buildCancellationTermoPrintHtml(doc: CancellationTermoDocument, logoSrc?: string): string {
+  if (doc.templateText) return buildTemplatePrintHtml(doc.templateText, logoSrc);
   const escape = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

@@ -235,7 +235,7 @@ export default function TermoCancelamentoModal({
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-foreground truncate">{doc.titulo}</h2>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Base institucional · {contentHint}
+              {doc.templateText ? `Modelo da aba Documentos: ${doc.templateNome}` : 'Base institucional'} · {contentHint}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -290,50 +290,74 @@ export default function TermoCancelamentoModal({
                   ? `Completar dados (${dadosAluno.faltantes.length})`
                   : 'Editar dados'}
               </button>
-              <p>
-                <span className="font-semibold">NOME COMPLETO:</span> {doc.studentName}
-              </p>
-              <p className={dadosAluno.faltantes.includes('cpf') ? 'text-amber-700' : undefined}>
-                <span className="font-semibold">CPF:</span> {doc.cpf}
-              </p>
-              <p className={dadosAluno.faltantes.includes('email') ? 'text-amber-700' : undefined}>
-                <span className="font-semibold">E-MAIL:</span> {doc.email}
-              </p>
-              <p className={dadosAluno.faltantes.includes('whatsapp') ? 'text-amber-700' : undefined}>
-                <span className="font-semibold">WHATSAPP:</span> {doc.whatsapp}
-              </p>
+              {doc.templateText ? (
+                // Modelo editado na aba Documentos: mostra o texto final como vai
+                // para o PDF e para a ZapSign (sem o título, já exibido acima).
+                <pre className="whitespace-pre-wrap font-sans text-[11px] leading-relaxed pt-6">
+                  {doc.templateText.replace(/^\s*[^\n]*\n/, '')}
+                </pre>
+              ) : (
+                <>
+                  <p>
+                    <span className="font-semibold">NOME COMPLETO:</span> {doc.studentName}
+                  </p>
+                  <p className={dadosAluno.faltantes.includes('cpf') ? 'text-amber-700' : undefined}>
+                    <span className="font-semibold">CPF:</span> {doc.cpf}
+                  </p>
+                  <p className={dadosAluno.faltantes.includes('email') ? 'text-amber-700' : undefined}>
+                    <span className="font-semibold">E-MAIL:</span> {doc.email}
+                  </p>
+                  <p className={dadosAluno.faltantes.includes('whatsapp') ? 'text-amber-700' : undefined}>
+                    <span className="font-semibold">WHATSAPP:</span> {doc.whatsapp}
+                  </p>
+                </>
+              )}
             </div>
 
-            {doc.paragraphs.map((p, idx) => (
-              <p key={idx}>{p}</p>
-            ))}
-
-            {doc.showBankBlock && (
-              <div className="space-y-0.5 pt-1">
-                <p className="font-semibold uppercase text-[10px]">Dados Bancários</p>
-                {doc.bankLines.map((l) => (
-                  <p key={l}>{l}</p>
+            {!doc.templateText && (
+              <>
+                {doc.paragraphs.map((p, idx) => (
+                  <p key={idx}>{p}</p>
                 ))}
-              </div>
+
+                {doc.showBankBlock && (
+                  <div className="space-y-0.5 pt-1">
+                    <p className="font-semibold uppercase text-[10px]">Dados Bancários</p>
+                    {doc.bankLines.map((l) => (
+                      <p key={l}>{l}</p>
+                    ))}
+                  </div>
+                )}
+
+                <p className="pt-2">{doc.localData}</p>
+
+                <div className="grid grid-cols-2 gap-6 pt-6 text-center text-[10px]">
+                  <div>
+                    <div className="border-t border-foreground/40 mt-8 mb-1" />
+                    <p className="font-medium">{doc.studentName}</p>
+                    <p>{doc.cpf}</p>
+                  </div>
+                  <div>
+                    <div className="border-t border-foreground/40 mt-8 mb-1" />
+                    <p className="font-medium">INSTITUTO ACADEMY MIND TREINAMENTOS LTDA</p>
+                    <p>CNPJ 03.727.532/0001-13</p>
+                  </div>
+                </div>
+              </>
             )}
-
-            <p className="pt-2">{doc.localData}</p>
-
-            <div className="grid grid-cols-2 gap-6 pt-6 text-center text-[10px]">
-              <div>
-                <div className="border-t border-foreground/40 mt-8 mb-1" />
-                <p className="font-medium">{doc.studentName}</p>
-                <p>{doc.cpf}</p>
-              </div>
-              <div>
-                <div className="border-t border-foreground/40 mt-8 mb-1" />
-                <p className="font-medium">INSTITUTO ACADEMY MIND TREINAMENTOS LTDA</p>
-                <p>CNPJ 03.727.532/0001-13</p>
-              </div>
-            </div>
           </div>
 
-          {isManualVariant ? (
+          {doc.templateText ? (
+            <div className="p-4 bg-violet-50 border border-violet-200 rounded-xl">
+              <p className="text-xs text-violet-800">
+                Usando o modelo <strong>{doc.templateNome}</strong> (v{doc.templateVersao}) da aba Documentos,
+                relacionado a{' '}
+                <strong>{doc.variant === 'sem_multa' || doc.variant === 'somente_estorno' ? 'Cancelamento sem multa' : 'Cancelamento com multa'}</strong>.
+                O PDF e o termo na ZapSign saem exatamente com este texto. Para voltar ao texto institucional,
+                restaure o modelo padrão na aba Documentos.
+              </p>
+            </div>
+          ) : isManualVariant ? (
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
               <p className="text-xs text-amber-800">
                 Modelo escolhido manualmente. Pelas regras de multa/% e saldo a devolver, o automático seria{' '}

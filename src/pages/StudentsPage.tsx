@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
 import { Student, StudentStatus, StudentTag, canEditTab } from '@/types';
 import { useAppStore, formatCurrency, calculateStudentAutoStatus, calcularScoreComportamento } from '@/store/useAppStore';
 import { cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter } from '@/lib/acPortfolioVisibility';
@@ -24,6 +24,7 @@ import { getDisplayInstallmentValue, normalizeSearch, toDisplayName } from '@/li
 import { needsIamGcConciliacaoApproval } from '@/lib/iamPendenteConciliacao';
 import { resolveStudentDisplayStatusVinculado, type StatusVinculado } from '@/lib/recompraVinculo';
 import { isRecompraFicha } from '@/lib/recompraConciliacao';
+import { isEmRenegociacao } from '@/lib/renegociacaoStatus';
 
 
 // ── Score stars renderer ───────────────────────────────────────────────────────
@@ -98,9 +99,17 @@ export default function StudentsPage() {
   const myACName = (currentUser?.role === 'ac' || currentUser?.role === 'acn2') && currentUser.acId
     ? acs.find((a) => a.id === currentUser.acId)?.name
     : undefined;
-  const students = myACName ? allStudents.filter((s) => s.ac === myACName) : allStudents;
+  // Memoizado: a identidade do array é a chave do cache do índice de vínculos
+  // (recompraVinculo) e dos useMemo abaixo.
+  const students = useMemo(
+    () => (myACName ? allStudents.filter((s) => s.ac === myACName) : allStudents),
+    [allStudents, myACName],
+  );
 
   const [search, setSearch] = useState('');
+  // A digitação atualiza o input na hora; a filtragem da lista (pesada) usa o
+  // valor adiado, então o React não trava o campo enquanto recalcula.
+  const searchQuery = useDeferredValue(search);
   const [acFilter, setAcFilter] = useState<string>('');
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StudentStatus | 'cancelado' | 'cancelamento_solicitado' | 'renda_extra' | 'pendente' | ''>('');
@@ -203,8 +212,10 @@ export default function StudentsPage() {
       } else {
         // Safety net: se foi marcado manualmente como não-vencido (ex.: "Em Dia")
         // mas surgiu parcela vencida depois, reverte p/ Automático apontando vencido.
-        // Não aplica a Pendente (pagamento fora de boleto / IAM).
-        if (s.status === 'Pendente') return;
+        // Não aplica a Pendente (pagamento fora de boleto / IAM) nem a
+        // "Em Renegociação" (rascunho/proposta em andamento — sai só ao
+        // aprovar/reprovar/descartar).
+        if (s.status === 'Pendente' || isEmRenegociacao(s)) return;
         const autoStatus = calculateStudentAutoStatus(s);
         const isOverdueNow = autoStatus === 'Vencido 1' || autoStatus === 'Vencido 2';
         const manualSaysNotOverdue = s.status !== 'Vencido 1' && s.status !== 'Vencido 2';
@@ -219,7 +230,7 @@ export default function StudentsPage() {
   // Casos importados via botão externo não têm aluno cadastrado. Criamos um
   // registro virtual (somente visualização) apenas na aba Alunos — nunca na
   // carteira do assessor.
-  const mirrorStudents = (() => {
+  const mirrorStudents = useMemo(() => {
     if (myACName) return [];
     return cancellationCases
       .filter((c) => c.externalImport && !c.studentId)
@@ -254,9 +265,10 @@ export default function StudentsPage() {
         } as unknown as Student;
         return { ...mirror, _score: 0, _mirrorCaseId: c.id };
       });
-  })();
+  }, [cancellationCases, myACName]);
 
-  const processedStudents = [...students.map((s) => {
+  // Só recalcula quando a base muda — não a cada tecla da busca.
+  const processedStudents = useMemo(() => [...students.map((s) => {
     // Garante shape mínimo para evitar "tela branca" caso o backend devolva
     // um aluno sem installments/tags/name/ac (ex.: importações parciais).
     const safe: Student = {
@@ -279,14 +291,14 @@ export default function StudentsPage() {
       _mirrorCaseId: undefined as string | undefined,
       _vinculo: vinculo as StatusVinculado | undefined,
     };
-  }), ...mirrorStudents.map((m) => ({ ...m, _vinculo: undefined as StatusVinculado | undefined }))];
+  }), ...mirrorStudents.map((m) => ({ ...m, _vinculo: undefined as StatusVinculado | undefined }))], [students, mirrorStudents, tagFilters]);
 
-
-  const filtered = processedStudents.filter((s) => {
+  const filtered = useMemo(() => {
+    const q = normalizeSearch(searchQuery);
+    const qDigits = searchQuery.replace(/\D/g, '');
+    return processedStudents.filter((s) => {
     // Busca por nome ou CPF (com/sem máscara)
-    if (search) {
-      const q = normalizeSearch(search);
-      const qDigits = search.replace(/\D/g, '');
+    if (searchQuery) {
       const nameHit = normalizeSearch(s.name).includes(q);
       const cpfDigits = (s.cpf || '').replace(/\D/g, '');
       const cpfHit = qDigits.length >= 3 && cpfDigits.includes(qDigits);
@@ -332,12 +344,28 @@ export default function StudentsPage() {
     if (recompraFilter && !hasActiveRecompra(s, studentTags)) return false;
 
     return true;
-  });
+    });
+  }, [
+    processedStudents,
+    searchQuery,
+    acFilter,
+    scoreFilter,
+    statusFilter,
+    cancellationCases,
+    tagFilters,
+    dueDateStart,
+    dueDateEnd,
+    recompraFilter,
+    studentTags,
+  ]);
 
   // Contagem de alunos com Recompra Ativa (sobre a base pré-filtro, para KPI real)
-  const recompraAtivaCount = processedStudents.filter((s) => hasActiveRecompra(s, studentTags)).length;
+  const recompraAtivaCount = useMemo(
+    () => processedStudents.filter((s) => hasActiveRecompra(s, studentTags)).length,
+    [processedStudents, studentTags],
+  );
 
-  const sorted = (() => {
+  const sorted = useMemo(() => {
     if (!sortBy) return filtered;
     const arr = [...filtered];
     arr.sort((a, b) => {
@@ -354,7 +382,17 @@ export default function StudentsPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return arr;
-  })();
+  }, [filtered, sortBy, sortDir]);
+
+  // Renderização incremental: milhares de <tr> de uma vez travam o navegador.
+  // Mostra um lote por vez e um botão "Mostrar mais"; exportações continuam
+  // usando a lista completa (`sorted`).
+  const PAGE_ROWS = 150;
+  const [visibleRows, setVisibleRows] = useState(PAGE_ROWS);
+  useEffect(() => {
+    setVisibleRows(PAGE_ROWS);
+  }, [searchQuery, acFilter, scoreFilter, statusFilter, tagFilters, dueDateStart, dueDateEnd, recompraFilter, sortBy, sortDir]);
+  const visibleSorted = useMemo(() => sorted.slice(0, visibleRows), [sorted, visibleRows]);
 
   const paidCount = (s: Student) => (s.installments || []).filter((i) => i.paid).length;
   // Contrato quitado à vista / cartão integral: sync IAM entrega a venda inteira
@@ -556,6 +594,7 @@ export default function StudentsPage() {
             <option value="Vencido 2">Vencido 2</option>
             <option value="À Negativar">À negativar</option>
             <option value="Negativado">Negativado</option>
+            <option value="Em Renegociação">Em renegociação</option>
             <option value="Pendente">Pendente</option>
             <option value="cancelamento_solicitado">Cancelamento solicitado</option>
             <option value="Pago">Pago</option>
@@ -702,7 +741,7 @@ export default function StudentsPage() {
                   </td>
                 </tr>
               ) : (
-                sorted.map((student) => {
+                visibleSorted.map((student) => {
                   const sc = student.statusCancelamento;
                   const isMirrorRow = !!student._mirrorCaseId;
                   return (
@@ -998,6 +1037,22 @@ export default function StudentsPage() {
                     </tr>
                   );
                 })
+              )}
+              {sorted.length > visibleSorted.length && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleRows((v) => v + PAGE_ROWS)}
+                      className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-muted hover:bg-muted/70 text-foreground transition-colors"
+                    >
+                      Mostrar mais {Math.min(PAGE_ROWS, sorted.length - visibleSorted.length)} de {sorted.length - visibleSorted.length} restantes
+                    </button>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Mostrando {visibleSorted.length} de {sorted.length} alunos — refine a busca ou os filtros para encontrar mais rápido.
+                    </p>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

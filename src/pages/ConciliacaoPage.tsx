@@ -39,6 +39,7 @@ import {
 } from '@/lib/iamPendenteConciliacao';
 import { pushContratoConciliado } from '@/lib/iamControlSync';
 import type { RecompraIncorporada } from '@/lib/recompraVinculo';
+import { buildSairRenegociacaoPatch } from '@/lib/renegociacaoStatus';
 /** Tipos cuja efetivação financeira ainda ocorre no clique Conciliar (sem `_after` upfront). */
 const TIPOS_EFETIVAM_NO_CONCILIAR = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -1747,6 +1748,11 @@ export default function ConciliacaoPage() {
           const allInst = novasParcelas.map((i, idx) => ({ ...i, number: idx + 1, paid: !!i.paid }));
           const downPayAtual = Number(st.downPayment) || 0;
           const novoDownPayment = downPayAtual + novaEntrada;
+          // Renegociação aprovada: a ficha sai de "Em Renegociação" e volta ao
+          // Automático, já calculado sobre o novo plano de parcelas.
+          const saidaReneg = buildSairRenegociacaoPatch(st, 'renegociação aprovada na Conciliação', {
+            installments: allInst,
+          });
           updateStudent(st.id, {
             installments: allInst,
             totalInstallments: Number.isFinite(novoTotal) ? novoTotal : allInst.length,
@@ -1754,8 +1760,9 @@ export default function ConciliacaoPage() {
             paidInstallments: allInst.filter((i) => i.paid).length,
             ...(Number.isFinite(novoSaleValue) ? { saleValue: novoSaleValue } : {}),
             ...(novaEntrada > 0 ? { downPayment: novoDownPayment } : {}),
+            ...(saidaReneg ? { status: saidaReneg.status, statusMode: saidaReneg.statusMode } : {}),
             history: [
-              ...st.history,
+              ...(saidaReneg?.history ?? st.history),
               {
                 date: new Date().toISOString(),
                 type: 'Sistema' as const,

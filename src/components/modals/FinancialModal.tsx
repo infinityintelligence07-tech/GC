@@ -21,6 +21,12 @@ import {
   recompraSaldoAberto,
   type RecompraIncorporada,
 } from '@/lib/recompraVinculo';
+import {
+  buildEntrarRenegociacaoPatch,
+  buildSairRenegociacaoPatch,
+  capturarStatusAnterior,
+  type StatusAnteriorRenegociacao,
+} from '@/lib/renegociacaoStatus';
 import { deleteZapSignTermo, getZapSignTermoStatus, isZapSignTermoAssinado } from '@/lib/zapsignTermo';
 import {
   ANTECIPADA_BADGE_CLASS,
@@ -92,6 +98,8 @@ type RenegStandbyDraft = {
   savedAt: string;
   /** Termo de renegociação aguardando / concluído na ZapSign. */
   termo?: RenegTermoPending;
+  /** Status/modo da ficha antes de virar "Em Renegociação" (restaurado ao descartar). */
+  statusAnterior?: StatusAnteriorRenegociacao;
 };
 
 function renegStandbyKey(studentId: string) {
@@ -405,7 +413,23 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     renegOutrosIncluidos,
     savedAt: new Date().toISOString(),
     termo: termoOverride === undefined ? (termoPending ?? undefined) : (termoOverride ?? undefined),
+    // Mantém o status de antes do primeiro rascunho (a ficha já pode estar "Em Renegociação").
+    statusAnterior: standbyDraft?.statusAnterior ?? capturarStatusAnterior(student),
   });
+
+  /** Ficha passa a exibir "Em Renegociação" (status manual) enquanto houver rascunho/proposta. */
+  const marcarEmRenegociacao = (motivo: string) => {
+    const atual = useAppStore.getState().students.find((s) => s.id === student.id) ?? student;
+    const patch = buildEntrarRenegociacaoPatch(atual, currentUser?.name ?? 'Sistema', motivo);
+    if (patch) updateStudent(atual.id, patch);
+  };
+
+  /** Ficha sai de "Em Renegociação" — volta ao status anterior (manual) ou ao Automático. */
+  const sairDeRenegociacao = (motivo: string, anterior?: StatusAnteriorRenegociacao | null) => {
+    const atual = useAppStore.getState().students.find((s) => s.id === student.id) ?? student;
+    const patch = buildSairRenegociacaoPatch(atual, motivo, { anterior });
+    if (patch) updateStudent(atual.id, patch);
+  };
 
   const persistRenegStandby = (
     mode?: Exclude<RenegMode, 'none'>,
@@ -416,6 +440,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     const draft = buildRenegStandby(m, termoOverride);
     saveRenegStandby(draft);
     setStandbyDraft(draft);
+    marcarEmRenegociacao('rascunho de renegociação salvo');
   };
 
   const applyRenegStandby = (draft: RenegStandbyDraft) => {
@@ -476,6 +501,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         }
       }
       clearRenegStandby(student.id);
+      sairDeRenegociacao('rascunho descartado', standbyDraft?.statusAnterior);
       setStandbyDraft(null);
       setTermoPending(null);
       setRenegMode('none');
@@ -1323,6 +1349,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         ),
       ],
     });
+    // Ficha fica "Em Renegociação" até a Conciliação aprovar (vira Automático
+    // sobre o novo plano) ou reprovar (volta ao status de antes).
+    const statusAnterior = standbyDraft?.statusAnterior ?? capturarStatusAnterior(student);
+    marcarEmRenegociacao('renegociação enviada para Conciliação');
     registrarConc({
       tipo: 'renegociacao',
       studentSnapshot: buildStudentSnapshot(baseStudent),
@@ -1339,6 +1369,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         totalParcelas: previousTotal,
         valorParcela: previousValue,
         saleValue: student.saleValue,
+        statusAnterior,
       },
       depois: {
         totalParcelas: newTotal,
@@ -1669,6 +1700,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           else toast.error(`Termo não excluído na ZapSign: ${r.error ?? 'falha na exclusão.'}`);
         }
         clearRenegStandby(student.id);
+        sairDeRenegociacao('renegociação descartada ao fechar', standbyDraft?.statusAnterior);
         setStandbyDraft(null);
         setTermoPending(null);
       }
@@ -3707,26 +3739,50 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     >
                       <ArrowLeft size={12} /> Voltar
                     </button>
-                    {termoPending && (
-                      <button
-                        onClick={() => {
-                          if (!termoAssinado) {
-                            toast.error('Aguarde a assinatura do termo ou anexe o termo já assinado para confirmar.');
-                            return;
+                    {termoPending && (() => {
+                      // Enquanto aguarda assinatura, o botão vira "Pendente assinatura · Copiar link"
+                      // para o assessor reenviar o link da ZapSign ao aluno.
+                      const linkPendente = !termoAssinado && !termoPending.anexoPath ? termoPending.urlAssinatura : undefined;
+                      return (
+                        <button
+                          onClick={() => {
+                            if (!termoAssinado) {
+                              if (linkPendente) {
+                                void navigator.clipboard
+                                  .writeText(linkPendente)
+                                  .then(() => toast.success('Link de assinatura copiado. Envie novamente ao aluno.'))
+                                  .catch(() => toast.error('Não foi possível copiar o link.'));
+                              } else {
+                                toast.error('Aguarde a assinatura do termo ou anexe o termo já assinado para confirmar.');
+                              }
+                              return;
+                            }
+                            const draft = buildRenegStandby('confirm');
+                            saveRenegStandby(draft);
+                            setStandbyDraft(draft);
+                            setRenegMode('confirm');
+                          }}
+                          disabled={newInstallments < 1 || (!termoAssinado && !linkPendente)}
+                          className={`flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40 ${
+                            termoAssinado
+                              ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                              : linkPendente
+                                ? 'bg-emerald-100 border border-emerald-300 text-emerald-800 hover:bg-emerald-200'
+                                : 'bg-emerald-500 text-white'
+                          }`}
+                          title={
+                            termoAssinado
+                              ? 'Prosseguir para confirmação'
+                              : linkPendente
+                                ? 'Termo aguardando assinatura — clique para copiar o link da ZapSign e reenviar ao aluno'
+                                : 'Pendente de assinatura do termo'
                           }
-                          const draft = buildRenegStandby('confirm');
-                          saveRenegStandby(draft);
-                          setStandbyDraft(draft);
-                          setRenegMode('confirm');
-                        }}
-                        disabled={newInstallments < 1 || !termoAssinado}
-                        className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 transition-colors"
-                        title={termoAssinado ? 'Prosseguir para confirmação' : 'Pendente de assinatura do termo'}
-                      >
-                        {termoAssinado ? <CheckCircle2 size={12} /> : <Lock size={12} />}
-                        {termoAssinado ? 'Confirmar' : 'Pendente assinatura'}
-                      </button>
-                    )}
+                        >
+                          {termoAssinado ? <CheckCircle2 size={12} /> : linkPendente ? <Copy size={12} /> : <Lock size={12} />}
+                          {termoAssinado ? 'Confirmar' : linkPendente ? 'Pendente assinatura · Copiar link' : 'Pendente assinatura'}
+                        </button>
+                      );
+                    })()}
                     <button
                       onClick={() => {
                         persistRenegStandby('detailed');
@@ -3797,7 +3853,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   {!termoAssinado && (
                     <p className="text-[10px] text-center text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
                       {termoAguardandoAssinatura
-                        ? 'Aguardando assinatura do termo. Use "Ver status da assinatura" para consultar; o Confirmar libera quando a assinatura for identificada ou quando você anexar o termo feito manualmente.'
+                        ? 'Aguardando assinatura do termo. Clique em "Pendente assinatura · Copiar link" para reenviar o link ao aluno e em "Ver status da assinatura" para consultar; o Confirmar libera quando a assinatura for identificada ou quando você anexar o termo feito manualmente.'
                         : 'Gere o termo e envie ao aluno — ou use "Anexar termo feito manualmente". O botão Confirmar aparece assim que o termo for gerado.'}
                     </p>
                   )}

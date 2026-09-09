@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/store/useAppStore';
 import type { Student } from '@/types';
 import type { CancellationTermoDocument } from '@/lib/cancellationTermoDocument';
+import { templateTextToZapSignMarkdown } from '@/lib/templateRender';
 
 /**
  * Integração direta com a ZapSign (edge functions `zapsign-termo` e `zapsign-webhook`).
@@ -93,6 +94,8 @@ function blocoAssinaturas(nome: string, cpf: string): string {
  * jurídicas do caso são uso interno e NÃO entram no documento assinado.
  */
 export function buildCancelamentoTermoMarkdown(doc: CancellationTermoDocument): string {
+  // Modelo editado na aba Documentos: o termo é o texto do modelo.
+  if (doc.templateText) return templateTextToZapSignMarkdown(doc.templateText);
   const partes: string[] = [
     `# ${md(doc.titulo)}`,
     '',

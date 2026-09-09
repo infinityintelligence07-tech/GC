@@ -13,7 +13,7 @@ export default function StudentJourneyFooter({ student }: StudentJourneyFooterPr
   allProducts.push({
     product: student.product,
     enrollmentDate: student.enrollmentDate,
-    status: student.status === 'Excluído' || student.statusCancelamento === 'cancelado' ? 'cancelado' : student.status === 'Em Negociação' ? 'em_risco' : 'ativo'
+    status: student.status === 'Excluído' || student.statusCancelamento === 'cancelado' ? 'cancelado' : student.status === 'Em Negociação' || student.status === 'Em Renegociação' ? 'em_risco' : 'ativo'
   });
 
   // Add historical products if available

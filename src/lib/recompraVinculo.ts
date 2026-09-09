@@ -38,33 +38,77 @@ function sameAluno(a: Student, b: Student): boolean {
   return normName(a.name) === normName(b.name);
 }
 
+// ─── Índice de vínculos ──────────────────────────────────────────────────────
+// Resolver o vínculo ficha a ficha varrendo `students` inteiro é O(n²) — na aba
+// Alunos isso rodava a cada tecla da busca e travava a tela. O índice abaixo é
+// montado uma vez por array de alunos (cache por identidade; o store devolve o
+// mesmo array até a próxima alteração) e responde a qualquer consulta em O(1).
+
+type VinculoIndex = Map<string, RecompraVinculoGroup>;
+const indexCache = new WeakMap<Student[], VinculoIndex>();
+
+/** Entre homônimos com o mesmo treinamento, prefere o contrato que ainda tem saldo. */
+function escolheOriginal(candidatos: Student[]): Student | undefined {
+  if (candidatos.length <= 1) return candidatos[0];
+  return candidatos.find((s) => (s.installments ?? []).some((i) => !i.paid)) ?? candidatos[0];
+}
+
+function buildVinculoIndex(students: Student[]): VinculoIndex {
+  // Contratos de origem agrupados por produto normalizado.
+  const originaisPorProduto = new Map<string, Student[]>();
+  for (const s of students) {
+    if (isRecompraFicha(s)) continue;
+    const prod = normProduct(s.product);
+    if (!prod) continue;
+    const lista = originaisPorProduto.get(prod);
+    if (lista) lista.push(s);
+    else originaisPorProduto.set(prod, [s]);
+  }
+
+  // Cada recompra vinculada aponta para exatamente um contrato de origem.
+  const originalPorId = new Map<string, Student>();
+  const recomprasPorOriginal = new Map<string, Student[]>();
+  for (const r of students) {
+    if (!isRecompraFicha(r) || !r.recompraTreinamento) continue;
+    const candidatos = (originaisPorProduto.get(normProduct(r.recompraTreinamento)) ?? []).filter((s) =>
+      sameAluno(r, s),
+    );
+    const original = escolheOriginal(candidatos);
+    if (!original) continue;
+    originalPorId.set(original.id, original);
+    const lista = recomprasPorOriginal.get(original.id);
+    if (lista) lista.push(r);
+    else recomprasPorOriginal.set(original.id, [r]);
+  }
+
+  const index: VinculoIndex = new Map();
+  for (const [originalId, recompras] of recomprasPorOriginal) {
+    const group: RecompraVinculoGroup = { original: originalPorId.get(originalId)!, recompras };
+    index.set(originalId, group);
+    for (const r of recompras) index.set(r.id, group);
+  }
+  return index;
+}
+
+function getVinculoIndex(students: Student[]): VinculoIndex {
+  let idx = indexCache.get(students);
+  if (!idx) {
+    idx = buildVinculoIndex(students);
+    indexCache.set(students, idx);
+  }
+  return idx;
+}
+
 /** Contrato de origem de uma recompra já vinculada. */
 export function findRecompraOriginal(recompra: Student, students: Student[]): Student | undefined {
   if (!isRecompraFicha(recompra) || !recompra.recompraTreinamento) return undefined;
-  const alvo = normProduct(recompra.recompraTreinamento);
-  const candidatos = students.filter(
-    (s) => !isRecompraFicha(s) && normProduct(s.product) === alvo && sameAluno(recompra, s),
-  );
-  if (candidatos.length <= 1) return candidatos[0];
-  // Homônimos com o mesmo treinamento: prefere o contrato que ainda tem saldo.
-  return candidatos.find((s) => s.installments.some((i) => !i.paid)) ?? candidatos[0];
+  return getVinculoIndex(students).get(recompra.id)?.original;
 }
 
 /** Recompras vinculadas a um contrato de origem. */
 export function findRecomprasVinculadas(original: Student, students: Student[]): Student[] {
   if (isRecompraFicha(original)) return [];
-  const prod = normProduct(original.product);
-  if (!prod) return [];
-  return students.filter(
-    (s) =>
-      isRecompraFicha(s) &&
-      !!s.recompraTreinamento &&
-      normProduct(s.recompraTreinamento) === prod &&
-      sameAluno(original, s) &&
-      // A recompra só pertence a este contrato se ele for o "original" dela
-      // (evita puxar para um homônimo).
-      findRecompraOriginal(s, students)?.id === original.id,
-  );
+  return getVinculoIndex(students).get(original.id)?.recompras ?? [];
 }
 
 /**
@@ -114,14 +158,7 @@ export function findOutrosContratosComSaldo(original: Student, students: Student
 
 /** Grupo vinculado do qual a ficha faz parte (ou null se não há vínculo). */
 export function getRecompraVinculoGroup(student: Student, students: Student[]): RecompraVinculoGroup | null {
-  if (isRecompraFicha(student)) {
-    const original = findRecompraOriginal(student, students);
-    if (!original) return null;
-    return { original, recompras: findRecomprasVinculadas(original, students) };
-  }
-  const recompras = findRecomprasVinculadas(student, students);
-  if (recompras.length === 0) return null;
-  return { original: student, recompras };
+  return getVinculoIndex(students).get(student.id) ?? null;
 }
 
 function contaNoStatusConjunto(s: Student): boolean {

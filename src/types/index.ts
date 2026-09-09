@@ -1,4 +1,4 @@
-export type StudentStatus = 'Aluno Novo' | 'Em Dia' | 'Vencido 1' | 'Vencido 2' | 'À Negativar' | 'Negativado' | 'Em Negociação' | 'Excluído' | 'Pago' | 'Pendente' | 'Renda Extra' | 'Cancelado' | 'Solicitação Cancelamento';
+export type StudentStatus = 'Aluno Novo' | 'Em Dia' | 'Vencido 1' | 'Vencido 2' | 'À Negativar' | 'Negativado' | 'Em Negociação' | 'Em Renegociação' | 'Excluído' | 'Pago' | 'Pendente' | 'Renda Extra' | 'Cancelado' | 'Solicitação Cancelamento';
 export type StatusMode = 'Automático' | 'Manual';
 
 export type RendaExtraStatus = 'Conciliar Exclusão' | 'Disponível Negociação' | 'Em Negociação' | 'Acordo Feito';
