@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { X, Download, Check, Link2, FileText } from 'lucide-react';
+import { X, Download, Check, Link2, FileText, UserRoundPen } from 'lucide-react';
 import type { CancellationCase, RefundPaymentMethod, RefundPixKeyType, Student } from '@/types';
 import {
   CANCELLATION_TERMO_VARIANTS,
@@ -20,6 +20,8 @@ import {
 } from '@/lib/zapsignTermo';
 import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
 import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
+import TermoDadosAlunoForm from '@/components/ui/TermoDadosAlunoForm';
+import { useTermoDadosAluno } from '@/hooks/useTermoDadosAluno';
 import { toast } from 'sonner';
 import logoIAM from '@/assets/logo-iam-blue.png';
 
@@ -41,6 +43,7 @@ export interface TermoCancelamentoModalProps {
   pixOtherHolder?: boolean;
   pixHolderName?: string;
   pixHolderPhone?: string;
+  /** Uso interno do caso; não entra no termo (mantido para compatibilidade dos chamadores). */
   legalNotes?: string;
   onClose: () => void;
   onGenerated?: (payload: {
@@ -70,7 +73,6 @@ export default function TermoCancelamentoModal({
   pixOtherHolder,
   pixHolderName,
   pixHolderPhone,
-  legalNotes,
   onClose,
   onGenerated,
 }: TermoCancelamentoModalProps) {
@@ -80,7 +82,27 @@ export default function TermoCancelamentoModal({
   const [enviarEmail, setEnviarEmail] = useState(true);
   /** ZapSign envia o link por WhatsApp automaticamente (consome créditos da conta ZapSign). */
   const [enviarWhatsapp, setEnviarWhatsapp] = useState(false);
-  const signerCheck = checkStudentZapSignSigner(student);
+  // Dados do aluno para o termo — abre preenchimento manual se CPF/e-mail/WhatsApp/nome não forem reconhecidos.
+  const dadosAluno = useTermoDadosAluno({
+    student,
+    fallback: { name: caseRef.studentName, whatsapp: caseRef.studentWhatsapp },
+  });
+  const { studentEfetivo, dados: dadosTermo } = dadosAluno;
+  const studentTermo = useMemo<Pick<Student, 'name' | 'cpf' | 'email' | 'whatsapp' | 'product'> | null>(
+    () =>
+      studentEfetivo ??
+      (dadosTermo.name
+        ? {
+            name: dadosTermo.name ?? '',
+            cpf: dadosTermo.cpf ?? '',
+            email: dadosTermo.email,
+            whatsapp: dadosTermo.whatsapp ?? '',
+            product: caseRef.treinamento,
+          }
+        : null),
+    [studentEfetivo, dadosTermo, caseRef.treinamento],
+  );
+  const signerCheck = checkStudentZapSignSigner(studentTermo);
   /** 'auto' = modelo escolhido pelas regras de multa/estorno; senão, modelo forçado pelo usuário. */
   const [variantChoice, setVariantChoice] = useState<'auto' | CancellationTermoVariant>('auto');
 
@@ -95,7 +117,7 @@ export default function TermoCancelamentoModal({
       buildCancellationTermoDocument({
         ...buildCancellationTermoInputFromCase({
           caseRef,
-          student,
+          student: studentTermo,
           semMultaCDC7,
           multaPercent,
           multaValue,
@@ -113,7 +135,7 @@ export default function TermoCancelamentoModal({
       }),
     [
       caseRef,
-      student,
+      studentTermo,
       semMultaCDC7,
       multaPercent,
       multaValue,
@@ -146,12 +168,14 @@ export default function TermoCancelamentoModal({
 
   /** Gera o termo na ZapSign (direto pela API); só depois libera copiar/enviar o link. */
   const handleGenerateZapSign = async () => {
-    if (!student) {
-      toast.error('Ficha do aluno não encontrada — não é possível gerar o termo para assinatura.');
+    if (!studentTermo) {
+      toast.error('Ficha do aluno não encontrada — preencha os dados do aluno para gerar o termo.');
+      dadosAluno.setFormOpen(true);
       return;
     }
     if (!signerCheck.ok) {
       toast.error(signerCheck.motivo ?? 'Aluno sem contato para assinatura.');
+      dadosAluno.setFormOpen(true);
       return;
     }
     if (signLink) {
@@ -161,12 +185,11 @@ export default function TermoCancelamentoModal({
 
     setLinkBusy(true);
     try {
-      const motivo = caseRef.motivoCancelamento || caseRef.descricaoCancelamento || caseRef.notes || '';
       const result = await createZapSignTermo({
         tipo: 'cancelamento',
         nomeDocumento: `${doc.titulo} — ${doc.studentName}`,
-        markdown: buildCancelamentoTermoMarkdown(doc, { motivo, legalNotes: legalNotes ?? caseRef.legalNotes }),
-        student,
+        markdown: buildCancelamentoTermoMarkdown(doc),
+        student: { id: student?.id, ...studentTermo },
         cancellationCaseId: caseRef.id,
         enviarEmail: enviarEmail && !!signerCheck.email,
         enviarWhatsapp: enviarWhatsapp && !!signerCheck.whatsapp,
@@ -199,6 +222,15 @@ export default function TermoCancelamentoModal({
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-foreground/30 backdrop-blur-sm p-4 fade-in">
       <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto shadow-2xl border border-border">
+        {dadosAluno.formOpen && (
+          <TermoDadosAlunoForm
+            initial={dadosAluno.dados}
+            faltantes={dadosAluno.faltantes}
+            salvaNaFicha={!!student}
+            onSave={dadosAluno.salvar}
+            onClose={() => dadosAluno.setFormOpen(false)}
+          />
+        )}
         <div className="flex items-center justify-between gap-3 p-6 border-b border-border sticky top-0 bg-card z-10">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-foreground truncate">{doc.titulo}</h2>
@@ -242,17 +274,32 @@ export default function TermoCancelamentoModal({
             </div>
             <h3 className="text-center text-sm font-bold uppercase tracking-wide">{doc.titulo}</h3>
 
-            <div className="space-y-0.5">
+            <div className="relative space-y-0.5">
+              <button
+                type="button"
+                onClick={() => dadosAluno.setFormOpen(true)}
+                className={`absolute right-0 top-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border transition-colors ${
+                  dadosAluno.faltantes.length > 0
+                    ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                    : 'bg-white border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+                }`}
+                title="Preencher/corrigir nome, CPF, e-mail e WhatsApp do aluno"
+              >
+                <UserRoundPen size={11} />
+                {dadosAluno.faltantes.length > 0
+                  ? `Completar dados (${dadosAluno.faltantes.length})`
+                  : 'Editar dados'}
+              </button>
               <p>
                 <span className="font-semibold">NOME COMPLETO:</span> {doc.studentName}
               </p>
-              <p>
+              <p className={dadosAluno.faltantes.includes('cpf') ? 'text-amber-700' : undefined}>
                 <span className="font-semibold">CPF:</span> {doc.cpf}
               </p>
-              <p>
+              <p className={dadosAluno.faltantes.includes('email') ? 'text-amber-700' : undefined}>
                 <span className="font-semibold">E-MAIL:</span> {doc.email}
               </p>
-              <p>
+              <p className={dadosAluno.faltantes.includes('whatsapp') ? 'text-amber-700' : undefined}>
                 <span className="font-semibold">WHATSAPP:</span> {doc.whatsapp}
               </p>
             </div>
@@ -366,7 +413,7 @@ export default function TermoCancelamentoModal({
           <ZapSignLinkActions
             signLink={signLink}
             nomeAluno={doc.studentName}
-            whatsapp={student?.whatsapp ?? caseRef.studentWhatsapp}
+            whatsapp={studentTermo?.whatsapp || caseRef.studentWhatsapp}
             titulo={doc.titulo}
             disabled={linkBusy}
           />

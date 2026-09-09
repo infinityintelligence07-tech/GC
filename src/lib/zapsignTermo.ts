@@ -44,33 +44,55 @@ const INSTITUTO_QUALIFICACAO =
   `${INSTITUTO_RAZAO}, pessoa jurídica de direito privado, inscrita no CNPJ nº ${INSTITUTO_CNPJ}, ` +
   'com sede na R. Major Rehder, 248 - Vila Rehder, Americana - SP, 13465-390';
 
+/**
+ * Sanitiza texto para o Markdown da ZapSign. O renderizador dela NÃO honra
+ * escape com barra invertida (mostra o "\" literal) nem tabelas/HTML, então
+ * aqui só se neutralizam os caracteres que quebrariam a estrutura do documento
+ * (pipe, quebras de linha e marcadores de bloco no início do texto).
+ */
 function md(s: string | null | undefined): string {
-  // Evita que caracteres do texto virem formatação Markdown.
-  return String(s ?? '').replace(/([\\`*_{}[\]#>|])/g, '\\$1');
+  return String(s ?? '')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\|/g, '/')
+    .replace(/^\s*([#>*+-]|\d+\.)\s+/, '')
+    .trim();
 }
 
 function linhaCampo(rotulo: string, valor: string | null | undefined): string {
   return `**${rotulo}:** ${md(valor) || '—'}`;
 }
 
+/** Linha de assinatura em texto puro (com prefixo para não virar régua horizontal). */
+const LINHA_ASSINATURA = '______________________________________';
+
+/**
+ * Bloco de assinaturas em parágrafos simples: mesmo conteúdo do PDF do GC
+ * (nome/CPF do aluno e razão social/CNPJ do Instituto), sem tabela — a ZapSign
+ * renderizava a tabela como texto cru.
+ */
 function blocoAssinaturas(nome: string, cpf: string): string {
   return [
     '',
-    '&nbsp;',
+    `ALUNO(A): ${LINHA_ASSINATURA}`,
     '',
-    '| | |',
-    '|:---:|:---:|',
-    `| \\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_ | \\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_ |`,
-    `| **${md(nome)}** | **${INSTITUTO_RAZAO}** |`,
-    `| ${md(cpf) || 'CPF —'} | CNPJ ${INSTITUTO_CNPJ} |`,
+    `**${md(nome)}**`,
+    '',
+    md(cpf) || 'CPF —',
+    '',
+    `INSTITUTO: ${LINHA_ASSINATURA}`,
+    '',
+    `**${INSTITUTO_RAZAO}**`,
+    '',
+    `CNPJ ${INSTITUTO_CNPJ}`,
   ].join('\n');
 }
 
-/** Termo de cancelamento (mesmo conteúdo do preview/PDF) em Markdown para a ZapSign. */
-export function buildCancelamentoTermoMarkdown(
-  doc: CancellationTermoDocument,
-  extras?: { motivo?: string; legalNotes?: string },
-): string {
+/**
+ * Termo de cancelamento em Markdown para a ZapSign — exatamente o conteúdo do
+ * preview/PDF do GC (`buildCancellationTermoDocument`). Motivo e observações
+ * jurídicas do caso são uso interno e NÃO entram no documento assinado.
+ */
+export function buildCancelamentoTermoMarkdown(doc: CancellationTermoDocument): string {
   const partes: string[] = [
     `# ${md(doc.titulo)}`,
     '',
@@ -84,10 +106,6 @@ export function buildCancelamentoTermoMarkdown(
   if (doc.showBankBlock && doc.bankLines.length > 0) {
     partes.push('**DADOS BANCÁRIOS**', '', ...doc.bankLines.map((l) => `- ${md(l)}`), '');
   }
-  const motivo = extras?.motivo?.trim();
-  if (motivo) partes.push(`**Motivo informado:** ${md(motivo)}`, '');
-  const legal = extras?.legalNotes?.trim();
-  if (legal) partes.push(`**Observações jurídicas:** ${md(legal)}`, '');
   partes.push(md(doc.localData), blocoAssinaturas(doc.studentName, doc.cpf));
   return partes.join('\n');
 }
@@ -194,7 +212,8 @@ export interface CreateZapSignTermoInput {
   tipo: ZapSignTermoTipo;
   nomeDocumento: string;
   markdown: string;
-  student: Pick<Student, 'id' | 'name' | 'email' | 'whatsapp'>;
+  /** `id` ausente = aluno sem ficha no GC (dados preenchidos manualmente). */
+  student: Pick<Student, 'name' | 'email' | 'whatsapp'> & { id?: string };
   cancellationCaseId?: string;
   /** ZapSign envia o link por e-mail automaticamente (grátis). */
   enviarEmail?: boolean;
@@ -239,6 +258,25 @@ export async function getZapSignTermoStatus(docToken: string): Promise<ZapSignTe
   if (error) return { ok: false, error: error.message || 'Falha ao consultar status do termo.' };
   if (!data?.ok) {
     return { ok: false, error: data?.error || 'Não foi possível consultar o status do termo.', detalhe: data?.detalhe };
+  }
+  return data;
+}
+
+/**
+ * Exclui o termo na ZapSign (soft delete: o link de assinatura deixa de valer).
+ * Usado ao descartar um rascunho de renegociação com termo pendente. Termo já
+ * assinado não é excluído (a edge function recusa com 409).
+ */
+export async function deleteZapSignTermo(docToken: string, motivo?: string): Promise<ZapSignTermoResult> {
+  const id = docToken.trim();
+  if (!id) return { ok: false, error: 'ID do termo não informado.' };
+
+  const { data, error } = await supabase.functions.invoke<ZapSignTermoResult>('zapsign-termo', {
+    body: { action: 'delete', id, motivo },
+  });
+  if (error) return { ok: false, error: error.message || 'Falha ao excluir o termo na ZapSign.' };
+  if (!data?.ok) {
+    return { ok: false, error: data?.error || 'Não foi possível excluir o termo na ZapSign.', detalhe: data?.detalhe };
   }
   return data;
 }

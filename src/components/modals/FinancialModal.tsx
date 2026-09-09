@@ -16,7 +16,7 @@ import { getInstallmentCreditApplied, getInstallmentOutstanding, getStudentCredi
 import { isEntradaPendenciaInstallment, sumEntradaPendenteValue } from '@/lib/studentDisplayStatus';
 import { resolveStudentFinance } from '@/lib/studentFinance';
 import { findRecomprasComSaldo, recompraSaldoAberto, type RecompraIncorporada } from '@/lib/recompraVinculo';
-import { getZapSignTermoStatus, isZapSignTermoAssinado } from '@/lib/zapsignTermo';
+import { deleteZapSignTermo, getZapSignTermoStatus, isZapSignTermoAssinado } from '@/lib/zapsignTermo';
 import {
   ANTECIPADA_BADGE_CLASS,
   ANTECIPADA_CHIP_CLASS,
@@ -55,7 +55,14 @@ type RenegTermoPending = {
   /** Termo/contrato já assinado anexado manualmente (path no bucket `cancellation-docs`). */
   anexoPath?: string;
   anexoNome?: string;
+  /** PDF assinado na ZapSign, arquivado pelo GC no bucket `cancellation-docs`. */
+  signedFilePath?: string;
 };
+
+/** Path do PDF assinado disponível para abrir/baixar (anexo manual ou ZapSign). */
+function termoPdfPath(t: RenegTermoPending | null | undefined): string | undefined {
+  return t?.anexoPath || t?.signedFilePath || undefined;
+}
 
 /** Rascunho local da renegociação — permite retomar se fechar o modal no meio. */
 type RenegStandbyDraft = {
@@ -422,12 +429,41 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     );
   };
 
-  const discardRenegStandby = () => {
-    clearRenegStandby(student.id);
-    setStandbyDraft(null);
-    setTermoPending(null);
-    setRenegMode('none');
-    toast.message('Rascunho de renegociação descartado.');
+  const [discardingStandby, setDiscardingStandby] = useState(false);
+  /**
+   * Descarta o rascunho. Se houver termo gerado na ZapSign ainda pendente de
+   * assinatura, exclui o documento lá também (o link enviado ao aluno deixa de
+   * valer). Termo já assinado não é excluído — o rascunho é limpo e o termo
+   * fica registrado na ZapSign e no histórico.
+   */
+  const discardRenegStandby = async () => {
+    const termo = standbyDraft?.termo ?? termoPending;
+    const excluirNaZapSign = !!termo?.id && termo.status !== 'signed';
+    if (excluirNaZapSign) {
+      const ok = window.confirm(
+        'Descartar o rascunho e excluir o termo pendente na ZapSign? O link de assinatura enviado ao aluno deixará de funcionar.',
+      );
+      if (!ok) return;
+    }
+    setDiscardingStandby(true);
+    try {
+      if (excluirNaZapSign) {
+        const r = await deleteZapSignTermo(termo!.id!, 'rascunho de renegociação descartado');
+        if (!r.ok) {
+          toast.error(`Rascunho não descartado: ${r.error ?? 'falha ao excluir o termo na ZapSign.'}`);
+          return;
+        }
+      }
+      clearRenegStandby(student.id);
+      setStandbyDraft(null);
+      setTermoPending(null);
+      setRenegMode('none');
+      toast.message(
+        excluirNaZapSign ? 'Rascunho descartado e termo excluído na ZapSign.' : 'Rascunho de renegociação descartado.',
+      );
+    } finally {
+      setDiscardingStandby(false);
+    }
   };
 
   const markTermoPending = (info: {
@@ -452,12 +488,13 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     }
   };
 
-  const markTermoSigned = (opts?: { silent?: boolean }) => {
+  const markTermoSigned = (opts?: { silent?: boolean; signedFilePath?: string | null; signedAt?: string | null }) => {
     if (!termoPending) return;
     const signed: RenegTermoPending = {
       ...termoPending,
       status: 'signed',
-      signedAt: new Date().toISOString(),
+      signedAt: termoPending.signedAt ?? opts?.signedAt ?? new Date().toISOString(),
+      signedFilePath: opts?.signedFilePath ?? termoPending.signedFilePath,
     };
     setTermoPending(signed);
     const mode = renegMode !== 'none' ? renegMode : 'detailed';
@@ -500,13 +537,33 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   };
 
   const abrirTermoAnexado = async () => {
-    if (!termoPending?.anexoPath) return;
+    const path = termoPdfPath(termoPending);
+    if (!path) return;
     try {
-      await openCancellationPdf(termoPending.anexoPath, termoPending.anexoNome || 'termo-renegociacao.pdf');
+      await openCancellationPdf(
+        path,
+        termoPending?.anexoPath ? termoPending.anexoNome || 'termo-renegociacao.pdf' : 'termo-renegociacao-assinado-zapsign.pdf',
+      );
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Não foi possível abrir o termo anexado.');
+      toast.error(err instanceof Error ? err.message : 'Não foi possível abrir o termo assinado.');
     }
   };
+
+  // Termo assinado na ZapSign sem o PDF ainda registrado aqui (assinatura chegou pelo
+  // webhook, ou rascunho antigo): busca o path arquivado para liberar o download.
+  useEffect(() => {
+    if (!termoPending?.id || termoPending.status !== 'signed' || termoPdfPath(termoPending)) return;
+    let cancelled = false;
+    (async () => {
+      const result = await getZapSignTermoStatus(termoPending.id!);
+      if (cancelled || !result.ok || !result.signed_file_path) return;
+      markTermoSigned({ silent: true, signedFilePath: result.signed_file_path, signedAt: result.signed_at });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [termoPending?.id, termoPending?.status, termoPending?.anexoPath, termoPending?.signedFilePath]);
 
   const verificarAssinaturaTermo = async () => {
     if (!termoPending?.id) {
@@ -518,7 +575,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       const result = await getZapSignTermoStatus(termoPending.id);
       if (!result.ok) throw new Error(result.error || 'Falha ao verificar assinatura.');
       if (isZapSignTermoAssinado(result)) {
-        markTermoSigned();
+        markTermoSigned({ signedFilePath: result.signed_file_path, signedAt: result.signed_at });
       } else {
         toast.message(
           `Ainda pendente de assinatura${result.status ? ` (status: ${result.status})` : ''}.`,
@@ -540,7 +597,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       try {
         const result = await getZapSignTermoStatus(termoPending.id!);
         if (cancelled || !result.ok) return;
-        if (isZapSignTermoAssinado(result)) markTermoSigned();
+        if (isZapSignTermoAssinado(result)) {
+          markTermoSigned({ signedFilePath: result.signed_file_path, signedAt: result.signed_at });
+        }
       } catch {
         /* ignore poll errors */
       }
@@ -1209,7 +1268,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             (termoPending?.anexoPath
               ? `Termo assinado anexado manualmente: ${termoPending.anexoNome ?? termoPending.anexoPath}.`
               : termoPending?.id
-                ? `Termo assinado via ZapSign (id ${termoPending.id}).`
+                ? `Termo assinado via ZapSign (id ${termoPending.id})${termoPending.signedFilePath ? ' — PDF assinado arquivado no GC' : ''}.`
                 : 'Termo marcado como assinado.')
         ),
       ],
@@ -1244,8 +1303,14 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               origem: termoPending.anexoPath ? 'anexo' : 'zapsign',
               zapsignId: termoPending.id,
               urlAssinatura: termoPending.urlAssinatura,
-              anexoPath: termoPending.anexoPath,
-              anexoNome: termoPending.anexoNome,
+              // PDF disponível para a Conciliação abrir: anexo manual ou o assinado na ZapSign.
+              anexoPath: termoPdfPath(termoPending),
+              anexoNome: termoPending.anexoPath
+                ? termoPending.anexoNome
+                : termoPending.signedFilePath
+                  ? 'Termo de renegociação assinado (ZapSign).pdf'
+                  : undefined,
+              signedFilePath: termoPending.signedFilePath,
               assinadoEm: termoPending.signedAt,
             }
           : undefined,
@@ -1537,8 +1602,16 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         persistRenegStandby();
         toast.success('Renegociação em rascunho. Abra de novo este aluno para continuar.');
       } else {
+        // Descartar = mesma regra do "Descartar rascunho": termo ZapSign ainda
+        // pendente é excluído lá também, para o link enviado ao aluno não valer.
+        if (termoPending?.id && termoPending.status !== 'signed') {
+          const r = await deleteZapSignTermo(termoPending.id, 'renegociação descartada ao fechar');
+          if (r.ok) toast.message('Termo pendente excluído na ZapSign.');
+          else toast.error(`Termo não excluído na ZapSign: ${r.error ?? 'falha na exclusão.'}`);
+        }
         clearRenegStandby(student.id);
         setStandbyDraft(null);
+        setTermoPending(null);
       }
       onClose();
       return;
@@ -1651,10 +1724,16 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 </button>
                 <button
                   type="button"
-                  onClick={discardRenegStandby}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
+                  onClick={() => void discardRenegStandby()}
+                  disabled={discardingStandby}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors disabled:opacity-60"
+                  title={
+                    standbyDraft.termo?.id && standbyDraft.termo.status !== 'signed'
+                      ? 'Descarta o rascunho e exclui o termo pendente na ZapSign'
+                      : 'Descarta o rascunho salvo'
+                  }
                 >
-                  Descartar rascunho
+                  {discardingStandby ? 'Descartando…' : 'Descartar rascunho'}
                 </button>
               </div>
             </div>
@@ -1685,17 +1764,21 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 {termoAssinado
                   ? termoPending.anexoPath
                     ? `Arquivo "${termoPending.anexoNome ?? 'termo'}" anexado${termoPending.signedAt ? ` em ${new Date(termoPending.signedAt).toLocaleString('pt-BR')}` : ''}. Você já pode confirmar a renegociação.`
-                    : `Assinatura confirmada${termoPending.signedAt ? ` em ${new Date(termoPending.signedAt).toLocaleString('pt-BR')}` : ''}. Você já pode confirmar a renegociação.`
+                    : `Assinatura confirmada${termoPending.signedAt ? ` em ${new Date(termoPending.signedAt).toLocaleString('pt-BR')}` : ''}. ${
+                        termoPending.signedFilePath
+                          ? 'O PDF assinado já está arquivado no GC.'
+                          : 'O PDF assinado fica disponível aqui assim que a ZapSign liberar o arquivo.'
+                      } Você já pode confirmar a renegociação.`
                   : 'Pendente de assinatura do termo. O botão Confirmar fica bloqueado até o sistema identificar a assinatura ou você anexar o termo assinado.'}
               </p>
-              {termoAssinado && termoPending.anexoPath && (
+              {termoAssinado && termoPdfPath(termoPending) && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   <button
                     type="button"
                     onClick={() => void abrirTermoAnexado()}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
                   >
-                    <FileText size={11} /> Ver termo anexado
+                    <FileText size={11} /> {termoPending.anexoPath ? 'Ver termo anexado' : 'Baixar PDF assinado'}
                   </button>
                   <button
                     type="button"
@@ -3431,8 +3514,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     </div>
                   </div>
 
-                  {/* 3 Botões: Voltar / Confirmar / Gerar Termo */}
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* Botões: Voltar / [Confirmar ou Pendente assinatura — só após gerar/anexar o termo] / Rascunho */}
+                  <div className={`grid gap-2 ${termoPending ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <button
                       onClick={() => setRenegMode('initial')}
                       className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -3440,35 +3523,26 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     >
                       <ArrowLeft size={12} /> Voltar
                     </button>
-                    <button
-                      onClick={() => {
-                        if (!termoAssinado) {
-                          toast.error(
-                            termoAguardandoAssinatura
-                              ? 'Aguarde a assinatura do termo ou anexe o termo já assinado para confirmar.'
-                              : 'Gere o termo e envie o link ao aluno, ou anexe o termo já assinado. Só libera com a assinatura.',
-                          );
-                          if (!termoPending) setTermoModal(true);
-                          return;
-                        }
-                        const draft = buildRenegStandby('confirm');
-                        saveRenegStandby(draft);
-                        setStandbyDraft(draft);
-                        setRenegMode('confirm');
-                      }}
-                      disabled={newInstallments < 1 || !termoAssinado}
-                      className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 transition-colors"
-                      title={
-                        termoAssinado
-                          ? 'Prosseguir para confirmação'
-                          : termoAguardandoAssinatura
-                            ? 'Pendente de assinatura do termo'
-                            : 'Gere e envie o termo antes de confirmar'
-                      }
-                    >
-                      {termoAssinado ? <CheckCircle2 size={12} /> : <Lock size={12} />}
-                      {termoAssinado ? 'Confirmar' : 'Pendente assinatura'}
-                    </button>
+                    {termoPending && (
+                      <button
+                        onClick={() => {
+                          if (!termoAssinado) {
+                            toast.error('Aguarde a assinatura do termo ou anexe o termo já assinado para confirmar.');
+                            return;
+                          }
+                          const draft = buildRenegStandby('confirm');
+                          saveRenegStandby(draft);
+                          setStandbyDraft(draft);
+                          setRenegMode('confirm');
+                        }}
+                        disabled={newInstallments < 1 || !termoAssinado}
+                        className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 transition-colors"
+                        title={termoAssinado ? 'Prosseguir para confirmação' : 'Pendente de assinatura do termo'}
+                      >
+                        {termoAssinado ? <CheckCircle2 size={12} /> : <Lock size={12} />}
+                        {termoAssinado ? 'Confirmar' : 'Pendente assinatura'}
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         persistRenegStandby('detailed');
@@ -3481,14 +3555,46 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     </button>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setTermoModal(true)}
-                      className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-purple-700 hover:bg-purple-50 border border-purple-200 transition-colors"
-                      title="Gerar termo de renegociação (PDF, copiar link de assinatura)"
-                    >
-                      <FileText size={12} /> Gerar Termo de Renegociação
-                    </button>
+                    {/* Antes de gerar: "Gerar Termo". Depois de gerado/anexado, o botão
+                        vira o status da assinatura (consulta a ZapSign ao clicar). */}
+                    {!termoPending ? (
+                      <button
+                        type="button"
+                        onClick={() => setTermoModal(true)}
+                        className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-purple-700 hover:bg-purple-50 border border-purple-200 transition-colors"
+                        title="Gerar termo de renegociação (PDF, copiar link de assinatura)"
+                      >
+                        <FileText size={12} /> Gerar Termo de Renegociação
+                      </button>
+                    ) : termoAssinado ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (termoPdfPath(termoPending)) void abrirTermoAnexado();
+                        }}
+                        className={`flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 transition-colors ${termoPdfPath(termoPending) ? 'hover:bg-emerald-100' : 'cursor-default'}`}
+                        title={
+                          termoPending.anexoPath
+                            ? 'Termo assinado anexado — clique para abrir'
+                            : termoPending.signedFilePath
+                              ? 'Termo assinado na ZapSign — clique para baixar o PDF'
+                              : `Assinatura confirmada${termoPending.signedAt ? ` em ${new Date(termoPending.signedAt).toLocaleString('pt-BR')}` : ''}`
+                        }
+                      >
+                        <CheckCircle2 size={12} /> {termoPending.signedFilePath && !termoPending.anexoPath ? 'Baixar PDF assinado' : 'Termo assinado'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void verificarAssinaturaTermo()}
+                        disabled={termoChecking}
+                        className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-colors disabled:opacity-60"
+                        title="Consulta na ZapSign se o aluno já assinou o termo"
+                      >
+                        {termoChecking ? <Clock size={12} className="animate-pulse" /> : <FileText size={12} />}
+                        {termoChecking ? 'Verificando…' : 'Ver status da assinatura'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => anexoContratoInputRef.current?.click()}
@@ -3507,8 +3613,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   {!termoAssinado && (
                     <p className="text-[10px] text-center text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
                       {termoAguardandoAssinatura
-                        ? 'Aguardando assinatura do termo. O Confirmar libera quando o sistema identificar a assinatura ou quando você anexar o termo assinado.'
-                        : 'Gere o termo, copie o link e envie ao aluno — ou use "Anexar contrato já assinado". Só assim o Confirmar é liberado.'}
+                        ? 'Aguardando assinatura do termo. Use "Ver status da assinatura" para consultar; o Confirmar libera quando a assinatura for identificada ou quando você anexar o termo assinado.'
+                        : 'Gere o termo e envie ao aluno — ou use "Anexar contrato já assinado". O botão Confirmar aparece assim que o termo for gerado.'}
                     </p>
                   )}
                 </div>
@@ -3714,14 +3820,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 })()
               : undefined,
           }}
+          signLinkInicial={termoPending && !termoPending.anexoPath ? termoPending.urlAssinatura : undefined}
           onClose={() => setTermoModal(false)}
           onTermoGerado={(info) => {
+            // Mantém o modal aberto: o link de assinatura fica disponível para
+            // Copiar Link / WhatsApp logo após gerar o termo.
             markTermoPending(info);
-            setTermoModal(false);
-          }}
-          onTermoAnexado={(info) => {
-            markTermoAnexado(info);
-            setTermoModal(false);
           }}
         />
       )}

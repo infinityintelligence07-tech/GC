@@ -47,6 +47,7 @@ import TermoCancelamentoModal from '@/components/modals/TermoCancelamentoModal';
 import {
   buildTermoWhatsAppMessage,
   buildWhatsAppShareUrl,
+  deleteZapSignTermo,
   getZapSignTermoStatus,
   isZapSignTermoAssinado,
 } from '@/lib/zapsignTermo';
@@ -1524,7 +1525,7 @@ function CancellationReviewModal({
     return d.toISOString().slice(0, 10);
   })();
 
-  const { updateCancellationCase, students: allStudents, updateStudent } = useAppStore();
+  const { updateCancellationCase, students: allStudents, updateStudent, currentUser } = useAppStore();
   const [semMultaCDC7, setSemMultaCDC7] = useState<boolean>(
     caseRef.dentro7Dias === true && (caseRef.multaPercent ?? -1) === 0,
   );
@@ -1745,6 +1746,55 @@ function CancellationReviewModal({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [termoAguardandoAssinatura, cancelTermoPending?.id]);
+
+  const [termoExcluindo, setTermoExcluindo] = useState(false);
+  /**
+   * Exclui o termo pendente na ZapSign e volta o cancelamento ao início da
+   * etapa de termo (sem link, sem verificação): o "Visualizar termo" fica
+   * disponível de novo para gerar outro. Só vale para termo ainda não assinado.
+   */
+  const excluirTermoERecomecar = async () => {
+    if (!cancelTermoPending || termoZapAssinado) return;
+    const ok = window.confirm(
+      'Excluir o termo pendente na ZapSign e recomeçar o cancelamento? O link de assinatura enviado ao aluno deixará de funcionar e será preciso gerar um novo termo.',
+    );
+    if (!ok) return;
+    setTermoExcluindo(true);
+    try {
+      if (cancelTermoPending.id) {
+        const r = await deleteZapSignTermo(cancelTermoPending.id, 'cancelamento reiniciado');
+        if (!r.ok) {
+          toast.error(`Termo não excluído na ZapSign: ${r.error ?? 'falha na exclusão.'}`);
+          return;
+        }
+      }
+      // Remove o link ZapSign deste termo dos anexos do caso e registra no histórico.
+      const urlTermo = cancelTermoPending.urlAssinatura;
+      const idTermo = cancelTermoPending.id;
+      const restantes = (caseRef.termAttachments ?? []).filter((a) => {
+        if (a.type !== 'outro' || !a.name.toLowerCase().includes('zapsign')) return true;
+        if (urlTermo && a.url === urlTermo) return false;
+        if (idTermo && a.url === `zapsign:${idTermo}`) return false;
+        return true;
+      });
+      const entry = makeCaseHistoryEntry(
+        caseRef,
+        'Termo de cancelamento pendente excluído na ZapSign; cancelamento reiniciado (novo termo a gerar).',
+        currentUser,
+      );
+      await updateCancellationCase(caseRef.id, {
+        termAttachments: restantes,
+        termSignedByStudent: false,
+        history: [...(caseRef.history ?? []), entry],
+      });
+      setCancelTermoPending(null);
+      toast.success('Termo excluído na ZapSign. Gere um novo termo quando quiser.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível excluir o termo.');
+    } finally {
+      setTermoExcluindo(false);
+    }
+  };
 
   const requireTermoAssinado = (): boolean => {
     if (termoLiberado) return true;
@@ -2704,6 +2754,15 @@ function CancellationReviewModal({
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors"
                       >
                         Já assinou
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void excluirTermoERecomecar()}
+                        disabled={termoExcluindo}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 transition-colors disabled:opacity-60"
+                        title="Exclui o termo pendente na ZapSign (o link deixa de valer) e volta ao início para gerar um novo termo"
+                      >
+                        {termoExcluindo ? 'Excluindo…' : 'Excluir termo e recomeçar'}
                       </button>
                     </div>
                   )}

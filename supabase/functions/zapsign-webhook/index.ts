@@ -14,7 +14,8 @@
 // registra no histórico do aluno (renegociação), o que libera o "Confirmar" no GC.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-import { detailDoc, normalizeStatus, tokenEquals, zapsignConfig, type ZapSignDoc } from '../_shared/zapsign.ts';
+import { normalizeStatus, tokenEquals, type ZapSignDoc } from '../_shared/zapsign.ts';
+import { arquivarTermoAssinado, type ZapSignDocumentRow } from '../_shared/zapsignArquivo.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,8 +30,6 @@ function json(status: number, body: unknown): Response {
   });
 }
 
-const BUCKET = 'cancellation-docs';
-
 function autorizado(req: Request): boolean {
   const esperado = (Deno.env.get('ZAPSIGN_WEBHOOK_TOKEN') ?? '').trim();
   if (!esperado) return false;
@@ -38,34 +37,6 @@ function autorizado(req: Request): boolean {
   const auth = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
   const query = new URL(req.url).searchParams.get('token')?.trim() ?? '';
   return tokenEquals(header, esperado) || tokenEquals(auth, esperado) || tokenEquals(query, esperado);
-}
-
-function fmtDataHora(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-}
-
-async function baixarPdfAssinado(
-  admin: ReturnType<typeof createClient>,
-  fileUrl: string,
-  path: string,
-): Promise<boolean> {
-  const res = await fetch(fileUrl);
-  if (!res.ok) {
-    console.error('download signed_file', res.status);
-    return false;
-  }
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  const { error } = await admin.storage.from(BUCKET).upload(path, bytes, {
-    contentType: 'application/pdf',
-    upsert: true,
-  });
-  if (error) {
-    console.error('upload signed pdf', error.message);
-    return false;
-  }
-  return true;
 }
 
 Deno.serve(async (req: Request) => {
@@ -135,6 +106,9 @@ Deno.serve(async (req: Request) => {
 
   const jaFinalizado = row.status !== 'pending';
   let assinouAgora = false;
+  // Polling do GC já marcou como assinado mas o PDF ainda não foi arquivado
+  // (ex.: signed_file indisponível na hora) — o webhook completa o arquivamento.
+  const arquivarPendente = status === 'signed' && row.status === 'signed' && !row.signed_file_path && !!evento.signed_file;
 
   if (status === 'signed' && !jaFinalizado) {
     assinouAgora = true;
@@ -144,22 +118,6 @@ Deno.serve(async (req: Request) => {
       agora;
     patch.status = 'signed';
     patch.signed_at = signedAt;
-
-    // PDF assinado: o link do webhook expira em 60 min — salva no nosso bucket.
-    let fileUrl = evento.signed_file ?? null;
-    if (!fileUrl && zapsignConfig()) {
-      try {
-        fileUrl = (await detailDoc(token)).signed_file ?? null;
-      } catch (err) {
-        console.error('detailDoc', err instanceof Error ? err.message : err);
-      }
-    }
-    if (fileUrl) {
-      const pasta = row.tipo === 'cancelamento' ? 'termos' : `termos-${row.tipo}`;
-      const ref = row.cancellation_case_id ?? row.student_id ?? token;
-      const path = `${row.company_id}/${pasta}/${ref}_zapsign_${token}.pdf`;
-      if (await baixarPdfAssinado(admin, fileUrl, path)) patch.signed_file_path = path;
-    }
   } else if ((status === 'refused' || eventType === 'doc_refused') && !jaFinalizado) {
     patch.status = 'refused';
     patch.refused_at = agora;
@@ -175,55 +133,20 @@ Deno.serve(async (req: Request) => {
   // Reflete no domínio (caso de cancelamento / histórico do aluno).
   const nomeDoc = String(row.nome_documento ?? evento.name ?? 'Termo');
   const quem = evento.signer_who_signed?.name ?? row.signer_name ?? 'aluno';
+  let signedFilePath: string | null = row.signed_file_path ?? null;
 
-  if (assinouAgora) {
-    const signedAt = String(patch.signed_at);
-    const signedPath = patch.signed_file_path as string | undefined;
-
-    if (row.tipo === 'cancelamento' && row.cancellation_case_id) {
-      const { data: caso } = await admin
-        .from('cancellation_cases')
-        .select('id, term_attachments, term_signed_at')
-        .eq('id', row.cancellation_case_id)
-        .maybeSingle();
-      if (caso) {
-        const atuais: Array<{ name: string; url: string; uploadedAt: string; type: string }> = Array.isArray(caso.term_attachments)
-          ? caso.term_attachments
-          : [];
-        const novo = signedPath && !atuais.some((a) => a.url === signedPath)
-          ? [
-              ...atuais,
-              {
-                name: `Termo assinado (ZapSign) — ${nomeDoc}.pdf`,
-                url: signedPath,
-                uploadedAt: agora,
-                type: 'termo_assinado',
-              },
-            ]
-          : atuais;
-        await admin
-          .from('cancellation_cases')
-          .update({
-            term_signed_at: caso.term_signed_at ?? signedAt,
-            term_signed_by_student: true,
-            term_attachments: novo,
-            updated_at: agora,
-          })
-          .eq('id', caso.id);
-      }
-    }
-
-    if (row.student_id) {
-      const rotulo =
-        row.tipo === 'cancelamento' ? 'Termo de cancelamento' : row.tipo === 'renegociacao' ? 'Termo de renegociação' : 'Termo';
-      await admin.rpc('student_history_append', {
-        p_student_id: row.student_id,
-        p_text: `${rotulo} assinado eletronicamente via ZapSign por ${quem} em ${fmtDataHora(signedAt)}.${
-          signedPath ? ' PDF assinado arquivado no GC.' : ''
-        }`,
-        p_type: 'Sistema',
-      });
-    }
+  if (assinouAgora || arquivarPendente) {
+    // PDF assinado: o link do webhook expira em 60 min — salva no nosso bucket,
+    // anexa no caso de cancelamento e registra no histórico do aluno.
+    const r = await arquivarTermoAssinado(admin, {
+      row: { ...(row as ZapSignDocumentRow), nome_documento: nomeDoc },
+      fileUrl: evento.signed_file ?? null,
+      signedAt: String(patch.signed_at ?? row.signed_at ?? agora),
+      quem,
+      // Se o polling já registrou a assinatura, aqui só completa o PDF.
+      semHistorico: !assinouAgora,
+    });
+    signedFilePath = r.signedFilePath;
   } else if (patch.status === 'refused' && row.student_id) {
     await admin.rpc('student_history_append', {
       p_student_id: row.student_id,
@@ -232,5 +155,12 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  return json(200, { ok: true, token, event_type: eventType, status: patch.status ?? row.status, assinou_agora: assinouAgora });
+  return json(200, {
+    ok: true,
+    token,
+    event_type: eventType,
+    status: patch.status ?? row.status,
+    assinou_agora: assinouAgora,
+    signed_file_path: signedFilePath,
+  });
 });

@@ -158,6 +158,14 @@ export function detailDoc(token: string): Promise<ZapSignDoc> {
   return zapsignFetch<ZapSignDoc>(`/docs/${encodeURIComponent(token)}/`, { method: 'GET' });
 }
 
+/**
+ * Exclui o documento na ZapSign (soft delete: sai da interface e o link de
+ * assinatura deixa de funcionar; segue acessível pela API). Sem volta.
+ */
+export function deleteDoc(token: string): Promise<ZapSignDoc> {
+  return zapsignFetch<ZapSignDoc>(`/docs/${encodeURIComponent(token)}/`, { method: 'DELETE' });
+}
+
 /** Normaliza o status ZapSign para o nosso conjunto. */
 export function normalizeStatus(raw: string | null | undefined, signers?: ZapSignSigner[]): ZapSignStatus {
   const s = String(raw ?? '').toLowerCase();

@@ -177,6 +177,7 @@ const FIELD_LABELS: Record<string, string> = {
   paidInstallments: 'Parcelas pagas',
   novasParcelas: 'Novas parcelas',
   recomprasIncorporadas: 'Recompra incluída na renegociação',
+  termo: 'Termo de renegociação',
   parcelasPagas: 'Parcelas pagas',
   entrada: 'Entrada (obrigatória)',
   downPayment: 'Entrada (obrigatória)',
@@ -344,6 +345,14 @@ function formatValue(key: string, v: unknown, parent?: Record<string, unknown>):
     return v.join(', ');
   }
   if (typeof v === 'object' && v !== null) {
+    // Termo da renegociação (ZapSign / anexo manual): resumo legível
+    if (key === 'termo') {
+      const t = v as Record<string, unknown>;
+      const origem = t.origem === 'anexo' ? 'Anexado manualmente' : 'Assinado na ZapSign';
+      const quando = typeof t.assinadoEm === 'string' ? ` em ${new Date(t.assinadoEm).toLocaleString('pt-BR')}` : '';
+      const pdf = t.anexoPath || t.signedFilePath ? ' — PDF assinado arquivado' : '';
+      return `${origem}${quando}${pdf}`;
+    }
     // Troca de turma: exibe de forma legível em vez de JSON cru
     if (key === 'trocaTurma') {
       const t = v as Record<string, unknown>;

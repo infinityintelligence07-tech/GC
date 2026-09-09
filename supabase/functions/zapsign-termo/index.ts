@@ -7,6 +7,9 @@
 // POST { action: 'status', id }
 //   → { ok, id, status, url_assinatura, signers, signed_at, signed_file_path }
 //
+// POST { action: 'delete', id, motivo? }
+//   → { ok, id, status: 'deleted' }  (soft delete na ZapSign; termo assinado não é excluído)
+//
 // Requer usuário logado (verify_jwt) com empresa ativa. Escreve em public.zapsign_documents
 // com service role.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
@@ -14,12 +17,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import {
   ZapSignError,
   createDoc,
+  deleteDoc,
   detailDoc,
   normalizeStatus,
   phoneToZapSign,
   zapsignConfig,
   type ZapSignDoc,
 } from '../_shared/zapsign.ts';
+import { arquivarTermoAssinado, type ZapSignDocumentRow } from '../_shared/zapsignArquivo.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -106,6 +111,16 @@ Deno.serve(async (req: Request) => {
 
       // Estado final já conhecido (webhook chegou): não precisa bater na ZapSign.
       if (row.status !== 'pending') {
+        let signedFilePath: string | null = row.signed_file_path ?? null;
+        // Assinado mas sem PDF arquivado (falha anterior de download): tenta de novo.
+        if (row.status === 'signed' && !signedFilePath) {
+          const r = await arquivarTermoAssinado(admin, {
+            row: row as ZapSignDocumentRow,
+            signedAt: row.signed_at ?? new Date().toISOString(),
+            semHistorico: true,
+          });
+          signedFilePath = r.signedFilePath;
+        }
         return json(200, {
           ok: true,
           id: row.doc_token,
@@ -114,7 +129,7 @@ Deno.serve(async (req: Request) => {
           url_assinatura: row.sign_url,
           signers: row.signers ?? [],
           signed_at: row.signed_at,
-          signed_file_path: row.signed_file_path,
+          signed_file_path: signedFilePath,
           origem: 'banco',
         });
       }
@@ -137,6 +152,20 @@ Deno.serve(async (req: Request) => {
         })
         .eq('id', row.id);
 
+      // Assinatura descoberta pelo polling antes do webhook: arquiva o PDF assinado
+      // e reflete no caso/histórico do mesmo jeito (senão o webhook, ao chegar,
+      // veria o documento já finalizado e o PDF nunca ficaria disponível no GC).
+      let signedFilePath: string | null = row.signed_file_path ?? null;
+      if (status === 'signed' && signedAt) {
+        const r = await arquivarTermoAssinado(admin, {
+          row: row as ZapSignDocumentRow,
+          fileUrl: doc.signed_file ?? null,
+          signedAt,
+          quem: doc.signers?.find((s) => s.signed_at)?.name ?? row.signer_name ?? null,
+        });
+        signedFilePath = r.signedFilePath;
+      }
+
       return json(200, {
         ok: true,
         id: doc.token,
@@ -145,10 +174,59 @@ Deno.serve(async (req: Request) => {
         url_assinatura: row.sign_url || doc.signers?.[0]?.sign_url || '',
         signers,
         signed_at: signedAt,
-        signed_file_path: row.signed_file_path,
+        signed_file_path: signedFilePath,
         file_url: doc.signed_file ?? undefined,
         origem: 'zapsign',
       });
+    }
+
+    if (action === 'delete') {
+      const id = String(body.id ?? body.termo_id ?? '').trim();
+      if (!id) return json(400, { ok: false, error: 'Informe "id" (token do documento).' });
+
+      const { data: row, error: rowErr } = await admin
+        .from('zapsign_documents')
+        .select('id, doc_token, status, student_id, nome_documento, tipo')
+        .eq('doc_token', id)
+        .eq('company_id', companyId)
+        .maybeSingle();
+      if (rowErr) throw new Error(rowErr.message);
+      if (!row) return json(404, { ok: false, error: 'Termo não encontrado nesta empresa.' });
+
+      if (row.status === 'deleted') {
+        return json(200, { ok: true, id: row.doc_token, status: 'deleted', ja_excluido: true });
+      }
+      // Termo já assinado é documento jurídico: nunca some por descarte de rascunho.
+      if (row.status === 'signed') {
+        return json(409, { ok: false, error: 'Termo já assinado não pode ser excluído.' });
+      }
+
+      await deleteDoc(id);
+
+      const now = new Date().toISOString();
+      await admin
+        .from('zapsign_documents')
+        .update({ status: 'deleted', last_event: 'deleted_by_user', last_event_at: now })
+        .eq('id', row.id);
+
+      if (row.student_id) {
+        const { data: appUser } = await admin
+          .from('app_users')
+          .select('name')
+          .eq('auth_user_id', userId)
+          .maybeSingle();
+        const quem = (appUser?.name as string | undefined) ?? userData.user.email ?? 'usuário';
+        const motivo = body.motivo ? String(body.motivo) : 'rascunho descartado';
+        const rotulo =
+          row.tipo === 'cancelamento' ? 'Termo de cancelamento' : row.tipo === 'renegociacao' ? 'Termo de renegociação' : 'Termo';
+        await admin.rpc('student_history_append', {
+          p_student_id: row.student_id,
+          p_text: `${rotulo} excluído na ZapSign (${motivo}) por ${quem}. Documento: ${row.nome_documento ?? id}. O link de assinatura deixou de valer.`,
+          p_type: 'Sistema',
+        });
+      }
+
+      return json(200, { ok: true, id: row.doc_token, status: 'deleted' });
     }
 
     if (action !== 'create') return json(400, { ok: false, error: `Ação desconhecida: ${action}` });

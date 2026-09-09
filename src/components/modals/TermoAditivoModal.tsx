@@ -65,6 +65,11 @@ interface Props {
   }) => void;
   /** Chamado quando o usuário anexa um termo/contrato já assinado (fora da ZapSign). */
   onTermoAnexado?: (info: TermoAnexadoInfo) => void;
+  /**
+   * Link de assinatura de um termo já gerado na ZapSign (ao reabrir o modal).
+   * Com ele, o modal já abre com Copiar Link / WhatsApp liberados.
+   */
+  signLinkInicial?: string | null;
 }
 
 function parseBrDate(dateStr?: string): Date | null {
@@ -118,9 +123,10 @@ export default function TermoAditivoModal({
   onClose,
   onTermoGerado,
   onTermoAnexado,
+  signLinkInicial,
 }: Props) {
   const [linkBusy, setLinkBusy] = useState(false);
-  const [signLink, setSignLink] = useState<string | null>(null);
+  const [signLink, setSignLink] = useState<string | null>(signLinkInicial ?? null);
   const [enviarEmail, setEnviarEmail] = useState(true);
   const [enviarWhatsapp, setEnviarWhatsapp] = useState(false);
   const [anexoBusy, setAnexoBusy] = useState(false);
@@ -552,13 +558,17 @@ export default function TermoAditivoModal({
           >
             Fechar
           </button>
-          <button
-            onClick={handleGeneratePDF}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-2"
-          >
-            <Download size={16} />
-            Gerar PDF
-          </button>
+          {/* Depois de gerar o termo na ZapSign, o documento oficial é o dela:
+              Gerar PDF e Gerar Termo saem e ficam só as ações de envio do link. */}
+          {!signLink && (
+            <button
+              onClick={handleGeneratePDF}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-2"
+            >
+              <Download size={16} />
+              Gerar PDF
+            </button>
+          )}
           <input
             ref={anexoInputRef}
             type="file"
@@ -576,26 +586,28 @@ export default function TermoAditivoModal({
             <Paperclip size={16} />
             {anexoBusy ? 'Enviando…' : 'Anexar assinado'}
           </button>
-          <button
-            onClick={() => void handleGenerateZapSign()}
-            disabled={linkBusy || !signerCheck.ok || !!signLink}
-            title={signerCheck.ok ? 'Gerar o termo na ZapSign e obter o link de assinatura' : signerCheck.motivo}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            {linkBusy ? (
-              <>
-                <Link2 size={16} /> Gerando termo…
-              </>
-            ) : signLink ? (
-              <>
-                <Check size={16} /> Termo gerado
-              </>
-            ) : (
-              <>
-                <FileText size={16} /> Gerar Termo (ZapSign)
-              </>
-            )}
-          </button>
+          {signLink ? (
+            <span className="px-3 py-2 rounded-lg text-sm font-medium bg-violet-50 border border-violet-200 text-violet-700 flex items-center gap-2">
+              <Check size={16} /> Termo gerado
+            </span>
+          ) : (
+            <button
+              onClick={() => void handleGenerateZapSign()}
+              disabled={linkBusy || !signerCheck.ok}
+              title={signerCheck.ok ? 'Gerar o termo na ZapSign e obter o link de assinatura' : signerCheck.motivo}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              {linkBusy ? (
+                <>
+                  <Link2 size={16} /> Gerando termo…
+                </>
+              ) : (
+                <>
+                  <FileText size={16} /> Gerar Termo (ZapSign)
+                </>
+              )}
+            </button>
+          )}
           <ZapSignLinkActions
             signLink={signLink}
             nomeAluno={student.name}
