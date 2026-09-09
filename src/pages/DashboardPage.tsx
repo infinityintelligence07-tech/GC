@@ -577,11 +577,6 @@ export default function DashboardPage() {
   // filterCarteiraActiveStudents) mas some da Carteira Total, que só conta quem
   // tem parcela em aberto. É a diferença entre a soma dos cards e o total.
   const solicCancQuitados = solicitacaoCancelamento.filter(isStudentFullyPaid).length;
-  // Cancelados (mesmo recorte de AC/produto/tag) não têm saldo, por isso ficam fora dos
-  // 100% da carteira; exibidos no card para deixar claro que existem na base.
-  const carteiraCancelados = mode === 'historico'
-    ? 0
-    : baseStudents.filter((s) => s.statusCancelamento === 'cancelado').length;
   const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
   // Mesma base do card "Carteira Total" — pendência IAM excluída por parcela, não por aluno.
@@ -1807,15 +1802,11 @@ export default function DashboardPage() {
                 solicCancQuitados > 0
                   ? `${solicCancQuitados} com contrato quitado aguardando fechamento do cancelamento (R$ 0,00). Soma dos cards de status: ${carteiraTotalAlunos + solicCancQuitados}.`
                   : '',
-                carteiraCancelados > 0 ? `${carteiraCancelados} cancelados — fora da carteira.` : '',
               ].filter(Boolean).join(' ')}
             >
               {carteiraTotalAlunos} alunos
               {solicCancQuitados > 0 && (
                 <span className="text-muted-foreground/80"> · {solicCancQuitados} quitados em cancelamento</span>
-              )}
-              {carteiraCancelados > 0 && (
-                <span className="text-muted-foreground/80"> · {carteiraCancelados} cancelados</span>
               )}
             </p>
             <p className="text-[11px] font-semibold text-primary shrink-0">100%</p>
