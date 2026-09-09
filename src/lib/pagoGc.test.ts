@@ -44,6 +44,12 @@ describe('isBaixaRegistradaNoGc', () => {
     expect(isBaixaRegistradaNoGc(aluno, parcela({ paidMarkedAt: '2026-09-05T12:00:00Z' }), idx)).toBe(true);
   });
 
+  it('boleto antecipado nunca entra no Pago, mesmo com rastro de baixa', () => {
+    const idx = buildBaixasGcIndex([item({ depois: { parcela: 1 } })]);
+    expect(isBaixaRegistradaNoGc(aluno, parcela({ antecipada: true, paidMarkedAt: '2026-09-05T12:00:00Z' }), idx)).toBe(false);
+    expect(isBaixaRegistradaNoGc(aluno, parcela({ antecipada: true }), idx)).toBe(false);
+  });
+
   it('item pagamento_parcela conciliado casa pelo número da parcela', () => {
     const idx = buildBaixasGcIndex([item({ depois: { parcela: 2, valor: 500 } })]);
     expect(isBaixaRegistradaNoGc(aluno, parcela({ number: 2 }), idx)).toBe(true);

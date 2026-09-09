@@ -13,6 +13,10 @@ import type { ConciliacaoItem, ConciliacaoTipo, Installment, Student } from '@/t
  *    ou `baixa_kamino` apontando para a parcela (número);
  *  - item `quitacao` conciliado para o aluno — as parcelas que estavam em
  *    aberto recebem paidDate = dia da conciliação, então casamos por data.
+ *
+ * Boleto antecipado (`antecipada: true`, baixa do banco/fundo, não pagamento
+ * do aluno) NUNCA entra no Pago, mesmo com rastro de baixa — conta só no card
+ * "Boletos Antecipados" (regra do financeiro, 09/09/2026).
  */
 export const TIPOS_BAIXA_GC: ReadonlySet<ConciliacaoTipo> = new Set<ConciliacaoTipo>([
   'pagamento_parcela',
@@ -67,6 +71,7 @@ const diffDias = (a: string, b: string): number => {
 /**
  * A parcela está paga E a baixa foi feita dentro do GC (conciliada)?
  * Parcela paga sem rastro (importada já paga) devolve false.
+ * Boleto antecipado devolve false: fica só em "Boletos Antecipados".
  */
 export function isBaixaRegistradaNoGc(
   student: Pick<Student, 'id'>,
@@ -74,6 +79,7 @@ export function isBaixaRegistradaNoGc(
   index: BaixasGcIndex,
 ): boolean {
   if (!inst.paid) return false;
+  if (inst.antecipada) return false;
   if (inst.paidMarkedAt) return true;
 
   const nums = index.parcelas.get(student.id);
