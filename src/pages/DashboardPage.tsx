@@ -1015,25 +1015,36 @@ export default function DashboardPage() {
       return entry;
     };
 
-    // 1 Mês: mês vigente dividido em semanas (seg–dom, recortadas no mês).
-    // Rótulo do eixo = intervalo de dias da semana ("01–06/09").
+    // 1 Mês: o período do filtro de data do card "Data de Vencimento"
+    // (Início/Fim), dividido em semanas fechadas no domingo e recortadas no
+    // período. Sem filtro preenchido, usa o mês vigente. Rótulo do eixo =
+    // intervalo de dias da semana ("01–06/09").
     if (evolPreset === '1m') {
-      const y = today.getFullYear();
-      const m = today.getMonth();
-      const lastDay = new Date(y, m + 1, 0).getDate();
       const pad = (n: number) => String(n).padStart(2, '0');
-      const monthKey = `${y}-${pad(m + 1)}`;
+      const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const ddmm = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+      let inicio: Date;
+      let fim: Date;
+      if (forecastCustomStart && forecastCustomEnd) {
+        inicio = new Date(forecastCustomStart + 'T00:00:00');
+        fim = new Date(forecastCustomEnd + 'T00:00:00');
+        if (fim < inicio) [inicio, fim] = [fim, inicio];
+      } else {
+        inicio = new Date(today.getFullYear(), today.getMonth(), 1);
+        fim = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      }
       const weeks: any[] = [];
-      let start = 1;
-      while (start <= lastDay) {
-        // Fecha a semana no domingo (getDay() === 0) ou no fim do mês.
-        let end = start;
-        while (end < lastDay && new Date(y, m, end).getDay() !== 0) end++;
-        const from = `${monthKey}-${pad(start)}`;
-        const to = `${monthKey}-${pad(end)}`;
-        const label = start === end ? `${pad(start)}/${pad(m + 1)}` : `${pad(start)}–${pad(end)}/${pad(m + 1)}`;
+      const cursor = new Date(inicio);
+      while (cursor <= fim) {
+        // Fecha a semana no domingo (getDay() === 0) ou no fim do período.
+        const end = new Date(cursor);
+        while (end < fim && end.getDay() !== 0) end.setDate(end.getDate() + 1);
+        const from = iso(cursor);
+        const to = iso(end);
+        const label = from === to ? ddmm(cursor) : `${ddmm(cursor)}–${ddmm(end)}`;
         weeks.push(acumula(emptyEntry(label), (due) => due >= from && due <= to));
-        start = end + 1;
+        cursor.setTime(end.getTime());
+        cursor.setDate(cursor.getDate() + 1);
       }
       setCartesianData(weeks);
       return;
@@ -1062,7 +1073,7 @@ export default function DashboardPage() {
       cursor.setMonth(cursor.getMonth() + 1);
     }
     setCartesianData(months);
-  }, [forecastBase.length, acFilter, productFilter, scoreFilter, tagFilters, students, baixasGcIndex, evolPreset, evolCustomStart, evolCustomEnd, fcCadastroStart, fcCadastroEnd]);
+  }, [forecastBase.length, acFilter, productFilter, scoreFilter, tagFilters, students, baixasGcIndex, evolPreset, evolCustomStart, evolCustomEnd, fcCadastroStart, fcCadastroEnd, forecastCustomStart, forecastCustomEnd]);
 
   // ── Relatório (snapshot dos KPIs importantes) ─────────────────────────────
   const reportContextLines = (() => {
@@ -2160,7 +2171,13 @@ export default function DashboardPage() {
         <div className="bg-card border border-border rounded-2xl p-4 saas-shadow">
           <h3 className="text-sm font-semibold text-foreground mb-1">Evolução Mensal por Status</h3>
           <p className="text-xs text-muted-foreground mb-2">
-            Valor (R$) {evolPreset === '1m' ? 'semana a semana no mês vigente' : 'mês a mês'} {acFilter ? `— ${acFilter}` : '— carteira completa'}
+            Valor (R$){' '}
+            {evolPreset === '1m'
+              ? forecastCustomStart && forecastCustomEnd
+                ? `semana a semana de ${forecastCustomStart.split('-').reverse().join('/')} a ${forecastCustomEnd.split('-').reverse().join('/')} (filtro de data)`
+                : 'semana a semana no mês vigente'
+              : 'mês a mês'}{' '}
+            {acFilter ? `— ${acFilter}` : '— carteira completa'}
           </p>
 
           {/* Filtro exclusivo do bloco — período em meses */}
