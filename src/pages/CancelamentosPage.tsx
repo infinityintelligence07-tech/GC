@@ -827,8 +827,8 @@ function CancellationCard({
                   e.stopPropagation();
                   try {
                     await openCancellationPdf(t.url, t.name);
-                  } catch {
-                    window.alert('Não foi possível abrir o termo anexado.');
+                  } catch (err: unknown) {
+                    toast.error(err instanceof Error ? err.message : 'Não foi possível abrir o termo anexado.');
                   }
                 }}
                 className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-all text-[10px] font-medium"

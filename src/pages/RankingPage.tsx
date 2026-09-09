@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, cancelamentoOverridesFinancialStatus } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
+import { getCurrentMonthDates } from '@/lib/periodFilter';
 import type { Student, ConciliacaoItem } from '@/types';
 
 /**
@@ -68,21 +69,31 @@ export default function RankingPage() {
     [cancellationCases, conciliacaoItems, students],
   );
 
-  const performanceStudents: Student[] = useMemo(
-    () =>
-      studentsForAcRanking(
-        students.map((s) =>
-          s.statusMode === 'Automático' &&
-          s.status !== 'Negativado' &&
-          !cancelamentoOverridesFinancialStatus(s)
-            ? { ...s, status: calculateStudentAutoStatus(s) }
-            : { ...s, status: resolveStudentDisplayStatus(s) },
-        ),
-        hiddenKeys,
-        students,
+  // Performance = mesma base da Dashboard/Carteira no mês vigente: só aluno com
+  // parcela EM ABERTO vencendo entre o dia 01 e o último dia do mês atual.
+  // Sem isso o ranking somava a carteira inteira e divergia da Taxa Em Dia.
+  const performanceStudents: Student[] = useMemo(() => {
+    const { firstDay, lastDay } = getCurrentMonthDates();
+    const start = new Date(firstDay + 'T00:00:00');
+    const end = new Date(lastDay + 'T23:59:59');
+    const temAbertoNoMes = (s: Student) =>
+      (s.installments ?? []).some((i) => {
+        if (i.paid) return false;
+        const due = new Date(i.dueDate + 'T00:00:00');
+        return due >= start && due <= end;
+      });
+    return studentsForAcRanking(
+      students.filter(temAbertoNoMes).map((s) =>
+        s.statusMode === 'Automático' &&
+        s.status !== 'Negativado' &&
+        !cancelamentoOverridesFinancialStatus(s)
+          ? { ...s, status: calculateStudentAutoStatus(s) }
+          : { ...s, status: resolveStudentDisplayStatus(s) },
       ),
-    [students, hiddenKeys],
-  );
+      hiddenKeys,
+      students,
+    );
+  }, [students, hiddenKeys]);
 
   const historicoStudents: Student[] = useMemo(() => {
     if (!endDate) return [];
@@ -133,7 +144,7 @@ export default function RankingPage() {
             </h3>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {mode === 'performance'
-                ? 'Dados ao vivo, com base nos filtros correntes do sistema.'
+                ? 'Dados ao vivo do mês vigente: alunos com parcela em aberto vencendo neste mês (mesma base da Taxa Em Dia da Dashboard e da carteira).'
                 : 'Snapshot reconstruído com os dados congelados na data final do período.'}
             </p>
           </div>

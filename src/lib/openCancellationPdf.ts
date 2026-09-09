@@ -85,7 +85,7 @@ export function humanizeStorageError(err: unknown, fallback = 'Não foi possíve
   const msg = raw.trim();
   if (!msg) return fallback;
   if (/object not found|not found|no such file|404/i.test(msg)) {
-    return 'Arquivo não encontrado no armazenamento. O anexo foi registrado, mas o PDF não está mais no servidor — anexe de novo pela observação.';
+    return 'Arquivo não encontrado no armazenamento. Anexos enviados antes de 25/08/2026 ficaram no sistema antigo (Lovable) e não vieram na migração — anexe o PDF de novo.';
   }
   if (/row-level security|permission|not authorized|unauthorized|403/i.test(msg)) {
     return 'Sem permissão para abrir este arquivo. Confira se você está na empresa certa e com acesso a Cancelamentos.';

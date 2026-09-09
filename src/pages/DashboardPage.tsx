@@ -101,9 +101,10 @@ export default function DashboardPage() {
   const lastCardSnapshotRef = useRef<string | null>(null);
 
   // ── Evolução Mensal (filtro exclusivo do bloco) ───────────────────────────
-  // Presets: 3m, 6m (default), 12m, custom (datepickers de mês)
-  type EvolPreset = '3m' | '6m' | '12m' | 'custom';
-  const [evolPreset, setEvolPreset] = useState<EvolPreset>('6m');
+  // Presets: 1m (default — mês vigente, eixo por semana), 3m, 6m, 12m
+  // (eixo por mês), custom (datepickers de mês)
+  type EvolPreset = '1m' | '3m' | '6m' | '12m' | 'custom';
+  const [evolPreset, setEvolPreset] = useState<EvolPreset>('1m');
   const _evolToday = getTodayBrasilia();
   const _evolDefStart = new Date(_evolToday.getFullYear(), _evolToday.getMonth() - 5, 1);
   const fmtMonthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -457,9 +458,19 @@ export default function DashboardPage() {
     return getPerfRange(perfPreset, perfCustomStart, perfCustomEnd);
   })();
 
+  // Filtro "Data de Vencimento" (Início/Fim) do card de previsão — também
+  // recorta os KPIs de status e, abaixo, os pedidos de cancelamento.
+  const _fcRange = (() => {
+    if (!forecastCustomStart || !forecastCustomEnd) return null;
+    return { start: new Date(forecastCustomStart + 'T00:00:00'), end: new Date(forecastCustomEnd + 'T23:59:59') };
+  })();
+  // Pedidos de cancelamento: Histórico/Performance manda; sem eles, segue o
+  // mesmo mês/período do filtro de vencimento (cards precisam falar do mesmo período).
+  const casesRange = cancellationDateRange ?? _fcRange;
+
   const acCases = cancellationCases.filter((c) => {
     if (acFilter && c.ac !== acFilter) return false;
-    if (!isCancellationCaseInRange(c, cancellationDateRange)) return false;
+    if (!isCancellationCaseInRange(c, casesRange)) return false;
     if (!productFilter && scoreFilter === null) return true;
     const st = c.studentId ? students.find((s) => s.id === c.studentId) : undefined;
     if (!st) return false;
@@ -476,10 +487,6 @@ export default function DashboardPage() {
   // ── KPI derivations ───────────────────────────────────────────────────────
   // Aplica o filtro "Data de Vencimento" (Início/Fim) também aos KPIs de status:
   // só conta alunos que possuem ao menos uma parcela com dueDate dentro do range.
-  const _fcRange = (() => {
-    if (!forecastCustomStart || !forecastCustomEnd) return null;
-    return { start: new Date(forecastCustomStart + 'T00:00:00'), end: new Date(forecastCustomEnd + 'T23:59:59') };
-  })();
   const _instInRange = (i: { dueDate: string }) => {
     if (!_fcRange) return true;
     const due = new Date(i.dueDate + 'T00:00:00');
@@ -502,8 +509,9 @@ export default function DashboardPage() {
   const aNegativar = kpiStudentsScoped.filter((s) => s.status === 'À Negativar' && !_isSolic(s));
   const negativado = kpiStudentsScoped.filter((s) => s.status === 'Negativado' && !_isSolic(s));
   // Pedido de cancelamento: critério unificado (status OU statusCancelamento).
-  // Não depende do filtro de vencimento — o pedido existe independente da parcela.
-  const solicitacaoCancelamento = kpiStudents.filter(_isSolic);
+  // Com filtro de período, só entra quem tem parcela em aberto no intervalo —
+  // a mesma base do valor do card (sumUnpaid), para alunos e R$ fecharem juntos.
+  const solicitacaoCancelamento = kpiStudentsScoped.filter(_isSolic);
   // Pendência = pagamento aguardando fora de boleto (PIX, link, cartão, etc.).
   // Boleto NÃO entra neste status — segue Em Dia / Vencido / etc.
   const pendentes = kpiStudentsScoped.filter((s) => isOperationalPendente(s) && !_isSolic(s));
@@ -975,8 +983,52 @@ export default function DashboardPage() {
   // ── Cartesian chart (evolution) ───────────────────────────────────────────
   const [cartesianData, setCartesianData] = useState<any[]>([]);
   useEffect(() => {
-    // Determina range de meses (start..end inclusivos) com base no filtro do bloco
     const today = getTodayBrasilia();
+    const emptyEntry = (label: string): any => ({
+      month: label,
+      'Em Dia': 0,
+      'Vencido 1': 0,
+      'Vencido 2': 0,
+      'À Negativar': 0,
+      'Negativado': 0,
+    });
+    const acumula = (entry: any, matches: (dueDate: string) => boolean) => {
+      baseStudents.forEach((s) => {
+        s.installments.forEach((inst) => {
+          if (!matches(inst.dueDate)) return;
+          const finVal = getInstallmentFinancialValueExport(inst);
+          if (inst.paid) entry['Em Dia'] += finVal;
+          else entry[s.status] = (entry[s.status] || 0) + finVal;
+        });
+      });
+      return entry;
+    };
+
+    // 1 Mês: mês vigente dividido em semanas (seg–dom, recortadas no mês).
+    // Rótulo do eixo = intervalo de dias da semana ("01–06/09").
+    if (evolPreset === '1m') {
+      const y = today.getFullYear();
+      const m = today.getMonth();
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const monthKey = `${y}-${pad(m + 1)}`;
+      const weeks: any[] = [];
+      let start = 1;
+      while (start <= lastDay) {
+        // Fecha a semana no domingo (getDay() === 0) ou no fim do mês.
+        let end = start;
+        while (end < lastDay && new Date(y, m, end).getDay() !== 0) end++;
+        const from = `${monthKey}-${pad(start)}`;
+        const to = `${monthKey}-${pad(end)}`;
+        const label = start === end ? `${pad(start)}/${pad(m + 1)}` : `${pad(start)}–${pad(end)}/${pad(m + 1)}`;
+        weeks.push(acumula(emptyEntry(label), (due) => due >= from && due <= to));
+        start = end + 1;
+      }
+      setCartesianData(weeks);
+      return;
+    }
+
+    // Determina range de meses (start..end inclusivos) com base no filtro do bloco
     let startDate: Date;
     let endDate: Date;
     if (evolPreset === 'custom' && evolCustomStart && evolCustomEnd) {
@@ -995,17 +1047,7 @@ export default function DashboardPage() {
     while (cursor <= endDate) {
       const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
       const label = cursor.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-      const entry: any = { month: label, 'Em Dia': 0, 'Vencido 1': 0, 'Vencido 2': 0, 'À Negativar': 0, 'Negativado': 0 };
-      baseStudents.forEach((s) => {
-        s.installments.forEach((inst) => {
-          if (inst.dueDate.startsWith(monthKey)) {
-            const finVal = getInstallmentFinancialValueExport(inst);
-            if (inst.paid) entry['Em Dia'] += finVal;
-            else entry[s.status] = (entry[s.status] || 0) + finVal;
-          }
-        });
-      });
-      months.push(entry);
+      months.push(acumula(emptyEntry(label), (due) => due.startsWith(monthKey)));
       cursor.setMonth(cursor.getMonth() + 1);
     }
     setCartesianData(months);
@@ -1113,11 +1155,7 @@ export default function DashboardPage() {
         {
           label: 'Solicitação Cancelamento',
           value: formatCurrency(solicCancValue),
-          detail: `${solicitacaoCancelamento.length} alunos · ${
-            kpiStudents.length > 0
-              ? ((solicitacaoCancelamento.length / kpiStudents.length) * 100).toFixed(1)
-              : '0.0'
-          }%`,
+          detail: `${solicitacaoCancelamento.length} alunos · ${pctCarteira(solicitacaoCancelamento.length)}%`,
           tone: 'accent',
         },
         {
@@ -1165,9 +1203,10 @@ export default function DashboardPage() {
     });
   }
 
-  // Ranking liquidez (top 5) — mesmo universo do card
+  // Ranking liquidez (top 5) — mesmo universo do card e dos KPIs de status
+  // (respeita o período de vencimento filtrado; padrão: mês vigente).
   const rankingStudents = studentsForAcRanking(
-    kpiStudents,
+    kpiStudentsScoped,
     getHiddenFromAcPortfolioKeys(cancellationCases, conciliacaoItems, students),
     students,
   );
@@ -1917,11 +1956,7 @@ export default function DashboardPage() {
               {solicitacaoCancelamento.length} alunos
               {solicCancQuitados > 0 && ` · ${solicCancQuitados} quitados`}
             </p>
-            <p className="text-[11px] font-semibold text-fuchsia-600 shrink-0">
-              {kpiStudents.length > 0
-                ? ((solicitacaoCancelamento.length / kpiStudents.length) * 100).toFixed(1)
-                : '0.0'}%
-            </p>
+            <p className="text-[11px] font-semibold text-fuchsia-600 shrink-0">{pctCarteira(solicitacaoCancelamento.length)}%</p>
           </div>
           {infoStatus === 'solic' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
@@ -1990,7 +2025,7 @@ export default function DashboardPage() {
           {infoStatus === 'revertidos' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
               <p>
-                Pedidos de cancelamento revertidos no período selecionado (Performance / Histórico).
+                Pedidos de cancelamento revertidos no período selecionado (Histórico ou o Início/Fim do filtro de vencimento).
                 Taxa = revertidos ÷ pedidos criados no período.
                 Conta pedidos, não alunos — não entra na soma da Carteira Total.
               </p>
@@ -2113,11 +2148,14 @@ export default function DashboardPage() {
         {/* Evolução Mensal */}
         <div className="bg-card border border-border rounded-2xl p-4 saas-shadow">
           <h3 className="text-sm font-semibold text-foreground mb-1">Evolução Mensal por Status</h3>
-          <p className="text-xs text-muted-foreground mb-2">Valor (R$) mês a mês {acFilter ? `— ${acFilter}` : '— carteira completa'}</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            Valor (R$) {evolPreset === '1m' ? 'semana a semana no mês vigente' : 'mês a mês'} {acFilter ? `— ${acFilter}` : '— carteira completa'}
+          </p>
 
           {/* Filtro exclusivo do bloco — período em meses */}
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             {([
+              { key: '1m', label: '1 Mês' },
               { key: '3m', label: '3 Meses' },
               { key: '6m', label: '6 Meses' },
               { key: '12m', label: '12 Meses' },
@@ -2220,7 +2258,7 @@ export default function DashboardPage() {
       {kpiModalKey === 'revertidos' && (
         <CancellationCasesModal
           title="Casos revertidos"
-          subtitle={`${revertidos.length} de ${acCases.length} pedidos${cancellationDateRange ? ' no período' : ''} · ${revertPct}%`}
+          subtitle={`${revertidos.length} de ${acCases.length} pedidos${casesRange ? ' no período' : ''} · ${revertPct}%`}
           cases={revertidos}
           onClose={() => setKpiModalKey(null)}
         />
@@ -2235,13 +2273,11 @@ export default function DashboardPage() {
         />
       )}
       {/* ── 6. Ranking AC ────────────────────────────────────────────────────── */}
+      {/* Mesma base dos cards Taxa Em Dia / Inadimplente: alunos com parcela em
+          aberto dentro do período de vencimento filtrado (padrão: mês vigente). */}
       <ACRankingCard
         acs={acs}
-        students={studentsForAcRanking(
-          kpiStudents,
-          getHiddenFromAcPortfolioKeys(cancellationCases, conciliacaoItems, students),
-          students,
-        )}
+        students={rankingStudents}
         renegByAc={renegByAc}
         referenceDate={mode === 'historico' && historicoEnd ? new Date(historicoEnd + 'T23:59:59') : undefined}
       />

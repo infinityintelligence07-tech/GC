@@ -213,6 +213,11 @@ export default function ACPortfolioPage() {
   const hiddenIdsKey = [...hiddenFromPortfolioKeys.ids].sort().join(',');
   const hiddenNamesKey = [...hiddenFromPortfolioKeys.names].sort().join(',');
 
+  // ── Forecast custom dates ──────────────────────────────────────────────────
+  // Abre no mês vigente (01 → último dia). "Limpar" volta a toda a carteira.
+  const [forecastCustomStart, setForecastCustomStart] = useState(currentMonthStart);
+  const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
+
   // ── Revertidos / Boletos Antecipados / Pendências (filtros de card) ───────
   const cancellationDateRange = (() => {
     if (mode === 'historico') {
@@ -226,9 +231,16 @@ export default function ACPortfolioPage() {
     if (perfPreset === 'todos') return null;
     return getPerfRange(perfPreset, perfCustomStart, perfCustomEnd);
   })();
+  // Pedidos de cancelamento: Histórico/Performance manda; sem eles, segue o
+  // mesmo mês/período do filtro de vencimento (cards precisam falar do mesmo período).
+  const casesRange =
+    cancellationDateRange ??
+    (forecastCustomStart && forecastCustomEnd
+      ? { start: new Date(forecastCustomStart + 'T00:00:00'), end: new Date(forecastCustomEnd + 'T23:59:59') }
+      : null);
   const acCases = cancellationCases.filter((c) => {
     if (c.ac !== ac?.name) return false;
-    return isCancellationCaseInRange(c, cancellationDateRange);
+    return isCancellationCaseInRange(c, casesRange);
   });
   const revertidos = acCases.filter(isCancellationCaseRevertido);
   const revertidosStudentIds = useMemo(
@@ -373,10 +385,6 @@ export default function ACPortfolioPage() {
     setPerfKpis({ toReceiveCount, toReceiveValue, overdueValue });
   }, [mode, perfPreset, perfCustomStart, perfCustomEnd, acStudents]);
 
-  // ── Forecast custom dates ──────────────────────────────────────────────────
-  // Abre no mês vigente (01 → último dia). "Limpar" volta a toda a carteira.
-  const [forecastCustomStart, setForecastCustomStart] = useState(currentMonthStart);
-  const [forecastCustomEnd, setForecastCustomEnd] = useState(currentMonthEnd);
   const forecastSemPeriodo = !forecastCustomStart && !forecastCustomEnd;
   // Filtro do card por data de cadastro NO SISTEMA (created_at): só entram
   // fichas cadastradas no intervalo. Independente do filtro da tabela.
@@ -711,8 +719,9 @@ export default function ACPortfolioPage() {
   const vencido2 = kpiStudentsScoped.filter((s) => s.status === 'Vencido 2' && !_isSolic(s));
   const aNegativar = kpiStudentsScoped.filter((s) => s.status === 'À Negativar' && !_isSolic(s));
   const negativado = kpiStudentsScoped.filter((s) => s.status === 'Negativado' && !_isSolic(s));
-  // Pedido de cancelamento: não depende do filtro de vencimento.
-  const solicitacaoCancelamento = kpiStudents.filter(_isSolic);
+  // Pedido de cancelamento: com filtro de período, só entra quem tem parcela em
+  // aberto no intervalo — mesma base do valor do card (sumUnpaid).
+  const solicitacaoCancelamento = kpiStudentsScoped.filter(_isSolic);
   const inadimplentes = vencido1.length + vencido2.length + aNegativar.length + negativado.length;
   const aNegativarStale = aNegativar.some((s) => {
     const dias = calcularDiasVencido(s.installments);
@@ -783,9 +792,7 @@ export default function ACPortfolioPage() {
   const totalComposicao = alunosNovos.length + emDia.length + inadimplentes;
   const pct = (n: number) => totalComposicao > 0 ? ((n / totalComposicao) * 100).toFixed(1) : '0.0';
   const pctCarteira = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
-  const pctSolic = kpiStudents.length > 0
-    ? ((solicitacaoCancelamento.length / kpiStudents.length) * 100).toFixed(1)
-    : '0.0';
+  const pctSolic = pctCarteira(solicitacaoCancelamento.length);
   const pctEmDia = pct(emDia.length);
   const pctInadimplente = pct(inadimplentes);
   // ── Card "Pago · mês vigente" (fita de meta) ─────────────────────────────
