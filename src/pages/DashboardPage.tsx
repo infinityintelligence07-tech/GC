@@ -991,14 +991,25 @@ export default function DashboardPage() {
       'Vencido 2': 0,
       'À Negativar': 0,
       'Negativado': 0,
+      'Pago': 0,
     });
-    const acumula = (entry: any, matches: (dueDate: string) => boolean) => {
-      baseStudents.forEach((s) => {
+    // Mesmas regras dos cards A Vencer / Pago (getForecastTotals):
+    //  - base = forecastBase (sem cancelados, Renda Extra ativa e IAM não aprovado);
+    //  - paga entra na linha "Pago" pela DATA DE PAGAMENTO e só com baixa
+    //    registrada no GC (parcela que veio paga de planilha/IAM/Kamino fica fora);
+    //  - em aberto entra pelo VENCIMENTO na linha do status do aluno.
+    const acumula = (entry: any, matches: (date: string) => boolean) => {
+      forecastBase.forEach((s) => {
         s.installments.forEach((inst) => {
+          if (inst.paid) {
+            if (!inst.paidDate || !isBaixaRegistradaNoGc(s, inst, baixasGcIndex)) return;
+            if (!matches(inst.paidDate)) return;
+            entry['Pago'] += getInstallmentFinancialValueExport(inst);
+            return;
+          }
+          if (isInstallmentExcludedFromFinancialTotals(s, inst)) return;
           if (!matches(inst.dueDate)) return;
-          const finVal = getInstallmentFinancialValueExport(inst);
-          if (inst.paid) entry['Em Dia'] += finVal;
-          else entry[s.status] = (entry[s.status] || 0) + finVal;
+          entry[s.status] = (entry[s.status] || 0) + getInstallmentFinancialValueExport(inst);
         });
       });
       return entry;
@@ -1051,7 +1062,7 @@ export default function DashboardPage() {
       cursor.setMonth(cursor.getMonth() + 1);
     }
     setCartesianData(months);
-  }, [baseStudents.length, acFilter, productFilter, scoreFilter, tagFilters, students, evolPreset, evolCustomStart, evolCustomEnd]);
+  }, [forecastBase.length, acFilter, productFilter, scoreFilter, tagFilters, students, baixasGcIndex, evolPreset, evolCustomStart, evolCustomEnd, fcCadastroStart, fcCadastroEnd]);
 
   // ── Relatório (snapshot dos KPIs importantes) ─────────────────────────────
   const reportContextLines = (() => {
