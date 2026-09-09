@@ -47,8 +47,29 @@ export default function KpiStudentsModal({
     pendenciaValor: number;
     antecipada: boolean;
   };
+  type SortKey = 'studentName' | 'dueDate' | 'valor';
+  type SortDir = 'asc' | 'desc';
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('dueDate');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const toggleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    setSortDir('asc');
+  };
+  const sortIndicator = (key: SortKey) => (
+    <span className={`ml-1 ${sortKey === key ? 'text-primary' : 'text-muted-foreground/40'}`} aria-hidden>
+      {sortKey === key ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
+    </span>
+  );
+  const sortTitle = (key: SortKey, asc: string, desc: string) =>
+    sortKey === key
+      ? `Ordenado ${sortDir === 'asc' ? asc : desc} — clique para inverter`
+      : `Clique para ordenar ${asc}`;
   const allRows: Row[] = [];
   students.forEach((s) => {
     const source =
@@ -88,9 +109,28 @@ export default function KpiStudentsModal({
     return true;
   });
   const studentCount = new Set(rows.map((r) => r.studentId)).size;
+  const byName = (a: Row, b: Row) => a.studentName.localeCompare(b.studentName, 'pt-BR', { sensitivity: 'base' });
+  const byDue = (a: Row, b: Row) => (a.dueDate || '').localeCompare(b.dueDate || '');
+  const byValor = (a: Row, b: Row) => (a.entradaValor + a.pendenciaValor) - (b.entradaValor + b.pendenciaValor);
+  const primary = (a: Row, b: Row): number => {
+    switch (sortKey) {
+      case 'studentName':
+        return byName(a, b);
+      case 'dueDate':
+        return byDue(a, b);
+      case 'valor':
+        return byValor(a, b);
+      default: {
+        const _exhaustive: never = sortKey;
+        return _exhaustive;
+      }
+    }
+  };
   rows.sort((a, b) => {
-    if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
-    return a.studentName.localeCompare(b.studentName);
+    const cmp = primary(a, b);
+    if (cmp !== 0) return sortDir === 'asc' ? cmp : -cmp;
+    // Desempate estável: nome → vencimento → nº da parcela.
+    return byName(a, b) || byDue(a, b) || a.installmentNumber - b.installmentNumber;
   });
   const totalEntrada = rows.reduce((acc, r) => acc + r.entradaValor, 0);
   const totalPendencia = rows.reduce((acc, r) => acc + r.pendenciaValor, 0);
@@ -163,21 +203,48 @@ export default function KpiStudentsModal({
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-muted/60 backdrop-blur">
               <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                <th className="text-left font-semibold px-4 py-2">Aluno</th>
+                <th className="text-left font-semibold px-4 py-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleSort('studentName')}
+                    title={sortTitle('studentName', 'de A a Z', 'de Z a A')}
+                    className="uppercase tracking-wider hover:text-foreground transition-colors"
+                  >
+                    Aluno{sortIndicator('studentName')}
+                  </button>
+                </th>
                 <th className="text-left font-semibold px-4 py-2">AC</th>
                 <th className="text-left font-semibold px-4 py-2">Status</th>
                 {valueMode === 'operational_pendente' && (
                   <th className="text-left font-semibold px-4 py-2">Tipo</th>
                 )}
                 <th className="text-center font-semibold px-4 py-2">Parc.</th>
-                <th className="text-left font-semibold px-4 py-2">Vencimento</th>
+                <th className="text-left font-semibold px-4 py-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleSort('dueDate')}
+                    title={sortTitle('dueDate', 'do mais antigo ao mais recente', 'do mais recente ao mais antigo')}
+                    className="uppercase tracking-wider hover:text-foreground transition-colors"
+                  >
+                    Vencimento{sortIndicator('dueDate')}
+                  </button>
+                </th>
                 {valueMode === 'operational_pendente' ? (
                   <>
                     <th className="text-right font-semibold px-4 py-2">Valor Entrada</th>
                     <th className="text-right font-semibold px-4 py-2">Valor Pendência</th>
                   </>
                 ) : (
-                  <th className="text-right font-semibold px-4 py-2">Valor Parcela</th>
+                  <th className="text-right font-semibold px-4 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('valor')}
+                      title={sortTitle('valor', 'do menor ao maior', 'do maior ao menor')}
+                      className="uppercase tracking-wider hover:text-foreground transition-colors"
+                    >
+                      Valor Parcela{sortIndicator('valor')}
+                    </button>
+                  </th>
                 )}
               </tr>
             </thead>

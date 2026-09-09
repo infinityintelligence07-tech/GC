@@ -270,6 +270,8 @@ export default function ACPortfolioPage() {
   // Aplica TODOS os filtros (produto, status, score, tags) — KPIs e tabela
   // refletem exatamente o mesmo conjunto de alunos.
   const [kpiStudents, setKpiStudents] = useState<Student[]>([]);
+  /** Quitados via boleto antecipado — só para o card "Boletos Antecipados". */
+  const [pagosAntecipados, setPagosAntecipados] = useState<Student[]>([]);
   useEffect(() => {
     const stripCancelados = (arr: Student[]) =>
       statusFilter === 'cancelado' ? arr : arr.filter((s) => s.statusCancelamento !== 'cancelado');
@@ -278,11 +280,25 @@ export default function ACPortfolioPage() {
         ? arr
         : arr.filter((s) => !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão'));
 
+    const passaFiltrosBasicos = (s: Student) => {
+      if (productFilter && s.product !== productFilter) return false;
+      if (!matchesCadastro(s)) return false;
+      if (scoreFilter !== null && calcularScoreComportamento(s.installments) !== scoreFilter) return false;
+      return true;
+    };
+    // Quitado por antecipação (banco/fundo) sai da carteira ativa, mas as
+    // parcelas antecipadas continuam contando no card "Boletos Antecipados".
+    const pagosAntecipadosDe = (arr: Student[]) =>
+      statusFilter
+        ? []
+        : arr.filter(
+            (s) =>
+              s.status === 'Pago' && !isSolicCancel(s) && passaFiltrosBasicos(s) && s.installments.some(isParcelaAntecipada),
+          );
+
     const applyLocalFilters = (arr: Student[]) =>
       arr.filter((s) => {
-        if (productFilter && s.product !== productFilter) return false;
-        if (!matchesCadastro(s)) return false;
-        if (scoreFilter !== null && calcularScoreComportamento(s.installments) !== scoreFilter) return false;
+        if (!passaFiltrosBasicos(s)) return false;
         if (statusFilter) {
           if (statusFilter === 'cancelado') {
             if (s.statusCancelamento !== 'cancelado') return false;
@@ -300,7 +316,7 @@ export default function ACPortfolioPage() {
       });
 
     if (mode === 'historico') {
-      if (!historicoEnd) { setKpiStudents([]); return; }
+      if (!historicoEnd) { setKpiStudents([]); setPagosAntecipados([]); return; }
       const refDate = new Date(historicoEnd + 'T23:59:59');
       const base = acStudents.filter((s) => new Date(s.enrollmentDate) <= refDate);
       const remapped = base.map((s) => {
@@ -312,9 +328,13 @@ export default function ACPortfolioPage() {
         }
         return s;
       });
-      setKpiStudents(applyLocalFilters(stripRendaExtraConciliada(stripCancelados(remapped))));
+      const visiveis = stripRendaExtraConciliada(stripCancelados(remapped));
+      setKpiStudents(applyLocalFilters(visiveis));
+      setPagosAntecipados(pagosAntecipadosDe(visiveis));
     } else {
-      setKpiStudents(applyLocalFilters(stripRendaExtraConciliada(stripCancelados(acStudents))));
+      const visiveis = stripRendaExtraConciliada(stripCancelados(acStudents));
+      setKpiStudents(applyLocalFilters(visiveis));
+      setPagosAntecipados(pagosAntecipadosDe(visiveis));
     }
   }, [mode, historicoEnd, acStudents, statusFilter, productFilter, scoreFilter, cadastroStart, cadastroEnd]);
 
@@ -741,9 +761,13 @@ export default function ACPortfolioPage() {
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
   // Boletos Antecipados: com período, inclui também alunos cujas parcelas no período
   // são só boletos antecipados (já baixados) — o escopo padrão exige parcela em aberto.
-  const tagKpiStudents = _fcRange
-    ? kpiStudents.filter((s) => s.installments.some((i) => (!i.paid || isParcelaAntecipada(i)) && _instInRange(i)))
-    : kpiStudentsScoped;
+  const tagKpiStudents = [
+    ...(_fcRange
+      ? kpiStudents.filter((s) => s.installments.some((i) => (!i.paid || isParcelaAntecipada(i)) && _instInRange(i)))
+      : kpiStudentsScoped),
+    // Quitados por antecipação: fora da carteira, mas dentro do card.
+    ...pagosAntecipados.filter((s) => s.installments.some((i) => isParcelaAntecipada(i) && _instInRange(i))),
+  ];
   const tagKpis = computeTagKpis(tagKpiStudents, studentTags, _instInRange);
 
   // Novos + Em Dia + Inadimplentes usam a mesma base para as % fecharem em 100%.

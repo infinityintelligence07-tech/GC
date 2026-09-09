@@ -205,6 +205,8 @@ export default function DashboardPage() {
   // Regra: Pagos NÃO entram na carteira/KPIs. Aparecem somente quando o
   // usuário filtra explicitamente por "Pago" (consulta).
   const [kpiStudents, setKpiStudents] = useState<Student[]>([]);
+  /** Quitados via boleto antecipado — só para o card "Boletos Antecipados". */
+  const [pagosAntecipados, setPagosAntecipados] = useState<Student[]>([]);
 
   // Snapshot histórico congelado (uma foto por dia por empresa). Quando o
   // usuário consulta uma data passada, lemos a foto salva na tabela
@@ -333,8 +335,17 @@ export default function DashboardPage() {
       statusFilter === 'Renda Extra'
         ? arr
         : arr.filter((s) => !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão'));
+    // Quitado por antecipação (banco/fundo) sai da carteira ativa, mas as
+    // parcelas antecipadas continuam contando no card "Boletos Antecipados".
+    const pagosAntecipadosDe = (arr: Student[], ativos: Student[]) => {
+      if (statusFilter) return [];
+      const ativosIds = new Set(ativos.map((s) => s.id));
+      return stripRendaExtraConciliada(
+        stripCancelados(arr.filter((s) => !ativosIds.has(s.id) && s.installments.some(isParcelaAntecipada))),
+      );
+    };
     if (mode === 'historico') {
-      if (!historicoEnd) { setKpiStudents([]); return; }
+      if (!historicoEnd) { setKpiStudents([]); setPagosAntecipados([]); return; }
       const refDate = new Date(historicoEnd + 'T23:59:59');
       const todayEnd = getTodayBrasilia(); todayEnd.setHours(23, 59, 59, 999);
       const isTodaySnapshot = refDate.getTime() >= todayEnd.getTime();
@@ -359,6 +370,7 @@ export default function DashboardPage() {
                 : withoutREConciliada.filter((s) => s.status === statusFilter))
           : withoutREConciliada;
         setKpiStudents(filtered);
+        setPagosAntecipados(pagosAntecipadosDe(filteredByFront, withoutPagos));
         return;
       }
 
@@ -394,6 +406,7 @@ export default function DashboardPage() {
               : withoutREConciliada.filter((s) => s.status === statusFilter))
         : withoutREConciliada;
       setKpiStudents(filtered);
+      setPagosAntecipados(pagosAntecipadosDe(remapped, withoutPagos));
     } else {
       const mapped = baseStudents.map((s) => {
         if (s.status === 'Negativado' || cancelamentoOverridesFinancialStatus(s) || isOperationalPendente(s)) {
@@ -419,6 +432,7 @@ export default function DashboardPage() {
               : withoutREConciliada.filter((s) => s.status === statusFilter))
         : withoutREConciliada;
       setKpiStudents(filtered);
+      setPagosAntecipados(pagosAntecipadosDe(mapped, withoutPagos));
     }
   }, [mode, historicoEnd, baseStudents.length, acFilter, productFilter, scoreFilter, statusFilter, tagFilters, students, snapshotStudents, snapshotDate, cancellationCases]);
 
@@ -573,9 +587,13 @@ export default function DashboardPage() {
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
   // Boletos Antecipados: com período, inclui também alunos cujas parcelas no período
   // são só boletos antecipados (já baixados) — o escopo padrão exige parcela em aberto.
-  const tagKpiStudents = _fcRange
-    ? kpiStudents.filter((s) => s.installments.some((i) => (!i.paid || isParcelaAntecipada(i)) && _instInRange(i)))
-    : kpiStudentsScoped;
+  const tagKpiStudents = [
+    ...(_fcRange
+      ? kpiStudents.filter((s) => s.installments.some((i) => (!i.paid || isParcelaAntecipada(i)) && _instInRange(i)))
+      : kpiStudentsScoped),
+    // Quitados por antecipação: fora da carteira, mas dentro do card.
+    ...pagosAntecipados.filter((s) => s.installments.some((i) => isParcelaAntecipada(i) && _instInRange(i))),
+  ];
   const tagKpis = computeTagKpis(tagKpiStudents, studentTags, _instInRange);
 
   const kpiModalConfig: { title: string; students: Student[]; valueMode: KpiValueMode } | null = (() => {
