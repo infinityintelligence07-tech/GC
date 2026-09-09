@@ -36,6 +36,11 @@ interface AppState {
   /** Atualiza otimista + grava no banco. A promise resolve quando a gravação confirmar (rejeita se falhar). */
   updateStudent: (id: string, data: Partial<Student>) => Promise<void>;
   markStudentNegativado: (id: string) => Promise<void>;
+  /**
+   * Retira a negativação: baixa parcelas em aberto e coloca o aluno como Quitado (Pago).
+   * Só se aplica a alunos com status "Negativado".
+   */
+  tirarNegativacaoComoQuitado: (id: string) => Promise<void>;
   deleteStudent: (id: string) => void;
 
   acs: AC[];
@@ -354,6 +359,56 @@ export const useAppStore = create<AppState>()(
       reportDbError('marcar aluno como Negativado')(e);
       throw e;
     }
+  },
+  tirarNegativacaoComoQuitado: async (id) => {
+    const before = get().students.find((st) => st.id === id);
+    if (!before) return;
+    if (before.status !== 'Negativado') {
+      throw new Error('Só é possível retirar negativação de aluno com status Negativado.');
+    }
+
+    const actorName = get().currentUser?.name ?? 'Usuário';
+    const now = new Date().toISOString();
+    const todayIso = now.split('T')[0];
+    const installments = (before.installments ?? []).map((i) =>
+      i.paid
+        ? i
+        : {
+            ...i,
+            paid: true,
+            paidDate: todayIso,
+            paidMarkedAt: now,
+          },
+    );
+    const unpaidCount = (before.installments ?? []).filter((i) => !i.paid).length;
+
+    await get().updateStudent(id, {
+      status: 'Pago',
+      statusMode: 'Automático',
+      installments,
+      paidInstallments: installments.filter((i) => i.paid).length,
+      history: [
+        ...(before.history ?? []),
+        {
+          date: now,
+          type: 'Sistema' as const,
+          text:
+            `${actorName} retirou a negativação — aluno quitado (Pago)` +
+            (unpaidCount > 0
+              ? `; ${unpaidCount} parcela(s) em aberto baixada(s).`
+              : '.'),
+        },
+      ],
+    });
+
+    logActivity({
+      action: 'student.update',
+      entity: 'student',
+      entityId: id,
+      entityLabel: before.name,
+      summary: `Retirou negativação de ${before.name} — status Quitado (Pago)`,
+      meta: { changedKeys: ['status', 'statusMode', 'installments'], unpaidCount },
+    });
   },
   deleteStudent: (id) => {
     const before = get().students.find((st) => st.id === id);

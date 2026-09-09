@@ -168,11 +168,12 @@ export default function StudentsPage() {
   useEffect(() => {
     students.forEach((s) => {
       // "Negativado" é um estado exclusivamente manual: uma vez definido, só
-      // sai via ação explícita do usuário (badge → "Voltar para Em Dia",
-      // Admin → "Reverter para À Negativar", ou migração automática p/ Renda
-      // Extra >180d). NÃO rebaixamos por auto-cálculo aqui, sob nenhuma
-      // condição — nem quando statusMode='Automático' (pois pode ter ficado
-      // inconsistente após um toggle acidental na ficha).
+      // sai via ação explícita do usuário (badge → "Tirar negativação (Quitado)",
+      // "Voltar para Em Dia", Admin → "Reverter para À Negativar", "Voltar para
+      // inadimplência", ou migração automática p/ Renda Extra >180d). NÃO
+      // rebaixamos por auto-cálculo aqui, sob nenhuma condição — nem quando
+      // statusMode='Automático' (pois pode ter ficado inconsistente após um
+      // toggle acidental na ficha).
       // "Revertido" é um lembrete que acompanha o status normal (Em Dia,
       // Vencido 1/2 etc.) até o contrato ser quitado — aí o lembrete some.
       // Uma nova solicitação de cancelamento também substitui esse estado.

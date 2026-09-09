@@ -19,6 +19,9 @@ interface StatusBadgeManualProps {
  * Regras:
  *  - "À Negativar" → permite promover para "Negativado"
  *  - "Negativado"  → Admin pode reverter para "À Negativar"
+ *  - "Negativado"  → usuários com edição em Alunos podem:
+ *      • tirar a negativação e quitar o contrato (status Pago)
+ *      • voltar para inadimplência (status automático)
  *  - "Negativado" / "À Negativar" / "Vencido 1" / "Vencido 2"
  *    → usuários com edição em Alunos podem voltar para "Em Dia"
  *      (abre Gestão Financeira para registrar pagamentos)
@@ -34,6 +37,7 @@ export default function StatusBadgeManual({ student, status, readOnly = false }:
   const wrapperRef = useRef<HTMLDivElement>(null);
   const updateStudent = useAppStore((s) => s.updateStudent);
   const markStudentNegativado = useAppStore((s) => s.markStudentNegativado);
+  const tirarNegativacaoComoQuitado = useAppStore((s) => s.tirarNegativacaoComoQuitado);
   const currentUser = useAppStore((s) => s.currentUser);
   const confirm = useConfirm();
   const isAdmin = currentUser?.role === 'admin';
@@ -75,6 +79,36 @@ export default function StatusBadgeManual({ student, status, readOnly = false }:
     });
   }
   if (status === 'Negativado' && canEditAlunos) {
+    options.push({
+      key: 'tirar-negativacao-quitado',
+      label: (
+        <span className="inline-flex items-center gap-1">
+          <CheckCircle2 size={10} />
+          Tirar negativação (Quitado)
+        </span>
+      ),
+      variant: 'success',
+      action: async () => {
+        const unpaid = (student.installments ?? []).filter((i) => !i.paid).length;
+        const ok = await confirm({
+          title: 'Tirar negativação e quitar',
+          description:
+            `Retirar a negativação de "${student.name}" e marcar o contrato como Quitado (Pago)?` +
+            (unpaid > 0
+              ? `\n\nAs ${unpaid} parcela(s) em aberto serão baixadas como pagas.`
+              : '\n\nNão há parcelas em aberto — apenas o status será atualizado para Pago.'),
+          confirmText: 'Tirar negativação',
+          cancelText: 'Cancelar',
+        });
+        if (!ok) return;
+        try {
+          await tirarNegativacaoComoQuitado(student.id);
+          toast.success(`${student.name}: negativação retirada — status Quitado (Pago).`);
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Não foi possível retirar a negativação.');
+        }
+      },
+    });
     options.push({
       key: 'inadimplencia-automatica',
       label: 'Voltar para inadimplência',

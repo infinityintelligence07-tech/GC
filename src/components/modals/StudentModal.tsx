@@ -572,7 +572,7 @@ export default function StudentModal({ student, onClose }: Props) {
                   className="input-field w-full"
                   value={form.statusMode}
                   disabled={student?.status === 'Negativado'}
-                  title={student?.status === 'Negativado' ? 'Aluno em Negativado — reverta pelo badge para "À Negativar" ou "Em Dia" antes de trocar o modo.' : undefined}
+                  title={student?.status === 'Negativado' ? 'Aluno em Negativado — use o badge para tirar a negativação (Quitado), reverter para À Negativar ou Em Dia antes de trocar o modo.' : undefined}
                   onChange={(e) => {
                     const newMode = e.target.value as StatusMode;
                     // Bloqueio: não permitir sair de Manual quando aluno está Negativado.

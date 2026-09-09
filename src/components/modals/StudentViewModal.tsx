@@ -6,6 +6,7 @@ import { X, User, Phone, Mail, MapPin, FileText, CreditCard, Calendar, TrendingU
 import { useAppStore } from '@/store/useAppStore';
 import FinancialModal from '@/components/modals/FinancialModal';
 import { useConfirm } from '@/hooks/useConfirm';
+import { toast } from 'sonner';
 
 import { getTagStyle } from '@/lib/tagColors';
 import { getDisplayInstallmentValue } from '@/lib/utils';
@@ -66,7 +67,7 @@ function formatDateOnlyBR(value?: string | null) {
 }
 
 export default function StudentViewModal({ student, onClose, extraSections, headerBadge, readOnly = false }: Props) {
-  const { studentTags, students, updateStudent, currentUser, cancellationCases } = useAppStore();
+  const { studentTags, students, updateStudent, tirarNegativacaoComoQuitado, currentUser, cancellationCases } = useAppStore();
   const latestCancellationCase = getLatestCancellationCaseForStudent(
     student.id,
     student.name,
@@ -162,6 +163,26 @@ export default function StudentViewModal({ student, onClose, extraSections, head
     });
     setShowFinancial(true);
   };
+  const handleTirarNegativacaoQuitado = async () => {
+    const unpaid = (currentStudent.installments ?? []).filter((i) => !i.paid).length;
+    const ok = await confirm({
+      title: 'Tirar negativação e quitar',
+      description:
+        `Retirar a negativação de "${currentStudent.name}" e marcar o contrato como Quitado (Pago)?` +
+        (unpaid > 0
+          ? `\n\nAs ${unpaid} parcela(s) em aberto serão baixadas como pagas.`
+          : '\n\nNão há parcelas em aberto — apenas o status será atualizado para Pago.'),
+      confirmText: 'Tirar negativação',
+      cancelText: 'Cancelar',
+    });
+    if (!ok) return;
+    try {
+      await tirarNegativacaoComoQuitado(currentStudent.id);
+      toast.success(`${currentStudent.name}: negativação retirada — status Quitado (Pago).`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível retirar a negativação.');
+    }
+  };
   const finance = resolveStudentFinance(currentStudent, {
     kaminoPaid: latestCancellationCase?.totalPagoAteMomento,
   });
@@ -248,6 +269,17 @@ export default function StudentViewModal({ student, onClose, extraSections, head
                   >
                     <RotateCcw size={10} />
                     Reverter para À Negativar
+                  </button>
+                )}
+                {canEditAlunos && currentStudent.status === 'Negativado' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleTirarNegativacaoQuitado()}
+                    title="Retirar negativação e marcar o contrato como Quitado (Pago)"
+                    className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 transition-colors"
+                  >
+                    <CheckCircle2 size={10} />
+                    Tirar negativação (Quitado)
                   </button>
                 )}
                 {canEditAlunos && currentStudent.status === 'Negativado' && (

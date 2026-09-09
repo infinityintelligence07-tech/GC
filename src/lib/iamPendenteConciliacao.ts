@@ -179,10 +179,20 @@ export function isIamConciliadoQuitadoAvista(student: Student): boolean {
   return false;
 }
 
+/**
+ * Contrato cancelado (conciliação de cancelamento concluída). Não precisa de
+ * aprovação IAM > GC e entra nos totais pela regra de cancelado
+ * (pago + multa − estorno) — mesmo que o IAM nunca tenha sido aprovado no GC.
+ */
+export function isContratoCancelado(student: Pick<Student, 'status' | 'statusCancelamento'>): boolean {
+  return student.statusCancelamento === 'cancelado' || student.status === 'Cancelado';
+}
+
 /** IAM ainda não aprovado na Conciliação GC (fila IAM CONTROL → GC). */
 export function needsIamGcConciliacaoApproval(student: Student): boolean {
   if (!isIamControlStudent(student)) return false;
   if (student.iamGcConciliadoAt) return false;
+  if (isContratoCancelado(student)) return false;
   if (isIamConciliadoQuitadoAvista(student)) return false;
   const status = normalizeIamContratoStatus(student.iamControlContratoStatus);
   return IAM_STATUSES_REQUIRING_GC_APPROVAL.has(status);
@@ -196,7 +206,9 @@ export function isAwaitingIamGcApproval(student: Student): boolean {
 /** Entra nos totais da dashboard principal — Kamino ou IAM já aprovado no GC. */
 export function countsInFinancialTotals(student: Student): boolean {
   if (isIamControlStudent(student)) {
-    return Boolean(student.iamGcConciliadoAt) || isIamConciliadoQuitadoAvista(student);
+    return (
+      Boolean(student.iamGcConciliadoAt) || isContratoCancelado(student) || isIamConciliadoQuitadoAvista(student)
+    );
   }
   return isKaminoPortfolioStudent(student);
 }
@@ -204,7 +216,9 @@ export function countsInFinancialTotals(student: Student): boolean {
 /** Entra na carteira do assessor — IAM só após aprovação na Conciliação GC. */
 export function countsInAcPortfolioTotals(student: Student): boolean {
   if (isIamControlStudent(student)) {
-    return Boolean(student.iamGcConciliadoAt) || isIamConciliadoQuitadoAvista(student);
+    return (
+      Boolean(student.iamGcConciliadoAt) || isContratoCancelado(student) || isIamConciliadoQuitadoAvista(student)
+    );
   }
   return isKaminoPortfolioStudent(student);
 }
