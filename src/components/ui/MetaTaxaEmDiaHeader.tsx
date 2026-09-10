@@ -14,10 +14,10 @@ import MetaTaxaEmDiaGauge from '@/components/ui/MetaTaxaEmDiaGauge';
  * congelado até a próxima virada. Sem isso o início da escala acompanharia a
  * taxa ao vivo e a agulha ficaria sempre colada no começo do velocímetro.
  *
- * Quem começa o mês com 100% de Taxa em Dia tem a partida fixada em 95%
+ * Quem começa o mês com 100% de Taxa em Dia tem a partida fixada em 90%
  * (`PARTIDA_TETO`): com partida 100% a escala não teria para onde subir.
  */
-const PARTIDA_TETO = 95;
+const PARTIDA_TETO = 90;
 /** Partida automática do mês a partir da taxa do momento (1 casa decimal). */
 export function partidaAutomatica(taxaAtual: number): number {
   const arred = Math.round(taxaAtual * 10) / 10;
@@ -73,7 +73,7 @@ export default function MetaTaxaEmDiaHeader({
   const baseEfetiva = base ?? partidaAuto;
 
   // Partida do mês ainda não fixada (nunca gravada ou gravada em outro mês):
-  // fixa na taxa atual (100% → 95%), uma vez por mês. Meta só é gravada se já
+  // fixa na taxa atual (100% → 90%), uma vez por mês. Meta só é gravada se já
   // existia — a meta padrão continua vindo das Configurações.
   const fixarPartida = canEdit && temDados && (base == null || baseMes !== mesAtual);
   useEffect(() => {

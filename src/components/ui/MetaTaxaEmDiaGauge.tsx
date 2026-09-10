@@ -2,9 +2,9 @@
  * MetaTaxaEmDiaGauge — velocímetro da meta mensal de Taxa em Dia.
  *
  * Escala (da esquerda para a direita):
- *   início  = ponto de partida (taxa em dia quando a meta foi definida)
+ *   início  = ponto de partida (taxa em dia no início do mês; 100% → 90%)
  *   45°     = meio do caminho entre o início e a meta
- *   topo    = meta
+ *   topo    = meta (ou 100%, quando a partida já está em/acima da meta)
  *   135°    = 1,5 × meta (sem rótulo)
  *   fim     = 2 × meta
  *
@@ -41,10 +41,13 @@ export default function MetaTaxaEmDiaGauge({
   // Espaço inferior só para os rótulos das pontas (partida / dobro da meta).
   const H = cy + size * 0.22;
 
-  const m = Math.max(0.1, Math.min(100, meta));
-  // Se a taxa já estava acima da meta quando ela foi definida, a escala
-  // começaria depois do topo — trava o início logo abaixo da meta.
-  const lo = Math.min(Math.max(0, base), m - 0.01);
+  const metaReal = Math.max(0.1, Math.min(100, meta));
+  // A partida manda: a escala sempre começa nela (ex.: AC que abriu o mês em
+  // 100% parte de 90%). Se a partida já está em/acima da meta, a meta não
+  // serve como topo (a escala inverteria) — o topo passa a ser 100%.
+  const lo = Math.max(0, Math.min(99.9, base));
+  const partidaAcimaDaMeta = lo >= metaReal - 0.01;
+  const m = partidaAcimaDaMeta ? 100 : metaReal;
   const anchors: Array<[number, number]> = [
     [lo, 0],
     [(lo + m) / 2, 45],
@@ -109,7 +112,7 @@ export default function MetaTaxaEmDiaGauge({
   const labels: Array<{ x: number; y: number; text: string; title: string; anchor: 'start' | 'middle' | 'end' }> = [
     { x: polar(0).x, y: endLabelY, text: `${fmt(lo)}%`, title: 'Ponto de partida — Taxa em Dia no início do mês', anchor: 'middle' },
     { ...polar(45, outerLabelRadius), text: `${fmt((lo + m) / 2)}%`, title: 'Meio do caminho', anchor: 'middle' },
-    { ...polar(90, outerLabelRadius), text: `${fmt(m)}%`, title: 'Meta do mês', anchor: 'middle' },
+    { ...polar(90, outerLabelRadius), text: `${fmt(m)}%`, title: partidaAcimaDaMeta ? `Teto — a partida já está acima da meta (${fmt(metaReal)}%)` : 'Meta do mês', anchor: 'middle' },
     { x: polar(180).x, y: endLabelY, text: `${fmt(m * 2)}%`, title: 'Dobro da meta', anchor: 'middle' },
   ];
 
@@ -119,7 +122,7 @@ export default function MetaTaxaEmDiaGauge({
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
         role="img"
-        aria-label={`Taxa em Dia ${v.toFixed(1)}% — meta ${fmt(m)}%`}
+        aria-label={`Taxa em Dia ${v.toFixed(1)}% — meta ${fmt(metaReal)}%`}
       >
         <defs>
           <filter id={`${uid}-shadow`} x="-50%" y="-50%" width="200%" height="200%">
