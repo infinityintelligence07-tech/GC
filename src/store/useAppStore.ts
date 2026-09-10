@@ -948,13 +948,59 @@ export const useAppStore = create<AppState>()(
       const d = new Date(); d.setHours(0, 0, 0, 0);
       return d.toISOString().split('T')[0];
     })();
-    const fineInstallment: Installment | null = finalFineValue > 0 ? {
+
+    // Entrada e total pago resolvidos com a MESMA regra do modal de finalização
+    // e da aba Cancelamentos (getStudentTotalPaid + "pago até o momento"
+    // informado no caso). Ex.: aluna pagou R$ 3.000 fora do fluxo de boletos
+    // (Kamino/ficha com 0 pago) → o card de conciliação e o estorno precisam
+    // enxergar os R$ 3.000, não R$ 0.
+    const kaminoPaidCase = Math.max(0, Number(cancCase.totalPagoAteMomento) || 0);
+    const financeAluno = linkedStudent
+      ? resolveStudentFinance(linkedStudent, { kaminoPaid: kaminoPaidCase })
+      : null;
+    const entradaAluno = financeAluno && financeAluno.paidEntrada
+      ? financeAluno.downPayment
+      : Number(linkedStudent?.downPayment) || 0;
+    const totalInscricoesCase = Math.max(1, cancCase.quantidadeInscricoes ?? 1);
+    const inscRevertidasCase = Math.min(Math.max(0, cancCase.inscricoesRevertidas ?? 0), totalInscricoesCase);
+    const inscRestantesCase = Math.max(1, totalInscricoesCase - inscRevertidasCase);
+    const proporcionalCancel = inscRevertidasCase > 0 && inscRestantesCase < totalInscricoesCase;
+    const totalPagoBrutoAluno = linkedStudent
+      ? getStudentTotalPaid(linkedStudent, { kaminoPaid: kaminoPaidCase })
+      : kaminoPaidCase;
+    const totalPagoAluno = proporcionalCancel
+      ? Math.round(totalPagoBrutoAluno * inscRestantesCase / totalInscricoesCase * 100) / 100
+      : totalPagoBrutoAluno;
+
+    const fine = finalFineValue;
+    // Multa complementar paga pelo aluno: quando o total já pago (entrada +
+    // parcelas) é MENOR que a multa contratual e o Jurídico marcou como
+    // "Multa Quitada" (fineAlreadyPaid=true), o aluno pagou a diferença.
+    const multaComplementarPaga = fineAlreadyPaid && fine > 0
+      ? Math.max(0, Math.round((fine - totalPagoAluno) * 100) / 100)
+      : 0;
+
+    // Parcela de multa na ficha = DINHEIRO que entra pela multa:
+    //   * multa a negativar (fineAlreadyPaid=false): parcela em aberto pelo valor
+    //     integral — vira "a receber" até o aluno pagar;
+    //   * multa quitada com complemento: parcela PAGA só pelo complemento — a
+    //     entrada/parcelas já pagas continuam na ficha e cobrem o resto;
+    //   * multa quitada coberta pelo que já foi pago: NENHUMA parcela nova. A
+    //     multa é retida da entrada/parcelas já registradas como pagas; criar
+    //     uma parcela paga aqui dobrava o "pago" do aluno (ex.: entrada
+    //     R$ 1.500 + multa R$ 1.500 paga = R$ 3.000 pagos e R$ 1.500 "a abater"
+    //     que nunca existiram — Damares Barbosa, 10/09/2026).
+    const fineInstallmentValue = fineAlreadyPaid ? multaComplementarPaga : finalFineValue;
+    const fineInstallment: Installment | null = finalFineValue > 0 && fineInstallmentValue > 0.0049 ? {
       number: maxNumber + 1,
       dueDate: finalFineDueDate,
-      value: finalFineValue,
+      value: fineInstallmentValue,
       paid: !!fineAlreadyPaid,
       paidDate: fineAlreadyPaid ? finalFineDueDate : undefined,
       tags: ['multa-cancelamento'],
+      ...(fineAlreadyPaid && fineInstallmentValue < finalFineValue - 0.0049
+        ? { observacao: `Complemento da multa de cancelamento (${formatCurrency(finalFineValue)}); o restante foi retido do valor já pago.` }
+        : {}),
     } : null;
     const finalInstallments: Installment[] = fineInstallment
       ? [...paidOnly, fineInstallment]
@@ -1018,36 +1064,6 @@ export const useAppStore = create<AppState>()(
     const pendentesArr = parcelasOrigem.filter((i) => !i.paid);
     const totalPagasValor = pagasArr.reduce((s, i) => s + (i.value ?? 0), 0);
     const totalPendentesValor = pendentesArr.reduce((s, i) => s + (i.value ?? 0), 0);
-    // Entrada e total pago resolvidos com a MESMA regra do modal de finalização
-    // e da aba Cancelamentos (getStudentTotalPaid + "pago até o momento"
-    // informado no caso). Ex.: aluna pagou R$ 3.000 fora do fluxo de boletos
-    // (Kamino/ficha com 0 pago) → o card de conciliação e o estorno precisam
-    // enxergar os R$ 3.000, não R$ 0.
-    const kaminoPaidCase = Math.max(0, Number(cancCase.totalPagoAteMomento) || 0);
-    const financeAluno = linkedStudent
-      ? resolveStudentFinance(linkedStudent, { kaminoPaid: kaminoPaidCase })
-      : null;
-    const entradaAluno = financeAluno && financeAluno.paidEntrada
-      ? financeAluno.downPayment
-      : Number(linkedStudent?.downPayment) || 0;
-    const totalInscricoesCase = Math.max(1, cancCase.quantidadeInscricoes ?? 1);
-    const inscRevertidasCase = Math.min(Math.max(0, cancCase.inscricoesRevertidas ?? 0), totalInscricoesCase);
-    const inscRestantesCase = Math.max(1, totalInscricoesCase - inscRevertidasCase);
-    const proporcionalCancel = inscRevertidasCase > 0 && inscRestantesCase < totalInscricoesCase;
-    const totalPagoBrutoAluno = linkedStudent
-      ? getStudentTotalPaid(linkedStudent, { kaminoPaid: kaminoPaidCase })
-      : kaminoPaidCase;
-    const totalPagoAluno = proporcionalCancel
-      ? Math.round(totalPagoBrutoAluno * inscRestantesCase / totalInscricoesCase * 100) / 100
-      : totalPagoBrutoAluno;
-    
-    const fine = finalFineValue;
-    // Multa complementar paga pelo aluno: quando o total já pago (entrada +
-    // parcelas) é MENOR que a multa contratual e o Jurídico marcou como
-    // "Multa Quitada" (fineAlreadyPaid=true), o aluno pagou a diferença.
-    const multaComplementarPaga = fineAlreadyPaid && fine > 0
-      ? Math.max(0, Math.round((fine - totalPagoAluno) * 100) / 100)
-      : 0;
     // TOTAL PAGO efetivo = entrada + parcelas pagas + multa complementar paga.
     const totalPagoFinal = Math.round((totalPagoAluno + multaComplementarPaga) * 100) / 100;
     // Estorno ao aluno: quando o total já pago pelo aluno (entrada + parcelas)

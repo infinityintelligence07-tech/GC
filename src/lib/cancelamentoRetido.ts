@@ -1,6 +1,7 @@
 import type { CancellationCase, ConciliacaoItem, Student } from '@/types';
 import { isCancelamentoEspelhoItem } from '@/lib/cancelamentoGcConciliacao';
 import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
+import { getStudentTotalPaid } from '@/lib/studentFinance';
 
 /**
  * Card Pago para contrato CANCELADO: entra só o que a empresa ficou de fato —
@@ -86,18 +87,24 @@ export function valorRetidoCancelamento(
     };
   }
 
-  // Sem item de conciliação (cancelamento antigo / importado): o que ficou é
-  // a parcela de multa paga que a finalização deixou na ficha.
+  // Sem item de conciliação (cancelamento antigo / importado). A parcela de
+  // multa na ficha é só o DINHEIRO recebido pela multa (complemento ou multa
+  // negativada paga); a multa coberta pela entrada/parcelas já pagas não gera
+  // parcela. Então: retido = tudo que o aluno pagou, limitado à multa do caso
+  // (o excedente teria virado estorno).
   const multaPaga = (student.installments ?? [])
     .filter((i) => i.paid && (i.tags ?? []).includes('multa-cancelamento'))
     .reduce((acc, i) => acc + num(i.paidValue ?? i.value), 0);
+  const multaCaso = num(caso.cancellationFineValue);
+  const pagoTotal = getStudentTotalPaid(student);
+  const valor = multaCaso > 0.0049 ? Math.min(pagoTotal, multaCaso) : multaPaga;
   return {
-    valor: round2(multaPaga),
+    valor: round2(valor),
     data: toIsoDate(caso.movedToCurrentStageAt),
-    pago: multaPaga,
+    pago: round2(multaCaso > 0.0049 ? pagoTotal : multaPaga),
     estorno: 0,
     abatimento: 0,
-    multa: multaPaga,
+    multa: multaCaso > 0.0049 ? multaCaso : multaPaga,
     fonte: 'caso',
     caseId: caso.id,
   };
