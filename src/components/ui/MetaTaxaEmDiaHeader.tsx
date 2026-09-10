@@ -13,7 +13,16 @@ import MetaTaxaEmDiaGauge from '@/components/ui/MetaTaxaEmDiaGauge';
  * (`baseMes` diferente do mês atual → refixa na taxa do momento) e fica
  * congelado até a próxima virada. Sem isso o início da escala acompanharia a
  * taxa ao vivo e a agulha ficaria sempre colada no começo do velocímetro.
+ *
+ * Quem começa o mês com 100% de Taxa em Dia tem a partida fixada em 95%
+ * (`PARTIDA_TETO`): com partida 100% a escala não teria para onde subir.
  */
+const PARTIDA_TETO = 95;
+/** Partida automática do mês a partir da taxa do momento (1 casa decimal). */
+export function partidaAutomatica(taxaAtual: number): number {
+  const arred = Math.round(taxaAtual * 10) / 10;
+  return arred >= 100 ? PARTIDA_TETO : arred;
+}
 interface Props {
   /** Taxa em Dia atual (%), já calculada pela página. */
   taxaAtual: number;
@@ -60,18 +69,18 @@ export default function MetaTaxaEmDiaHeader({
   const [baseDraft, setBaseDraft] = useState('');
 
   const metaEfetiva = meta ?? metaPadrao;
-  const baseEfetiva = base ?? taxaAtual;
-  const taxaArred = Math.round(taxaAtual * 10) / 10;
+  const partidaAuto = partidaAutomatica(taxaAtual);
+  const baseEfetiva = base ?? partidaAuto;
 
   // Partida do mês ainda não fixada (nunca gravada ou gravada em outro mês):
-  // fixa na taxa atual, uma vez por mês. Meta só é gravada se já existia — a
-  // meta padrão continua vindo das Configurações.
+  // fixa na taxa atual (100% → 95%), uma vez por mês. Meta só é gravada se já
+  // existia — a meta padrão continua vindo das Configurações.
   const fixarPartida = canEdit && temDados && (base == null || baseMes !== mesAtual);
   useEffect(() => {
     if (!fixarPartida) return;
     onSave({
       meta: meta ?? undefined,
-      base: taxaArred,
+      base: partidaAuto,
       baseMes: mesAtual,
       definidaEm: definidaEm ?? new Date().toISOString(),
     });
@@ -161,7 +170,7 @@ export default function MetaTaxaEmDiaHeader({
             />
           </label>
           <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug">
-            A partida é refixada automaticamente na virada do mês com a taxa daquele momento; aqui você pode corrigi-la. A escala vai da partida até o dobro da meta; o amarelo marca o meio do caminho.
+            A partida é refixada automaticamente na virada do mês com a Taxa em Dia daquele momento (quem começa com 100% parte de {PARTIDA_TETO}%); aqui você pode corrigi-la. A escala vai da partida até o dobro da meta; o amarelo marca o meio do caminho.
           </p>
           <div className="flex justify-end gap-2 mt-3">
             <button
