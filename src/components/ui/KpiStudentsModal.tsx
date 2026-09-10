@@ -26,6 +26,7 @@ export default function KpiStudentsModal({
   instInRange,
   valueMode,
   todayMs,
+  futureOnlyStudentIds,
   onClose,
 }: {
   title: string;
@@ -33,6 +34,12 @@ export default function KpiStudentsModal({
   instInRange: (i: { dueDate: string }) => boolean;
   valueMode: KpiValueMode;
   todayMs: number;
+  /**
+   * Alunos cujas parcelas JÁ VENCIDAS ficam de fora (só as a vencer entram).
+   * Usado no card "Em Dia + Novos": os Vencido 1/2 entram só com o que ainda
+   * não venceu — a parte vencida está nos cards Vencido 1 / Vencido 2.
+   */
+  futureOnlyStudentIds?: ReadonlySet<string>;
   onClose: () => void;
 }) {
   type Row = {
@@ -83,6 +90,9 @@ export default function KpiStudentsModal({
       if (valueMode !== 'operational_pendente' && isInstallmentExcludedFromFinancialTotals(s, i)) return false;
       if (valueMode === 'overdue') {
         return new Date(i.dueDate + 'T00:00:00').getTime() < todayMs;
+      }
+      if (futureOnlyStudentIds?.has(s.id)) {
+        return new Date(i.dueDate + 'T00:00:00').getTime() >= todayMs;
       }
       return true;
     });

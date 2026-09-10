@@ -777,15 +777,21 @@ export default function ACPortfolioPage() {
   //     ficou inadimplente numa parcela; o resto do contrato segue a vencer.
   //   À Negativar / Negativado → saldo em aberto inteiro (vencido + a vencer),
   //     porque o contrato todo vai para negativação.
-  //   Em Dia / Novos / Cancelamento → saldo em aberto inteiro.
-  const emDiaValue = sumUnpaid(emDia);
+  //   Em Dia → saldo em aberto inteiro dos alunos Em Dia MAIS as parcelas
+  //     ainda não vencidas dos Vencido 1/2 (regra geral: só a parcela vencida
+  //     "sai" do em dia; o resto do contrato continua contando como em dia).
+  //   Novos / Cancelamento → saldo em aberto inteiro.
   const alunosNovosValue = sumUnpaid(alunosNovos);
   const v1Value = sumOverdue(vencido1);
   const v2Value = sumOverdue(vencido2);
-  // Parcelas futuras dos alunos em Vencido 1/2: ficam fora do valor do card,
-  // mas seguem na Carteira Total — mostradas como sub-linha para a soma fechar.
+  // Parcelas futuras dos alunos em Vencido 1/2: ficam fora do valor do card
+  // Vencido e entram no card Em Dia (mostradas como sub-linha nos dois lados).
   const v1AVencer = Math.max(0, sumUnpaid(vencido1) - v1Value);
   const v2AVencer = Math.max(0, sumUnpaid(vencido2) - v2Value);
+  const emDiaAVencerV1V2 = v1AVencer + v2AVencer;
+  const emDiaValue = sumUnpaid(emDia) + emDiaAVencerV1V2;
+  // Em Dia + Novos = composição dos dois cards ao lado — mesma regra da Dashboard.
+  const emDiaNovosValue = emDiaValue + alunosNovosValue;
   const anValue = sumUnpaid(aNegativar);
   const negValue = sumUnpaid(negativado);
   const solicCancValue = sumUnpaid(solicitacaoCancelamento);
@@ -1420,9 +1426,9 @@ export default function ACPortfolioPage() {
               </button>
             </div>
           </div>
-          <p className="kpi-value text-teal-600" title={formatCurrency(emDiaValue + alunosNovosValue)}>
-            <span className="hidden sm:inline">{formatCurrency(emDiaValue + alunosNovosValue)}</span>
-            <span className="sm:hidden">{formatCurrencyCompact(emDiaValue + alunosNovosValue)}</span>
+          <p className="kpi-value text-teal-600" title={formatCurrency(emDiaNovosValue)}>
+            <span className="hidden sm:inline">{formatCurrency(emDiaNovosValue)}</span>
+            <span className="sm:hidden">{formatCurrencyCompact(emDiaNovosValue)}</span>
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
             <p className="text-[11px] text-muted-foreground truncate">{emDia.length + alunosNovos.length} alunos</p>
@@ -1430,7 +1436,11 @@ export default function ACPortfolioPage() {
           </div>
           {infoStatus === 'emdia_novos' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
-              <p>Soma de "Em Dia" + "Alunos Novos": alunos adimplentes da carteira (sem parcelas vencidas).</p>
+              <p>
+                Soma de "Em Dia" + "Alunos Novos": tudo que está em dia na carteira (o card Em Dia já inclui as
+                parcelas ainda não vencidas dos alunos Vencido 1/2). Com Vencido 1/2, À Negativar, Negativado e
+                Solicitação Cancelamento, fecha a Carteira Total.
+              </p>
             </div>
           )}
         </div>
@@ -1449,12 +1459,24 @@ export default function ACPortfolioPage() {
             <span className="sm:hidden">{formatCurrencyCompact(emDiaValue)}</span>
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
-            <p className="text-[11px] text-muted-foreground truncate">{emDia.length} alunos</p>
+            <p
+              className="text-[11px] text-muted-foreground truncate"
+              title={emDiaAVencerV1V2 > 0.005 ? `Inclui ${formatCurrency(emDiaAVencerV1V2)} em parcelas ainda não vencidas de alunos Vencido 1/2.` : undefined}
+            >
+              {emDia.length} alunos
+              {emDiaAVencerV1V2 > 0.005 && (
+                <span className="text-muted-foreground/80"> · +{formatCurrencyCompact(emDiaAVencerV1V2)} a vencer de V1/V2</span>
+              )}
+            </p>
             <p className="text-[11px] font-semibold text-emerald-600 shrink-0">{pctEmDia}%</p>
           </div>
           {infoStatus === 'emdia' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
-              <p>Alunos com todas as parcelas em dia, sem nenhum vencimento pendente.</p>
+              <p>
+                Saldo em aberto dos alunos com todas as parcelas em dia, mais as parcelas ainda não vencidas dos
+                alunos Vencido 1/2 — só a parcela atrasada sai do em dia; o resto do contrato continua aqui.
+                A contagem de alunos e a taxa consideram apenas os alunos com status Em Dia.
+              </p>
             </div>
           )}
         </div>
@@ -1488,8 +1510,8 @@ export default function ACPortfolioPage() {
       {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado (Taxa Inadimplente está no bloco do topo) */}
       <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { key: 'v1', label: 'Vencido 1', value: v1Value, aVencer: v1AVencer, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos no 1º mês de atraso (pela parcela vencida mais antiga). O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 1' as StudentStatus },
-          { key: 'v2', label: 'Vencido 2', value: v2Value, aVencer: v2AVencer, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos no 2º mês de atraso (pela parcela vencida mais antiga). O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 2' as StudentStatus },
+          { key: 'v1', label: 'Vencido 1', value: v1Value, aVencer: v1AVencer, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos no 1º mês de atraso (pela parcela vencida mais antiga). O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos ("a vencer") contam no card Em Dia e continuam na Carteira Total.', filter: 'Vencido 1' as StudentStatus },
+          { key: 'v2', label: 'Vencido 2', value: v2Value, aVencer: v2AVencer, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos no 2º mês de atraso (pela parcela vencida mais antiga). O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos ("a vencer") contam no card Em Dia e continuam na Carteira Total.', filter: 'Vencido 2' as StudentStatus },
           { key: 'an', label: 'À Negativar', value: anValue, aVencer: 0, count: aNegativar.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos a partir do 3º mês de atraso (passaram do Vencido 2). O valor é TODO o saldo em aberto do aluno (vencido + a vencer): o contrato inteiro vai para negativação e sai do card A Vencer / Vencido. Última oportunidade de negociação antes de negativar.', filter: 'À Negativar' as StudentStatus },
           { key: 'neg', label: 'Negativado', value: negValue, aVencer: 0, count: negativado.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos que já foram negativados nos órgãos de proteção ao crédito. Requer acompanhamento para eventual acordo e retirada da negativação.', filter: 'Negativado' as StudentStatus },
         ].map(({ key, label, value, aVencer, count, color, text, desc, filter }) => {
@@ -1520,7 +1542,7 @@ export default function ACPortfolioPage() {
               <div className="flex items-center justify-between mt-1 gap-2">
                 <p className={subCls} title={aVencer > 0 ? `${count} alunos · a vencer ${formatCurrency(aVencer)}` : undefined}>
                   {count} alunos
-                  {aVencer > 0 && <span className="text-muted-foreground/80"> · a vencer {formatCurrency(aVencer)}</span>}
+                  {aVencer > 0 && <span className="text-muted-foreground/80"> · a vencer {formatCurrency(aVencer)} (no Em Dia)</span>}
                 </p>
                 <p className={pctCls}>{pct(count)}%</p>
               </div>
