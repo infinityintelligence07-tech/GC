@@ -186,6 +186,14 @@ export default function StudentsPage() {
         updateStudent(s.id, { statusCancelamento: null });
       }
       if (s.status === 'Negativado') return;
+      // Negativação do contrato (aluno recusou a multa): "À Negativar"/"Negativado"
+      // é definitivo — o safety net de Vencido não pode rebaixar para Vencido 1.
+      if (s.statusCancelamento === 'negativacao') {
+        if (s.status !== 'À Negativar' && s.status !== 'Negativado') {
+          updateStudent(s.id, { status: 'À Negativar', statusMode: 'Manual' });
+        }
+        return;
+      }
       // Pendência IAM: restaura Pendente/Manual até aprovação na Conciliação GC.
       if (needsIamGcConciliacaoApproval(s)) {
         if (s.status !== 'Pendente' || s.statusMode !== 'Manual') {
