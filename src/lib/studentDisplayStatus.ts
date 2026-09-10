@@ -32,6 +32,8 @@ export const CANCELAMENTO_BADGE_CONFIG: Record<string, { label: string; color: s
     color: 'bg-amber-100 text-amber-700 border border-amber-300',
   },
   revertido: { label: 'Revertido', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
+  // Aluno recusou a multa: contrato inteiro em negativação, segue na carteira.
+  negativacao: { label: 'Negativação (recusou multa)', color: 'bg-rose-100 text-rose-800 border border-rose-300' },
 };
 
 export function isFunilCancelamentoAtivo(sc?: StatusCancelamento | null): boolean {

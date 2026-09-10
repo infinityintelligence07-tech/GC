@@ -201,6 +201,8 @@ export function useSupabaseSync() {
       // Cancelado, Estorno) ou aluno já cancelado/conciliado não disparam.
       const STAGES_ENCERRADAS = new Set<string>([
         'Recuperado', 'Cancelado', 'Início do Estorno', 'Estorno em Andamento',
+        // Negativação do contrato: aluno já saiu do funil (À Negativar/Negativado).
+        'Iniciar Negativação', 'Negativação Efetivada', 'Pagando Parcelado (Negativado)', 'Negativação Retirada',
       ]);
       const casosAtivosPorStudentId = new Map<string, string>();
       // Fallback por nome normalizado: usado APENAS quando existe um único
@@ -253,6 +255,9 @@ export function useSupabaseSync() {
           return s;
         }
         const sc = s.statusCancelamento;
+        // Negativação do contrato já aplicada: status À Negativar/Negativado é
+        // definitivo — nunca volta para "Solicitação Cancelamento".
+        if (sc === 'negativacao') return s;
         if ((!sc || sc === 'nenhum') && caseId) {
           return {
             ...s,

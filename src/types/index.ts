@@ -30,7 +30,8 @@ export type StatusCancelamento =
   | 'revertido'
   | 'aguardando_conciliacao'      // Cancelado pelo funil, aguardando conciliação contábil
   | 'pagamento_multa_pendente'    // Conciliado manualmente: parcelas baixadas, aguardando pagamento da multa via Kamino
-  | 'cancelado';                  // Pagamento da multa baixado: cancelamento totalmente concluído
+  | 'cancelado'                   // Pagamento da multa baixado: cancelamento totalmente concluído
+  | 'negativacao';                // Aluno se recusou a pagar a multa: contrato INTEIRO segue na carteira (À Negativar/Negativado); nada é baixado
 
 // ─── Feature: Tipo de Parcela (Recompra/Antecipação) ─────────────────────────
 export type TipoParcela = 'propria' | 'antecipada';
@@ -440,7 +441,8 @@ export type CancellationAction =
   | 'Procon'
   | 'Processo Judicial'
   | 'Cancelado'
-  | 'Revertido';
+  | 'Revertido'
+  | 'Negativação';
 
 
 export type CancellationResponsavel = 'Jurídico' | 'Financeiro';
@@ -592,6 +594,12 @@ export interface CancellationCase {
   // Revisão financeira: parcelas mantidas como multa antes da conciliação
   cancellationFineValue?: number;
   cancellationReviewedInstallments?: Installment[];
+  /**
+   * Desfecho "Negativar Contrato": aluno se recusou a pagar a multa. Ao
+   * conciliar, o contrato inteiro segue na carteira como "À Negativar" —
+   * nenhuma parcela é baixada e a dashboard não muda com o cancelamento.
+   */
+  negativarContrato?: boolean;
 
   // ─── NOVOS CAMPOS (fluxo de perguntas e cálculo de multa) ──────────────────
   /** Cancelamento pedido dentro do prazo de 7 dias do contrato (arrependimento) */

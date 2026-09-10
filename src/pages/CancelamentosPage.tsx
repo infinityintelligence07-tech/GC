@@ -148,7 +148,7 @@ const ACTIONS_BY_FUNNEL: Record<FunnelStage, CancellationAction[]> = {
   'Em Execução':  ['Conversa WhatsApp', 'Ligação Agendada', 'Enviar Proposta ao Aluno', 'Proposta Enviada (cobrar retorno)', 'Aguardando Retorno Aluno', 'Renegociação Jurídico', 'Corrigir por Erro'],
   'Formalização': ['Iniciar Tratativa', 'Em Tratativa', 'Cobrar Informação ou Pagamento', 'Confeccionar Termo', 'Em Assinatura'],
   'Pendente':     ['Procon', 'Processo Judicial'],
-  'Finalizado':   ['Cancelado', 'Revertido'],
+  'Finalizado':   ['Cancelado', 'Revertido', 'Negativação'],
 };
 
 // Ação fixa na coluna Entrada (sempre "Aguardando Contato")
@@ -214,7 +214,10 @@ function isActiveCancellationWorkflow(c: CancellationCase): boolean {
 
 // ─── Constantes auxiliares (KPIs) ─────────────────────────────────────────────
 
-const FINAL_STAGES: CancellationStage[] = ['Recuperado', 'Cancelado', 'Negativação Retirada', 'Negativação Efetivada'];
+// "Iniciar Negativação" = desfecho Negativar Contrato (aluno recusou a multa):
+// caso encerrado no funil; o contrato segue na carteira como À Negativar.
+const FINAL_STAGES: CancellationStage[] = ['Recuperado', 'Cancelado', 'Negativação Retirada', 'Negativação Efetivada', 'Iniciar Negativação'];
+const CANCELLED_STAGES: CancellationStage[] = ['Cancelado', 'Negativação Efetivada', 'Iniciar Negativação'];
 const RECOVERED_STAGES: CancellationStage[] = ['Recuperado', 'Negativação Retirada'];
 
 const opStatusColor: Record<CancellationOperationalStatus, string> = {
@@ -1458,7 +1461,7 @@ interface CancellationReviewModalProps {
   caseRef: CancellationCase;
   student?: Student;
   onClose: () => void;
-  onConfirm: (installments: Installment[], fineValue: number, fineDueDate: string, fineAlreadyPaid: boolean, skipConciliation?: boolean, abatimento?: AbatimentoInfo) => void;
+  onConfirm: (installments: Installment[], fineValue: number, fineDueDate: string, fineAlreadyPaid: boolean, skipConciliation?: boolean, abatimento?: AbatimentoInfo, negativarContrato?: boolean) => void;
   /** Chamado antes do cancelamento quando o jurídico fraciona inscrições no próprio modal. */
   onPartialRevertBeforeCancel?: (qty: number) => void;
   simplified?: boolean;
@@ -1985,12 +1988,27 @@ function CancellationReviewModal({
     });
   };
 
-  const handleConfirmCancellation = (fineAlreadyPaid: boolean, abatimentoInfo?: AbatimentoInfo) => {
+  const handleConfirmCancellation = (fineAlreadyPaid: boolean, abatimentoInfo?: AbatimentoInfo, negativarContrato?: boolean) => {
     if (!requireTermoAssinado()) return;
     if (localRevertQty > 0 && onPartialRevertBeforeCancel) {
       onPartialRevertBeforeCancel(localRevertQty);
     }
-    onConfirm(installments, fineValue, finePaymentDate, fineAlreadyPaid, simplified || undefined, abatimentoInfo);
+    onConfirm(installments, fineValue, finePaymentDate, fineAlreadyPaid, simplified || undefined, abatimentoInfo, negativarContrato);
+  };
+
+  // Desfecho "Negativar Contrato": aluno se recusa a pagar a multa. O contrato
+  // inteiro (todas as parcelas em aberto) vai para negativação — nada é baixado
+  // e a dashboard não muda; a ficha vira "À Negativar" ao conciliar.
+  const handleNegativarContrato = () => {
+    if (!requireTermoAssinado()) return;
+    const ok = window.confirm(
+      `Negativar o CONTRATO de ${caseRef.studentName}?\n\n` +
+        `• Nenhuma parcela será baixada: ${formatCurrency(totalPending)} em aberto continuam na carteira e na dashboard.\n` +
+        `• Ao conciliar, o aluno passa a "À Negativar" e o caso vai para Finalizado (Negativação).\n` +
+        `• Não é criada parcela de multa (${formatCurrency(fineValue)}) — o aluno recusou pagá-la.`,
+    );
+    if (!ok) return;
+    handleConfirmCancellation(false, undefined, true);
   };
 
   const persistRefundPlanAndConfirm = async (fineAlreadyPaid: boolean) => {
@@ -2921,6 +2939,13 @@ function CancellationReviewModal({
                         >
                           Negativar Multa
                         </button>
+                        <button
+                          onClick={handleNegativarContrato}
+                          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-rose-900 text-white hover:bg-rose-950 transition-colors"
+                          title="Aluno se recusa a pagar a multa: o contrato inteiro vai para negativação. Nenhuma parcela é baixada — a dashboard não muda; o aluno vira À Negativar."
+                        >
+                          Negativar Contrato
+                        </button>
                       </div>
                       <button
                         onClick={() => setConfirmStep(false)}
@@ -3014,6 +3039,18 @@ function CancellationReviewModal({
                   }
                 >
                   Negativar Multa
+                </button>
+                <button
+                  onClick={handleNegativarContrato}
+                  disabled={!termoLiberado}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-rose-900 text-white hover:bg-rose-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={
+                    termoLiberado
+                      ? 'Aluno se recusa a pagar a multa: o contrato inteiro vai para negativação. Nenhuma parcela é baixada — a dashboard não muda; o aluno vira À Negativar.'
+                      : 'Aguarde a assinatura do termo ou anexe o PDF assinado.'
+                  }
+                >
+                  Negativar Contrato
                 </button>
               </>
             ) : (
@@ -3753,7 +3790,7 @@ export default function CancelamentosPage() {
     });
     const cancelled = periodCases.filter((c) => {
       const s = isHistoricalMode ? getHistoricalStage(c, period.end) : c.stage;
-      return s === 'Cancelado' || s === 'Negativação Efetivada';
+      return CANCELLED_STAGES.includes(s);
     });
     const active = periodCases.filter((c) => {
       const s = isHistoricalMode ? getHistoricalStage(c, period.end) : c.stage;
@@ -3772,7 +3809,7 @@ export default function CancelamentosPage() {
     const stats = MOTIVOS_CANCELAMENTO.map((motivo) => {
       const cases = periodCases.filter((c) => c.motivoCancelamento === motivo);
       const count = cases.length;
-      const cancelledCases = cases.filter((c) => c.stage === 'Cancelado' || c.stage === 'Negativação Efetivada');
+      const cancelledCases = cases.filter((c) => CANCELLED_STAGES.includes(c.stage));
       const valueLost = cancelledCases.reduce((s, c) => s + (c.value ?? 0), 0);
       return { motivo, count, valueLost };
     }).filter((m) => m.count > 0);
@@ -5420,8 +5457,17 @@ export default function CancelamentosPage() {
               applyPartialRevert(liveCase, qty, 'Fracionamento definido no distrato — jurídico.');
             }}
             onClose={() => setFinalizeAction(null)}
-            onConfirm={(installments, fineValue, fineDueDate, fineAlreadyPaid, skipConciliation, abatimento) => {
-              finalizeCancellation(liveCase.id, installments, fineValue, fineDueDate, fineAlreadyPaid, skipConciliation, abatimento);
+            onConfirm={(installments, fineValue, fineDueDate, fineAlreadyPaid, skipConciliation, abatimento, negativarContrato) => {
+              finalizeCancellation(
+                liveCase.id,
+                installments,
+                fineValue,
+                fineDueDate,
+                fineAlreadyPaid,
+                skipConciliation,
+                abatimento,
+                negativarContrato ? { negativarContrato: true } : undefined,
+              );
               setFinalizeAction(null);
             }}
           />

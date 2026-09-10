@@ -279,6 +279,7 @@ export type Database = {
           moved_to_current_stage_at: string
           multa_percent: number | null
           multa_value: number | null
+          negativar_contrato: boolean
           notes: string | null
           operational_status: string
           pagamento_tipo: string | null
@@ -324,6 +325,7 @@ export type Database = {
           moved_to_current_stage_at?: string
           multa_percent?: number | null
           multa_value?: number | null
+          negativar_contrato?: boolean
           notes?: string | null
           operational_status: string
           pagamento_tipo?: string | null
@@ -369,6 +371,7 @@ export type Database = {
           moved_to_current_stage_at?: string
           multa_percent?: number | null
           multa_value?: number | null
+          negativar_contrato?: boolean
           notes?: string | null
           operational_status?: string
           pagamento_tipo?: string | null

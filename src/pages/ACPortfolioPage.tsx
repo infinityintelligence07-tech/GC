@@ -79,6 +79,7 @@ const cancelStatusConfig: Record<string, { label: string; color: string }> = {
   aguardando_conciliacao: { label: 'Conciliação Pendente', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
   pagamento_multa_pendente: { label: 'Pagamento Multa Pendente', color: 'bg-amber-100 text-amber-700 border border-amber-300' },
   revertido: { label: 'Revertido', color: 'bg-slate-200 text-slate-600 border border-slate-300' },
+  negativacao: { label: 'Negativação (recusou multa)', color: 'bg-rose-100 text-rose-800 border border-rose-300' },
 };
 
 // Critério ÚNICO de "Solicitação de Cancelamento" — usado pelos KPIs e pela

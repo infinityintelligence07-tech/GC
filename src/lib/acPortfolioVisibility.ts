@@ -35,7 +35,22 @@ export function isSolicitacaoCancelamento(s: Student): boolean {
   return s.status === 'Solicitação Cancelamento';
 }
 
-const FINALIZED_CANCEL_STAGES = new Set(['Cancelado', 'Negativação Efetivada', 'Recuperado']);
+const FINALIZED_CANCEL_STAGES = new Set([
+  'Cancelado',
+  'Recuperado',
+  'Iniciar Negativação',
+  'Negativação Efetivada',
+  'Pagando Parcelado (Negativado)',
+]);
+
+/**
+ * Desfecho "Negativar Contrato" já aplicado: o aluno saiu do funil de
+ * cancelamento e segue na carteira do assessor como À Negativar/Negativado
+ * (contrato inteiro em aberto). Não é ocultado como os cancelamentos baixados.
+ */
+export function isNegativacaoContratoAplicada(student: Student | undefined, c: CancellationCase): boolean {
+  return c.negativarContrato === true && student?.statusCancelamento === 'negativacao';
+}
 
 /** Caso ainda em fluxo ativo — espelha a regra do funil Cancelamentos. */
 function findActiveCancellationCase(s: Student, cases: CancellationCase[]): CancellationCase | undefined {
@@ -174,6 +189,8 @@ export function getHiddenFromAcPortfolioKeys(
       st?.statusCancelamento === 'revertido' ||
       (total > 0 && revertidas >= total);
     if (isRevertido) return;
+    // Negativação do contrato: aluno continua na carteira (À Negativar).
+    if (isNegativacaoContratoAplicada(st, c)) return;
 
     const casoFinalizado = c.funnelStage === 'Finalizado';
     // Conciliação formal pendente/conciliada ganha da ação do card (ex.: "Em Tratativa"

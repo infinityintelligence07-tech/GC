@@ -219,6 +219,8 @@ const FIELD_LABELS: Record<string, string> = {
   comprovanteMultaUrl: 'Comprovante de pagamento da multa',
   comprovanteMultaNome: 'Comprovante (arquivo)',
   multaDeduzidaDoPago: 'Multa deduzida do valor pago',
+  negativarContrato: 'Negativar contrato (aluno recusou a multa)',
+  contratoNegativar: 'Saldo do contrato a negativar',
   statusCancelamento: 'Status do cancelamento',
   stage: 'Etapa',
 
@@ -265,6 +267,7 @@ const CURRENCY_KEYS = new Set([
   'valorContabil', 'acordoValue',
   'multaCancelamento', 'valorCarteira', 'impactoCarteira', 'estornoAluno', 'totalPago',
   'multaComplementarPaga', 'totalNegativar', 'totalNegativarBase', 'multaNegativadaPaga',
+  'contratoNegativar',
 ]);
 
 function isNegativeValue(key: string, v: unknown): boolean {

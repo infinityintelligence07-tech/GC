@@ -82,7 +82,7 @@ interface AppState {
     options?: { forceNew?: boolean },
   ) => void;
   revertCancellation: (caseId: string) => void;
-  finalizeCancellation: (caseId: string, reviewedInstallments?: Installment[], fineValue?: number, fineDueDate?: string, fineAlreadyPaid?: boolean, skipConciliation?: boolean, abatimento?: AbatimentoInfo) => void;
+  finalizeCancellation: (caseId: string, reviewedInstallments?: Installment[], fineValue?: number, fineDueDate?: string, fineAlreadyPaid?: boolean, skipConciliation?: boolean, abatimento?: AbatimentoInfo, opts?: { negativarContrato?: boolean }) => void;
   concluirConciliacaoCancelamento: (caseId: string) => void; // baixa real após conciliação
   /** Aluno pagou a multa de cancelamento negativada: ajusta a parcela de multa
    *  para o valor efetivamente pago, marca como paga e finaliza o cancelamento. */
@@ -920,12 +920,16 @@ export const useAppStore = create<AppState>()(
     }).catch(reportDbError("salvar alteração"));
   },
 
-  finalizeCancellation: (caseId, reviewedInstallments, fineValue, fineDueDate, fineAlreadyPaid, skipConciliation, abatimento) => {
+  finalizeCancellation: (caseId, reviewedInstallments, fineValue, fineDueDate, fineAlreadyPaid, skipConciliation, abatimento, opts) => {
     // Move o caso para a etapa "Conciliação Pendente" (não baixa carteira ainda).
     // A baixa real só acontece após `concluirConciliacaoCancelamento`.
     const s = get();
     const cancCase = s.cancellationCases.find((c) => c.id === caseId);
     if (!cancCase) return;
+    // Desfecho "Negativar Contrato": aluno se recusou a pagar a multa. O
+    // contrato INTEIRO vai para negativação — nenhuma parcela é baixada, a
+    // ficha vira "À Negativar" ao conciliar e a dashboard não muda.
+    const negativarContrato = opts?.negativarContrato === true;
     // Prioriza o contrato explicitamente vinculado ao caso (`studentId`). Quando
     // o mesmo aluno tem mais de um contrato, buscar apenas por `cancellationCaseId`
     // podia pegar o contrato errado e calcular entrada/parcelas pagas de outro contrato.
@@ -1002,16 +1006,22 @@ export const useAppStore = create<AppState>()(
         ? { observacao: `Complemento da multa de cancelamento (${formatCurrency(finalFineValue)}); o restante foi retido do valor já pago.` }
         : {}),
     } : null;
-    const finalInstallments: Installment[] = fineInstallment
-      ? [...paidOnly, fineInstallment]
-      : paidOnly;
+    // Negativar Contrato: a ficha segue com TODAS as parcelas (nada é baixado,
+    // nenhuma parcela de multa é criada).
+    const finalInstallments: Installment[] = negativarContrato
+      ? sourceInstallments
+      : fineInstallment
+        ? [...paidOnly, fineInstallment]
+        : paidOnly;
 
     const entry = {
       date: now,
       from: cancCase.stage,
       to: 'Assinar Termo' as CancellationStage,
       operationalStatus: 'Aguardando' as CancellationOperationalStatus,
-      note: `Cancelamento confirmado. Aguardando conciliação contábil. Multa de cancelamento: ${formatCurrency(finalFineValue)}.`,
+      note: negativarContrato
+        ? `Cancelamento confirmado com NEGATIVAÇÃO DO CONTRATO (aluno se recusou a pagar a multa de ${formatCurrency(finalFineValue)}). Aguardando conciliação — o contrato inteiro segue na carteira e vai para "À Negativar".`
+        : `Cancelamento confirmado. Aguardando conciliação contábil. Multa de cancelamento: ${formatCurrency(finalFineValue)}.`,
       byName: get().currentUser?.name,
       byUserId: get().currentUser?.id,
     };
@@ -1024,8 +1034,15 @@ export const useAppStore = create<AppState>()(
       funnelStage: 'Formalização' as const,
       cancellationFineValue: finalFineValue,
       cancellationReviewedInstallments: finalInstallments,
+      negativarContrato,
     };
-    const historyEntry: HistoryEntry = { date: now, type: 'Sistema', text: `Cancelamento confirmado. Multa de cancelamento: ${formatCurrency(finalFineValue)}. Aguardando conciliação contábil — carteira só será atualizada após a conciliação.` };
+    const historyEntry: HistoryEntry = {
+      date: now,
+      type: 'Sistema',
+      text: negativarContrato
+        ? `Cancelamento confirmado com negativação do contrato (multa de ${formatCurrency(finalFineValue)} recusada pelo aluno). Aguardando conciliação — nenhuma parcela será baixada; o contrato inteiro vai para "À Negativar".`
+        : `Cancelamento confirmado. Multa de cancelamento: ${formatCurrency(finalFineValue)}. Aguardando conciliação contábil — carteira só será atualizada após a conciliação.`,
+    };
 
     // IMPORTANTE: NÃO mexemos nas `installments` do aluno aqui. A baixa real
     // (remoção das parcelas pendentes + adição da multa) só acontece quando
@@ -1120,7 +1137,10 @@ export const useAppStore = create<AppState>()(
       `${pagasArr.length} pagas (${formatCurrency(totalPagasValor)}) • ${pendentesArr.length} pendentes (${formatCurrency(totalPendentesValor)})`;
     // Individualiza a composição da multa quitada (entrada + complemento).
     let parcelasResumoDepois: string;
-    if (multaComplementarPaga > 0.0049) {
+    if (negativarContrato) {
+      parcelasResumoDepois =
+        `${pendentesArr.length} pendentes mantidas (${formatCurrency(totalPendentesValor)}) — contrato inteiro a negativar; nenhuma parcela baixada`;
+    } else if (multaComplementarPaga > 0.0049) {
       parcelasResumoDepois =
         `Entrada ${formatCurrency(entradaAluno)} + Multa paga em 1 parcela ${formatCurrency(multaComplementarPaga)} = Multa contratual ${formatCurrency(fine)} (quitada)`;
     } else if (fine > 0 && fineAlreadyPaid) {
@@ -1139,7 +1159,9 @@ export const useAppStore = create<AppState>()(
           studentId: cancCase.studentId,
           studentName: cancCase.studentName,
           ac: cancCase.ac,
-          resumo: (cancCase.dentro7Dias === true && fine === 0)
+          resumo: negativarContrato
+            ? `Cancelamento com NEGATIVAÇÃO DO CONTRATO — ${cancCase.studentName}. Aluno recusou a multa de ${formatCurrency(fine)}; o contrato inteiro (${formatCurrency(totalPendentesValor)} em aberto) segue na carteira como "À Negativar". Nada é baixado — a dashboard não muda.`
+            : (cancCase.dentro7Dias === true && fine === 0)
             ? `Cancelamento SEM MULTA — 7 dias CDC (Art. 49) — ${cancCase.studentName}. Aguardando conciliação da baixa das parcelas pendentes.`
             : hasEstorno
               ? `Cancelamento aguardando conciliação — ${cancCase.studentName}. Multa ${formatCurrency(fine)} retida do valor pago (${formatCurrency(totalPagoAluno)}) — estorno ao aluno ${formatCurrency(estornoAluno)}.`
@@ -1167,7 +1189,23 @@ export const useAppStore = create<AppState>()(
               movedToCurrentStageAt: cancCase.movedToCurrentStageAt,
             },
           },
-          depois: {
+          depois: negativarContrato ? {
+            // Negativar Contrato: nada sai da carteira. Não publica
+            // totalNegativar (isso ativaria "Aluno pagou a multa", que baixa o
+            // contrato) — o saldo inteiro vai em `contratoNegativar`.
+            stage: 'Iniciar Negativação',
+            statusCancelamento: 'negativacao',
+            parcelas: parcelasResumoDepois,
+            multaCancelamento: fine,
+            multaPercent: cancCase.multaPercent ?? 0,
+            dentro7DiasCDC: cancCase.dentro7Dias === true,
+            negativarContrato: true,
+            contratoNegativar: totalPendentesValor,
+            ...(totalPagoAluno > 0.0049 ? { totalPago: totalPagoAluno, totalPagoEfetivo: totalPagoAluno } : {}),
+            impactoCarteira: 0,
+            impactoCarteiraNota: 'Contrato permanece na carteira como "À Negativar" — o cancelamento não altera a dashboard.',
+            motivo: cancCase.motivoCancelamento ?? null,
+          } : {
             stage: 'Assinar Termo',
             statusCancelamento: 'aguardando_conciliacao',
             parcelas: parcelasResumoDepois,
@@ -1283,6 +1321,59 @@ export const useAppStore = create<AppState>()(
     const finePending = finalInstallments.some(
       (i) => !i.paid && (i.tags ?? []).includes('multa-cancelamento'),
     );
+
+    // ── Negativar Contrato: aluno se recusou a pagar a multa. Nenhuma parcela
+    //    é baixada; a ficha vira "À Negativar" (Manual) com o contrato inteiro
+    //    em aberto e sai do funil de cancelamento (statusCancelamento
+    //    'negativacao'). Caso vai para Finalizado / "Iniciar Negativação".
+    //    Quem negativar nos órgãos de crédito muda depois para "Negativado".
+    if (cancCase.negativarContrato === true) {
+      const saldoAberto = (linkedStudent?.installments ?? [])
+        .filter((i) => !i.paid)
+        .reduce((acc, i) => acc + (i.value ?? 0), 0);
+      const entryNeg = {
+        date: now,
+        from: cancCase.stage,
+        to: 'Iniciar Negativação' as CancellationStage,
+        operationalStatus: 'Cancelado' as CancellationOperationalStatus,
+        note: `Conciliação concluída — negativação do contrato. Nenhuma parcela baixada: ${formatCurrency(saldoAberto)} em aberto seguem na carteira como "À Negativar".`,
+        byName: get().currentUser?.name,
+        byUserId: get().currentUser?.id,
+      };
+      const updatedCaseNeg = {
+        stage: 'Iniciar Negativação' as CancellationStage,
+        operationalStatus: 'Cancelado' as CancellationOperationalStatus,
+        funnelStage: 'Finalizado' as const,
+        acao: 'Negativação' as const,
+        movedToCurrentStageAt: now,
+        history: [...cancCase.history, entryNeg],
+      };
+      const historyEntryNeg: HistoryEntry = {
+        date: now,
+        type: 'Sistema',
+        text: `Conciliação de cancelamento concluída com NEGATIVAÇÃO DO CONTRATO. Aluno recusou a multa (${formatCurrency(cancCase.cancellationFineValue ?? 0)}); o contrato inteiro (${formatCurrency(saldoAberto)} em aberto) segue na carteira como "À Negativar". Após negativar nos órgãos de crédito, mude o status para "Negativado".`,
+      };
+      const patchNeg = {
+        status: 'À Negativar' as StudentStatus,
+        statusMode: 'Manual' as const,
+        statusCancelamento: 'negativacao' as StatusCancelamento,
+      };
+      set((state) => ({
+        cancellationCases: state.cancellationCases.map((c) => c.id === caseId ? { ...c, ...updatedCaseNeg } : c),
+        students: state.students.map((st) => {
+          if (st.cancellationCaseId !== caseId && st.id !== linkedStudent?.id) return st;
+          return { ...st, ...patchNeg, history: [...st.history, historyEntryNeg] };
+        }),
+      }));
+      updateCancellationCaseDb(caseId, updatedCaseNeg).catch(reportDbError("salvar alteração"));
+      if (linkedStudent) {
+        updateStudentDb(linkedStudent.id, {
+          ...patchNeg,
+          history: [...linkedStudent.history, historyEntryNeg],
+        }).catch(reportDbError("salvar alteração"));
+      }
+      return;
+    }
 
     // ── Fase A: ainda há multa pendente — aplica baixa das parcelas + multa,
     //    mas mantém aluno em Formalização aguardando pagamento via Kamino ──
