@@ -515,7 +515,6 @@ export default function DashboardPage() {
   // Pendência = pagamento aguardando fora de boleto (PIX, link, cartão, etc.).
   // Boleto NÃO entra neste status — segue Em Dia / Vencido / etc.
   const pendentes = kpiStudentsScoped.filter((s) => isOperationalPendente(s) && !_isSolic(s));
-  const inadimplentes = vencido1.length + vencido2.length + aNegativar.length + negativado.length;
 
   // Dia de referência dos KPIs: no Histórico é o "fim" escolhido; senão, hoje.
   const _refDayMs = (() => {
@@ -654,13 +653,18 @@ export default function DashboardPage() {
     }
   })();
 
-  // Novos + Em Dia + Inadimplentes usam a mesma base para as % fecharem em 100%.
-  // Cancelamento/Pendência ficam nos cards próprios e não entram nesta conta.
-  const totalComposicao = alunosNovos.length + emDia.length + inadimplentes;
-  const pct = (n: number) => totalComposicao > 0 ? ((n / totalComposicao) * 100).toFixed(1) : '0.0';
+  // Taxas (por nº de alunos):
+  //   Taxa Inadimplente = (Vencido 1 + Vencido 2 + À Negativar) / Em Dia
+  //   Taxa Em Dia       = 100% − Taxa Inadimplente
+  // Alunos Novos ficam fora da conta (sem %). Negativado, Cancelamento e
+  // Pendência ficam nos cards próprios e não entram nesta taxa.
+  const inadimplentesTaxa = vencido1.length + vencido2.length + aNegativar.length;
+  const baseTaxa = emDia.length;
+  const pct = (n: number) => baseTaxa > 0 ? ((n / baseTaxa) * 100).toFixed(1) : '0.0';
   const pctCarteira = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
-  const pctEmDia = pct(emDia.length);
-  const pctInadimplente = pct(inadimplentes);
+  const pctInadimplenteNum = baseTaxa > 0 ? (inadimplentesTaxa / baseTaxa) * 100 : 0;
+  const pctInadimplente = pctInadimplenteNum.toFixed(1);
+  const pctEmDia = (100 - pctInadimplenteNum).toFixed(1);
   // ── Fita "Pago · mês vigente" (período/rótulos) ───────────────────────────
   // Valor calculado mais abaixo (pagoMesTotais), depois de getForecastTotals.
   const hojeKey = getTodayStringBrasilia(); // YYYY-MM-DD
@@ -1161,7 +1165,7 @@ export default function DashboardPage() {
         {
           label: 'Em Dia + Novos',
           value: formatCurrency(emDiaNovosValue),
-          detail: `${emDia.length + alunosNovos.length} alunos · ${pct(emDia.length + alunosNovos.length)}%`,
+          detail: `${emDia.length + alunosNovos.length} alunos`,
           tone: 'good',
         },
         {
@@ -1173,18 +1177,18 @@ export default function DashboardPage() {
         {
           label: 'Alunos Novos',
           value: formatCurrency(alunosNovosValue),
-          detail: `${alunosNovos.length} alunos · ${pct(alunosNovos.length)}%`,
+          detail: `${alunosNovos.length} alunos`,
         },
         {
           label: 'Taxa Em Dia',
           value: `${pctEmDia}%`,
-          detail: `${emDia.length} de ${totalComposicao}`,
+          detail: `100% − Taxa Inadimplente · ${emDia.length} alunos em dia`,
           tone: 'good',
         },
         {
           label: 'Taxa Inadimplente',
           value: `${pctInadimplente}%`,
-          detail: `${inadimplentes} de ${totalComposicao}`,
+          detail: `${inadimplentesTaxa} inadimplentes (V1 + V2 + À Negativar) / ${emDia.length} em dia`,
           tone: 'bad',
         },
       ],
@@ -1346,7 +1350,7 @@ export default function DashboardPage() {
             definidaEm={rules.metaTaxaEmDiaEm}
             titulo="Dashboard geral"
             canEdit={currentUser?.role === 'admin'}
-            temDados={totalComposicao > 0}
+            temDados={baseTaxa > 0}
             onSave={({ meta, base, baseMes, definidaEm }) =>
               setRules({
                 ...(meta != null ? { metaTaxaEmDia: meta } : {}),
@@ -1410,7 +1414,7 @@ export default function DashboardPage() {
               <TrendingUp size={16} className="text-white/50 shrink-0" />
             </div>
             <p className="kpi-value text-white">{pctEmDia}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate" title={`${emDia.length} alunos em dia de ${carteiraTotalAlunos} alunos da Carteira Total`}>{emDia.length} de {carteiraTotalAlunos} alunos</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate" title={`100% − Taxa Inadimplente. ${emDia.length} alunos em dia (Alunos Novos ficam fora da taxa).`}>100% − inadimplência · {emDia.length} em dia</p>
           </div>
           <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
             <div className="flex items-start justify-between mb-2 gap-2">
@@ -1418,7 +1422,7 @@ export default function DashboardPage() {
               <TrendingDown size={16} className="text-white/50 shrink-0" />
             </div>
             <p className="kpi-value text-white">{pctInadimplente}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate" title={`${inadimplentes} alunos inadimplentes de ${carteiraTotalAlunos} alunos da Carteira Total`}>{inadimplentes} de {carteiraTotalAlunos} alunos</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate" title={`(Vencido 1 + Vencido 2 + À Negativar) / Em Dia = ${inadimplentesTaxa} / ${emDia.length}`}>{inadimplentesTaxa} inadimplentes / {emDia.length} em dia</p>
           </div>
         </div>
       </div>
@@ -1893,7 +1897,6 @@ export default function DashboardPage() {
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
             <p className="text-[11px] text-muted-foreground truncate">{emDia.length + alunosNovos.length} alunos</p>
-            <p className="text-[11px] font-semibold text-teal-600 shrink-0">{pct(emDia.length + alunosNovos.length)}%</p>
           </div>
           {infoStatus === 'emdia_novos' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
@@ -1959,11 +1962,10 @@ export default function DashboardPage() {
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
             <p className="text-[11px] text-muted-foreground truncate">{alunosNovos.length} alunos</p>
-            <p className="text-[11px] font-semibold text-sky-600 shrink-0">{pct(alunosNovos.length)}%</p>
           </div>
           {infoStatus === 'novos' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
-              <p>Alunos recém cadastrados que ainda não possuem parcelas vencidas.</p>
+              <p>Alunos recém cadastrados que ainda não possuem parcelas vencidas. Não entram nas taxas Em Dia / Inadimplente.</p>
             </div>
           )}
         </div>
