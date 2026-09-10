@@ -27,7 +27,7 @@ import {
   hasActiveCancellationCase,
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
-import { getCancelamentoBadge, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
+import { getCancelamentoBadge, isOperationalPendente, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
 import { resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
@@ -41,7 +41,7 @@ import {
 } from '@/lib/cancellationIndicators';
 import { statusColors } from '@/lib/statusColors';
 import { NaoSomaBadge } from '@/components/NaoSomaBadge';
-import { getTodayBrasilia, getTodayStringBrasilia, calcularDiasVencido, dueDateForDisplay, createdAtInRange } from '@/lib/brasiliaDate';
+import { getTodayBrasilia, getTodayStringBrasilia, calcularDiasVencido, dueDateForDisplay, createdAtInRange, isNegativacaoEstagnada } from '@/lib/brasiliaDate';
 import { getDisplayInstallmentValue, normalizeSearch } from '@/lib/utils';
 import { getTagStyle } from '@/lib/tagColors';
 import {
@@ -439,12 +439,18 @@ export default function ACPortfolioPage() {
     const basis = opts?.basis ?? dateBasis;
     let total = 0, aVencer = 0, pago = 0;
     let totalReal = 0, pagoReal = 0;
+    // Parcelas em aberto de alunos À Negativar / Negativado: o contrato inteiro
+    // vai para negativação, então saem do A Vencer/Vencido e contam só nos
+    // cards de negativação (continuam na Carteira Total).
+    let negativacao = 0;
     let qtd = 0;
     const qtdAlunosSet = new Set<string>();
     const qtdAlunosAVencerSet = new Set<string>();
+    const qtdAlunosNegativacaoSet = new Set<string>();
     const details: ForecastExportRow[] = [];
     const pushDetail = (
       st: Student,
+      displayStatus: StudentStatus,
       partial: Omit<ForecastExportRow, 'studentId' | 'studentName' | 'ac' | 'product' | 'whatsapp' | 'email' | 'status' | 'saleValue'>,
     ) => {
       details.push({
@@ -454,7 +460,7 @@ export default function ACPortfolioPage() {
         product: st.product || '',
         whatsapp: st.whatsapp || '',
         email: st.email || '',
-        displayStatus: resolveStudentStatusComVinculo(st, students),
+        displayStatus,
         saleValue: Number(st.saleValue ?? 0),
         ...partial,
       });
@@ -464,6 +470,8 @@ export default function ACPortfolioPage() {
       // GC — mesma regra da Dashboard (src/lib/pagoGc.ts). Contrato IAM quitado
       // à vista/cartão só serve para nunca somar no A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
+      const displayStatus = resolveStudentStatusComVinculo(st, students);
+      const emNegativacao = isStatusNegativacao(displayStatus);
       st.installments.forEach((i) => {
         if (basis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
@@ -479,7 +487,7 @@ export default function ACPortfolioPage() {
           pagoReal += realValue;
           qtd += 1;
           qtdAlunosSet.add(st.id);
-          pushDetail(st, {
+          pushDetail(st, displayStatus, {
             bucket: 'pago',
             installmentNumber: i.number,
             dueDate: i.dueDate,
@@ -509,7 +517,7 @@ export default function ACPortfolioPage() {
           pagoReal += realValue;
           qtd += 1;
           qtdAlunosSet.add(st.id);
-          pushDetail(st, {
+          pushDetail(st, displayStatus, {
             bucket: 'pago',
             installmentNumber: i.number,
             dueDate: i.dueDate,
@@ -531,12 +539,17 @@ export default function ACPortfolioPage() {
         }
         total += i.value;
         totalReal += i.value;
-        aVencer += i.value;
         qtd += 1;
         qtdAlunosSet.add(st.id);
-        qtdAlunosAVencerSet.add(st.id);
-        pushDetail(st, {
-          bucket: 'a_vencer',
+        if (emNegativacao) {
+          negativacao += i.value;
+          qtdAlunosNegativacaoSet.add(st.id);
+        } else {
+          aVencer += i.value;
+          qtdAlunosAVencerSet.add(st.id);
+        }
+        pushDetail(st, displayStatus, {
+          bucket: emNegativacao ? 'negativacao' : 'a_vencer',
           installmentNumber: i.number,
           dueDate: i.dueDate,
           value: i.value,
@@ -557,7 +570,7 @@ export default function ACPortfolioPage() {
       pagoReal += retido.valor;
       qtd += 1;
       qtdAlunosSet.add(st.id);
-      pushDetail(st, {
+      pushDetail(st, resolveStudentStatusComVinculo(st, students), {
         bucket: 'pago',
         installmentNumber: 0,
         dueDate: retido.data,
@@ -566,13 +579,23 @@ export default function ACPortfolioPage() {
         paidDate: retido.data || undefined,
       });
     });
-    return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, qtdAlunosAVencer: qtdAlunosAVencerSet.size, details };
+    return {
+      total, aVencer, negativacao, pago, totalReal, pagoReal, qtd,
+      qtdAlunos: qtdAlunosSet.size,
+      qtdAlunosAVencer: qtdAlunosAVencerSet.size,
+      qtdAlunosNegativacao: qtdAlunosNegativacaoSet.size,
+      // Carteira Total = tudo em aberto (A Vencer/Vencido + negativação).
+      carteira: aVencer + negativacao,
+      qtdAlunosCarteira: qtdAlunosAVencerSet.size + qtdAlunosNegativacaoSet.size,
+      details,
+    };
   };
   const getForecastValue = () => getForecastTotals().aVencer;
-  // Carteira Total = A Vencer / Vencido da projeção (mesmo valor do card laranja).
+  // Carteira Total = A Vencer / Vencido + parcelas dos alunos em negativação
+  // (À Negativar / Negativado), que saem do card laranja mas seguem na carteira.
   const carteiraTotais = getForecastTotals();
-  const carteiraTotalValue = carteiraTotais.aVencer;
-  const carteiraTotalAlunos = carteiraTotais.qtdAlunosAVencer;
+  const carteiraTotalValue = carteiraTotais.carteira;
+  const carteiraTotalAlunos = carteiraTotais.qtdAlunosCarteira;
 
   const hasInstallmentInForecastRange = (student: Student): boolean => {
     const range = getForecastRange();
@@ -724,10 +747,8 @@ export default function ACPortfolioPage() {
   // aberto no intervalo — mesma base do valor do card (sumUnpaid).
   const solicitacaoCancelamento = kpiStudentsScoped.filter(_isSolic);
   const inadimplentes = vencido1.length + vencido2.length + aNegativar.length + negativado.length;
-  const aNegativarStale = aNegativar.some((s) => {
-    const dias = calcularDiasVencido(s.installments);
-    return dias !== null && dias > 65;
-  });
+  // "+5d": alguém parado em À Negativar há 5 dias ou mais desde que entrou (3º mês de atraso).
+  const aNegativarStale = aNegativar.some((s) => isNegativacaoEstagnada(s.installments));
 
   const sumUnpaid = (arr: Student[], extra: (i: Installment) => boolean = () => true) =>
     arr.reduce((acc, s) => {
@@ -1170,6 +1191,14 @@ export default function ACPortfolioPage() {
                     <p className="kpi-value-fit text-amber-700 mt-0.5" title={formatCurrency(aVencer)}>
                       {formatCurrency(aVencer)}
                     </p>
+                    {carteiraTotais.negativacao > 0.005 && (
+                      <p
+                        className="text-[10px] font-semibold text-amber-700/80 mt-0"
+                        title={`${formatCurrency(carteiraTotais.negativacao)} em parcelas de ${carteiraTotais.qtdAlunosNegativacao} aluno(s) À Negativar/Negativado ficam fora deste card e aparecem nos cards de negativação.`}
+                      >
+                        fora: {formatCurrency(carteiraTotais.negativacao)} em negativação ({carteiraTotais.qtdAlunosNegativacao} {carteiraTotais.qtdAlunosNegativacao === 1 ? 'aluno' : 'alunos'})
+                      </p>
+                    )}
                   </div>
                   <div className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0">
                     <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Pago no período</p>
@@ -1347,24 +1376,34 @@ export default function ACPortfolioPage() {
             <p className="text-[11px] font-semibold text-primary shrink-0">100%</p>
           </div>
           <div className="mt-2 pt-2 border-t border-border/60 space-y-0.5">
-            <div className="flex items-center justify-between gap-2 text-[10px]">
-              <span className="text-amber-700 font-medium truncate">A vencer / vencido</span>
-              <span className="tabular-nums font-semibold text-amber-700 shrink-0">
-                {formatCurrencyCompact(carteiraTotais.aVencer)}
-                {carteiraTotais.aVencer + carteiraTotais.pago > 0
-                  ? ` · ${((carteiraTotais.aVencer / (carteiraTotais.aVencer + carteiraTotais.pago)) * 100).toFixed(1)}%`
-                  : ''}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2 text-[10px]">
-              <span className="text-emerald-700 font-medium truncate">Pago no período</span>
-              <span className="tabular-nums font-semibold text-emerald-700 shrink-0">
-                {formatCurrencyCompact(carteiraTotais.pago)}
-                {carteiraTotais.aVencer + carteiraTotais.pago > 0
-                  ? ` · ${((carteiraTotais.pago / (carteiraTotais.aVencer + carteiraTotais.pago)) * 100).toFixed(1)}%`
-                  : ''}
-              </span>
-            </div>
+            {(() => {
+              const base = carteiraTotais.carteira + carteiraTotais.pago;
+              const pct = (v: number) => (base > 0 ? ` · ${((v / base) * 100).toFixed(1)}%` : '');
+              return (
+                <>
+                  <div className="flex items-center justify-between gap-2 text-[10px]">
+                    <span className="text-amber-700 font-medium truncate">A vencer / vencido</span>
+                    <span className="tabular-nums font-semibold text-amber-700 shrink-0">
+                      {formatCurrencyCompact(carteiraTotais.aVencer)}{pct(carteiraTotais.aVencer)}
+                    </span>
+                  </div>
+                  {carteiraTotais.negativacao > 0.005 && (
+                    <div className="flex items-center justify-between gap-2 text-[10px]">
+                      <span className="text-slate-600 font-medium truncate">Em negativação</span>
+                      <span className="tabular-nums font-semibold text-slate-600 shrink-0">
+                        {formatCurrencyCompact(carteiraTotais.negativacao)}{pct(carteiraTotais.negativacao)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-2 text-[10px]">
+                    <span className="text-emerald-700 font-medium truncate">Pago no período</span>
+                    <span className="tabular-nums font-semibold text-emerald-700 shrink-0">
+                      {formatCurrencyCompact(carteiraTotais.pago)}{pct(carteiraTotais.pago)}
+                    </span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </button>
 
@@ -1449,9 +1488,9 @@ export default function ACPortfolioPage() {
       {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado (Taxa Inadimplente está no bloco do topo) */}
       <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { key: 'v1', label: 'Vencido 1', value: v1Value, aVencer: v1AVencer, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos com parcelas vencidas entre 1 e 30 dias. O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 1' as StudentStatus },
-          { key: 'v2', label: 'Vencido 2', value: v2Value, aVencer: v2AVencer, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos com parcelas vencidas entre 31 e 60 dias. O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 2' as StudentStatus },
-          { key: 'an', label: 'À Negativar', value: anValue, aVencer: 0, count: aNegativar.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos com inadimplência prolongada que estão próximos de serem negativados nos órgãos de proteção ao crédito. Última oportunidade de negociação antes da negativação.', filter: 'À Negativar' as StudentStatus },
+          { key: 'v1', label: 'Vencido 1', value: v1Value, aVencer: v1AVencer, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos no 1º mês de atraso (pela parcela vencida mais antiga). O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 1' as StudentStatus },
+          { key: 'v2', label: 'Vencido 2', value: v2Value, aVencer: v2AVencer, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos no 2º mês de atraso (pela parcela vencida mais antiga). O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 2' as StudentStatus },
+          { key: 'an', label: 'À Negativar', value: anValue, aVencer: 0, count: aNegativar.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos a partir do 3º mês de atraso (passaram do Vencido 2). O valor é TODO o saldo em aberto do aluno (vencido + a vencer): o contrato inteiro vai para negativação e sai do card A Vencer / Vencido. Última oportunidade de negociação antes de negativar.', filter: 'À Negativar' as StudentStatus },
           { key: 'neg', label: 'Negativado', value: negValue, aVencer: 0, count: negativado.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos que já foram negativados nos órgãos de proteção ao crédito. Requer acompanhamento para eventual acordo e retirada da negativação.', filter: 'Negativado' as StudentStatus },
         ].map(({ key, label, value, aVencer, count, color, text, desc, filter }) => {
           const isStaleAN = key === 'an' && aNegativarStale;

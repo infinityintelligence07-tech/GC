@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { reportDbError } from '@/lib/dbError';
 import { persist } from 'zustand/middleware';
 import { Student, AC, Product, FinancialRules, TabKey, StudentStatus, Installment, HistoryEntry, CancellationCase, CancellationStage, CancellationOperationalStatus, RendaExtraStatus, AppUser, StatusCancelamento, StudentTag, AbatimentoInfo } from '@/types';
-import { getTodayBrasilia, effectiveDueDate } from '@/lib/brasiliaDate';
+import { getTodayBrasilia, effectiveDueDate, faixaAtrasoPorMes } from '@/lib/brasiliaDate';
 import { getInstallmentOutstanding } from '@/lib/utils';
 import { resolveStudentFinance, getStudentTotalPaid, getLatestCancellationCaseForStudent } from '@/lib/studentFinance';
 import { cancellationCasesToResyncAc } from '@/lib/cancellationCaseAc';
@@ -2053,10 +2053,8 @@ export function calculateAutoStatus(
   const oldestOverdue = overdueInstallments.reduce((oldest, curr) =>
     effectiveDueDate(curr.dueDate).getTime() < effectiveDueDate(oldest.dueDate).getTime() ? curr : oldest
   );
-  const diffDays = Math.floor((today.getTime() - effectiveDueDate(oldestOverdue.dueDate).getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays <= 30) return 'Vencido 1';
-  if (diffDays <= 60) return 'Vencido 2';
-  return 'À Negativar';
+  // 1º mês de atraso → Vencido 1; 2º mês → Vencido 2; 3º mês em diante → À Negativar.
+  return faixaAtrasoPorMes(oldestOverdue.dueDate, today);
 }
 
 export function formatCurrency(value: number): string {
@@ -2128,12 +2126,8 @@ export function calculateAutoStatusAt(
   const oldestOverdue = overdueAtRef.reduce((oldest, curr) =>
     effectiveDueDate(curr.dueDate).getTime() < effectiveDueDate(oldest.dueDate).getTime() ? curr : oldest
   );
-  const diffDays = Math.floor(
-    (refDayStart.getTime() - effectiveDueDate(oldestOverdue.dueDate).getTime()) / (1000 * 60 * 60 * 24)
-  );
-  if (diffDays <= 30) return 'Vencido 1';
-  if (diffDays <= 60) return 'Vencido 2';
-  return 'À Negativar';
+  // Mesmas faixas do ao vivo, medidas na data de referência.
+  return faixaAtrasoPorMes(oldestOverdue.dueDate, refDayStart);
 }
 
 export function getInstallmentFinancialValueExport(i: Installment): number {

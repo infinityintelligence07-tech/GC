@@ -3,6 +3,7 @@
 // na listagem mas só os dados financeiros das parcelas marcadas são considerados.
 
 import type { Student, Installment, StudentStatus } from '@/types';
+import { effectiveDueDate, faixaAtrasoPorMes, getTodayBrasilia } from '@/lib/brasiliaDate';
 
 /**
  * Retorna todas as tags visíveis do aluno, incluindo tags aplicadas em parcelas.
@@ -68,35 +69,21 @@ export function getFilteredInstallments(student: Student, tagFilters: string[]):
  */
 export function calculateStatusFromInstallments(installments: Installment[]): StudentStatus {
   if (installments.length === 0) return 'Em Dia';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = getTodayBrasilia();
 
   const unpaid = installments.filter((i) => !i.paid);
   if (unpaid.length === 0) return 'Pago';
 
-  const overdue = unpaid.filter((i) => {
-    const [y, m, d] = i.dueDate.split('-').map(Number);
-    const due = new Date(y, (m || 1) - 1, d || 1);
-    return due < today;
-  });
-
+  const overdue = unpaid.filter((i) => effectiveDueDate(i.dueDate).getTime() < today.getTime());
   if (overdue.length === 0) return 'Em Dia';
 
-  // Maior atraso (em dias) define a faixa
-  const maxDaysOverdue = Math.max(
-    ...overdue.map((i) => {
-      const [y, m, d] = i.dueDate.split('-').map(Number);
-      const due = new Date(y, (m || 1) - 1, d || 1);
-      return Math.floor((today.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
-    })
+  // A parcela vencida mais antiga define a faixa (mesma regra de
+  // calculateAutoStatus): 1º mês Vencido 1, 2º mês Vencido 2, 3º mês em diante
+  // À Negativar — onde permanece até ser marcado manualmente como "Negativado".
+  const oldestOverdue = overdue.reduce((oldest, curr) =>
+    effectiveDueDate(curr.dueDate).getTime() < effectiveDueDate(oldest.dueDate).getTime() ? curr : oldest,
   );
-
-  if (maxDaysOverdue <= 30) return 'Vencido 1';
-  if (maxDaysOverdue <= 60) return 'Vencido 2';
-  // Acima de 60 dias → "À Negativar" automaticamente. Permanece nesse status
-  // até ser marcado manualmente como "Negativado" ou até ultrapassar 180 dias,
-  // quando migra automaticamente para Renda Extra (aguardando conciliação).
-  return 'À Negativar';
+  return faixaAtrasoPorMes(oldestOverdue.dueDate, today);
 }
 
 /**

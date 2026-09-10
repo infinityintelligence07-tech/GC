@@ -6,6 +6,17 @@ import {
 } from '@/lib/acPortfolioVisibility';
 import { isAwaitingIamGcApproval } from '@/lib/iamPendenteConciliacao';
 
+/**
+ * Status em que o contrato inteiro segue para negativação. As parcelas em
+ * aberto desses alunos saem do card "A Vencer / Vencido" (e de Vencido 1/2) e
+ * passam a contar somente nos cards À Negativar / Negativado.
+ */
+export const STATUS_NEGATIVACAO: ReadonlySet<StudentStatus> = new Set<StudentStatus>(['À Negativar', 'Negativado']);
+
+export function isStatusNegativacao(status: StudentStatus | undefined | null): boolean {
+  return !!status && STATUS_NEGATIVACAO.has(status);
+}
+
 /** Etapas do funil em que o status financeiro (Vencido, Em Dia…) não deve aparecer. */
 const FUNIL_CANCELAMENTO_ATIVO = new Set<StatusCancelamento>([
   'solicitado',

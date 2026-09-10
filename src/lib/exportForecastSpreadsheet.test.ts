@@ -162,6 +162,35 @@ describe('exportForecastSpreadsheet', () => {
     expect(pago['M2'].z).toBe('R$ #,##0.00');
   });
 
+  it('separa parcelas de alunos em negativação em aba própria', () => {
+    const comNegativacao: ForecastExportRow[] = [
+      ...rows,
+      {
+        bucket: 'negativacao',
+        studentId: '7',
+        studentName: 'Sivanildo Soares',
+        ac: 'Bianca Martins',
+        product: 'LIBERTY',
+        displayStatus: 'À Negativar',
+        installmentNumber: 5,
+        dueDate: '2026-09-15',
+        value: 9181.81,
+        paidValue: 0,
+      },
+    ];
+    const wb = roundTrip(
+      buildForecastWorkbook(comNegativacao, { dateBasis: 'vencimento', periodLabel: 'Todos' }),
+    );
+    expect(wb.SheetNames).toEqual(['A Vencer Vencido', 'Negativação', 'Pago']);
+    const neg = wb.Sheets['Negativação'];
+    expect(neg['B2'].v).toBe('Sivanildo Soares');
+    expect(neg['K2'].v).toBe(9181.81);
+    expect(neg['L2'].v).toBe('À Negativar');
+    // A aba A Vencer Vencido não repete a parcela do aluno em negativação.
+    const aVencer = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets['A Vencer Vencido']);
+    expect(aVencer.some((r) => r.Aluno === 'Sivanildo Soares')).toBe(false);
+  });
+
   it('monta o nome do arquivo com base, período e data', () => {
     const nome = forecastFileName({ dateBasis: 'pagamento', periodLabel: 'Setembro 2026' });
     expect(nome).toMatch(/^projecao-carteira-pagamento-setembro-2026-\d{4}-\d{2}-\d{2}\.xlsx$/);

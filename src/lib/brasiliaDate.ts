@@ -146,6 +146,91 @@ export function dueDateForDisplay(dueDateStr: string): {
   };
 }
 
+// ─── Faixas de atraso por MÊS (Vencido 1 → Vencido 2 → À Negativar) ─────────
+//
+// O atraso é contado em meses de calendário a partir do vencimento efetivo da
+// parcela vencida mais antiga: o 1º mês de atraso é "Vencido 1", o 2º mês é
+// "Vencido 2" e, a partir do 3º mês (dois meses completos), "À Negativar".
+// Ex.: parcela de 15/05 → Vencido 1 de 16/05 a 15/06, Vencido 2 de 16/06 a
+// 15/07 e À Negativar a partir de 15/07 (o 3º mês em que a parcela venceria).
+// O mesmo cálculo é espelhado na Edge Function `snapshot-daily`.
+
+/** Meses completos de atraso a partir dos quais a ficha vira "Vencido 2". */
+export const MESES_ATRASO_VENCIDO_2 = 1;
+/** Meses completos de atraso a partir dos quais a ficha vira "À Negativar" (3º mês). */
+export const MESES_ATRASO_NEGATIVAR = 2;
+/** Dias em À Negativar a partir dos quais o card acende o alerta "+5d". */
+export const DIAS_NEGATIVACAO_ESTAGNADA = 5;
+
+export type FaixaAtraso = 'Vencido 1' | 'Vencido 2' | 'À Negativar';
+
+/** Soma meses de calendário mantendo o dia (31/01 + 1 mês = 28/02). */
+export function addMonthsClamped(d: Date, months: number): Date {
+  const y = d.getFullYear();
+  const m = d.getMonth() + months;
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  return new Date(y, m, Math.min(d.getDate(), lastDay));
+}
+
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/**
+ * Meses completos de atraso entre o vencimento efetivo e a data de referência.
+ * 0 = ainda no 1º mês de atraso (ou não vencida).
+ */
+export function mesesDeAtraso(dueDateStr: string, ref: Date): number {
+  const due = effectiveDueDate(dueDateStr);
+  const refDay = startOfDay(ref);
+  if (due.getTime() >= refDay.getTime()) return 0;
+  let meses = 0;
+  while (addMonthsClamped(due, meses + 1).getTime() <= refDay.getTime()) meses += 1;
+  return meses;
+}
+
+/** Faixa de status de uma parcela vencida na data de referência. */
+export function faixaAtrasoPorMes(dueDateStr: string, ref: Date): FaixaAtraso {
+  const meses = mesesDeAtraso(dueDateStr, ref);
+  if (meses < MESES_ATRASO_VENCIDO_2) return 'Vencido 1';
+  if (meses < MESES_ATRASO_NEGATIVAR) return 'Vencido 2';
+  return 'À Negativar';
+}
+
+/** Dia em que uma parcela vencida (e não paga) leva a ficha para "À Negativar". */
+export function dataEntradaNegativacao(dueDateStr: string): Date {
+  return addMonthsClamped(effectiveDueDate(dueDateStr), MESES_ATRASO_NEGATIVAR);
+}
+
+/**
+ * Há quantos dias a ficha está em "À Negativar" pela parcela em aberto mais
+ * antiga (0 no dia em que entrou). null quando nenhuma parcela chegou lá.
+ */
+export function diasEmNegativacao(
+  installments: { paid: boolean; dueDate: string }[],
+  ref: Date = getTodayBrasilia(),
+): number | null {
+  const refDay = startOfDay(ref).getTime();
+  let max: number | null = null;
+  for (const inst of installments) {
+    if (inst.paid) continue;
+    const entrada = dataEntradaNegativacao(inst.dueDate).getTime();
+    if (entrada > refDay) continue;
+    const dias = Math.floor((refDay - entrada) / (1000 * 60 * 60 * 24));
+    if (max === null || dias > max) max = dias;
+  }
+  return max;
+}
+
+/** Alerta "+5d" do card À Negativar: ficha parada em negativação há 5 dias ou mais. */
+export function isNegativacaoEstagnada(
+  installments: { paid: boolean; dueDate: string }[],
+  ref: Date = getTodayBrasilia(),
+): boolean {
+  const dias = diasEmNegativacao(installments, ref);
+  return dias !== null && dias >= DIAS_NEGATIVACAO_ESTAGNADA;
+}
+
 /**
  * Calcula há quantos dias a parcela mais antiga vencida está em atraso.
  * Considera rolagem de fim de semana (vencimento efetivo).

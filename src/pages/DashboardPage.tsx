@@ -13,7 +13,7 @@ import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
 import { Installment, Student, StudentStatus, canEditTab } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { getTodayBrasilia, getTodayStringBrasilia, createdAtInRange } from '@/lib/brasiliaDate';
+import { getTodayBrasilia, getTodayStringBrasilia, createdAtInRange, isNegativacaoEstagnada } from '@/lib/brasiliaDate';
 import { getTagStyle } from '@/lib/tagColors';
 import { computeTagKpis } from '@/lib/tagKpis';
 import { isParcelaAntecipada } from '@/lib/parcelaAntecipada';
@@ -23,8 +23,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter, isStudentFullyPaid } from '@/lib/acPortfolioVisibility';
-import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue } from '@/lib/studentDisplayStatus';
-import { resolveStudentDisplayStatusVinculado } from '@/lib/recompraVinculo';
+import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
+import { resolveStudentDisplayStatusVinculado, resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { fetchKaminoDashboardForecastTotals, type KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
 import { upsertCarteiraCardSnapshot } from '@/lib/carteiraCardExtrato';
@@ -37,7 +37,7 @@ import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
 import DashboardReportModal, { type DashboardReportSection } from '@/components/ui/DashboardReportModal';
 import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import FinancialModal from '@/components/modals/FinancialModal';
-import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
+import { exportForecastSpreadsheet, type ForecastExportBucket, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
 import { retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
 import { toast } from 'sonner';
@@ -527,18 +527,9 @@ export default function DashboardPage() {
     return d.getTime();
   })();
 
-  // À Negativar "estagnado" = oldestOverdue > 65 dias (na data de referência do modo).
-  const aNegativarStale = aNegativar.some((s) => {
-    let oldest: number | null = null;
-    for (const inst of s.installments) {
-      if (inst.paid) continue;
-      const due = new Date(inst.dueDate + 'T00:00:00').getTime();
-      if (due >= _refDayMs) continue;
-      const diffDays = Math.floor((_refDayMs - due) / 86400000);
-      if (oldest === null || diffDays > oldest) oldest = diffDays;
-    }
-    return oldest !== null && oldest > 65;
-  });
+  // "+5d": alguém parado em À Negativar há 5 dias ou mais desde que entrou
+  // (3º mês de atraso), na data de referência do modo.
+  const aNegativarStale = aNegativar.some((s) => isNegativacaoEstagnada(s.installments, new Date(_refDayMs)));
 
   const sumUnpaid = (arr: Student[], extra: (i: Installment) => boolean = () => true) =>
     arr.reduce((acc, s) => {
@@ -681,9 +672,14 @@ export default function DashboardPage() {
     const basis = opts?.basis ?? dateBasis;
     let total = 0, aVencer = 0, pago = 0;
     let totalReal = 0, pagoReal = 0;
+    // Parcelas em aberto de alunos À Negativar / Negativado: o contrato inteiro
+    // vai para negativação, então saem do A Vencer/Vencido e contam só nos
+    // cards de negativação (continuam na Carteira Total).
+    let negativacao = 0;
     let qtd = 0;
     const qtdAlunosSet = new Set<string>();
     const qtdAlunosAVencerSet = new Set<string>();
+    const qtdAlunosNegativacaoSet = new Set<string>();
     // Card Pago: só baixa registrada no GC e conciliada (ver src/lib/pagoGc.ts).
     const baixaGc = (st: Student, i: Installment) => isBaixaRegistradaNoGc(st, i, baixasGcIndex);
     // Breakdown por Assessor (usado no modo Pagamento)
@@ -700,6 +696,7 @@ export default function DashboardPage() {
     const details: ForecastExportRow[] = [];
     const pushDetail = (
       st: Student,
+      displayStatus: StudentStatus,
       partial: Omit<ForecastExportRow, 'studentId' | 'studentName' | 'ac' | 'product' | 'whatsapp' | 'email' | 'status' | 'saleValue'>,
     ) => {
       details.push({
@@ -709,7 +706,7 @@ export default function DashboardPage() {
         product: st.product || '',
         whatsapp: st.whatsapp || '',
         email: st.email || '',
-        displayStatus: resolveStudentDisplayStatus(st),
+        displayStatus,
         saleValue: Number(st.saleValue ?? 0),
         ...partial,
       });
@@ -719,6 +716,9 @@ export default function DashboardPage() {
       // GC. Contrato IAM quitado à vista/cartão só serve para nunca somar no
       // A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
+      // Mesmo status dos cards (recompra ↔ original leem o status conjunto).
+      const displayStatus = resolveStudentStatusComVinculo(st, students);
+      const emNegativacao = isStatusNegativacao(displayStatus);
       st.installments.forEach((i) => {
         if (basis === 'pagamento') {
           if (!i.paid || !i.paidDate) return;
@@ -735,7 +735,7 @@ export default function DashboardPage() {
           qtd += 1;
           qtdAlunosSet.add(st.id);
           bumpAc(st.ac, i.value, realValue, st.id);
-          pushDetail(st, {
+          pushDetail(st, displayStatus, {
             bucket: 'pago',
             installmentNumber: i.number,
             dueDate: i.dueDate,
@@ -765,7 +765,7 @@ export default function DashboardPage() {
           qtd += 1;
           qtdAlunosSet.add(st.id);
           bumpAc(st.ac, i.value, realValue, st.id);
-          pushDetail(st, {
+          pushDetail(st, displayStatus, {
             bucket: 'pago',
             installmentNumber: i.number,
             dueDate: i.dueDate,
@@ -787,12 +787,17 @@ export default function DashboardPage() {
         }
         total += i.value;
         totalReal += i.value;
-        aVencer += i.value;
         qtd += 1;
         qtdAlunosSet.add(st.id);
-        qtdAlunosAVencerSet.add(st.id);
-        pushDetail(st, {
-          bucket: 'a_vencer',
+        if (emNegativacao) {
+          negativacao += i.value;
+          qtdAlunosNegativacaoSet.add(st.id);
+        } else {
+          aVencer += i.value;
+          qtdAlunosAVencerSet.add(st.id);
+        }
+        pushDetail(st, displayStatus, {
+          bucket: emNegativacao ? 'negativacao' : 'a_vencer',
           installmentNumber: i.number,
           dueDate: i.dueDate,
           value: i.value,
@@ -816,7 +821,7 @@ export default function DashboardPage() {
       qtd += 1;
       qtdAlunosSet.add(st.id);
       bumpAc(st.ac, retido.valor, retido.valor, st.id);
-      pushDetail(st, {
+      pushDetail(st, resolveStudentDisplayStatus(st), {
         bucket: 'pago',
         installmentNumber: 0,
         dueDate: retido.data,
@@ -828,7 +833,17 @@ export default function DashboardPage() {
     const perAcList = Object.entries(perAc)
       .map(([name, b]) => ({ name, pago: b.pago, pagoReal: b.pagoReal, qtd: b.qtd, qtdAlunos: b.alunos.size }))
       .sort((a, b) => b.pagoReal - a.pagoReal);
-    return { total, aVencer, pago, totalReal, pagoReal, qtd, qtdAlunos: qtdAlunosSet.size, qtdAlunosAVencer: qtdAlunosAVencerSet.size, perAcList, details };
+    return {
+      total, aVencer, negativacao, pago, totalReal, pagoReal, qtd,
+      qtdAlunos: qtdAlunosSet.size,
+      qtdAlunosAVencer: qtdAlunosAVencerSet.size,
+      qtdAlunosNegativacao: qtdAlunosNegativacaoSet.size,
+      // Carteira Total = tudo em aberto (A Vencer/Vencido + negativação).
+      carteira: aVencer + negativacao,
+      qtdAlunosCarteira: qtdAlunosAVencerSet.size + qtdAlunosNegativacaoSet.size,
+      perAcList,
+      details,
+    };
   };
 
   // ── Fita "Pago · mês vigente" ─────────────────────────────────────────────
@@ -856,7 +871,9 @@ export default function DashboardPage() {
   /** Rótulo em "% da meta" a partir do % da escala da fita (tooltips). */
   const fmtPctMeta = (pctEscala: number) => `${(pctEscala * ESCALA_FITA).toFixed(1).replace('.', ',')}% da meta`;
 
-  // Carteira Total (card azul) = A Vencer / Vencido da projeção (mesmo valor do card laranja).
+  // Carteira Total (card azul) = A Vencer / Vencido + parcelas dos alunos em
+  // negativação (À Negativar / Negativado), que saem do card laranja mas
+  // seguem na carteira.
   const forecastTotaisBase = getForecastTotals();
   // No Liberty, o espelho Kamino segue autoritativo para preservar contratos
   // que ainda não estão completos no GC (a RPC incorpora as baixas do GC como
@@ -874,10 +891,16 @@ export default function DashboardPage() {
           pagoReal: activeKaminoTotals.pagoReal,
           total: activeKaminoTotals.total,
           totalReal: activeKaminoTotals.aVencer + activeKaminoTotals.pagoReal,
+          negativacao: 0,
+          carteira: activeKaminoTotals.aVencer,
+          qtdAlunosCarteira: forecastTotaisBase.qtdAlunosAVencer,
         }
       : forecastTotaisBase;
-  const carteiraTotalValue = forecastTotais.aVencer;
-  const carteiraTotalAlunos = forecastTotais.qtdAlunosAVencer;
+  const carteiraTotalValue = forecastTotais.carteira;
+  const carteiraTotalAlunos = forecastTotais.qtdAlunosCarteira;
+  /** Valor do card laranja "A Vencer / Vencido" (sem os alunos em negativação). */
+  const aVencerCardValue = forecastTotais.aVencer;
+  const aVencerCardAlunos = forecastTotais.qtdAlunosAVencer;
 
   // ── Leitura diária do card (Extrato do Card) ──────────────────────────────
   // Grava o valor do card "A Vencer / Vencido" uma vez por dia por empresa
@@ -897,13 +920,15 @@ export default function DashboardPage() {
     if (!activeCompanyId || !isCanonicalCardView || kaminoTotalsPending) return;
     if (students.length === 0) return;
     const today = getTodayBrasilia().toISOString().slice(0, 10);
-    const key = `${activeCompanyId}|${today}|${carteiraTotalValue.toFixed(2)}|${forecastTotais.pago.toFixed(2)}`;
+    const key = `${activeCompanyId}|${today}|${aVencerCardValue.toFixed(2)}|${forecastTotais.pago.toFixed(2)}`;
     if (lastCardSnapshotRef.current === key) return;
     lastCardSnapshotRef.current = key;
-    // Detalhamento por aluno (carteira GC): mesmas regras do A Vencer do card.
+    // Detalhamento por aluno (carteira GC): mesmas regras do A Vencer do card —
+    // alunos À Negativar / Negativado ficam fora (estão nos cards de negativação).
     // Alimenta o comparativo "O que mudou" na aba Extrato do Card.
     const payload = forecastBase.flatMap((st) => {
       if (isIamConciliadoQuitadoAvista(st)) return [];
+      if (isStatusNegativacao(resolveStudentStatusComVinculo(st, students))) return [];
       let open = 0;
       st.installments.forEach((i) => {
         if (i.paid) return;
@@ -916,13 +941,13 @@ export default function DashboardPage() {
     void upsertCarteiraCardSnapshot({
       companyId: activeCompanyId,
       snapshotDate: today,
-      aVencer: carteiraTotalValue,
+      aVencer: aVencerCardValue,
       pago: forecastTotais.pago,
-      qtdAlunos: carteiraTotalAlunos,
+      qtdAlunos: aVencerCardAlunos,
       payload,
     }).catch((err) => console.warn('[extrato-card] snapshot:', err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCompanyId, isCanonicalCardView, kaminoTotalsPending, carteiraTotalValue, forecastTotais.pago, carteiraTotalAlunos, students.length]);
+  }, [activeCompanyId, isCanonicalCardView, kaminoTotalsPending, aVencerCardValue, forecastTotais.pago, aVencerCardAlunos, students.length]);
 
   // ── Score distribution ────────────────────────────────────────────────────
   // Calculado sobre o MESMO universo que os KPIs/tabela exibem por padrão
@@ -1103,7 +1128,15 @@ export default function DashboardPage() {
         {
           label: 'Carteira Total',
           value: formatCurrency(carteiraTotalValue),
-          detail: `${carteiraTotalAlunos} alunos · a vencer / vencido no período`,
+          detail: `${carteiraTotalAlunos} alunos · tudo em aberto no período`,
+          tone: 'default',
+        },
+        {
+          label: 'A Vencer / Vencido',
+          value: formatCurrency(aVencerCardValue),
+          detail: forecastTotais.negativacao > 0.005
+            ? `${aVencerCardAlunos} alunos · fora ${formatCurrency(forecastTotais.negativacao)} em negativação (${forecastTotais.qtdAlunosNegativacao} alunos)`
+            : `${aVencerCardAlunos} alunos`,
           tone: 'default',
         },
         {
@@ -1586,6 +1619,14 @@ export default function DashboardPage() {
                     <p className="kpi-value-fit text-amber-700 mt-0.5" title={kaminoTotalsPending ? 'Carregando totais Kamino…' : formatCurrency(aVencer)}>
                       {kaminoTotalsPending ? '…' : formatCurrency(aVencer)}
                     </p>
+                    {!kaminoTotalsPending && forecastTotais.negativacao > 0.005 && (
+                      <p
+                        className="text-[10px] font-semibold text-amber-700/80 mt-0"
+                        title={`${formatCurrency(forecastTotais.negativacao)} em parcelas de ${forecastTotais.qtdAlunosNegativacao} aluno(s) À Negativar/Negativado ficam fora deste card e aparecem nos cards de negativação.`}
+                      >
+                        fora: {formatCurrency(forecastTotais.negativacao)} em negativação ({forecastTotais.qtdAlunosNegativacao} {forecastTotais.qtdAlunosNegativacao === 1 ? 'aluno' : 'alunos'})
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -1901,9 +1942,9 @@ export default function DashboardPage() {
       {/* Ordem: Vencido 1 → Vencido 2 → À Negativar → Negativado */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
         {[
-          { key: 'v1', label: 'Vencido 1', value: v1Value, aVencer: v1AVencer, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos com parcelas vencidas entre 1 e 30 dias. O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 1' as StudentStatus },
-          { key: 'v2', label: 'Vencido 2', value: v2Value, aVencer: v2AVencer, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos com parcelas vencidas entre 31 e 60 dias. O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 2' as StudentStatus },
-          { key: 'an', label: 'À Negativar', value: anValue, aVencer: 0, count: aNegativar.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos que precisam ser negativados manualmente nos órgãos de crédito. Após realizar a negativação manual, mude o status do aluno manualmente para "Negativado".', filter: 'À Negativar' as StudentStatus },
+          { key: 'v1', label: 'Vencido 1', value: v1Value, aVencer: v1AVencer, count: vencido1.length, color: 'amber-500', text: 'text-amber-600', desc: 'Alunos no 1º mês de atraso (pela parcela vencida mais antiga). O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 1' as StudentStatus },
+          { key: 'v2', label: 'Vencido 2', value: v2Value, aVencer: v2AVencer, count: vencido2.length, color: 'red-500', text: 'text-red-600', desc: 'Alunos no 2º mês de atraso (pela parcela vencida mais antiga). O valor é só a(s) parcela(s) vencida(s); as parcelas futuras desses alunos aparecem em "a vencer" e continuam na Carteira Total.', filter: 'Vencido 2' as StudentStatus },
+          { key: 'an', label: 'À Negativar', value: anValue, aVencer: 0, count: aNegativar.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos a partir do 3º mês de atraso (passaram do Vencido 2). O valor é TODO o saldo em aberto do aluno (vencido + a vencer): o contrato inteiro vai para negativação e sai do card A Vencer / Vencido. Após negativar nos órgãos de crédito, mude o status do aluno manualmente para "Negativado".', filter: 'À Negativar' as StudentStatus },
           { key: 'neg', label: 'Negativado', value: negValue, aVencer: 0, count: negativado.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos já negativados nos órgãos de crédito.', filter: 'Negativado' as StudentStatus },
         ].map(({ key, label, value, aVencer, count, color, text, desc, filter }) => {
           const isStaleAN = key === 'an' && aNegativarStale;
@@ -2316,7 +2357,7 @@ interface PaymentDetail {
   value: number;
   paidValue: number;
   paidDate?: string;
-  bucket?: 'pago' | 'a_vencer';
+  bucket?: ForecastExportBucket;
 }
 
 function PaymentDetailsModal({

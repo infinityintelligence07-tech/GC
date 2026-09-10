@@ -46,6 +46,23 @@ function effectiveDueDate(dueDateStr: string): Date {
   return d;
 }
 
+// Espelha `addMonthsClamped` / `mesesDeAtraso` (src/lib/brasiliaDate.ts):
+// meses de calendário mantendo o dia (31/01 + 1 mês = 28/02).
+function addMonthsClamped(d: Date, months: number): Date {
+  const y = d.getFullYear();
+  const m = d.getMonth() + months;
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  return new Date(y, m, Math.min(d.getDate(), lastDay));
+}
+
+function mesesDeAtraso(dueDateStr: string, refDayStart: Date): number {
+  const due = effectiveDueDate(dueDateStr);
+  if (due.getTime() >= refDayStart.getTime()) return 0;
+  let meses = 0;
+  while (addMonthsClamped(due, meses + 1).getTime() <= refDayStart.getTime()) meses += 1;
+  return meses;
+}
+
 // IMPORTANTE: as regras aqui têm que refletir EXATAMENTE o `calculateAutoStatusAt`
 // do frontend (src/store/useAppStore.ts). Caso contrário, o modo Histórico
 // mostra números diferentes do modo Performance para a MESMA data.
@@ -54,9 +71,11 @@ function effectiveDueDate(dueDateStr: string): Date {
 //   - Pago: todas as parcelas pagas até a data de referência.
 //   - Aluno Novo: 0 pagas + 0 vencidas + mais de 1 parcela cadastrada.
 //   - Em Dia: sem parcelas vencidas.
-//   - Vencido 1: maior atraso ≤ 30d.
-//   - Vencido 2: 31–60d.
-//   - À Negativar: > 60d.
+//   - Faixas pela parcela vencida MAIS ANTIGA, em meses de calendário
+//     (src/lib/brasiliaDate.ts → faixaAtrasoPorMes):
+//       Vencido 1: 1º mês de atraso.
+//       Vencido 2: 2º mês de atraso.
+//       À Negativar: a partir do 3º mês (2 meses completos).
 //   - "Negativado" só é setado MANUALMENTE (nunca automático) — preservado via status_mode='Manual'.
 //   - Vencimento efetivo: sáb/dom rolam para 2ª (via effectiveDueDate).
 function calcStatusAt(
@@ -82,14 +101,12 @@ function calcStatusAt(
     if (paidAtRef.length === 0 && installments.length > 1) return "Aluno Novo";
     return "Em Dia";
   }
-  const oldest = overdue.reduce((min, i) => {
-    const d = Math.floor(
-      (refDayStart.getTime() - effectiveDueDate(i.dueDate).getTime()) / 86400000
-    );
-    return d > min ? d : min;
-  }, 0);
-  if (oldest <= 30) return "Vencido 1";
-  if (oldest <= 60) return "Vencido 2";
+  const oldest = overdue.reduce((oldest, i) =>
+    effectiveDueDate(i.dueDate).getTime() < effectiveDueDate(oldest.dueDate).getTime() ? i : oldest
+  );
+  const meses = mesesDeAtraso(oldest.dueDate, refDayStart);
+  if (meses < 1) return "Vencido 1";
+  if (meses < 2) return "Vencido 2";
   return "À Negativar";
 }
 
