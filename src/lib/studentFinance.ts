@@ -72,17 +72,32 @@ export function getEmbeddedEntradaInstallment(
  * Normaliza entrada e valor de contrato para exibição/edição quando o registro
  * só soma parcelas ou embute a entrada na P1.
  */
+/**
+ * Contrato cancelado: as parcelas em aberto foram baixadas e sobrou só o que
+ * foi pago (+ parcela de multa). A diferença "contrato − soma das parcelas"
+ * deixa de significar entrada e NÃO pode ser inferida como paga (ex.: Dayane
+ * Rabelo — contrato R$ 9.662,50, só a multa R$ 2.000 na ficha → o modal
+ * inventava uma entrada paga de R$ 7.662,50).
+ */
+function isContratoCanceladoParaFinanceiro(
+  student: Partial<Pick<Student, 'status' | 'statusCancelamento'>> & Pick<Student, 'installments'>,
+): boolean {
+  if (student.statusCancelamento === 'cancelado' || student.status === 'Cancelado') return true;
+  return (student.installments ?? []).some((i) => (i.tags ?? []).includes('multa-cancelamento'));
+}
+
 export function resolveStudentFinance(
   student: Pick<
     Student,
     'downPayment' | 'saleValue' | 'installments' | 'totalInstallments' | 'installmentValue'
-  >,
+  > & Partial<Pick<Student, 'status' | 'statusCancelamento'>>,
   options?: ResolveStudentFinanceOptions,
 ): ResolvedStudentFinance {
   const storedDown = Math.max(0, Number(student.downPayment) || 0);
   const storedSale = Math.max(0, Number(student.saleValue) || 0);
   const installments = student.installments ?? [];
   const sumInst = sumInstallmentValues(installments);
+  const cancelado = isContratoCanceladoParaFinanceiro(student);
 
   let downPayment = storedDown;
   let paidEntrada = storedDown > 0.0049;
@@ -99,7 +114,8 @@ export function resolveStudentFinance(
   }
 
   // Entrada parcial já paga (ex.: IAM — débito R$197 + crédito R$2364 pendente).
-  if (downPayment <= 0.0049 && storedSale > 0.0049 && sumInst > 0.0049) {
+  // Nunca em contrato cancelado: o gap ali é saldo baixado, não entrada.
+  if (!cancelado && downPayment <= 0.0049 && storedSale > 0.0049 && sumInst > 0.0049) {
     const gap = roundMoney(storedSale - sumInst);
     if (gap > 0.0049 && gap < storedSale - 0.01) {
       downPayment = gap;
