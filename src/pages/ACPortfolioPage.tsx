@@ -733,7 +733,6 @@ export default function ACPortfolioPage() {
   const kpiStudentsScoped = _fcRange
     ? kpiStudents.filter((s) => s.installments.some((i) => !i.paid && _instInRange(i)))
     : kpiStudents;
-  const total = kpiStudentsScoped.length;
   // Pedido de cancelamento: critério unificado da Dashboard (status OU caso
   // ativo no funil Cancelamentos). Sobrepõe visualmente qualquer outro status.
   const _isSolic = (s: Student) => matchesCancelamentoFilter(s, cancellationCases);
@@ -814,16 +813,19 @@ export default function ACPortfolioPage() {
   ];
   const tagKpis = computeTagKpis(tagKpiStudents, studentTags, _instInRange);
 
-  // Taxas (por nº de alunos) — mesma regra da Dashboard:
+  // Taxas (por VALOR, R$) — mesma regra da Dashboard:
   //   Taxa Inadimplente = (Vencido 1 + Vencido 2 + À Negativar) / Em Dia
+  //     (valores dos cards: V1/V2 só o vencido; À Negativar o saldo todo;
+  //      Em Dia inclui o a vencer dos V1/V2)
   //   Taxa Em Dia       = 100% − Taxa Inadimplente
   // Alunos Novos ficam fora da conta (sem %). Negativado, Cancelamento e
   // Pendência ficam nos cards próprios e não entram nesta taxa.
-  const inadimplentesTaxa = vencido1.length + vencido2.length + aNegativar.length;
-  const baseTaxa = emDia.length;
-  const pct = (n: number) => baseTaxa > 0 ? ((n / baseTaxa) * 100).toFixed(1) : '0.0';
-  const pctCarteira = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
-  const pctSolic = pctCarteira(solicitacaoCancelamento.length);
+  const inadimplentesTaxa = v1Value + v2Value + anValue;
+  const baseTaxa = emDiaValue;
+  const pct = (valor: number) => baseTaxa > 0 ? ((valor / baseTaxa) * 100).toFixed(1) : '0.0';
+  // % sobre a Carteira Total — sempre por valor (R$), nunca por nº de alunos.
+  const pctCarteira = (valor: number) => carteiraTotalValue > 0 ? ((valor / carteiraTotalValue) * 100).toFixed(1) : '0.0';
+  const pctSolic = pctCarteira(solicCancValue);
   const pctInadimplenteNum = baseTaxa > 0 ? (inadimplentesTaxa / baseTaxa) * 100 : 0;
   const pctInadimplente = pctInadimplenteNum.toFixed(1);
   const pctEmDia = (100 - pctInadimplenteNum).toFixed(1);
@@ -1026,7 +1028,7 @@ export default function ACPortfolioPage() {
               <TrendingUp size={16} className="text-white/50 shrink-0" />
             </div>
             <p className="kpi-value text-white">{pctEmDia}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate" title={`100% − Taxa Inadimplente. ${emDia.length} alunos em dia (Alunos Novos ficam fora da taxa).`}>100% − inadimplência · {emDia.length} em dia</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate" title={`100% − Taxa Inadimplente. Base: ${formatCurrency(emDiaValue)} em dia (${emDia.length} alunos). Alunos Novos ficam fora da taxa.`}>100% − inadimplência · {formatCurrencyCompact(emDiaValue)} em dia</p>
           </div>
           <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
             <div className="flex items-start justify-between mb-2 gap-2">
@@ -1034,7 +1036,7 @@ export default function ACPortfolioPage() {
               <TrendingDown size={16} className="text-white/50 shrink-0" />
             </div>
             <p className="kpi-value text-white">{pctInadimplente}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate" title={`(Vencido 1 + Vencido 2 + À Negativar) / Em Dia = ${inadimplentesTaxa} / ${emDia.length}`}>{inadimplentesTaxa} inadimplentes / {emDia.length} em dia</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate" title={`(Vencido 1 + Vencido 2 + À Negativar) / Em Dia = ${formatCurrency(inadimplentesTaxa)} / ${formatCurrency(emDiaValue)}`}>{formatCurrencyCompact(inadimplentesTaxa)} / {formatCurrencyCompact(emDiaValue)} em dia</p>
           </div>
         </div>
       </div>
@@ -1546,7 +1548,7 @@ export default function ACPortfolioPage() {
                   {count} alunos
                   {aVencer > 0 && <span className="text-muted-foreground/80"> · a vencer {formatCurrency(aVencer)} (no Em Dia)</span>}
                 </p>
-                <p className={pctCls}>{pct(count)}%</p>
+                <p className={pctCls}>{pct(value)}%</p>
               </div>
               {infoStatus === key && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-xl p-3 shadow-lg z-10 text-[11px] text-muted-foreground max-h-40 overflow-y-auto">
@@ -1619,7 +1621,7 @@ export default function ACPortfolioPage() {
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
             <p className="text-[11px] text-muted-foreground truncate">{pendentes.length} alunos</p>
-            <p className="text-[11px] font-semibold text-yellow-700 shrink-0">{pctCarteira(pendentes.length)}%</p>
+            <p className="text-[11px] font-semibold text-yellow-700 shrink-0">{pctCarteira(pendenteValue)}%</p>
           </div>
           {infoStatus === 'pendente' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
