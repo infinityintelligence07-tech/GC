@@ -4,9 +4,11 @@
  * Escala (da esquerda para a direita):
  *   início  = ponto de partida (taxa em dia no início do mês; 100% → 90%)
  *   45°     = meio do caminho entre o início e a meta
- *   topo    = meta (ou 100%, quando a partida já está em/acima da meta)
- *   135°    = 1,5 × meta (sem rótulo)
- *   fim     = 2 × meta
+ *   topo    = meta
+ *   135°    = meio do caminho entre a meta e 100% (sem rótulo)
+ *   fim     = sempre 100%
+ * Se a partida já está em/acima da meta (ou a meta é 100%), a escala vai
+ * linear da partida até 100% e o topo vira só o meio do caminho.
  *
  * Cores: vermelho → amarelo → verde claro → verde escuro.
  * O ponteiro marca a taxa em dia atual sobre essa escala.
@@ -23,7 +25,7 @@ interface MetaTaxaEmDiaGaugeProps {
 }
 
 const SEG_COLORS = ['#dc2626', '#facc15', '#4ade80', '#15803d'];
-const SEG_TITLES = ['Abaixo do meio do caminho', 'A caminho da meta', 'Meta batida', 'Acima de 1,5× a meta'];
+const SEG_TITLES = ['Abaixo do meio do caminho', 'A caminho da meta', 'Meta batida', 'Chegando em 100%'];
 
 export default function MetaTaxaEmDiaGauge({
   value,
@@ -38,22 +40,24 @@ export default function MetaTaxaEmDiaGauge({
   const cy = size * 0.66;
   const r = size * 0.40;
   const stroke = Math.max(14, size * 0.13);
-  // Espaço inferior só para os rótulos das pontas (partida / dobro da meta).
+  // Espaço inferior só para os rótulos das pontas (partida / 100%).
   const H = cy + size * 0.22;
 
-  const metaReal = Math.max(0.1, Math.min(100, meta));
+  const FIM = 100;
+  const metaReal = Math.max(0.1, Math.min(FIM, meta));
   // A partida manda: a escala sempre começa nela (ex.: AC que abriu o mês em
-  // 100% parte de 90%). Se a partida já está em/acima da meta, a meta não
-  // serve como topo (a escala inverteria) — o topo passa a ser 100%.
-  const lo = Math.max(0, Math.min(99.9, base));
-  const partidaAcimaDaMeta = lo >= metaReal - 0.01;
-  const m = partidaAcimaDaMeta ? 100 : metaReal;
+  // 100% parte de 90%) e termina sempre em 100%. Se a partida já está
+  // em/acima da meta (ou a meta é 100%), a meta não serve como topo — a
+  // escala fica linear da partida até 100%.
+  const lo = Math.max(0, Math.min(FIM - 0.1, base));
+  const partidaAcimaDaMeta = lo >= metaReal - 0.01 || metaReal >= FIM;
+  const m = partidaAcimaDaMeta ? (lo + FIM) / 2 : metaReal;
   const anchors: Array<[number, number]> = [
     [lo, 0],
     [(lo + m) / 2, 45],
     [m, 90],
-    [m * 1.5, 135],
-    [m * 2, 180],
+    [(m + FIM) / 2, 135],
+    [FIM, 180],
   ];
 
   const valToDeg = (raw: number): number => {
@@ -112,8 +116,8 @@ export default function MetaTaxaEmDiaGauge({
   const labels: Array<{ x: number; y: number; text: string; title: string; anchor: 'start' | 'middle' | 'end' }> = [
     { x: polar(0).x, y: endLabelY, text: `${fmt(lo)}%`, title: 'Ponto de partida — Taxa em Dia no início do mês', anchor: 'middle' },
     { ...polar(45, outerLabelRadius), text: `${fmt((lo + m) / 2)}%`, title: 'Meio do caminho', anchor: 'middle' },
-    { ...polar(90, outerLabelRadius), text: `${fmt(m)}%`, title: partidaAcimaDaMeta ? `Teto — a partida já está acima da meta (${fmt(metaReal)}%)` : 'Meta do mês', anchor: 'middle' },
-    { x: polar(180).x, y: endLabelY, text: `${fmt(m * 2)}%`, title: 'Dobro da meta', anchor: 'middle' },
+    { ...polar(90, outerLabelRadius), text: `${fmt(m)}%`, title: partidaAcimaDaMeta ? `Meio do caminho até 100% — a partida já está em/acima da meta (${fmt(metaReal)}%)` : 'Meta do mês', anchor: 'middle' },
+    { x: polar(180).x, y: endLabelY, text: `${fmt(FIM)}%`, title: 'Fim da escala — 100%', anchor: 'middle' },
   ];
 
   return (

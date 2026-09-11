@@ -170,7 +170,7 @@ export default function MetaTaxaEmDiaHeader({
             />
           </label>
           <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug">
-            A partida é refixada automaticamente na virada do mês com a Taxa em Dia daquele momento (quem começa com 100% parte de {PARTIDA_TETO}%); aqui você pode corrigi-la. A escala vai da partida até o dobro da meta; o amarelo marca o meio do caminho.
+            A partida é refixada automaticamente na virada do mês com a Taxa em Dia daquele momento (quem começa com 100% parte de {PARTIDA_TETO}%); aqui você pode corrigi-la. A escala vai da partida até 100%, com a meta no topo; o amarelo marca o meio do caminho.
           </p>
           <div className="flex justify-end gap-2 mt-3">
             <button
