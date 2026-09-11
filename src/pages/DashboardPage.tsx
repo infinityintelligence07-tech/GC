@@ -25,6 +25,7 @@ import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter, isStudentFullyPaid } from '@/lib/acPortfolioVisibility';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
 import { resolveStudentDisplayStatusVinculado, resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
+import { isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { fetchKaminoDashboardForecastTotals, type KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
 import { upsertCarteiraCardSnapshot } from '@/lib/carteiraCardExtrato';
@@ -350,9 +351,15 @@ export default function DashboardPage() {
     // mesmo status (mesma regra da aba Alunos/Carteira): Negativado em um lado
     // puxa o outro; fora de vínculo, cálculo próprio da ficha.
     const statusAutoComVinculo = (s: Student): StudentStatus => {
+      if (isEmRenegociacao(s)) return statusFinanceiroEmRenegociacao(s, students);
       const vinculo = resolveStudentDisplayStatusVinculado(s, students);
       return vinculo.group ? vinculo.status : calculateStudentAutoStatus(s);
     };
+    // "Em Renegociação" é selo operacional (rascunho/proposta em andamento):
+    // nos cards o aluno conta na posição real das parcelas (Vencido 1/2, À
+    // Negativar…), senão o saldo dele fica fora de todos os cards e a soma não
+    // fecha com a Carteira Total.
+    const recalculaStatusParaCards = (s: Student) => s.statusMode === 'Automático' || isEmRenegociacao(s);
     if (mode === 'historico') {
       if (!historicoEnd) { setKpiStudents([]); setPagosAntecipados([]); return; }
       const refDate = new Date(historicoEnd + 'T23:59:59');
@@ -396,7 +403,7 @@ export default function DashboardPage() {
               ? ({ ...s, status: 'Pendente' as StudentStatus })
               : s;
         }
-        if (s.statusMode === 'Automático') {
+        if (recalculaStatusParaCards(s)) {
           const st = isTodaySnapshot
             ? statusAutoComVinculo(s)
             : calculateStudentAutoStatusAt(s, refDate);
@@ -425,7 +432,7 @@ export default function DashboardPage() {
               ? ({ ...s, status: 'Pendente' } as Student)
               : s;
         }
-        if (s.statusMode === 'Automático') {
+        if (recalculaStatusParaCards(s)) {
           return { ...s, status: statusAutoComVinculo(s) } as Student;
         }
         return s;
@@ -524,6 +531,11 @@ export default function DashboardPage() {
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   })();
+
+  // Fichas "Em Renegociação" contam no card da posição real das parcelas; a
+  // sub-linha do card mostra quantas estão nessa situação.
+  const emRenegociacaoIds = new Set(students.filter(isEmRenegociacao).map((s) => s.id));
+  const countEmRenegociacao = (arr: Student[]) => arr.filter((s) => emRenegociacaoIds.has(s.id)).length;
 
   // "+5d": alguém parado em À Negativar há 5 dias ou mais desde que entrou
   // (3º mês de atraso), na data de referência do modo.
@@ -689,6 +701,9 @@ export default function DashboardPage() {
   // "Todos" → toda a carteira; demais → filtrado por dueDate dentro do range.
   // `opts` permite reutilizar o cálculo com outro período/base (fita "Pago ·
   // mês vigente": 01 → hoje por data de pagamento, independente dos controles).
+  /** Status usado para separar A Vencer/Vencido × negativação — o mesmo dos cards. */
+  const statusParaCards = (st: Student): StudentStatus =>
+    isEmRenegociacao(st) ? statusFinanceiroEmRenegociacao(st, students) : resolveStudentStatusComVinculo(st, students);
   const getForecastTotals = (opts?: {
     range?: { start: Date; end: Date } | null;
     basis?: 'vencimento' | 'pagamento';
@@ -741,8 +756,9 @@ export default function DashboardPage() {
       // GC. Contrato IAM quitado à vista/cartão só serve para nunca somar no
       // A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
-      // Mesmo status dos cards (recompra ↔ original leem o status conjunto).
-      const displayStatus = resolveStudentStatusComVinculo(st, students);
+      // Mesmo status dos cards (recompra ↔ original leem o status conjunto;
+      // "Em Renegociação" conta na posição real das parcelas).
+      const displayStatus = statusParaCards(st);
       const emNegativacao = isStatusNegativacao(displayStatus);
       st.installments.forEach((i) => {
         if (basis === 'pagamento') {
@@ -953,7 +969,7 @@ export default function DashboardPage() {
     // Alimenta o comparativo "O que mudou" na aba Extrato do Card.
     const payload = forecastBase.flatMap((st) => {
       if (isIamConciliadoQuitadoAvista(st)) return [];
-      if (isStatusNegativacao(resolveStudentStatusComVinculo(st, students))) return [];
+      if (isStatusNegativacao(statusParaCards(st))) return [];
       let open = 0;
       st.installments.forEach((i) => {
         if (i.paid) return;
@@ -1055,7 +1071,8 @@ export default function DashboardPage() {
           }
           if (isInstallmentExcludedFromFinancialTotals(s, inst)) return;
           if (!matches(inst.dueDate)) return;
-          entry[s.status] = (entry[s.status] || 0) + getInstallmentFinancialValueExport(inst);
+          const statusLinha = isEmRenegociacao(s) ? statusFinanceiroEmRenegociacao(s, students) : s.status;
+          entry[statusLinha] = (entry[statusLinha] || 0) + getInstallmentFinancialValueExport(inst);
         });
       });
       return entry;
@@ -1932,6 +1949,9 @@ export default function DashboardPage() {
               title={emDiaAVencerV1V2 > 0.005 ? `Inclui ${formatCurrency(emDiaAVencerV1V2)} em parcelas ainda não vencidas de alunos Vencido 1/2.` : undefined}
             >
               {emDia.length} alunos
+              {countEmRenegociacao(emDia) > 0 && (
+                <span className="text-muted-foreground/80"> · {countEmRenegociacao(emDia)} em renegociação</span>
+              )}
               {emDiaAVencerV1V2 > 0.005 && (
                 <span className="text-muted-foreground/80"> · +{formatCurrencyCompact(emDiaAVencerV1V2)} a vencer de V1/V2</span>
               )}
@@ -1985,6 +2005,9 @@ export default function DashboardPage() {
           { key: 'neg', label: 'Negativado', value: negValue, aVencer: 0, count: negativado.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos já negativados nos órgãos de crédito.', filter: 'Negativado' as StudentStatus },
         ].map(({ key, label, value, aVencer, count, color, text, desc, filter }) => {
           const isStaleAN = key === 'an' && aNegativarStale;
+          const reneg = countEmRenegociacao(
+            key === 'v1' ? vencido1 : key === 'v2' ? vencido2 : key === 'an' ? aNegativar : negativado,
+          );
           const cardCls = isStaleAN
             ? `min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-red-400/40 ${statusFilter === filter ? 'ring-2 ring-white/50' : ''}`
             : `min-w-0 cursor-pointer rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-${color} transition-all hover:-translate-y-0.5 relative hover:ring-2 hover:ring-foreground/20 ${statusFilter === filter ? 'ring-2 ring-foreground/40' : ''}`;
@@ -2011,6 +2034,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mt-1 gap-2">
                 <p className={subCls} title={aVencer > 0 ? `${count} alunos · a vencer ${formatCurrency(aVencer)}` : undefined}>
                   {count} alunos
+                  {reneg > 0 && <span className="text-muted-foreground/80"> · {reneg} em renegociação</span>}
                   {aVencer > 0 && <span className="text-muted-foreground/80"> · a vencer {formatCurrency(aVencer)} (no Em Dia)</span>}
                 </p>
                 <p className={pctCls}>{pct(value)}%</p>

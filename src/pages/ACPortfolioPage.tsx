@@ -29,6 +29,7 @@ import {
 } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, isOperationalPendente, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
 import { resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
+import { comStatusFinanceiroParaCards, isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
@@ -344,7 +345,8 @@ export default function ACPortfolioPage() {
         // Mesma regra da Dashboard: Negativado, funil de cancelamento e pendência
         // operacional preservados — nunca rebaixados pelo recálculo na data.
         if (s.status === 'Negativado' || cancelamentoOverridesFinancialStatus(s) || isOperationalPendente(s)) return s;
-        if (s.statusMode === 'Automático') {
+        // "Em Renegociação" conta na posição real das parcelas (ver Dashboard).
+        if (s.statusMode === 'Automático' || isEmRenegociacao(s)) {
           return { ...s, status: calculateStudentAutoStatusAt(s, refDate) as StudentStatus };
         }
         return s;
@@ -353,7 +355,11 @@ export default function ACPortfolioPage() {
       setKpiStudents(applyLocalFilters(visiveis));
       setPagosAntecipados(pagosAntecipadosDe(visiveis));
     } else {
-      const visiveis = stripRendaExtraConciliada(stripCancelados(acStudents));
+      // "Em Renegociação" é selo operacional: nos cards o aluno conta na posição
+      // real das parcelas (Vencido 1/2, À Negativar…), senão o saldo dele fica
+      // fora de todos os cards e a soma não fecha com a Carteira Total.
+      const paraCards = acStudents.map((s) => comStatusFinanceiroParaCards(s, students));
+      const visiveis = stripRendaExtraConciliada(stripCancelados(paraCards));
       setKpiStudents(applyLocalFilters(visiveis));
       setPagosAntecipados(pagosAntecipadosDe(visiveis));
     }
@@ -470,7 +476,10 @@ export default function ACPortfolioPage() {
       // GC — mesma regra da Dashboard (src/lib/pagoGc.ts). Contrato IAM quitado
       // à vista/cartão só serve para nunca somar no A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
-      const displayStatus = resolveStudentStatusComVinculo(st, students);
+      // Mesmo status dos cards ("Em Renegociação" conta na posição real das parcelas).
+      const displayStatus = isEmRenegociacao(st)
+        ? statusFinanceiroEmRenegociacao(st, students)
+        : resolveStudentStatusComVinculo(st, students);
       const emNegativacao = isStatusNegativacao(displayStatus);
       st.installments.forEach((i) => {
         if (basis === 'pagamento') {
@@ -742,6 +751,9 @@ export default function ACPortfolioPage() {
   const vencido2 = kpiStudentsScoped.filter((s) => s.status === 'Vencido 2' && !_isSolic(s));
   const aNegativar = kpiStudentsScoped.filter((s) => s.status === 'À Negativar' && !_isSolic(s));
   const negativado = kpiStudentsScoped.filter((s) => s.status === 'Negativado' && !_isSolic(s));
+  // Fichas "Em Renegociação" contam no card da posição real das parcelas; a
+  // sub-linha do card mostra quantas estão nessa situação.
+  const emRenegociacaoIds = new Set(students.filter(isEmRenegociacao).map((s) => s.id));
   // Pedido de cancelamento: com filtro de período, só entra quem tem parcela em
   // aberto no intervalo — mesma base do valor do card (sumUnpaid).
   const solicitacaoCancelamento = kpiStudentsScoped.filter(_isSolic);
@@ -1520,6 +1532,8 @@ export default function ACPortfolioPage() {
           { key: 'neg', label: 'Negativado', value: negValue, aVencer: 0, count: negativado.length, color: 'slate-400', text: 'text-slate-500', desc: 'Alunos que já foram negativados nos órgãos de proteção ao crédito. Requer acompanhamento para eventual acordo e retirada da negativação.', filter: 'Negativado' as StudentStatus },
         ].map(({ key, label, value, aVencer, count, color, text, desc, filter }) => {
           const isStaleAN = key === 'an' && aNegativarStale;
+          const reneg = (key === 'v1' ? vencido1 : key === 'v2' ? vencido2 : key === 'an' ? aNegativar : negativado)
+            .filter((s) => emRenegociacaoIds.has(s.id)).length;
           const cardCls = isStaleAN
             ? `min-w-0 rounded-2xl p-4 sm:p-5 saas-shadow-md bg-red-500 border border-red-600 transition-all hover:-translate-y-0.5 relative cursor-pointer hover:ring-2 hover:ring-red-400/40 ${statusFilter === filter ? 'ring-2 ring-white/50' : ''}`
             : `min-w-0 rounded-2xl p-4 sm:p-5 saas-shadow-md bg-card border border-border border-l-4 border-l-${color} transition-all hover:-translate-y-0.5 relative cursor-pointer hover:ring-2 hover:ring-foreground/20 ${statusFilter === filter ? 'ring-2 ring-foreground/40' : ''}`;
@@ -1546,6 +1560,7 @@ export default function ACPortfolioPage() {
               <div className="flex items-center justify-between mt-1 gap-2">
                 <p className={subCls} title={aVencer > 0 ? `${count} alunos · a vencer ${formatCurrency(aVencer)}` : undefined}>
                   {count} alunos
+                  {reneg > 0 && <span className="text-muted-foreground/80"> · {reneg} em renegociação</span>}
                   {aVencer > 0 && <span className="text-muted-foreground/80"> · a vencer {formatCurrency(aVencer)} (no Em Dia)</span>}
                 </p>
                 <p className={pctCls}>{pct(value)}%</p>

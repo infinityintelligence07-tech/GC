@@ -7,6 +7,7 @@
 
 import type { HistoryEntry, Student, StudentStatus } from '@/types';
 import { calculateStudentAutoStatus } from '@/store/useAppStore';
+import { resolveStudentDisplayStatusVinculado } from '@/lib/recompraVinculo';
 
 export const STATUS_EM_RENEGOCIACAO: StudentStatus = 'Em Renegociação';
 
@@ -18,6 +19,30 @@ export interface StatusAnteriorRenegociacao {
 
 export function isEmRenegociacao(s: Pick<Student, 'status'>): boolean {
   return s.status === STATUS_EM_RENEGOCIACAO;
+}
+
+/**
+ * Status financeiro que a ficha "Em Renegociação" ocupa nos cards/KPIs
+ * (Dashboard, Carteira do AC). O selo é operacional — rascunho/proposta em
+ * andamento — e não muda onde o saldo está: o aluno segue contando em
+ * Vencido 1/2, À Negativar ou Em Dia pela posição real das parcelas (como se a
+ * ficha estivesse em modo Automático, com o vínculo recompra ↔ original).
+ * Sem isso o saldo dele fica fora de todos os cards e a soma não fecha com a
+ * Carteira Total.
+ */
+export function statusFinanceiroEmRenegociacao(s: Student, students: Student[]): StudentStatus {
+  const base: Student = { ...s, statusMode: 'Automático' };
+  const vinculo = resolveStudentDisplayStatusVinculado(base, students);
+  return vinculo.group ? vinculo.status : calculateStudentAutoStatus(base);
+}
+
+/**
+ * Cópia da ficha com o status financeiro dos cards no lugar de "Em
+ * Renegociação" (demais fichas voltam inalteradas).
+ */
+export function comStatusFinanceiroParaCards(s: Student, students: Student[]): Student {
+  if (!isEmRenegociacao(s)) return s;
+  return { ...s, status: statusFinanceiroEmRenegociacao(s, students) };
 }
 
 function entrada(text: string): HistoryEntry {
