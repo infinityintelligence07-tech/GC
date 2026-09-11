@@ -429,7 +429,34 @@ export async function createStudentsBulkDb(students: Omit<Student, 'id'>[]): Pro
   return (data ?? []).map(rowToStudent);
 }
 
-export async function updateStudentDb(id: string, data: Partial<Student>) {
+// ─── Fila de gravação por aluno ──────────────────────────────────────────────
+// Gravações concorrentes do MESMO aluno na mesma sessão (ex.: conciliar duas
+// parcelas num clique só → dois updateStudent seguidos) enviam o array completo
+// de parcelas. Sem ordem garantida na rede, a gravação mais antiga pode chegar
+// ao banco por último e apagar a mais nova (caso Hugo Chagua Ventura, 11/09/2026:
+// a baixa da parcela 1 sumiu porque a gravação da parcela 2, montada antes,
+// foi a última a commitar). Cada gravação espera a anterior do mesmo aluno
+// terminar — o estado local já acumula as mudanças, então a última gravação
+// da fila sempre carrega tudo.
+const studentWriteQueues = new Map<string, Promise<unknown>>();
+
+function enqueueStudentWrite<T>(id: string, fn: () => Promise<T>): Promise<T> {
+  const prev = studentWriteQueues.get(id) ?? Promise.resolve();
+  const run = prev.catch(() => undefined).then(fn);
+  studentWriteQueues.set(id, run);
+  run
+    .catch(() => undefined)
+    .finally(() => {
+      if (studentWriteQueues.get(id) === run) studentWriteQueues.delete(id);
+    });
+  return run;
+}
+
+export function updateStudentDb(id: string, data: Partial<Student>): Promise<void> {
+  return enqueueStudentWrite(id, () => updateStudentDbNow(id, data));
+}
+
+async function updateStudentDbNow(id: string, data: Partial<Student>) {
   const row = studentToRow(data);
   if (Object.keys(row).length === 0) return;
   let wroteFromStaleState = false;

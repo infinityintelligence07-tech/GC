@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import MetaTaxaEmDiaGauge from '@/components/ui/MetaTaxaEmDiaGauge';
@@ -75,17 +75,27 @@ export default function MetaTaxaEmDiaHeader({
   // Partida do mês ainda não fixada (nunca gravada ou gravada em outro mês):
   // fixa na taxa atual (100% → 90%), uma vez por mês. Meta só é gravada se já
   // existia — a meta padrão continua vindo das Configurações.
+  //
+  // A gravação é adiada alguns ms e lê as props mais recentes: ao trocar de
+  // assessor, a página recalcula a taxa num efeito próprio, então no primeiro
+  // render o `taxaAtual` ainda é o do assessor anterior. Gravar na hora
+  // fixava a partida de um AC com a taxa do outro.
   const fixarPartida = canEdit && temDados && (base == null || baseMes !== mesAtual);
+  const latest = useRef({ taxaAtual, meta, definidaEm, onSave });
+  latest.current = { taxaAtual, meta, definidaEm, onSave };
   useEffect(() => {
     if (!fixarPartida) return;
-    onSave({
-      meta: meta ?? undefined,
-      base: partidaAuto,
-      baseMes: mesAtual,
-      definidaEm: definidaEm ?? new Date().toISOString(),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fixarPartida, mesAtual]);
+    const t = setTimeout(() => {
+      const cur = latest.current;
+      cur.onSave({
+        meta: cur.meta ?? undefined,
+        base: partidaAutomatica(cur.taxaAtual),
+        baseMes: mesAtual,
+        definidaEm: cur.definidaEm ?? new Date().toISOString(),
+      });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [fixarPartida, mesAtual, titulo]);
 
   const abrir = () => {
     setMetaDraft(fmtPct(metaEfetiva));
