@@ -30,7 +30,7 @@ import {
 import { getCancelamentoBadge, isOperationalPendente, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
 import { resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { comStatusFinanceiroParaCards, isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
-import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
+import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista, isIamForaDaCarteiraAteConciliar } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
 import { retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
@@ -273,6 +273,8 @@ export default function ACPortfolioPage() {
         return !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students);
       })
       .filter((s) => {
+        // IAM não conciliado no GC (exceto Pendente Link/PIX) não aparece nem na busca.
+        if (isIamForaDaCarteiraAteConciliar(s)) return false;
         // Carteira ativa exclui quitados; busca ou filtro "Pago" inclui para achar o aluno.
         if (statusFilter === 'Pago' || searching || isStudentInAcPortfolio(s)) return true;
         if (revertidosMode && revertidosStudentIds.has(s.id)) return true;

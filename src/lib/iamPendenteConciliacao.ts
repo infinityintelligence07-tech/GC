@@ -203,6 +203,32 @@ export function isAwaitingIamGcApproval(student: Student): boolean {
   return needsIamGcConciliacaoApproval(student);
 }
 
+/**
+ * Contrato IAM com pagamento pendente por Link ou PIX (ainda não aprovado no
+ * GC). É a única pendência IAM que o assessor precisa cobrar do cliente, por
+ * isso é a única que aparece na carteira do AC antes da conciliação.
+ */
+export function isIamPendenteLinkOuPix(student: Student): boolean {
+  if (!needsIamGcConciliacaoApproval(student)) return false;
+  const status = normalizeIamContratoStatus(student.iamControlContratoStatus);
+  if (status === 'PENDENTE_LINK' || status === 'PENDENTE_PIX') return true;
+  if (!isIamPendenteStatus(status)) return false;
+  const tipo = String(student.iamControlPendenteTipo ?? '').toUpperCase().trim();
+  return tipo === 'LINK' || tipo === 'PIX';
+}
+
+/**
+ * Contrato IAM ainda fora da carteira do assessor: não aprovado na Conciliação
+ * GC (qualquer status IAM — NOVO, PARA_CONCILIAR, CONCILIADO aguardando, AJUSTES…),
+ * exceto Pendente Link / PIX. Cancelados e quitados à vista CONCILIADO seguem
+ * a regra própria (`countsInAcPortfolioTotals`).
+ */
+export function isIamForaDaCarteiraAteConciliar(student: Student): boolean {
+  if (!isIamControlStudent(student)) return false;
+  if (countsInAcPortfolioTotals(student)) return false;
+  return !isIamPendenteLinkOuPix(student);
+}
+
 /** Entra nos totais da dashboard principal — Kamino ou IAM já aprovado no GC. */
 export function countsInFinancialTotals(student: Student): boolean {
   if (isIamControlStudent(student)) {

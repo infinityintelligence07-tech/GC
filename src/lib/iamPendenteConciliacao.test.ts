@@ -1,9 +1,50 @@
 import { describe, expect, it } from 'vitest';
+import type { Student } from '@/types';
 import {
   classifyIamTreinamentoOrigem,
   iamEventoProdutoLabel,
+  isIamForaDaCarteiraAteConciliar,
+  isIamPendenteLinkOuPix,
   resolveIamFilaStatus,
 } from '@/lib/iamPendenteConciliacao';
+
+const iamStudent = (over: Partial<Student>): Student =>
+  ({
+    id: 'x',
+    name: 'Aluno',
+    status: 'Pendente',
+    statusMode: 'Manual',
+    installments: [{ number: 1, value: 1000, dueDate: '2026-10-10', paid: false }],
+    saleValue: 5000,
+    downPayment: 500,
+    totalInstallments: 1,
+    paidInstallments: 0,
+    history: [],
+    iamControlAlunoId: 123,
+    ...over,
+  }) as unknown as Student;
+
+describe('carteira do AC — IAM antes da conciliação', () => {
+  it('Pendente Link / PIX aparecem na carteira', () => {
+    expect(isIamPendenteLinkOuPix(iamStudent({ iamControlContratoStatus: 'PENDENTE_LINK' }))).toBe(true);
+    expect(isIamPendenteLinkOuPix(iamStudent({ iamControlContratoStatus: 'PENDENTE_PIX' }))).toBe(true);
+    expect(isIamPendenteLinkOuPix(iamStudent({ iamControlContratoStatus: 'PENDENTE', iamControlPendenteTipo: 'PIX' }))).toBe(true);
+    expect(isIamForaDaCarteiraAteConciliar(iamStudent({ iamControlContratoStatus: 'PENDENTE_PIX' }))).toBe(false);
+  });
+
+  it('demais status IAM ficam fora até conciliar no GC', () => {
+    for (const st of ['NOVO', 'PARA_CONCILIAR', 'CONCILIADO', 'AJUSTES', 'PENDENTE', null]) {
+      const s = iamStudent({ iamControlContratoStatus: st as string | null });
+      expect(isIamPendenteLinkOuPix(s)).toBe(false);
+      expect(isIamForaDaCarteiraAteConciliar(s)).toBe(true);
+    }
+  });
+
+  it('conciliado no GC entra normalmente; não-IAM não é afetado', () => {
+    expect(isIamForaDaCarteiraAteConciliar(iamStudent({ iamControlContratoStatus: 'NOVO', iamGcConciliadoAt: '2026-09-01T00:00:00Z' }))).toBe(false);
+    expect(isIamForaDaCarteiraAteConciliar(iamStudent({ iamControlAlunoId: undefined, iamControlContratoStatus: 'NOVO' }))).toBe(false);
+  });
+});
 
 describe('resolveIamFilaStatus', () => {
   it('agrupa PENDENTE* como pendente', () => {
