@@ -40,7 +40,7 @@ import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import FinancialModal from '@/components/modals/FinancialModal';
 import { exportForecastSpreadsheet, type ForecastExportBucket, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
-import { retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
+import { recebimentosRetidos, retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
 import { toast } from 'sonner';
 
 type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'pendente' | 'tag' | 'revertidos';
@@ -835,28 +835,33 @@ export default function DashboardPage() {
     });
     // Contratos cancelados: ficam fora do A Vencer, mas o que a empresa ficou
     // de fato (pago + multa − estorno − abatimento) entra no Pago, na data em
-    // que o cancelamento foi concluído — só quando o cancelamento passou pela
-    // Conciliação do GC (fonte 'conciliacao'); cancelamento antigo/importado
-    // sem item conciliado fica de fora.
+    // que cada valor foi RECEBIDO (entrada na matrícula, parcela/multa na
+    // baixa) — só quando o cancelamento passou pela Conciliação do GC (fonte
+    // 'conciliacao'); cancelamento antigo/importado sem item conciliado fica
+    // de fora.
     canceladosBase.forEach((st) => {
       const retido = valorRetidoCancelamento(st, cancellationCases, conciliacaoItems);
       if (!retido || retido.valor <= 0 || retido.fonte !== 'conciliacao') return;
-      if (!retidoNoPeriodo(retido, range)) return;
-      total += retido.valor;
-      totalReal += retido.valor;
-      pago += retido.valor;
-      pagoReal += retido.valor;
-      qtd += 1;
-      qtdAlunosSet.add(st.id);
-      bumpAc(st.ac, retido.valor, retido.valor, st.id);
-      pushDetail(st, resolveStudentDisplayStatus(st), {
-        bucket: 'pago',
-        installmentNumber: 0,
-        dueDate: retido.data,
-        value: retido.valor,
-        paidValue: retido.valor,
-        paidDate: retido.data || undefined,
+      let contou = false;
+      recebimentosRetidos(st, retido).forEach((rec) => {
+        if (!retidoNoPeriodo(rec, range)) return;
+        total += rec.valor;
+        totalReal += rec.valor;
+        pago += rec.valor;
+        pagoReal += rec.valor;
+        qtd += 1;
+        contou = true;
+        bumpAc(st.ac, rec.valor, rec.valor, st.id);
+        pushDetail(st, resolveStudentDisplayStatus(st), {
+          bucket: 'pago',
+          installmentNumber: 0,
+          dueDate: rec.data,
+          value: rec.valor,
+          paidValue: rec.valor,
+          paidDate: rec.data || undefined,
+        });
       });
+      if (contou) qtdAlunosSet.add(st.id);
     });
     const perAcList = Object.entries(perAc)
       .map(([name, b]) => ({ name, pago: b.pago, pagoReal: b.pagoReal, qtd: b.qtd, qtdAlunos: b.alunos.size }))

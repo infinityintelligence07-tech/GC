@@ -1,5 +1,6 @@
 const LOGIN_EMAIL_OVERRIDES: Record<string, string> = {
   tiagofiel: 'contatotiagofiel@gmail.com',
+  arnoassis: 'arnoassislegacy@gmail.com',
 };
 
 export function loginToEmail(login: string): string {

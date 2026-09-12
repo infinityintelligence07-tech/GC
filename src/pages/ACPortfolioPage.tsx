@@ -33,7 +33,7 @@ import { comStatusFinanceiroParaCards, isEmRenegociacao, statusFinanceiroEmReneg
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista, isIamForaDaCarteiraAteConciliar } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
-import { retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
+import { recebimentosRetidos, retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
 import { toast } from 'sonner';
 import {
   isCancellationCaseInRange,
@@ -569,26 +569,31 @@ export default function ACPortfolioPage() {
       });
     });
     // Contratos cancelados: fora do A Vencer; o que a empresa ficou de fato
-    // (pago + multa − estorno − abatimento) entra no Pago na data da conclusão,
-    // só quando o cancelamento passou pela Conciliação do GC.
+    // (pago + multa − estorno − abatimento) entra no Pago na data em que cada
+    // valor foi recebido (entrada na matrícula, parcela/multa na baixa), só
+    // quando o cancelamento passou pela Conciliação do GC.
     canceladosBase.forEach((st) => {
       const retido = valorRetidoCancelamento(st, cancellationCases, conciliacaoItems);
       if (!retido || retido.valor <= 0 || retido.fonte !== 'conciliacao') return;
-      if (!retidoNoPeriodo(retido, range)) return;
-      total += retido.valor;
-      totalReal += retido.valor;
-      pago += retido.valor;
-      pagoReal += retido.valor;
-      qtd += 1;
-      qtdAlunosSet.add(st.id);
-      pushDetail(st, resolveStudentStatusComVinculo(st, students), {
-        bucket: 'pago',
-        installmentNumber: 0,
-        dueDate: retido.data,
-        value: retido.valor,
-        paidValue: retido.valor,
-        paidDate: retido.data || undefined,
+      let contou = false;
+      recebimentosRetidos(st, retido).forEach((rec) => {
+        if (!retidoNoPeriodo(rec, range)) return;
+        total += rec.valor;
+        totalReal += rec.valor;
+        pago += rec.valor;
+        pagoReal += rec.valor;
+        qtd += 1;
+        contou = true;
+        pushDetail(st, resolveStudentStatusComVinculo(st, students), {
+          bucket: 'pago',
+          installmentNumber: 0,
+          dueDate: rec.data,
+          value: rec.valor,
+          paidValue: rec.valor,
+          paidDate: rec.data || undefined,
+        });
       });
+      if (contou) qtdAlunosSet.add(st.id);
     });
     return {
       total, aVencer, negativacao, pago, totalReal, pagoReal, qtd,
