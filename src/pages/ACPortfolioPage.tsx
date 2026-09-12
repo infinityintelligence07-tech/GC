@@ -828,14 +828,14 @@ export default function ACPortfolioPage() {
   const tagKpis = computeTagKpis(tagKpiStudents, studentTags, _instInRange);
 
   // Taxas (por VALOR, R$) — mesma regra da Dashboard:
-  //   Taxa Inadimplente = (Vencido 1 + Vencido 2 + À Negativar) / Em Dia
-  //     (valores dos cards: V1/V2 só o vencido; À Negativar o saldo todo;
-  //      Em Dia inclui o a vencer dos V1/V2)
+  //   Base da taxa      = Carteira Total − Alunos Novos
+  //   Inadimplente      = Base da taxa − Em Dia
+  //   Taxa Inadimplente = Inadimplente / Base da taxa
   //   Taxa Em Dia       = 100% − Taxa Inadimplente
-  // Alunos Novos ficam fora da conta (sem %). Negativado, Cancelamento e
-  // Pendência ficam nos cards próprios e não entram nesta taxa.
-  const inadimplentesTaxa = v1Value + v2Value + anValue;
-  const baseTaxa = emDiaValue;
+  // (Em Dia inclui o a vencer dos Vencido 1/2.) Alunos Novos ficam fora da
+  // conta e sem %.
+  const baseTaxa = Math.max(0, carteiraTotalValue - alunosNovosValue);
+  const inadimplentesTaxa = Math.max(0, baseTaxa - emDiaValue);
   const pct = (valor: number) => baseTaxa > 0 ? ((valor / baseTaxa) * 100).toFixed(1) : '0.0';
   // % sobre a Carteira Total — sempre por valor (R$), nunca por nº de alunos.
   const pctCarteira = (valor: number) => carteiraTotalValue > 0 ? ((valor / carteiraTotalValue) * 100).toFixed(1) : '0.0';
@@ -1042,7 +1042,7 @@ export default function ACPortfolioPage() {
               <TrendingUp size={16} className="text-white/50 shrink-0" />
             </div>
             <p className="kpi-value text-white">{pctEmDia}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate" title={`100% − Taxa Inadimplente. Base: ${formatCurrency(emDiaValue)} em dia (${emDia.length} alunos). Alunos Novos ficam fora da taxa.`}>100% − inadimplência · {formatCurrencyCompact(emDiaValue)} em dia</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate" title={`100% − Taxa Inadimplente. Em Dia ${formatCurrency(emDiaValue)} sobre a base ${formatCurrency(baseTaxa)} (Carteira Total − Alunos Novos).`}>{formatCurrencyCompact(emDiaValue)} em dia / {formatCurrencyCompact(baseTaxa)}</p>
           </div>
           <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
             <div className="flex items-start justify-between mb-2 gap-2">
@@ -1050,7 +1050,7 @@ export default function ACPortfolioPage() {
               <TrendingDown size={16} className="text-white/50 shrink-0" />
             </div>
             <p className="kpi-value text-white">{pctInadimplente}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate" title={`(Vencido 1 + Vencido 2 + À Negativar) / Em Dia = ${formatCurrency(inadimplentesTaxa)} / ${formatCurrency(emDiaValue)}`}>{formatCurrencyCompact(inadimplentesTaxa)} / {formatCurrencyCompact(emDiaValue)} em dia</p>
+            <p className="text-[11px] text-white/60 mt-1 truncate" title={`Inadimplente = (Carteira Total − Alunos Novos) − Em Dia = ${formatCurrency(inadimplentesTaxa)}; ÷ base ${formatCurrency(baseTaxa)}.`}>{formatCurrencyCompact(inadimplentesTaxa)} / {formatCurrencyCompact(baseTaxa)}</p>
           </div>
         </div>
       </div>
