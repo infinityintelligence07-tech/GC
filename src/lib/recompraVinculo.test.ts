@@ -171,4 +171,27 @@ describe('vínculo recompra ↔ contrato original', () => {
     expect(r.status).toBe('Solicitação Cancelamento');
     expect(r.puxadoDoVinculo).toBe(false);
   });
+
+  it('original em Solicitação Cancelamento puxa a recompra vinculada (mesmo À Negativar / manual)', () => {
+    const emCancelamento = ficha({ statusCancelamento: 'solicitado', status: 'Solicitação Cancelamento', installments: [parcela(1, diasAtras(5), true)] });
+    const recompra = ficha({ product: 'Fundo - Receita (Recompra)', recompraTreinamento: 'Confronto', installments: [parcela(1, diasAtras(100), false, ['recompra'])] });
+    const r = resolveStudentDisplayStatusVinculado(recompra, [emCancelamento, recompra]);
+    expect(r.status).toBe('Solicitação Cancelamento');
+    expect(r.puxadoDoVinculo).toBe(true);
+
+    const recompraManual = ficha({ product: 'Fundo - Receita (Recompra)', recompraTreinamento: 'Confronto', statusMode: 'Manual', status: 'À Negativar', installments: [parcela(1, diasAtras(100), false, ['recompra'])] });
+    expect(resolveStudentDisplayStatusVinculado(recompraManual, [emCancelamento, recompraManual]).status).toBe('Solicitação Cancelamento');
+  });
+
+  it('original já Cancelado (concluído) não puxa a recompra — ela mantém a leitura própria', () => {
+    const cancelado = ficha({ statusCancelamento: 'cancelado', status: 'Cancelado', installments: [parcela(1, diasAtras(5), true)] });
+    const recompra = ficha({ product: 'Fundo - Receita (Recompra)', recompraTreinamento: 'Confronto', installments: [parcela(1, diasAtras(100), false, ['recompra'])] });
+    expect(resolveStudentDisplayStatusVinculado(recompra, [cancelado, recompra]).status).toBe('À Negativar');
+  });
+
+  it('recompra Negativado não é sobrescrita pelo cancelamento do original', () => {
+    const emCancelamento = ficha({ statusCancelamento: 'solicitado', status: 'Solicitação Cancelamento', installments: [parcela(1, diasAtras(5), true)] });
+    const negativado = ficha({ product: 'Fundo - Receita (Recompra)', recompraTreinamento: 'Confronto', statusMode: 'Manual', status: 'Negativado', installments: [parcela(1, diasAtras(200), false, ['recompra'])] });
+    expect(resolveStudentDisplayStatusVinculado(negativado, [emCancelamento, negativado]).status).toBe('Negativado');
+  });
 });

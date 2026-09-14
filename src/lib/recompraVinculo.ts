@@ -167,6 +167,12 @@ function contaNoStatusConjunto(s: Student): boolean {
   return true;
 }
 
+/** Pedido de cancelamento em andamento (funil ativo) — ainda não concluído. */
+function emSolicitacaoCancelamento(s: Student): boolean {
+  if (s.statusCancelamento === 'cancelado' || s.status === 'Cancelado') return false;
+  return cancelamentoOverridesFinancialStatus(s);
+}
+
 /** Parcelas de todas as fichas do grupo (só as que entram no status conjunto). */
 export function getVinculoInstallments(group: RecompraVinculoGroup): Installment[] {
   return [group.original, ...group.recompras]
@@ -186,12 +192,16 @@ export interface StatusVinculado {
 /**
  * Status de exibição considerando o vínculo recompra ↔ original.
  *
- * Mantém a leitura própria quando a ficha está em cancelamento, Negativado,
- * Pendente operacional ou com status Manual — nesses casos o vínculo não
- * sobrescreve. Fora disso:
- *  - se o outro lado do vínculo está Negativado (é o mesmo contrato), a ficha
- *    aparece Negativado também — a recompra não pode ficar "Vencido 2" com o
- *    treinamento de origem já negativado;
+ * Mantém a leitura própria quando a ficha está em cancelamento, Negativado ou
+ * Pendente operacional — nesses casos o vínculo não sobrescreve. Fora disso:
+ *  - se o outro lado do vínculo está com pedido de cancelamento em andamento
+ *    (é o mesmo contrato), a ficha aparece "Solicitação Cancelamento" também —
+ *    a recompra não pode seguir "À Negativar" com o treinamento de origem em
+ *    cancelamento (vale inclusive sobre status Manual);
+ *  - status Manual fora disso mantém a leitura própria;
+ *  - se o outro lado do vínculo está Negativado, a ficha aparece Negativado
+ *    também — a recompra não pode ficar "Vencido 2" com o treinamento de
+ *    origem já negativado;
  *  - senão, o status é calculado sobre a união das parcelas do grupo, e a
  *    parcela vencida da recompra conta como vencida.
  */
@@ -208,6 +218,19 @@ export function resolveStudentDisplayStatusVinculado(student: Student, students:
   if (!group) return proprio(null);
   if (!contaNoStatusConjunto(student)) return proprio(group);
   if (student.status === 'Negativado' || isOperationalPendente(student)) return proprio(group);
+
+  const outroEmCancelamento = [group.original, ...group.recompras].some(
+    (s) => s.id !== student.id && emSolicitacaoCancelamento(s),
+  );
+  if (outroEmCancelamento) {
+    return {
+      status: 'Solicitação Cancelamento',
+      installments: student.installments ?? [],
+      group,
+      puxadoDoVinculo: own !== 'Solicitação Cancelamento',
+    };
+  }
+
   if (student.statusMode !== 'Automático') return proprio(group);
 
   const installments = getVinculoInstallments(group);
