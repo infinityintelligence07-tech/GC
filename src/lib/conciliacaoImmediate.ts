@@ -6,6 +6,7 @@
 
 import { useAppStore } from '@/store/useAppStore';
 import { applyConciliacaoEfetivacao } from '@/lib/conciliacaoApply';
+import { aplicarBaixaQuitacao } from '@/lib/quitacaoBaixa';
 import type { ConciliacaoItem, HistoryEntry, Installment, Student } from '@/types';
 
 function fmtBR(v: number): string {
@@ -63,9 +64,11 @@ export function computeConciliacaoImmediateUpdate(
   }
 
   if (item.tipo === 'quitacao') {
-    const updatedInst: Installment[] = student.installments.map((i) =>
-      !i.paid ? { ...i, paid: true, paidDate: todayIso } : i,
-    );
+    const updatedInst = aplicarBaixaQuitacao(student.installments, {
+      valorPago: depois.valorPago,
+      paidDate: todayIso,
+      paidMarkedAt: new Date().toISOString(),
+    });
     const valorPago = Number(depois.valorPago);
     const desconto = Number(depois.desconto);
     history.push({

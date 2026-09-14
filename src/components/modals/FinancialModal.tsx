@@ -1292,6 +1292,19 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     if (firstDue && !aplicaTodas) {
       newInst = newInst.map((i) => (i.number === 1 ? { ...i, dueDate: firstDue } : i));
     }
+    // Parcelas em centavos: `newValue` é saldo ÷ n (ou PMT) sem arredondar e
+    // gravava valores como 514,593125. Arredonda cada uma e a última absorve a
+    // diferença para a soma bater com o financiado.
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const financiado = round2(renegValues.newValue * newInst.length);
+    const valorParcelaArred = round2(renegValues.newValue);
+    newInst = newInst.map((i, idx) => ({
+      ...i,
+      value:
+        idx === newInst.length - 1
+          ? round2(financiado - valorParcelaArred * (newInst.length - 1))
+          : valorParcelaArred,
+    }));
     // Plano proposto (mantidas + novas). Será aplicado ao aluno na conciliação.
     const proposedInst = [...keptInst, ...newInst].map((i, idx) => ({ ...i, number: idx + 1 }));
     const newTotal = proposedInst.length;
@@ -1374,7 +1387,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       depois: {
         totalParcelas: newTotal,
         novasParcelas: proposedInst,
-        valorParcela: renegValues.newValue,
+        valorParcela: valorParcelaArred,
         entrada: novaEntrada,
         multa: renegValues.multaValue,
         juros: renegValues.totalJuros,

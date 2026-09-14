@@ -269,9 +269,20 @@ export default function StudentModal({ student, onClose }: Props) {
       : (student?.installments ?? []);
     // Garantia: se nada foi marcado como pago, força paid=false em todas (evita bug
     // de primeira parcela vir marcada como paga em cadastro manual sem preenchimento).
-    const installments = paidQty === 0
+    const semPagas = paidQty === 0
       ? generated.map((i) => ({ ...i, paid: false, paidDate: undefined }))
       : generated;
+    // Parcela que passa a "paga" por esta edição é uma BAIXA feita no GC por
+    // quem está editando: recebe `paidMarkedAt` para entrar no card Pago
+    // (regra de src/lib/pagoGc.ts). Parcela que já estava paga não é tocada.
+    const jaPagas = new Set((student?.installments ?? []).filter((i) => i.paid).map((i) => i.number));
+    const installments = student
+      ? semPagas.map((i) =>
+          i.paid && !i.paidMarkedAt && !jaPagas.has(i.number)
+            ? { ...i, paidDate: i.paidDate ?? now.slice(0, 10), paidMarkedAt: now }
+            : i,
+        )
+      : semPagas;
     // Garante que o dueDay salvo no aluno coincide com o dueDate escolhido
     form.dueDay = effectiveDueDay;
 

@@ -23,6 +23,7 @@ import { openCancellationPdf, downloadCancellationPdf, isViewableInBrowser } fro
 import type { CaseNoteAttachment } from '@/types';
 import { isDraftAlreadyApplied, isDraftItem } from '@/lib/conciliacaoApply';
 import { isConciliacaoReversaoItem } from '@/lib/conciliacaoTipo';
+import { aplicarBaixaQuitacao } from '@/lib/quitacaoBaixa';
 import { isCancelamentoEspelhoItem, groupBlocksEspelhoConciliacao, isCancelamentoAguardandoFinalizacaoGc, isCancelamentoProntoConciliarGc, isCancelamentoCadastroExternoItem } from '@/lib/cancelamentoGcConciliacao';
 import {
   buildIamGcApprovalStudentPatch,
@@ -1688,11 +1689,14 @@ export default function ConciliacaoPage() {
       if (it.tipo === 'quitacao' && it.studentId) {
         const st = useAppStore.getState().students.find((s) => s.id === it.studentId);
         if (st) {
-          const updatedInst = st.installments.map((i) =>
-            !i.paid ? { ...i, paid: true, paidDate: todayIso } : i
-          );
           const valorPago = (it.depois as Record<string, unknown>)?.valorPago;
           const desconto = (it.depois as Record<string, unknown>)?.desconto;
+          // paidValue reflete o desconto: o card Pago soma o que foi recebido.
+          const updatedInst = aplicarBaixaQuitacao(st.installments, {
+            valorPago,
+            paidDate: todayIso,
+            paidMarkedAt: new Date().toISOString(),
+          });
           updateStudent(st.id, {
             installments: updatedInst,
             paidInstallments: updatedInst.length,
