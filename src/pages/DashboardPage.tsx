@@ -39,7 +39,7 @@ import DashboardReportModal, { type DashboardReportSection } from '@/components/
 import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import FinancialModal from '@/components/modals/FinancialModal';
 import { exportForecastSpreadsheet, type ForecastExportBucket, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
-import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
+import { buildBaixasGcIndex, dataBaixaParaPeriodo, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
 import { recebimentosRetidos, retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
 import { toast } from 'sonner';
 
@@ -752,8 +752,10 @@ export default function DashboardPage() {
           if (!i.paid || !i.paidDate) return;
           if (!baixaGc(st, i)) return;
           if (range) {
-            const pd = new Date(i.paidDate + 'T00:00:00');
-            if (pd < range.start || pd > range.end) return;
+            // Período pela data da BAIXA no GC (paidMarkedAt), não pela data
+            // em que o aluno pagou — ver dataBaixaParaPeriodo.
+            const pd = dataBaixaParaPeriodo(i);
+            if (!pd || pd < range.start || pd > range.end) return;
           }
           const realValue = typeof i.paidValue === 'number' ? i.paidValue : i.value;
           total += i.value;
@@ -782,8 +784,8 @@ export default function DashboardPage() {
           if (!i.paidDate) {
             if (range) return;
           } else if (range) {
-            const pd = new Date(i.paidDate + 'T00:00:00');
-            if (pd < range.start || pd > range.end) return;
+            const pd = dataBaixaParaPeriodo(i);
+            if (!pd || pd < range.start || pd > range.end) return;
           }
           const realValue = typeof i.paidValue === 'number' ? i.paidValue : i.value;
           total += i.value;

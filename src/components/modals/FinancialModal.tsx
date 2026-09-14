@@ -1182,10 +1182,16 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   // Regra: dívida total (vencido + a vencer) com encargos − entrada opcional,
   // dividido pelo nº de novas parcelas. As parcelas já pagas permanecem no fluxo.
   const calculateRenegValues = () => {
-    // Parcelas selecionadas (incluem pagas se o AC marcar). Fallback: todas em aberto.
+    // Parcelas selecionadas (incluem pagas se o AC marcar). Fallback: todas em
+    // aberto — exceto quando o AC vinculou recompra/outro treinamento sem marcar
+    // nada deste contrato: aí renegocia só o saldo vinculado (ex.: contrato
+    // próprio já todo pago, sobrou só a recompra).
+    const temVinculoIncluido = renegRecomprasIncluidas.length > 0 || renegOutrosIncluidos.length > 0;
     const selectedInst = renegSelected.length > 0
       ? student.installments.filter((i) => renegSelected.includes(i.number))
-      : unpaidInstallments;
+      : temVinculoIncluido
+        ? []
+        : unpaidInstallments;
     // Recompras vinculadas incluídas: o saldo em aberto delas entra no valor
     // renegociado (as fichas são "um contrato só" — ver recompraVinculo.ts).
     const recomprasIncorporadas: RecompraIncorporada[] = recomprasComSaldo
@@ -3527,7 +3533,20 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       saveRenegStandby(draft);
                       setStandbyDraft(draft);
                     }}
-                    disabled={renegSelected.length === 0}
+                    // Libera com parcela deste contrato marcada OU com recompra /
+                    // outro treinamento vinculado (saldo a renegociar > 0).
+                    disabled={
+                      renegSelected.length === 0 &&
+                      renegValues.recomprasIncorporadas.length === 0 &&
+                      renegValues.outrosIncorporados.length === 0
+                    }
+                    title={
+                      renegSelected.length === 0 &&
+                      renegValues.recomprasIncorporadas.length === 0 &&
+                      renegValues.outrosIncorporados.length === 0
+                        ? 'Marque ao menos uma parcela ou vincule uma recompra / outro treinamento.'
+                        : undefined
+                    }
                     className="w-full px-3 py-2 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
                   >
                     Próximo: Calcular Parcelas

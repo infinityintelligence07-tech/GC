@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConciliacaoItem, Installment } from '@/types';
-import { buildBaixasGcIndex, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
+import { buildBaixasGcIndex, dataBaixaParaPeriodo, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
 
 const aluno = { id: 'aluno-1' };
 
@@ -90,5 +90,19 @@ describe('isBaixaRegistradaNoGc', () => {
   it('tipos que não são baixa (ex.: parcela_valor) não contam', () => {
     const idx = buildBaixasGcIndex([item({ tipo: 'parcela_valor', depois: { parcela: 1 } })]);
     expect(isBaixaRegistradaNoGc(aluno, parcela({ number: 1 }), idx)).toBe(false);
+  });
+});
+
+describe('dataBaixaParaPeriodo', () => {
+  it('usa a data da baixa no GC (paidMarkedAt), não a data em que o aluno pagou', () => {
+    // Fabricio: pagou 30/05, baixa registrada em 11/09 → entra no Pago de setembro.
+    const d = dataBaixaParaPeriodo(parcela({ paidDate: '2026-05-30', paidMarkedAt: '2026-09-11T22:51:21.363Z' }));
+    expect(d?.getFullYear()).toBe(2026);
+    expect(d?.getMonth()).toBe(8);
+  });
+
+  it('sem paidMarkedAt cai na data de pagamento; sem nenhuma devolve null', () => {
+    expect(dataBaixaParaPeriodo(parcela({ paidDate: '2026-03-09' }))?.getMonth()).toBe(2);
+    expect(dataBaixaParaPeriodo(parcela({ paidDate: undefined }))).toBeNull();
   });
 });

@@ -59,6 +59,25 @@ export function buildBaixasGcIndex(items: ConciliacaoItem[]): BaixasGcIndex {
   return { parcelas, quitacoes };
 }
 
+/**
+ * Data que posiciona uma baixa no período do card "Pago": o dia em que a baixa
+ * foi REGISTRADA no GC (`paidMarkedAt`), não a data em que o aluno pagou.
+ * Ex.: parcela paga em 30/05 e baixada/conciliada em 12/09 entra no Pago de
+ * setembro — igual ao controle financeiro, que lança pela data do registro.
+ * Sem `paidMarkedAt` (baixa antiga/importada) cai na data de pagamento.
+ */
+export function dataBaixaParaPeriodo(inst: Pick<Installment, 'paidDate' | 'paidMarkedAt'>): Date | null {
+  if (inst.paidMarkedAt) {
+    const d = new Date(inst.paidMarkedAt);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  if (inst.paidDate) {
+    const d = new Date(inst.paidDate + 'T00:00:00');
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
 const DIA_MS = 86_400_000;
 
 const diffDias = (a: string, b: string): number => {
