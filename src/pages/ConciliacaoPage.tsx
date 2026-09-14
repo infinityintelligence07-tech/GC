@@ -13,6 +13,7 @@ import { useAppStore } from '@/store/useAppStore';
 import type { ConciliacaoItem, ConciliacaoTipo, ConciliacaoImportError, ConciliacaoImportErrorMotivo, Student, Installment, FunnelStage } from '@/types';
 import { canEditTab } from '@/types';
 import ImportConciliacaoModal from '@/components/modals/ImportConciliacaoModal';
+import ImportRecompraModal from '@/components/modals/ImportRecompraModal';
 import FinancialModal from '@/components/modals/FinancialModal';
 import HistoryModal from '@/components/modals/HistoryModal';
 import IamConciliarDataPagamentoModal, { type IamDataPagamentoAjuste } from '@/components/modals/IamConciliarDataPagamentoModal';
@@ -1270,6 +1271,7 @@ export default function ConciliacaoPage() {
   const [tipoFilter, setTipoFilter] = useState<ConciliacaoGrupoFilter>('todos');
   const [erroStatusFilter, setErroStatusFilter] = useState<'pendente' | 'resolvido' | 'ignorado' | 'todos'>('pendente');
   const [showImport, setShowImport] = useState(false);
+  const [showImportRecompra, setShowImportRecompra] = useState(false);
   const [resolveError, setResolveError] = useState<ConciliacaoImportError | null>(null);
   const [financialStudent, setFinancialStudent] = useState<Student | null>(null);
   const [reprovarGroup, setReprovarGroup] = useState<Group | null>(null);
@@ -2230,6 +2232,16 @@ export default function ConciliacaoPage() {
           >
             <Upload size={14} />
             Importar planilha
+          </button>
+        )}
+        {flow === 'recompras-gc' && canConciliarEdit && (
+          <button
+            onClick={() => setShowImportRecompra(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 shadow-sm"
+            title="Importar a planilha de recompra do financeiro (boletos debitados pelo banco)"
+          >
+            <Upload size={14} />
+            Importar planilha de recompra
           </button>
         )}
       </div>
@@ -3469,6 +3481,7 @@ export default function ConciliacaoPage() {
 
       {/* Modais */}
       <ImportConciliacaoModal isOpen={showImport} onClose={() => setShowImport(false)} />
+      <ImportRecompraModal isOpen={showImportRecompra} onClose={() => setShowImportRecompra(false)} />
 
       {resolveError && (
         <ResolveErrorModal
