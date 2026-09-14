@@ -75,7 +75,7 @@ function BotaoRelatorio({ onClick, className = '' }: { onClick: () => void; clas
 }
 
 export default function DashboardPage() {
-  const { students, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals, rules, setRules, currentUser } = useAppStore();
+  const { students, studentsCompanyId, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals, rules, setRules, currentUser } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
   // Baixas registradas no GC (Conciliação) — regra do card Pago.
   const baixasGcIndex = useMemo(() => buildBaixasGcIndex(conciliacaoItems), [conciliacaoItems]);
@@ -970,6 +970,11 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!activeCompanyId || !isCanonicalCardView || kaminoTotalsPending) return;
     if (students.length === 0) return;
+    // Troca de empresa: `activeCompanyId` já é a nova, mas `students` ainda é a
+    // lista da anterior até o fetch terminar. Gravar aqui escreveria os totais
+    // da empresa antiga na leitura da nova (aconteceu em 14/09: IAM - GC ficou
+    // com os valores da Liberty - GC).
+    if (studentsCompanyId !== activeCompanyId) return;
     const today = getTodayBrasilia().toISOString().slice(0, 10);
     const key = `${activeCompanyId}|${today}|${aVencerCardValue.toFixed(2)}|${forecastTotais.pago.toFixed(2)}`;
     if (lastCardSnapshotRef.current === key) return;
@@ -998,7 +1003,7 @@ export default function DashboardPage() {
       payload,
     }).catch((err) => console.warn('[extrato-card] snapshot:', err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCompanyId, isCanonicalCardView, kaminoTotalsPending, aVencerCardValue, forecastTotais.pago, aVencerCardAlunos, students.length]);
+  }, [activeCompanyId, studentsCompanyId, isCanonicalCardView, kaminoTotalsPending, aVencerCardValue, forecastTotais.pago, aVencerCardAlunos, students.length]);
 
   // ── Score distribution ────────────────────────────────────────────────────
   // Calculado sobre o MESMO universo que os KPIs/tabela exibem por padrão

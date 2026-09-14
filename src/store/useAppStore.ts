@@ -28,6 +28,14 @@ interface AppState {
   setSelectedACId: (id: string | null) => void;
 
   students: Student[];
+  /**
+   * Empresa a que `students` pertence. Ao trocar de empresa, `activeCompanyId`
+   * muda na hora e a lista só é substituída quando o fetch termina — nesse
+   * intervalo, quem grava algo "por empresa" a partir de `students` (ex.: a
+   * leitura diária do card no Dashboard) gravaria os números da empresa antiga
+   * na empresa nova. Compare com `activeCompanyId` antes de persistir.
+   */
+  studentsCompanyId: string | null;
   /** Totais autoritativos da Kamino (staging), carregados no sync. */
   kaminoPortfolioTotals: KaminoDashboardForecastTotals | null;
   setKaminoPortfolioTotals: (totals: KaminoDashboardForecastTotals | null) => void;
@@ -189,6 +197,7 @@ export const useAppStore = create<AppState>()(
 
   // ── Students ─ persistidos no Supabase ──────────────────────────────────
   students: [],
+  studentsCompanyId: null,
   kaminoPortfolioTotals: null,
   setKaminoPortfolioTotals: (totals) => set({ kaminoPortfolioTotals: totals }),
   addStudent: (student) => {

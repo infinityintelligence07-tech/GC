@@ -305,7 +305,7 @@ export function useSupabaseSync() {
         } as typeof s & { __fallbackByName?: boolean };
       });
 
-      const patch: any = { acs, products, studentTags, students: studentsReconciled, cancellationCases, appUsers };
+      const patch: any = { acs, products, studentTags, students: studentsReconciled, studentsCompanyId: activeCompanyId, cancellationCases, appUsers };
       if (rules) patch.rules = rules;
       setStore(patch);
 
