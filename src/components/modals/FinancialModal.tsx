@@ -88,6 +88,8 @@ type RenegStandbyDraft = {
   novaEntrada: number;
   renegFirstDueDate: string;
   renegDueScope: 'primeira' | 'todas';
+  /** Alterar os vencimentos (data + escopo) ou manter as datas atuais. Ausente = alterar (rascunho antigo). */
+  renegAlterarDatas?: boolean;
   entradaMode: 'valor' | 'percent';
   entradaPercent: number;
   renegSelected: number[];
@@ -339,6 +341,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   });
   // Escopo da alteração de vencimento: só a 1ª parcela ou todas
   const [renegDueScope, setRenegDueScope] = useState<'primeira' | 'todas'>('todas');
+  // Mudar as datas de vencimento ou manter as atuais (as novas parcelas seguem
+  // os vencimentos das parcelas em aberto selecionadas; o que exceder continua
+  // mês a mês no mesmo dia). Só com "alterar" aparecem data + escopo.
+  const [renegAlterarDatas, setRenegAlterarDatas] = useState(false);
   const [entradaMode, setEntradaMode] = useState<'valor' | 'percent'>('valor');
   const [entradaPercent, setEntradaPercent] = useState<number>(0);
 
@@ -406,6 +412,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     novaEntrada,
     renegFirstDueDate,
     renegDueScope,
+    renegAlterarDatas,
     entradaMode,
     entradaPercent,
     renegSelected,
@@ -452,6 +459,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     setNovaEntrada(draft.novaEntrada || 0);
     setRenegFirstDueDate(draft.renegFirstDueDate);
     setRenegDueScope(draft.renegDueScope);
+    // Rascunho anterior a esta opção sempre alterava as datas.
+    setRenegAlterarDatas(draft.renegAlterarDatas ?? true);
     setEntradaMode(draft.entradaMode);
     setEntradaPercent(draft.entradaPercent || 0);
     setRenegSelected(Array.isArray(draft.renegSelected) ? draft.renegSelected : []);
@@ -1253,6 +1262,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   };
 
   const renegValues = calculateRenegValues();
+  // Com "manter as datas", a 1ª nova parcela herda o vencimento mais antigo em aberto selecionado.
+  const primeiraDataMantida = !renegAlterarDatas
+    ? renegValues.selectedInst.filter((i) => !i.paid).map((i) => i.dueDate).sort()[0]
+    : undefined;
   // Recalcula entrada quando em modo percentual e o total muda
   useEffect(() => {
     if (entradaMode === 'percent') {
@@ -1280,19 +1293,38 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     const previousTotal = student.totalInstallments;
     const previousValue = student.installmentValue;
     const paidIncludedCount = renegValues.paidIncluded.length;
-    const firstDue = renegFirstDueDate || undefined;
+    // "Manter as datas": só há data/escopo quando o AC optou por alterar.
+    const firstDue = renegAlterarDatas ? renegFirstDueDate || undefined : undefined;
     const aplicaTodas = renegDueScope === 'todas';
     const renegDueDay = firstDue && aplicaTodas
       ? new Date(firstDue + 'T00:00:00').getDate()
       : student.dueDay;
+    // Datas mantidas: as novas parcelas reaproveitam os vencimentos das parcelas
+    // em aberto selecionadas (em ordem); se o novo plano tiver mais parcelas,
+    // continua mês a mês no mesmo dia após o último vencimento.
+    const datasMantidas = !renegAlterarDatas
+      ? renegValues.selectedInst
+          .filter((i) => !i.paid)
+          .map((i) => i.dueDate)
+          .sort()
+      : [];
     let newInst = generateInstallments(
       renegDueDay,
       newInstallments,
       renegValues.newValue,
       0,
       today.toISOString().split('T')[0],
-      aplicaTodas ? firstDue : undefined
+      datasMantidas.length > 0 ? datasMantidas[0] : aplicaTodas ? firstDue : undefined
     );
+    if (datasMantidas.length > 0) {
+      const ultima = new Date(datasMantidas[datasMantidas.length - 1] + 'T00:00:00');
+      const diaBase = new Date(datasMantidas[0] + 'T00:00:00').getDate();
+      newInst = newInst.map((i, idx) => {
+        if (idx < datasMantidas.length) return { ...i, dueDate: datasMantidas[idx] };
+        const d = new Date(ultima.getFullYear(), ultima.getMonth() + (idx - datasMantidas.length + 1), diaBase);
+        return { ...i, dueDate: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` };
+      });
+    }
     // Apenas a 1ª parcela recebe a data escolhida; as demais mantêm o dia
     // de vencimento original do aluno.
     if (firstDue && !aplicaTodas) {
@@ -1358,7 +1390,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             `${applyJurosReneg ? `Juros ${renegJurosPercent}% a.m. (${formatCurrency(renegValues.totalJuros)}). ` : 'Sem juros. '}` +
             `Entrada: ${formatCurrency(novaEntrada)}. ` +
             `Plano proposto: ${newInstallments}x de ${formatCurrency(renegValues.newValue)}` +
-            (renegFirstDueDate ? ` com vencimento em ${new Date(renegFirstDueDate + 'T00:00:00').toLocaleDateString('pt-BR')} (${renegDueScope === 'todas' ? 'aplicado a todas as parcelas' : 'somente a 1ª parcela'})` : '') + `. ` +
+            (firstDue
+              ? ` com vencimento em ${new Date(firstDue + 'T00:00:00').toLocaleDateString('pt-BR')} (${renegDueScope === 'todas' ? 'aplicado a todas as parcelas' : 'somente a 1ª parcela'})`
+              : newInst.length > 0
+                ? ` mantendo os vencimentos atuais (1ª em ${new Date(newInst[0].dueDate + 'T00:00:00').toLocaleDateString('pt-BR')})`
+                : '') + `. ` +
             `Fluxo total proposto: ${newTotal} parcelas (${keptPaid.length} pagas mantidas + ${newInstallments} novas). ` +
             (termoPending?.anexoPath
               ? `Termo assinado anexado manualmente: ${termoPending.anexoNome ?? termoPending.anexoPath}.`
@@ -3715,7 +3751,32 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       <p className="text-[9px] text-muted-foreground mt-1">Digite a quantidade desejada</p>
                     </div>
                     <div className="col-span-2">
-                      <label className="text-[10px] text-muted-foreground font-medium">Data de Vencimento</label>
+                      <p className="text-[10px] text-foreground font-medium">
+                        Vencimento das novas parcelas
+                      </p>
+                      <div className="inline-flex rounded-md border border-border overflow-hidden mt-1">
+                        <button
+                          type="button"
+                          onClick={() => setRenegAlterarDatas(false)}
+                          className={`px-2 py-1 text-[10px] font-semibold ${!renegAlterarDatas ? 'bg-primary text-primary-foreground' : 'bg-white text-muted-foreground hover:bg-muted'}`}
+                        >
+                          Manter as datas atuais
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRenegAlterarDatas(true)}
+                          className={`px-2 py-1 text-[10px] font-semibold border-l border-border ${renegAlterarDatas ? 'bg-primary text-primary-foreground' : 'bg-white text-muted-foreground hover:bg-muted'}`}
+                        >
+                          Alterar as datas
+                        </button>
+                      </div>
+                      {!renegAlterarDatas && (
+                        <p className="text-[9px] text-muted-foreground mt-1">
+                          As novas parcelas seguem os vencimentos das parcelas em aberto selecionadas; se houver mais parcelas que datas, continuam mês a mês no mesmo dia.
+                        </p>
+                      )}
+                      {renegAlterarDatas && (<>
+                      <label className="text-[10px] text-muted-foreground font-medium block mt-2">Data de Vencimento</label>
                       <input
                         type="date"
                         value={renegFirstDueDate}
@@ -3746,6 +3807,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                           ? `Todas as parcelas vencem mensalmente no dia ${renegFirstDueDate ? new Date(renegFirstDueDate + 'T00:00:00').getDate() : student.dueDay}.`
                           : `Apenas a 1ª parcela usa essa data; as demais mantêm o dia ${student.dueDay}.`}
                       </p>
+                      </>)}
                     </div>
                   </div>
 
@@ -3931,8 +3993,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Vencimento:</span>
                         <span className="font-medium">
-                          {renegFirstDueDate ? new Date(renegFirstDueDate + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
-                          {renegDueScope === 'todas' ? ' (todas as parcelas)' : ' (somente a 1ª parcela)'}
+                          {!renegAlterarDatas
+                            ? 'Datas atuais mantidas'
+                            : <>
+                                {renegFirstDueDate ? new Date(renegFirstDueDate + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                                {renegDueScope === 'todas' ? ' (todas as parcelas)' : ' (somente a 1ª parcela)'}
+                              </>}
                         </span>
                       </div>
 
@@ -4075,16 +4141,20 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             novasParcelas: newInstallments,
             novoValorParcela: renegValues.newValue,
             saldoAposEntrada: renegValues.remainingAfterEntrada,
-            primeiraParcelaVencimento: renegFirstDueDate ? formatDateBR(renegFirstDueDate) : undefined,
+            primeiraParcelaVencimento: !renegAlterarDatas
+              ? (primeiraDataMantida ? formatDateBR(primeiraDataMantida) : undefined)
+              : renegFirstDueDate ? formatDateBR(renegFirstDueDate) : undefined,
             taxaJurosMes: applyJurosReneg ? renegJurosPercent : 0,
             qtdParcelasAberto: renegValues.selectedInst.filter((i) => !i.paid).length || renegValues.selectedInst.length,
             totalPago:
               (student.downPayment ?? 0) +
               student.installments.filter((i) => i.paid).reduce((s, i) => s + (i.value || 0), 0),
             quantidadeInscricoes: 1,
-            diaVencimento: renegDueScope === 'todas' && renegFirstDueDate
-              ? new Date(renegFirstDueDate + 'T00:00:00').getDate()
-              : student.dueDay,
+            diaVencimento: !renegAlterarDatas
+              ? (primeiraDataMantida ? new Date(primeiraDataMantida + 'T00:00:00').getDate() : student.dueDay)
+              : renegDueScope === 'todas' && renegFirstDueDate
+                ? new Date(renegFirstDueDate + 'T00:00:00').getDate()
+                : student.dueDay,
             dataEntrada: novaEntrada > 0.0049
               ? (() => {
                   const t = getTodayBrasilia();
