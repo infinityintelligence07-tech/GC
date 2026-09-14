@@ -32,7 +32,13 @@ import { resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { comStatusFinanceiroParaCards, isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista, isIamForaDaCarteiraAteConciliar } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
-import { buildBaixasGcIndex, dataBaixaParaPeriodo, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
+import {
+  buildBaixasGcIndex,
+  dataBaixaParaPeriodo,
+  entradasRenegociacaoNoPeriodo,
+  isBaixaRegistradaNoGc,
+  valorRecebidoParcela,
+} from '@/lib/pagoGc';
 import { recebimentosRetidos, retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
 import { toast } from 'sonner';
 import {
@@ -475,8 +481,9 @@ export default function ACPortfolioPage() {
     };
     forecastBase.forEach((st) => {
       // Entrada de venda (downPayment) NÃO entra no Pago: não é baixa feita no
-      // GC — mesma regra da Dashboard (src/lib/pagoGc.ts). Contrato IAM quitado
-      // à vista/cartão só serve para nunca somar no A Vencer/Vencido.
+      // GC — mesma regra da Dashboard (src/lib/pagoGc.ts); só a entrada de
+      // renegociação conciliada entra (abaixo). Contrato IAM quitado à
+      // vista/cartão só serve para nunca somar no A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
       // Mesmo status dos cards ("Em Renegociação" conta na posição real das parcelas).
       const displayStatus = isEmRenegociacao(st)
@@ -492,10 +499,11 @@ export default function ACPortfolioPage() {
             const pd = dataBaixaParaPeriodo(i);
             if (!pd || pd < range.start || pd > range.end) return;
           }
-          const realValue = typeof i.paidValue === 'number' ? i.paidValue : i.value;
-          total += i.value;
+          // Pago = valor RECEBIDO (parcela + juros − desconto), não o de face.
+          const realValue = valorRecebidoParcela(i);
+          total += realValue;
           totalReal += realValue;
-          pago += i.value;
+          pago += realValue;
           pagoReal += realValue;
           qtd += 1;
           qtdAlunosSet.add(st.id);
@@ -522,10 +530,10 @@ export default function ACPortfolioPage() {
             const pd = dataBaixaParaPeriodo(i);
             if (!pd || pd < range.start || pd > range.end) return;
           }
-          const realValue = typeof i.paidValue === 'number' ? i.paidValue : i.value;
-          total += i.value;
+          const realValue = valorRecebidoParcela(i);
+          total += realValue;
           totalReal += realValue;
-          pago += i.value;
+          pago += realValue;
           pagoReal += realValue;
           qtd += 1;
           qtdAlunosSet.add(st.id);
@@ -566,6 +574,25 @@ export default function ACPortfolioPage() {
           dueDate: i.dueDate,
           value: i.value,
           paidValue: 0,
+        });
+      });
+      // Entrada paga em RENEGOCIAÇÃO aprovada na Conciliação: baixa feita no GC
+      // → entra no Pago na data da aprovação (entrada de venda continua fora).
+      entradasRenegociacaoNoPeriodo(st, baixasGcIndex, range).forEach((ent) => {
+        const dia = ent.data.slice(0, 10);
+        total += ent.valor;
+        totalReal += ent.valor;
+        pago += ent.valor;
+        pagoReal += ent.valor;
+        qtd += 1;
+        qtdAlunosSet.add(st.id);
+        pushDetail(st, displayStatus, {
+          bucket: 'pago',
+          installmentNumber: 0,
+          dueDate: dia,
+          value: ent.valor,
+          paidValue: ent.valor,
+          paidDate: dia,
         });
       });
     });
@@ -1238,7 +1265,7 @@ export default function ACPortfolioPage() {
                       {formatCurrency(pago)}
                     </p>
                     <p className="text-[10px] font-semibold text-emerald-700 mt-0">
-                      por data de pagamento · só baixas feitas no GC e conciliadas
+                      por data de pagamento · recebido (c/ juros − desconto) · baixas no GC + entrada de renegociação
                     </p>
                   </div>
                 </div>

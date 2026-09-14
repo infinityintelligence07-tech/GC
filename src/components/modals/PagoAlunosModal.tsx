@@ -35,8 +35,9 @@ const fmtDate = (iso?: string) => {
 /** Rótulo do título dentro do detalhamento de um aluno. */
 const tituloLabel = (row: ForecastExportRow) => {
   if (row.installmentNumber > 0) return `Parcela ${row.installmentNumber}`;
-  // installmentNumber 0 = entrada (cadastro/IAM) ou valor retido de cancelamento.
-  return row.displayStatus === 'Cancelado' ? 'Retido no cancelamento' : 'Entrada';
+  // installmentNumber 0 = entrada de renegociação (única entrada que entra no
+  // Pago) ou valor retido de cancelamento.
+  return row.displayStatus === 'Cancelado' ? 'Retido no cancelamento' : 'Entrada (renegociação)';
 };
 
 /**

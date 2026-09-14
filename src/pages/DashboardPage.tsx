@@ -39,7 +39,13 @@ import DashboardReportModal, { type DashboardReportSection } from '@/components/
 import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import FinancialModal from '@/components/modals/FinancialModal';
 import { exportForecastSpreadsheet, type ForecastExportBucket, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
-import { buildBaixasGcIndex, dataBaixaParaPeriodo, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
+import {
+  buildBaixasGcIndex,
+  dataBaixaParaPeriodo,
+  entradasRenegociacaoNoPeriodo,
+  isBaixaRegistradaNoGc,
+  valorRecebidoParcela,
+} from '@/lib/pagoGc';
 import { recebimentosRetidos, retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
 import { toast } from 'sonner';
 
@@ -740,7 +746,8 @@ export default function DashboardPage() {
     };
     forecastBase.forEach((st) => {
       // Entrada de venda (downPayment) NÃO entra no Pago: não é baixa feita no
-      // GC. Contrato IAM quitado à vista/cartão só serve para nunca somar no
+      // GC (só a entrada de renegociação conciliada entra — ver abaixo).
+      // Contrato IAM quitado à vista/cartão só serve para nunca somar no
       // A Vencer/Vencido.
       const quitadoAvista = isIamConciliadoQuitadoAvista(st);
       // Mesmo status dos cards (recompra ↔ original leem o status conjunto;
@@ -757,14 +764,15 @@ export default function DashboardPage() {
             const pd = dataBaixaParaPeriodo(i);
             if (!pd || pd < range.start || pd > range.end) return;
           }
-          const realValue = typeof i.paidValue === 'number' ? i.paidValue : i.value;
-          total += i.value;
+          // Pago = valor RECEBIDO (parcela + juros − desconto), não o de face.
+          const realValue = valorRecebidoParcela(i);
+          total += realValue;
           totalReal += realValue;
-          pago += i.value;
+          pago += realValue;
           pagoReal += realValue;
           qtd += 1;
           qtdAlunosSet.add(st.id);
-          bumpAc(st.ac, i.value, realValue, st.id);
+          bumpAc(st.ac, realValue, realValue, st.id);
           pushDetail(st, displayStatus, {
             bucket: 'pago',
             installmentNumber: i.number,
@@ -787,14 +795,14 @@ export default function DashboardPage() {
             const pd = dataBaixaParaPeriodo(i);
             if (!pd || pd < range.start || pd > range.end) return;
           }
-          const realValue = typeof i.paidValue === 'number' ? i.paidValue : i.value;
-          total += i.value;
+          const realValue = valorRecebidoParcela(i);
+          total += realValue;
           totalReal += realValue;
-          pago += i.value;
+          pago += realValue;
           pagoReal += realValue;
           qtd += 1;
           qtdAlunosSet.add(st.id);
-          bumpAc(st.ac, i.value, realValue, st.id);
+          bumpAc(st.ac, realValue, realValue, st.id);
           pushDetail(st, displayStatus, {
             bucket: 'pago',
             installmentNumber: i.number,
@@ -832,6 +840,26 @@ export default function DashboardPage() {
           dueDate: i.dueDate,
           value: i.value,
           paidValue: 0,
+        });
+      });
+      // Entrada paga em RENEGOCIAÇÃO aprovada na Conciliação: é baixa feita no
+      // GC → entra no Pago na data da aprovação (entrada de venda continua fora).
+      entradasRenegociacaoNoPeriodo(st, baixasGcIndex, range).forEach((ent) => {
+        const dia = ent.data.slice(0, 10);
+        total += ent.valor;
+        totalReal += ent.valor;
+        pago += ent.valor;
+        pagoReal += ent.valor;
+        qtd += 1;
+        qtdAlunosSet.add(st.id);
+        bumpAc(st.ac, ent.valor, ent.valor, st.id);
+        pushDetail(st, displayStatus, {
+          bucket: 'pago',
+          installmentNumber: 0,
+          dueDate: dia,
+          value: ent.valor,
+          paidValue: ent.valor,
+          paidDate: dia,
         });
       });
     });
@@ -1698,7 +1726,7 @@ export default function DashboardPage() {
                       {kaminoTotalsPending ? '…' : formatCurrency(pago)}
                     </p>
                     <p className="text-[10px] font-semibold text-emerald-700 mt-0">
-                      baixas feitas no GC e conciliadas · clique p/ alunos
+                      recebido (c/ juros − desconto) · baixas no GC + entrada de renegociação · clique p/ alunos
                     </p>
                   </button>
                   {pagoAlunosModalOpen && (

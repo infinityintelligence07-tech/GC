@@ -6,6 +6,14 @@ import type { ConciliacaoItem, ConciliacaoTipo, Installment, Student } from '@/t
  * conciliada. Parcela que já veio paga da planilha/IAM/Kamino (sem ninguém
  * ter dado baixa no GC) e entrada de venda (downPayment) ficam de fora.
  *
+ * Ajustes de 14/09/2026 (pedido do financeiro):
+ *  - o card soma o valor RECEBIDO (`paidValue`: parcela + juros − desconto), e
+ *    não o valor de face da parcela — ver `valorRecebidoParcela`;
+ *  - a entrada paga numa RENEGOCIAÇÃO entra no Pago (é baixa feita no GC, na
+ *    data em que a Conciliação aprovou) — entrada de venda continua fora;
+ *  - quitação de contrato entra pelo valor efetivamente pago (o desconto já é
+ *    abatido em `paidValue` por `aplicarBaixaQuitacao`).
+ *
  * Uma baixa "do GC" é reconhecida por qualquer um destes rastros:
  *  - `paidMarkedAt` na parcela — só o fluxo de baixa do GC grava esse campo
  *    (o pull do IAM preserva; importações não escrevem);
@@ -24,11 +32,23 @@ export const TIPOS_BAIXA_GC: ReadonlySet<ConciliacaoTipo> = new Set<ConciliacaoT
   'quitacao',
 ]);
 
+/** Entrada paga numa renegociação aprovada na Conciliação (baixa feita no GC). */
+export interface EntradaRenegociacaoGc {
+  /** Valor da entrada (o que o aluno pagou ao renegociar). */
+  valor: number;
+  /** Momento em que a Conciliação aprovou (data da baixa no GC), ISO. */
+  data: string;
+  /** Id do item de Conciliação (para detalhamento/exportação). */
+  itemId: string;
+}
+
 export interface BaixasGcIndex {
   /** studentId → números de parcela com baixa conciliada no GC. */
   parcelas: Map<string, Set<number>>;
   /** studentId → dias (YYYY-MM-DD) em que uma quitação foi conciliada. */
   quitacoes: Map<string, string[]>;
+  /** studentId → entradas de renegociação conciliadas. */
+  entradasRenegociacao: Map<string, EntradaRenegociacaoGc[]>;
 }
 
 const numeroParcela = (depois: Record<string, unknown> | undefined): number | null => {
@@ -36,12 +56,34 @@ const numeroParcela = (depois: Record<string, unknown> | undefined): number | nu
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+/**
+ * Valor que efetivamente entrou no caixa por uma parcela paga: `paidValue`
+ * quando registrado (já com juros somados / desconto abatido); senão o valor
+ * de face. É este número que o card "Pago" soma.
+ */
+export function valorRecebidoParcela(inst: Pick<Installment, 'value' | 'paidValue'>): number {
+  return typeof inst.paidValue === 'number' && Number.isFinite(inst.paidValue) ? inst.paidValue : Number(inst.value || 0);
+}
+
 /** Indexa uma vez os itens conciliados para consulta O(1) por parcela. */
 export function buildBaixasGcIndex(items: ConciliacaoItem[]): BaixasGcIndex {
   const parcelas = new Map<string, Set<number>>();
   const quitacoes = new Map<string, string[]>();
+  const entradasRenegociacao = new Map<string, EntradaRenegociacaoGc[]>();
   for (const it of items) {
-    if (it.status !== 'conciliado' || !it.studentId || !TIPOS_BAIXA_GC.has(it.tipo)) continue;
+    if (it.status !== 'conciliado' || !it.studentId) continue;
+    if (it.tipo === 'renegociacao') {
+      // Só a entrada de RENEGOCIAÇÃO entra no Pago (entrada de venda não).
+      const depois = it.depois as Record<string, unknown> | undefined;
+      const valor = Number(depois?.entrada);
+      const data = String(it.conciliadoAt ?? it.createdAt ?? '');
+      if (!Number.isFinite(valor) || valor <= 0.0049 || !data) continue;
+      const lista = entradasRenegociacao.get(it.studentId) ?? [];
+      lista.push({ valor, data, itemId: it.id });
+      entradasRenegociacao.set(it.studentId, lista);
+      continue;
+    }
+    if (!TIPOS_BAIXA_GC.has(it.tipo)) continue;
     if (it.tipo === 'quitacao') {
       const dia = String(it.conciliadoAt ?? it.createdAt ?? '').slice(0, 10);
       if (!dia) continue;
@@ -56,7 +98,25 @@ export function buildBaixasGcIndex(items: ConciliacaoItem[]): BaixasGcIndex {
     set.add(n);
     parcelas.set(it.studentId, set);
   }
-  return { parcelas, quitacoes };
+  return { parcelas, quitacoes, entradasRenegociacao };
+}
+
+/**
+ * Entradas de renegociação do aluno que caem no período do card (pela data em
+ * que a Conciliação aprovou). `range` nulo → todas.
+ */
+export function entradasRenegociacaoNoPeriodo(
+  student: Pick<Student, 'id'>,
+  index: BaixasGcIndex,
+  range: { start: Date; end: Date } | null | undefined,
+): EntradaRenegociacaoGc[] {
+  const lista = index.entradasRenegociacao.get(student.id);
+  if (!lista || lista.length === 0) return [];
+  if (!range) return lista;
+  return lista.filter((e) => {
+    const d = new Date(e.data);
+    return !Number.isNaN(d.getTime()) && d >= range.start && d <= range.end;
+  });
 }
 
 /**

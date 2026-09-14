@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ConciliacaoItem, Installment } from '@/types';
-import { buildBaixasGcIndex, dataBaixaParaPeriodo, isBaixaRegistradaNoGc } from '@/lib/pagoGc';
+import {
+  buildBaixasGcIndex,
+  dataBaixaParaPeriodo,
+  entradasRenegociacaoNoPeriodo,
+  isBaixaRegistradaNoGc,
+  valorRecebidoParcela,
+} from '@/lib/pagoGc';
 
 const aluno = { id: 'aluno-1' };
 
@@ -104,5 +110,56 @@ describe('dataBaixaParaPeriodo', () => {
   it('sem paidMarkedAt cai na data de pagamento; sem nenhuma devolve null', () => {
     expect(dataBaixaParaPeriodo(parcela({ paidDate: '2026-03-09' }))?.getMonth()).toBe(2);
     expect(dataBaixaParaPeriodo(parcela({ paidDate: undefined }))).toBeNull();
+  });
+});
+
+describe('valorRecebidoParcela (juros − desconto)', () => {
+  it('com paidValue usa o recebido: juros somam, desconto abate', () => {
+    expect(valorRecebidoParcela(parcela({ value: 500, paidValue: 537.5 }))).toBe(537.5);
+    expect(valorRecebidoParcela(parcela({ value: 500, paidValue: 450 }))).toBe(450);
+  });
+
+  it('sem paidValue (pagamento exato) usa o valor de face', () => {
+    expect(valorRecebidoParcela(parcela({ value: 500, paidValue: undefined }))).toBe(500);
+  });
+
+  it('quitação com desconto: paidValue zerado na última parcela conta zero, não o valor de face', () => {
+    expect(valorRecebidoParcela(parcela({ value: 500, paidValue: 0 }))).toBe(0);
+  });
+});
+
+describe('entradas de renegociação no Pago', () => {
+  const reneg = (over: Partial<ConciliacaoItem> = {}) =>
+    item({ tipo: 'renegociacao', depois: { entrada: 1200, novasParcelas: [] }, conciliadoAt: '2026-09-10T15:00:00.000Z', ...over });
+
+  it('renegociação conciliada com entrada > 0 entra na data da aprovação', () => {
+    const idx = buildBaixasGcIndex([reneg()]);
+    const lista = entradasRenegociacaoNoPeriodo(aluno, idx, null);
+    expect(lista).toHaveLength(1);
+    expect(lista[0].valor).toBe(1200);
+    expect(lista[0].data).toBe('2026-09-10T15:00:00.000Z');
+  });
+
+  it('respeita o período pela data da aprovação na Conciliação', () => {
+    const idx = buildBaixasGcIndex([reneg()]);
+    const set = { start: new Date('2026-09-01T00:00:00'), end: new Date('2026-09-30T23:59:59') };
+    const ago = { start: new Date('2026-08-01T00:00:00'), end: new Date('2026-08-31T23:59:59') };
+    expect(entradasRenegociacaoNoPeriodo(aluno, idx, set)).toHaveLength(1);
+    expect(entradasRenegociacaoNoPeriodo(aluno, idx, ago)).toHaveLength(0);
+  });
+
+  it('renegociação sem entrada, pendente/reprovada ou de outro aluno fica de fora', () => {
+    const idx = buildBaixasGcIndex([
+      reneg({ depois: { entrada: 0 } }),
+      reneg({ status: 'pendente' }),
+      reneg({ status: 'reprovado' }),
+      reneg({ studentId: 'outro' }),
+    ]);
+    expect(entradasRenegociacaoNoPeriodo(aluno, idx, null)).toHaveLength(0);
+  });
+
+  it('entrada de venda (downPayment) continua fora: só renegociação gera entrada no índice', () => {
+    const idx = buildBaixasGcIndex([item({ tipo: 'parcela_valor', depois: { entrada: 3000, downPayment: 3000 } })]);
+    expect(entradasRenegociacaoNoPeriodo(aluno, idx, null)).toHaveLength(0);
   });
 });
