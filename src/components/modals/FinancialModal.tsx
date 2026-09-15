@@ -348,12 +348,20 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const [entradaMode, setEntradaMode] = useState<'valor' | 'percent'>('valor');
   const [entradaPercent, setEntradaPercent] = useState<number>(0);
 
-  // Parcelas selecionadas para renegociação (números). Permite incluir parcelas
-  // já conciliadas como pagas — útil para alunos de antecipação (Sicoob/TMF/Fundo)
-  // em que o GC registra a parcela como paga, mas a dívida real com o aluno persiste.
+  // Parcelas selecionadas para renegociação (números). Inclui:
+  //  - em aberto (vencidas / a vencer);
+  //  - boletos antecipados (`antecipada`): baixados pelo banco/fundo, mas ainda
+  //    dívida do aluno — entram no novo plano por padrão;
+  //  - pagas pelo aluno (opcional, se o AC marcar).
   const [renegSelected, setRenegSelected] = useState<number[]>([]);
   const toggleRenegParcel = (n: number) =>
     setRenegSelected((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
+  /** Seleção padrão ao abrir a renegociação: em aberto + boletos antecipados. */
+  const defaultRenegSelection = () => {
+    const unpaid = student.installments.filter((i) => !i.paid).map((i) => i.number);
+    const antecipadas = student.installments.filter(isParcelaAntecipada).map((i) => i.number);
+    return Array.from(new Set([...unpaid, ...antecipadas]));
+  };
   // Recompras vinculadas a este contrato com saldo em aberto: entram na
   // renegociação por padrão (é o mesmo contrato), mas o AC pode desmarcar.
   const allStudents = useAppStore((s) => s.students);
@@ -789,10 +797,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       + totalCreditoAbatimento,
     [flowInstallments, finance.downPayment, totalCreditoAbatimento],
   );
-  /** Parcelas quitadas — a entrada tem card próprio e não entra aqui. */
+  /** Parcelas quitadas pelo aluno — a entrada tem card próprio e boletos
+   *  antecipados (banco/fundo) ficam no card Antecipado, não aqui. */
   const totalPagoParcelas = useMemo(
     () => flowInstallments
-      .filter((i) => i.paid)
+      .filter((i) => i.paid && !isParcelaAntecipada(i))
       .reduce((acc, i) => acc + ((i as { paidValue?: number }).paidValue ?? i.value), 0),
     [flowInstallments],
   );
@@ -1222,7 +1231,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     const outrosValor = outrosIncorporados.reduce((a, o) => a + o.valor, 0);
     const remainingProprio = selectedInst.reduce((acc, i) => acc + i.value, 0);
     const remaining = remainingProprio + recompraValor + outrosValor;
-    const paidIncluded = selectedInst.filter((i) => i.paid);
+    const paidIncluded = selectedInst.filter((i) => i.paid && !isParcelaAntecipada(i));
+    const antecipadasIncluidas = selectedInst.filter(isParcelaAntecipada);
     const multaValue = applyMultaReneg ? remaining * (renegMultaPercent / 100) : 0;
 
     // Tabela Price: PMT = PV * i / (1 - (1 + i)^-n)
@@ -1258,13 +1268,19 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       newValue,
       selectedInst,
       paidIncluded,
+      antecipadasIncluidas,
     };
   };
 
   const renegValues = calculateRenegValues();
-  // Com "manter as datas", a 1ª nova parcela herda o vencimento mais antigo em aberto selecionado.
+  // Com "manter as datas", a 1ª nova parcela herda o vencimento mais antigo
+  // entre as parcelas em aberto OU antecipadas selecionadas (antecipadas ainda
+  // são dívida do aluno e carregam o vencimento original do boleto).
   const primeiraDataMantida = !renegAlterarDatas
-    ? renegValues.selectedInst.filter((i) => !i.paid).map((i) => i.dueDate).sort()[0]
+    ? renegValues.selectedInst
+        .filter((i) => !i.paid || isParcelaAntecipada(i))
+        .map((i) => i.dueDate)
+        .sort()[0]
     : undefined;
   // Recalcula entrada quando em modo percentual e o total muda
   useEffect(() => {
@@ -1293,6 +1309,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     const previousTotal = student.totalInstallments;
     const previousValue = student.installmentValue;
     const paidIncludedCount = renegValues.paidIncluded.length;
+    const antecipadasIncluidasCount = renegValues.antecipadasIncluidas.length;
     // "Manter as datas": só há data/escopo quando o AC optou por alterar.
     const firstDue = renegAlterarDatas ? renegFirstDueDate || undefined : undefined;
     const aplicaTodas = renegDueScope === 'todas';
@@ -1300,11 +1317,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       ? new Date(firstDue + 'T00:00:00').getDate()
       : student.dueDay;
     // Datas mantidas: as novas parcelas reaproveitam os vencimentos das parcelas
-    // em aberto selecionadas (em ordem); se o novo plano tiver mais parcelas,
-    // continua mês a mês no mesmo dia após o último vencimento.
+    // em aberto/antecipadas selecionadas (em ordem); se o novo plano tiver mais
+    // parcelas, continua mês a mês no mesmo dia após o último vencimento.
     const datasMantidas = !renegAlterarDatas
       ? renegValues.selectedInst
-          .filter((i) => !i.paid)
+          .filter((i) => !i.paid || isParcelaAntecipada(i))
           .map((i) => i.dueDate)
           .sort()
       : [];
@@ -1384,7 +1401,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         addHistoryEntry(
           `Renegociação enviada para Conciliação (rascunho — alterações ainda não efetivas). ` +
             `Saldo devedor (parcelas selecionadas): ${formatCurrency(renegValues.remaining)}` +
-            (paidIncludedCount > 0 ? ` (inclui ${paidIncludedCount} parcela(s) conciliada(s) como paga(s))` : '') + `. ` +
+            (antecipadasIncluidasCount > 0
+              ? ` (inclui ${antecipadasIncluidasCount} boleto(s) antecipado(s))`
+              : '') +
+            (paidIncludedCount > 0
+              ? ` (inclui ${paidIncludedCount} parcela(s) já paga(s) pelo aluno)`
+              : '') + `. ` +
             recomprasTexto +
             `${applyMultaReneg ? `Multa ${renegMultaPercent}% (${formatCurrency(renegValues.multaValue)}). ` : 'Sem multa. '}` +
             `${applyJurosReneg ? `Juros ${renegJurosPercent}% a.m. (${formatCurrency(renegValues.totalJuros)}). ` : 'Sem juros. '}` +
@@ -1415,7 +1437,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       studentName: student.name,
       ac: student.ac,
       resumo: `Renegociação (rascunho) — ${previousTotal}x ${formatCurrency(previousValue)} → ${newTotal}x (${keptPaid.length} pagas mantidas + ${newInstallments} novas de ${formatCurrency(renegValues.newValue)})` +
-        (paidIncludedCount > 0 ? ` — ${paidIncludedCount} parcela(s) antes conciliada(s) como paga(s) foram incluídas` : '') +
+        (antecipadasIncluidasCount > 0
+          ? ` — ${antecipadasIncluidasCount} boleto(s) antecipado(s) incluído(s)`
+          : '') +
+        (paidIncludedCount > 0
+          ? ` — ${paidIncludedCount} parcela(s) já paga(s) pelo aluno foram incluídas`
+          : '') +
         (recompras.length > 0 ? ` — inclui recompra vinculada (${formatCurrency(renegValues.recompraValor)})` : '') +
         (outros.length > 0
           ? ` — inclui ${outros.length} outro(s) treinamento(s) (${formatCurrency(renegValues.outrosValor)})`
@@ -1436,6 +1463,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         saleValue: novoSaleValue,
         parcelasSelecionadas: renegValues.selectedInst.map((i) => i.number),
         parcelasPagasIncluidas: renegValues.paidIncluded.map((i) => i.number),
+        parcelasAntecipadasIncluidas: renegValues.antecipadasIncluidas.map((i) => i.number),
         recomprasIncorporadas: recompras.length > 0 ? recompras : undefined,
         contratosIncorporados: outros.length > 0 ? outros : undefined,
         termo: termoPending
@@ -3085,8 +3113,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               <button
                 onClick={() => {
                   if (renegMode === 'none') {
-                    // Default: seleciona todas as parcelas em aberto (vencidas + futuras)
-                    setRenegSelected(unpaidInstallments.map((i) => i.number));
+                    // Default: em aberto + boletos antecipados (dívida do aluno
+                    // mesmo com baixa do banco/fundo). Pagas pelo aluno ficam de fora.
+                    setRenegSelected(defaultRenegSelection());
                     setRenegMode('initial');
                   } else {
                     setRenegMode('none');
@@ -3370,8 +3399,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     </label>
                   </div>
 
-                  {/* Seleção de parcelas a renegociar — inclui pagas conciliadas
-                      (útil para alunos de antecipação Sicoob/TMF/Fundo) */}
+                  {/* Seleção de parcelas a renegociar — inclui boletos antecipados
+                      (dívida do aluno) e, opcionalmente, parcelas já pagas. */}
                   {(() => {
                     const overdue = student.installments.filter(
                       (i) =>
@@ -3380,38 +3409,46 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         parseDateLocal(i.dueDate) < today,
                     );
                     const futuras = student.installments.filter((i) => !i.paid && parseDateLocal(i.dueDate) >= today);
-                    const pagas = student.installments.filter((i) => i.paid);
+                    const antecipadas = student.installments.filter(isParcelaAntecipada);
+                    const pagasAluno = student.installments.filter((i) => i.paid && !isParcelaAntecipada(i));
                     const allUnpaidNums = [...overdue, ...futuras].map((i) => i.number);
-                    const allPaidNums = pagas.map((i) => i.number);
-                    const allOpenSelected = allUnpaidNums.length > 0 && allUnpaidNums.every((n) => renegSelected.includes(n));
-                    const allPaidSelected = allPaidNums.length > 0 && allPaidNums.every((n) => renegSelected.includes(n));
-                    const renderGroup = (title: string, list: Installment[], badgeClass: string) => (
+                    const allAntecipadasNums = antecipadas.map((i) => i.number);
+                    const allPaidNums = pagasAluno.map((i) => i.number);
+                    const renderGroup = (
+                      title: string,
+                      list: Installment[],
+                      badgeClass: string,
+                      badgeLabel?: (i: Installment) => string | null,
+                    ) => (
                       list.length > 0 && (
                         <div>
                           <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">{title}</p>
                           <div className="space-y-1 max-h-40 overflow-auto pr-1">
-                            {list.map((i) => (
-                              <label key={i.number} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/40 rounded px-2 py-1">
-                                <input
-                                  type="checkbox"
-                                  checked={renegSelected.includes(i.number)}
-                                  onChange={() => toggleRenegParcel(i.number)}
-                                  className="rounded"
-                                />
-                                <span className="flex-1">Parcela {i.number} • {parseDateLocal(i.dueDate).toLocaleDateString('pt-BR')}</span>
-                                <span className="font-semibold">{formatCurrency(i.value)}</span>
-                                {i.paid && <span className={`text-[9px] px-1.5 py-0.5 rounded ${badgeClass}`}>Conciliada paga</span>}
-                              </label>
-                            ))}
+                            {list.map((i) => {
+                              const badge = badgeLabel?.(i);
+                              return (
+                                <label key={i.number} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/40 rounded px-2 py-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={renegSelected.includes(i.number)}
+                                    onChange={() => toggleRenegParcel(i.number)}
+                                    className="rounded"
+                                  />
+                                  <span className="flex-1">Parcela {i.number} • {parseDateLocal(i.dueDate).toLocaleDateString('pt-BR')}</span>
+                                  <span className="font-semibold">{formatCurrency(i.value)}</span>
+                                  {badge && <span className={`text-[9px] px-1.5 py-0.5 rounded ${badgeClass}`}>{badge}</span>}
+                                </label>
+                              );
+                            })}
                           </div>
                         </div>
                       )
                     );
                     return (
                       <div className="p-3 bg-white rounded-lg border border-blue-200 space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
                           <p className="text-xs font-semibold text-foreground">Parcelas a renegociar</p>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap">
                             <button
                               type="button"
                               onClick={() => setRenegSelected(allUnpaidNums)}
@@ -3421,7 +3458,15 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                             </button>
                             <button
                               type="button"
-                              onClick={() => setRenegSelected([...allUnpaidNums, ...allPaidNums])}
+                              onClick={() => setRenegSelected(Array.from(new Set([...allUnpaidNums, ...allAntecipadasNums])))}
+                              className="text-[10px] px-2 py-0.5 rounded bg-sky-100 text-sky-800 hover:bg-sky-200"
+                              title="Inclui parcelas em aberto e boletos antecipados (dívida do aluno)"
+                            >
+                              Em aberto + antecipados
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRenegSelected([...allUnpaidNums, ...allAntecipadasNums, ...allPaidNums])}
                               className="text-[10px] px-2 py-0.5 rounded bg-muted hover:bg-muted/70"
                             >
                               Todas
@@ -3437,11 +3482,25 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         </div>
                         {renderGroup('Vencidas', overdue, 'bg-red-100 text-red-700')}
                         {renderGroup('A vencer', futuras, 'bg-blue-100 text-blue-700')}
-                        {renderGroup('Conciliadas como pagas (antecipação)', pagas, 'bg-emerald-100 text-emerald-700')}
-                        <p className="text-[10px] text-muted-foreground border-t pt-2">
+                        {renderGroup(
+                          'Boletos antecipados (dívida do aluno)',
+                          antecipadas,
+                          ANTECIPADA_BADGE_CLASS,
+                          () => ANTECIPADA_LABEL,
+                        )}
+                        {renderGroup(
+                          'Pagas pelo aluno',
+                          pagasAluno,
+                          'bg-emerald-100 text-emerald-700',
+                          () => 'Paga',
+                        )}
+                        <p className="text-[10px] text-muted-foreground border-t pt-2 leading-snug">
                           Total selecionado: <strong>{formatCurrency(renegValues.remaining)}</strong>
+                          {renegValues.antecipadasIncluidas.length > 0 && (
+                            <> • <span className="text-sky-700">{renegValues.antecipadasIncluidas.length} antecipado(s)</span></>
+                          )}
                           {renegValues.paidIncluded.length > 0 && (
-                            <> • <span className="text-emerald-700">{renegValues.paidIncluded.length} paga(s) incluída(s)</span></>
+                            <> • <span className="text-emerald-700">{renegValues.paidIncluded.length} paga(s) pelo aluno</span></>
                           )}
                           {renegValues.recompraValor > 0 && (
                             <> • <span className="text-violet-700">recompra {formatCurrency(renegValues.recompraValor)}</span></>
@@ -3450,6 +3509,12 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                             <> • <span className="text-amber-700">outro treinamento {formatCurrency(renegValues.outrosValor)}</span></>
                           )}
                         </p>
+                        {antecipadas.length > 0 && renegRecomprasIncluidas.length > 0 && (
+                          <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 leading-snug">
+                            Há recompra vinculada marcada e boleto(s) antecipado(s) neste contrato. Confira se não está
+                            contando a mesma dívida duas vezes — desmarque a antecipada ou a recompra, conforme o caso.
+                          </p>
+                        )}
                       </div>
                     );
                   })()}
