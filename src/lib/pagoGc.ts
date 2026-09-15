@@ -14,6 +14,12 @@ import type { ConciliacaoItem, ConciliacaoTipo, Installment, Student } from '@/t
  *  - quitação de contrato entra pelo valor efetivamente pago (o desconto já é
  *    abatido em `paidValue` por `aplicarBaixaQuitacao`).
  *
+ * Ajustes de 15/09/2026 (alinhamento à planilha de liquidação):
+ *  - o período do card usa a data de RECEBIMENTO (`paidDate`), não a data em
+ *    que a baixa foi registrada no GC — ver `dataBaixaParaPeriodo`;
+ *  - quitados (status Pago / contrato liquidado) CONTINUAM no card Pago: o
+ *    aluno some da lista de cobrança, mas o recebimento do assessor fica.
+ *
  * Uma baixa "do GC" é reconhecida por qualquer um destes rastros:
  *  - `paidMarkedAt` na parcela — só o fluxo de baixa do GC grava esse campo
  *    (o pull do IAM preserva; importações não escrevem);
@@ -120,19 +126,19 @@ export function entradasRenegociacaoNoPeriodo(
 }
 
 /**
- * Data que posiciona uma baixa no período do card "Pago": o dia em que a baixa
- * foi REGISTRADA no GC (`paidMarkedAt`), não a data em que o aluno pagou.
- * Ex.: parcela paga em 30/05 e baixada/conciliada em 12/09 entra no Pago de
- * setembro — igual ao controle financeiro, que lança pela data do registro.
- * Sem `paidMarkedAt` (baixa antiga/importada) cai na data de pagamento.
+ * Data que posiciona uma baixa no período do card "Pago": o dia em que o
+ * assessor RECEBEU o pagamento (`paidDate`), alinhado à planilha de liquidação
+ * diária (coluna Recebimento / VALOR PAGO). Quitados continuam contando — o
+ * card soma o que entrou no caixa, não só quem ainda está na carteira ativa.
+ * Sem `paidDate`, cai na data em que a baixa foi registrada no GC.
  */
 export function dataBaixaParaPeriodo(inst: Pick<Installment, 'paidDate' | 'paidMarkedAt'>): Date | null {
-  if (inst.paidMarkedAt) {
-    const d = new Date(inst.paidMarkedAt);
-    if (!Number.isNaN(d.getTime())) return d;
-  }
   if (inst.paidDate) {
     const d = new Date(inst.paidDate + 'T00:00:00');
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  if (inst.paidMarkedAt) {
+    const d = new Date(inst.paidMarkedAt);
     if (!Number.isNaN(d.getTime())) return d;
   }
   return null;

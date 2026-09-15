@@ -100,16 +100,19 @@ describe('isBaixaRegistradaNoGc', () => {
 });
 
 describe('dataBaixaParaPeriodo', () => {
-  it('usa a data da baixa no GC (paidMarkedAt), não a data em que o aluno pagou', () => {
-    // Fabricio: pagou 30/05, baixa registrada em 11/09 → entra no Pago de setembro.
+  it('usa a data de recebimento (paidDate), alinhada à planilha de liquidação', () => {
+    // Fabricio: pagou 30/05, baixa registrada em 11/09 → entra no Pago de maio
+    // (dia em que o assessor recebeu), não no de setembro.
     const d = dataBaixaParaPeriodo(parcela({ paidDate: '2026-05-30', paidMarkedAt: '2026-09-11T22:51:21.363Z' }));
     expect(d?.getFullYear()).toBe(2026);
-    expect(d?.getMonth()).toBe(8);
+    expect(d?.getMonth()).toBe(4);
   });
 
-  it('sem paidMarkedAt cai na data de pagamento; sem nenhuma devolve null', () => {
+  it('sem paidDate cai na data da baixa no GC; sem nenhuma devolve null', () => {
+    const d = dataBaixaParaPeriodo(parcela({ paidDate: undefined, paidMarkedAt: '2026-09-11T22:51:21.363Z' }));
+    expect(d?.getMonth()).toBe(8);
     expect(dataBaixaParaPeriodo(parcela({ paidDate: '2026-03-09' }))?.getMonth()).toBe(2);
-    expect(dataBaixaParaPeriodo(parcela({ paidDate: undefined }))).toBeNull();
+    expect(dataBaixaParaPeriodo(parcela({ paidDate: undefined, paidMarkedAt: undefined }))).toBeNull();
   });
 });
 

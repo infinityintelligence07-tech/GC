@@ -419,16 +419,29 @@ export default function ACPortfolioPage() {
     };
   };
 
-  // Exclui Renda Extra (já saída da carteira) e Cancelados conciliados
-  // para que o card "Data de Vencimento" reflita só carteira ativa.
-  const forecastBase = acStudents.filter(
-    (s) =>
-      isStudentInAcPortfolio(s) &&
-      s.statusCancelamento !== 'cancelado' &&
-      countsInAcPortfolioTotals(s) &&
-      !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão') &&
-      fcMatchesCadastro(s)
-  );
+  // Base dos cards Previsão / Pago: inclui quitados (status Pago). O aluno
+  // some da lista de cobrança (`acStudents`), mas o que o assessor RECEBEU
+  // continua no card Pago — mesma regra da planilha de liquidação e da
+  // Dashboard. A Vencer só soma parcela em aberto, então quitado não infla
+  // a carteira. Renda Extra conciliada e cancelados ficam de fora (retido
+  // de cancelamento entra via canceladosBase).
+  const forecastBase = (ac
+    ? students.filter(
+        (s) =>
+          s.ac === ac.name &&
+          !isIamForaDaCarteiraAteConciliar(s) &&
+          !isStudentHiddenFromAcPortfolio(s, hiddenFromPortfolioKeys, students) &&
+          s.statusCancelamento !== 'cancelado' &&
+          countsInAcPortfolioTotals(s) &&
+          !(isRendaExtraAtivo(s) && s.rendaExtraStatus && s.rendaExtraStatus !== 'Conciliar Exclusão') &&
+          studentMatchesTagFilter(s, tagFilters) &&
+          fcMatchesCadastro(s),
+      )
+    : []
+  ).map((s) => {
+    const withStatus = { ...s, status: resolveStudentStatusComVinculo(s, students) } as Student;
+    return tagFilters.length > 0 ? applyTagFilterToStudent(withStatus, tagFilters) : withStatus;
+  });
   // Cancelados: saem da carteira (acStudents), mas o valor retido no
   // cancelamento (pago + multa − estorno) entra no card Pago do assessor.
   const canceladosBase = ac
@@ -495,7 +508,7 @@ export default function ACPortfolioPage() {
           if (!i.paid || !i.paidDate) return;
           if (!isBaixaRegistradaNoGc(st, i, baixasGcIndex)) return;
           if (range) {
-            // Período pela data da BAIXA no GC (paidMarkedAt) — ver dataBaixaParaPeriodo.
+            // Período pela data de RECEBIMENTO (paidDate) — ver dataBaixaParaPeriodo.
             const pd = dataBaixaParaPeriodo(i);
             if (!pd || pd < range.start || pd > range.end) return;
           }

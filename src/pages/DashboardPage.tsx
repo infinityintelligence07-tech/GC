@@ -759,8 +759,7 @@ export default function DashboardPage() {
           if (!i.paid || !i.paidDate) return;
           if (!baixaGc(st, i)) return;
           if (range) {
-            // Período pela data da BAIXA no GC (paidMarkedAt), não pela data
-            // em que o aluno pagou — ver dataBaixaParaPeriodo.
+            // Período pela data de RECEBIMENTO (paidDate) — ver dataBaixaParaPeriodo.
             const pd = dataBaixaParaPeriodo(i);
             if (!pd || pd < range.start || pd > range.end) return;
           }
