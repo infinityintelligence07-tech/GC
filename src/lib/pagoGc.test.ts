@@ -143,6 +143,23 @@ describe('entradas de renegociação no Pago', () => {
     expect(lista[0].data).toBe('2026-09-10T15:00:00.000Z');
   });
 
+  it('com entradaPaidDate usa a data de recebimento (planilha), não a da aprovação', () => {
+    const idx = buildBaixasGcIndex([
+      reneg({
+        depois: { entrada: 956.27, entradaPaidDate: '2026-09-01' },
+        conciliadoAt: '2026-09-12T21:27:35.911Z',
+      }),
+    ]);
+    const lista = entradasRenegociacaoNoPeriodo(aluno, idx, null);
+    expect(lista).toHaveLength(1);
+    expect(lista[0].valor).toBe(956.27);
+    expect(lista[0].data).toBe('2026-09-01T12:00:00.000Z');
+    const dia01 = { start: new Date('2026-09-01T00:00:00'), end: new Date('2026-09-01T23:59:59') };
+    const dia12 = { start: new Date('2026-09-12T00:00:00'), end: new Date('2026-09-12T23:59:59') };
+    expect(entradasRenegociacaoNoPeriodo(aluno, idx, dia01)).toHaveLength(1);
+    expect(entradasRenegociacaoNoPeriodo(aluno, idx, dia12)).toHaveLength(0);
+  });
+
   it('respeita o período pela data da aprovação na Conciliação', () => {
     const idx = buildBaixasGcIndex([reneg()]);
     const set = { start: new Date('2026-09-01T00:00:00'), end: new Date('2026-09-30T23:59:59') };

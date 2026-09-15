@@ -82,7 +82,12 @@ export function buildBaixasGcIndex(items: ConciliacaoItem[]): BaixasGcIndex {
       // Só a entrada de RENEGOCIAÇÃO entra no Pago (entrada de venda não).
       const depois = it.depois as Record<string, unknown> | undefined;
       const valor = Number(depois?.entrada);
-      const data = String(it.conciliadoAt ?? it.createdAt ?? '');
+      // Preferir a data em que o assessor RECEBEU a entrada (PIX/boleto),
+      // alinhada à planilha; sem ela, cai na data da aprovação na Conciliação.
+      const recebimento = String(depois?.entradaPaidDate ?? depois?.entradaDataRecebimento ?? '').slice(0, 10);
+      const data = /^\d{4}-\d{2}-\d{2}$/.test(recebimento)
+        ? `${recebimento}T12:00:00.000Z`
+        : String(it.conciliadoAt ?? it.createdAt ?? '');
       if (!Number.isFinite(valor) || valor <= 0.0049 || !data) continue;
       const lista = entradasRenegociacao.get(it.studentId) ?? [];
       lista.push({ valor, data, itemId: it.id });
@@ -108,8 +113,9 @@ export function buildBaixasGcIndex(items: ConciliacaoItem[]): BaixasGcIndex {
 }
 
 /**
- * Entradas de renegociação do aluno que caem no período do card (pela data em
- * que a Conciliação aprovou). `range` nulo → todas.
+ * Entradas de renegociação do aluno que caem no período do card. Preferência:
+ * data de recebimento (`depois.entradaPaidDate`), senão data da aprovação na
+ * Conciliação. `range` nulo → todas.
  */
 export function entradasRenegociacaoNoPeriodo(
   student: Pick<Student, 'id'>,
