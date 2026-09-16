@@ -63,6 +63,7 @@ import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
+import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 
 function ScoreStars({ score }: { score: number }) {
@@ -124,6 +125,7 @@ export default function ACPortfolioPage() {
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [financialStudent, setFinancialStudent] = useState<Student | null>(null);
   const [financialBanner, setFinancialBanner] = useState<{ title: string; body?: string } | null>(null);
+  const [pagoAlunosModalOpen, setPagoAlunosModalOpen] = useState(false);
   const [historyStudent, setHistoryStudent] = useState<Student | null>(null);
   const [flowStudent, setFlowStudent] = useState<Student | null>(null);
   const [viewStudent, setViewStudent] = useState<Student | null>(null);
@@ -1272,15 +1274,20 @@ export default function ACPortfolioPage() {
                       </p>
                     )}
                   </div>
-                  <div className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setPagoAlunosModalOpen(true)}
+                    className="kpi-fit rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-2 min-w-0 text-left hover:bg-emerald-100/60 hover:border-emerald-300 transition-all cursor-pointer"
+                    title="Clique para ver os alunos e o valor pago no período"
+                  >
                     <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">Pago no período</p>
                     <p className="kpi-value-fit text-emerald-700 mt-0.5" title={formatCurrency(pago)}>
                       {formatCurrency(pago)}
                     </p>
                     <p className="text-[10px] font-semibold text-emerald-700 mt-0">
-                      por data de pagamento · recebido (c/ juros − desconto) · baixas no GC + entrada de renegociação
+                      por data de pagamento · recebido (c/ juros − desconto) · baixas no GC + entrada de renegociação · clique p/ alunos
                     </p>
-                  </div>
+                  </button>
                 </div>
               );
             })()}
@@ -2124,6 +2131,25 @@ export default function ACPortfolioPage() {
       </div>
 
       {/* Modals */}
+      {pagoAlunosModalOpen && (
+        <PagoAlunosModal
+          details={carteiraTotais.details}
+          totalPago={carteiraTotais.pago}
+          periodoLabel={
+            forecastCustomStart && forecastCustomEnd
+              ? `${forecastCustomStart.split('-').reverse().join('/')} a ${forecastCustomEnd.split('-').reverse().join('/')}`
+              : 'Toda a carteira'
+          }
+          onSelectStudent={(id) => {
+            const st = students.find((s) => s.id === id) ?? null;
+            if (st) {
+              setFinancialBanner(null);
+              setFinancialStudent(st);
+            }
+          }}
+          onClose={() => setPagoAlunosModalOpen(false)}
+        />
+      )}
       {showStudentModal && (
         <StudentModal student={editingStudent} onClose={() => setShowStudentModal(false)} />
       )}

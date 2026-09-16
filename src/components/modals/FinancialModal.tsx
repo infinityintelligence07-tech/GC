@@ -86,6 +86,8 @@ type RenegStandbyDraft = {
   applyMultaReneg: boolean;
   newInstallments: number;
   novaEntrada: number;
+  /** Data de recebimento da entrada da renegociação (YYYY-MM-DD). */
+  entradaPaidDate?: string;
   renegFirstDueDate: string;
   renegDueScope: 'primeira' | 'todas';
   /** Alterar os vencimentos (data + escopo) ou manter as datas atuais. Ausente = alterar (rascunho antigo). */
@@ -333,6 +335,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     Math.max(1, unpaidInstallments.length || 1)
   );
   const [novaEntrada, setNovaEntrada] = useState(0);
+  /** Data em que a entrada da renegociação foi recebida (PIX/boleto) — alimenta o card Pago. */
+  const [entradaPaidDate, setEntradaPaidDate] = useState(() => {
+    const t = getTodayBrasilia();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  });
   // Data do 1º vencimento das novas parcelas (editável pelo assessor)
   const [renegFirstDueDate, setRenegFirstDueDate] = useState<string>(() => {
     const base = getTodayBrasilia();
@@ -418,6 +425,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     applyMultaReneg,
     newInstallments,
     novaEntrada,
+    entradaPaidDate,
     renegFirstDueDate,
     renegDueScope,
     renegAlterarDatas,
@@ -465,6 +473,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     setApplyMultaReneg(draft.applyMultaReneg);
     setNewInstallments(Math.max(1, draft.newInstallments || 1));
     setNovaEntrada(draft.novaEntrada || 0);
+    if (draft.entradaPaidDate && /^\d{4}-\d{2}-\d{2}$/.test(draft.entradaPaidDate)) {
+      setEntradaPaidDate(draft.entradaPaidDate);
+    }
     setRenegFirstDueDate(draft.renegFirstDueDate);
     setRenegDueScope(draft.renegDueScope);
     // Rascunho anterior a esta opção sempre alterava as datas.
@@ -891,6 +902,26 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     ),
     [conciliacaoItems, student.id]
   );
+
+  /** Entrada de renegociação já conciliada: data de recebimento (ou aprovação) para o card P1. */
+  const entradaRenegociacaoMeta = useMemo(() => {
+    let best: { date: string; valor: number } | null = null;
+    for (const it of conciliacaoItems) {
+      if (it.studentId !== student.id || it.tipo !== 'renegociacao' || it.status !== 'conciliado') continue;
+      const depois = it.depois as Record<string, unknown> | undefined;
+      const valor = Number(depois?.entrada);
+      if (!(valor > 0.0049)) continue;
+      const recebimento = String(depois?.entradaPaidDate ?? depois?.entradaDataRecebimento ?? '').slice(0, 10);
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(recebimento)
+        ? recebimento
+        : String(it.conciliadoAt ?? it.createdAt ?? '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      if (!best || date > best.date || (date === best.date && valor >= best.valor)) {
+        best = { date, valor };
+      }
+    }
+    return best;
+  }, [conciliacaoItems, student.id]);
 
   const toggleParcel = (num: number) => {
     const iso = todayIsoDate();
@@ -1410,7 +1441,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             recomprasTexto +
             `${applyMultaReneg ? `Multa ${renegMultaPercent}% (${formatCurrency(renegValues.multaValue)}). ` : 'Sem multa. '}` +
             `${applyJurosReneg ? `Juros ${renegJurosPercent}% a.m. (${formatCurrency(renegValues.totalJuros)}). ` : 'Sem juros. '}` +
-            `Entrada: ${formatCurrency(novaEntrada)}. ` +
+            `Entrada: ${formatCurrency(novaEntrada)}` +
+            (novaEntrada > 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
+              ? ` (recebida em ${formatDateBR(entradaPaidDate)})`
+              : '') +
+            `. ` +
             `Plano proposto: ${newInstallments}x de ${formatCurrency(renegValues.newValue)}` +
             (firstDue
               ? ` com vencimento em ${new Date(firstDue + 'T00:00:00').toLocaleDateString('pt-BR')} (${renegDueScope === 'todas' ? 'aplicado a todas as parcelas' : 'somente a 1ª parcela'})`
@@ -1458,6 +1493,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
         novasParcelas: proposedInst,
         valorParcela: valorParcelaArred,
         entrada: novaEntrada,
+        ...(novaEntrada > 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
+          ? { entradaPaidDate }
+          : {}),
         multa: renegValues.multaValue,
         juros: renegValues.totalJuros,
         saleValue: novoSaleValue,
@@ -2206,7 +2244,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 {hasEntrada && (
                   <div
                     className="flex flex-col items-center px-2 py-1.5 rounded-lg border min-w-[80px] border-emerald-300 bg-emerald-50"
-                    title={`Entrada — ${formatCurrency(entradaValor)} — quitada na matrícula`}
+                    title={
+                      entradaRenegociacaoMeta
+                        ? `Entrada de renegociação — ${formatCurrency(entradaValor)} — paga em ${formatDateBR(entradaRenegociacaoMeta.date)}`
+                        : `Entrada — ${formatCurrency(entradaValor)} — quitada na matrícula`
+                    }
                   >
                     <span className="text-[9px] font-bold text-emerald-800">P1</span>
                     <span className="text-[8px] font-semibold text-emerald-700 mt-0.5">Entrada</span>
@@ -2214,9 +2256,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       {formatCurrency(entradaValor)}
                     </span>
                     <span className="text-[8px] text-muted-foreground mt-0.5 leading-tight text-center">
-                      {student.enrollmentDate
-                        ? `Matrícula: ${formatDateBR(student.enrollmentDate)}`
-                        : 'Na matrícula'}
+                      {entradaRenegociacaoMeta
+                        ? `Pago: ${formatDateBR(entradaRenegociacaoMeta.date)}`
+                        : student.enrollmentDate
+                          ? `Matrícula: ${formatDateBR(student.enrollmentDate)}`
+                          : 'Na matrícula'}
                     </span>
                     <span className="mt-0.5 text-[8px] font-semibold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700">
                       ✓ Pago
@@ -3793,6 +3837,20 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                           ? `${entradaPercent || 0}% de ${formatCurrency(renegValues.totalWithCharges)} = ${formatCurrency(novaEntrada)}`
                           : 'Será abatida do total'}
                       </p>
+                      {novaEntrada > 0.0049 && (
+                        <div className="mt-2">
+                          <label className="text-[10px] text-muted-foreground font-medium">Data do recebimento</label>
+                          <input
+                            type="date"
+                            value={entradaPaidDate}
+                            onChange={(e) => setEntradaPaidDate(e.target.value)}
+                            className="input-field mt-1 w-full text-xs py-1"
+                          />
+                          <p className="text-[9px] text-muted-foreground mt-1">
+                            Dia em que a entrada entrou no caixa (PIX/boleto)
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="text-[10px] text-muted-foreground font-medium">Nº Parcelas</label>
@@ -4220,11 +4278,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               : renegDueScope === 'todas' && renegFirstDueDate
                 ? new Date(renegFirstDueDate + 'T00:00:00').getDate()
                 : student.dueDay,
-            dataEntrada: novaEntrada > 0.0049
-              ? (() => {
-                  const t = getTodayBrasilia();
-                  return `${String(t.getDate()).padStart(2, '0')}/${String(t.getMonth() + 1).padStart(2, '0')}/${t.getFullYear()}`;
-                })()
+            dataEntrada: novaEntrada > 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
+              ? formatDateBR(entradaPaidDate)
               : undefined,
           }}
           signLinkInicial={termoPending && !termoPending.anexoPath ? termoPending.urlAssinatura : undefined}
