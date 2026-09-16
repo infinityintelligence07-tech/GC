@@ -1,14 +1,14 @@
 /**
  * MetaTaxaEmDiaGauge — velocímetro da meta mensal de Taxa em Dia.
  *
- * Escala (da esquerda para a direita):
- *   início  = ponto de partida (taxa em dia no início do mês; 100% → 90%)
- *   45°     = meio do caminho entre o início e a meta
- *   topo    = meta
- *   135°    = meio do caminho entre a meta e 100% (sem rótulo)
- *   fim     = sempre 100%
- * Se a partida já está em/acima da meta (ou a meta é 100%), a escala vai
- * linear da partida até 100% e o topo vira só o meio do caminho.
+ * Escala (da esquerda para a direita), sempre nesta ordem:
+ *   0°    = partida — Taxa em Dia do dia 01 do mês (`base`)
+ *   45°   = metade do caminho até a meta — partida + (meta − partida) / 2
+ *           (ex.: meta 5 p.p. acima → este marco fica 2,5 p.p. acima da partida)
+ *   90°   = meta do mês
+ *   135°  = penúltimo — meta + (100% − meta) / 2
+ *           (ex.: meta 50% → falta 50% até 100%, metade = 25% → marco em 75%)
+ *   180°  = sempre 100%
  *
  * Cores: vermelho → amarelo → verde claro → verde escuro.
  * O ponteiro marca a taxa em dia atual sobre essa escala.
@@ -25,7 +25,12 @@ interface MetaTaxaEmDiaGaugeProps {
 }
 
 const SEG_COLORS = ['#dc2626', '#facc15', '#4ade80', '#15803d'];
-const SEG_TITLES = ['Abaixo do meio do caminho', 'A caminho da meta', 'Meta batida', 'Chegando em 100%'];
+const SEG_TITLES = [
+  'Abaixo da metade do caminho até a meta',
+  'A caminho da meta',
+  'Meta batida',
+  'Acima da meta — rumo a 100%',
+];
 
 export default function MetaTaxaEmDiaGauge({
   value,
@@ -44,21 +49,27 @@ export default function MetaTaxaEmDiaGauge({
   const H = cy + size * 0.22;
 
   const FIM = 100;
-  const metaReal = Math.max(0.1, Math.min(FIM, meta));
-  // A partida manda: a escala sempre começa nela (ex.: AC que abriu o mês em
-  // 100% parte de 90%) e termina sempre em 100%. Se a partida já está
-  // em/acima da meta (ou a meta é 100%), a meta não serve como topo — a
-  // escala fica linear da partida até 100%.
   const lo = Math.max(0, Math.min(FIM - 0.1, base));
-  const partidaAcimaDaMeta = lo >= metaReal - 0.01 || metaReal >= FIM;
-  const m = partidaAcimaDaMeta ? (lo + FIM) / 2 : metaReal;
-  const anchors: Array<[number, number]> = [
-    [lo, 0],
-    [(lo + m) / 2, 45],
-    [m, 90],
-    [(m + FIM) / 2, 135],
-    [FIM, 180],
-  ];
+  const metaReal = Math.max(0, Math.min(FIM, meta));
+
+  // Cinco marcos fixos — mesma regra do financeiro.
+  const marcaPartida = lo;
+  const marcaMeioCaminho = lo + (metaReal - lo) / 2;
+  const marcaMeta = metaReal;
+  const marcaPenultimo = metaReal + (FIM - metaReal) / 2;
+  const marcaFim = FIM;
+
+  const labelMarks = [marcaPartida, marcaMeioCaminho, marcaMeta, marcaPenultimo, marcaFim];
+  const degs = [0, 45, 90, 135, 180] as const;
+
+  // Ponteiro exige escala não-decrescente (meta abaixo da partida comprime o 1º arco).
+  const needleMarks: number[] = [];
+  for (let i = 0; i < labelMarks.length; i++) {
+    if (i === 0) needleMarks.push(labelMarks[i]);
+    else needleMarks.push(Math.max(labelMarks[i], needleMarks[i - 1] + 0.01));
+  }
+
+  const anchors: Array<[number, number]> = needleMarks.map((v, i) => [v, degs[i]]);
 
   const valToDeg = (raw: number): number => {
     const v = Math.max(anchors[0][0], Math.min(anchors[anchors.length - 1][0], raw));
@@ -107,17 +118,24 @@ export default function MetaTaxaEmDiaGauge({
   const b1 = { x: cx + baseW * Math.cos(baseRad1), y: cy + baseW * Math.sin(baseRad1) };
   const b2 = { x: cx + baseW * Math.cos(baseRad2), y: cy + baseW * Math.sin(baseRad2) };
 
-  const fontPct = Math.max(10, size * 0.062);
+  const fontPct = Math.max(9, size * 0.055);
   const uid = `mtg-${Math.round(size)}-${Math.round(v * 10)}`;
   const outerLabelRadius = r + stroke / 2 + size * 0.10;
 
-  // Rótulos das extremidades ficam abaixo das pontas do arco; os demais, fora do arco.
   const endLabelY = cy + stroke / 2 + fontPct * 0.9;
+  const labelTitles = [
+    'Ponto de partida — Taxa em Dia no dia 01 do mês',
+    'Metade do caminho até a meta',
+    'Meta do mês',
+    'Metade do caminho entre a meta e 100%',
+    'Fim da escala — 100%',
+  ];
   const labels: Array<{ x: number; y: number; text: string; title: string; anchor: 'start' | 'middle' | 'end' }> = [
-    { x: polar(0).x, y: endLabelY, text: `${fmt(lo)}%`, title: 'Ponto de partida — Taxa em Dia no início do mês', anchor: 'middle' },
-    { ...polar(45, outerLabelRadius), text: `${fmt((lo + m) / 2)}%`, title: 'Meio do caminho', anchor: 'middle' },
-    { ...polar(90, outerLabelRadius), text: `${fmt(m)}%`, title: partidaAcimaDaMeta ? `Meio do caminho até 100% — a partida já está em/acima da meta (${fmt(metaReal)}%)` : 'Meta do mês', anchor: 'middle' },
-    { x: polar(180).x, y: endLabelY, text: `${fmt(FIM)}%`, title: 'Fim da escala — 100%', anchor: 'middle' },
+    { x: polar(0).x, y: endLabelY, text: `${fmt(labelMarks[0])}%`, title: labelTitles[0], anchor: 'middle' },
+    { ...polar(45, outerLabelRadius), text: `${fmt(labelMarks[1])}%`, title: labelTitles[1], anchor: 'middle' },
+    { ...polar(90, outerLabelRadius), text: `${fmt(labelMarks[2])}%`, title: labelTitles[2], anchor: 'middle' },
+    { ...polar(135, outerLabelRadius), text: `${fmt(labelMarks[3])}%`, title: labelTitles[3], anchor: 'middle' },
+    { x: polar(180).x, y: endLabelY, text: `${fmt(labelMarks[4])}%`, title: labelTitles[4], anchor: 'middle' },
   ];
 
   return (

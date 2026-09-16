@@ -47,6 +47,7 @@ import {
   valorRecebidoParcela,
 } from '@/lib/pagoGc';
 import { recebimentosRetidos, retidoNoPeriodo, valorRetidoCancelamento } from '@/lib/cancelamentoRetido';
+import { metaTaxaEmDiaEspelhoDasCarteiras } from '@/lib/metaTaxaEmDiaEspelho';
 import { toast } from 'sonner';
 
 type KpiModalKey = 'total' | 'emdia_novos' | 'emdia' | 'novos' | 'v1' | 'v2' | 'an' | 'neg' | 'solic' | 'pendente' | 'tag' | 'revertidos';
@@ -81,7 +82,7 @@ function BotaoRelatorio({ onClick, className = '' }: { onClick: () => void; clas
 }
 
 export default function DashboardPage() {
-  const { students, studentsCompanyId, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals, rules, setRules, currentUser } = useAppStore();
+  const { students, studentsCompanyId, acs, products, cancellationCases, studentTags, kaminoPortfolioTotals, rules, setRules, updateAC, currentUser } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
   // Baixas registradas no GC (Conciliação) — regra do card Pago.
   const baixasGcIndex = useMemo(() => buildBaixasGcIndex(conciliacaoItems), [conciliacaoItems]);
@@ -982,6 +983,28 @@ export default function DashboardPage() {
   const pctInadimplenteNum = baseTaxa > 0 ? (inadimplentesTaxa / baseTaxa) * 100 : 0;
   const pctInadimplente = pctInadimplenteNum.toFixed(1);
   const pctEmDia = (100 - pctInadimplenteNum).toFixed(1);
+
+  // Velocímetro da dash = espelho das carteiras (meta/partida ponderadas pela
+  // base R$ de cada AC). Taxa atual já é a soma de todas. Com filtro de AC,
+  // usa só aquela carteira (editável). Sem filtro, só leitura — edita em cada AC.
+  const pesoTaxaPorAc = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const ac of acsAtivosMeta) {
+      const list = kpiStudentsScoped.filter((s) => s.ac === ac.name);
+      const novosAc = list.filter((s) => s.status === 'Aluno Novo' && !_isSolic(s));
+      map.set(ac.name, Math.max(0, sumUnpaid(list) - sumUnpaid(novosAc)));
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acsAtivosMeta, kpiStudentsScoped, alunosNovosValue, carteiraTotalValue]);
+  const taxaEmDiaEspelho = metaTaxaEmDiaEspelhoDasCarteiras({
+    acs,
+    pesoPorAc: pesoTaxaPorAc,
+    metaPadrao: rules.meta1,
+    mesAtual: mesAtualKey,
+    acFilter,
+  });
+  const acFiltroMeta = acFilter ? acsAtivosMeta.find((a) => a.name === acFilter) : undefined;
   /** Valor do card laranja "A Vencer / Vencido" (sem os alunos em negativação). */
   const aVencerCardValue = forecastTotais.aVencer;
   const aVencerCardAlunos = forecastTotais.qtdAlunosAVencer;
@@ -1399,33 +1422,32 @@ export default function DashboardPage() {
       </HeaderActions>
 
       {/* ── 0. Cabeçalho de saúde da carteira ───────────────────────────────── */}
-      {/* Esquerda: velocímetro da meta mensal de Taxa em Dia (mesmo componente
-          da Carteira do Assessor, com a meta gravada em financial_rules).
-          Centro: só a fita "Pago" do MÊS ATUAL (01 → hoje, por data de
-          pagamento, regra do card Pago; sem card): ponteiro com o valor em R$
-          colorido conforme a posição na fita, traço = soma das metas dos ACs
-          ativos (editável na carteira de cada assessor). Clique abre a lista
-          de alunos pagos no mês. Direita: Taxa Em Dia e Taxa Inadimplente. */}
+      {/* Esquerda: velocímetro Taxa em Dia — mesmo componente das carteiras;
+          na dash geral espelha a soma ponderada de todas as carteiras ativas.
+          Centro: fita "Pago" do mês (soma das metas R$ dos ACs).
+          Direita: Taxa Em Dia e Taxa Inadimplente. */}
       <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_minmax(180px,220px)] gap-2.5 sm:gap-3 items-stretch">
         <div className="hidden sm:flex items-center justify-center rounded-2xl bg-card border border-border saas-shadow-md px-3 py-2">
           <MetaTaxaEmDiaHeader
             taxaAtual={Number(pctEmDia)}
-            meta={rules.metaTaxaEmDia}
+            meta={acFiltroMeta ? acFiltroMeta.metaTaxaEmDia : taxaEmDiaEspelho.meta}
             metaPadrao={rules.meta1}
-            base={rules.metaTaxaEmDiaBase}
-            baseMes={rules.metaTaxaEmDiaBaseMes}
+            base={acFiltroMeta ? acFiltroMeta.metaTaxaEmDiaBase : taxaEmDiaEspelho.base}
+            baseMes={acFiltroMeta ? acFiltroMeta.metaTaxaEmDiaBaseMes : taxaEmDiaEspelho.baseMes}
             mesAtual={mesAtualKey}
-            definidaEm={rules.metaTaxaEmDiaEm}
-            titulo="Dashboard geral"
-            canEdit={currentUser?.role === 'admin'}
+            definidaEm={acFiltroMeta ? acFiltroMeta.metaTaxaEmDiaEm : undefined}
+            titulo={taxaEmDiaEspelho.titulo}
+            canEdit={currentUser?.role === 'admin' && !!acFiltroMeta}
             temDados={baseTaxa > 0}
-            onSave={({ meta, base, baseMes, definidaEm }) =>
-              setRules({
+            onSave={({ meta, base, baseMes, definidaEm }) => {
+              if (!acFiltroMeta) return;
+              updateAC(acFiltroMeta.id, {
                 ...(meta != null ? { metaTaxaEmDia: meta } : {}),
                 metaTaxaEmDiaBase: base,
                 metaTaxaEmDiaBaseMes: baseMes,
                 metaTaxaEmDiaEm: definidaEm,
-              })}
+              });
+            }}
           />
         </div>
 
