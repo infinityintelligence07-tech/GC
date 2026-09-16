@@ -921,10 +921,16 @@ export default function DashboardPage() {
   const mesEmDiaNovosValue = pagoMesTotais.pago;
   const mesPagoAlunos = pagoMesTotais.qtdAlunos;
 
-  // Meta (R$) do mês da empresa: traço em 2/3 da fita, editável pelo admin
-  // (lápis ao lado da fita); sem meta salva usa o padrão do app. A fita vai
-  // até 150% da meta para sobrar espaço à direita quando a meta é superada.
-  const emDiaNovosMeta = rules.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO;
+  // Meta (R$) do dash geral = soma das metas das carteiras dos ACs ativos
+  // (cada um com emDiaNovosMeta ou o padrão do app). Com filtro de assessor,
+  // usa só a meta daquele AC. A fita vai até 150% da meta.
+  const acsAtivosMeta = acs.filter((a) => a.active);
+  const emDiaNovosMetaBruta = acFilter
+    ? (acsAtivosMeta.find((a) => a.name === acFilter)?.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO)
+    : acsAtivosMeta.reduce((sum, a) => sum + (a.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO), 0);
+  const emDiaNovosMeta = emDiaNovosMetaBruta > 0
+    ? emDiaNovosMetaBruta
+    : (rules.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO);
   const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
   const ESCALA_FITA = 1.5;
   const fitaMax = emDiaNovosMeta * ESCALA_FITA;
@@ -1397,9 +1403,9 @@ export default function DashboardPage() {
           da Carteira do Assessor, com a meta gravada em financial_rules).
           Centro: só a fita "Pago" do MÊS ATUAL (01 → hoje, por data de
           pagamento, regra do card Pago; sem card): ponteiro com o valor em R$
-          colorido conforme a posição na fita, traço = meta da empresa
-          (editável pelo lápis). Clique abre a lista de alunos pagos no mês.
-          Direita: Taxa Em Dia e Taxa Inadimplente empilhados. */}
+          colorido conforme a posição na fita, traço = soma das metas dos ACs
+          ativos (editável na carteira de cada assessor). Clique abre a lista
+          de alunos pagos no mês. Direita: Taxa Em Dia e Taxa Inadimplente. */}
       <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_minmax(180px,220px)] gap-2.5 sm:gap-3 items-stretch">
         <div className="hidden sm:flex items-center justify-center rounded-2xl bg-card border border-border saas-shadow-md px-3 py-2">
           <MetaTaxaEmDiaHeader
@@ -1434,9 +1440,9 @@ export default function DashboardPage() {
             </p>
             <MetaValorEditor
               value={emDiaNovosMeta}
-              titulo="Dashboard geral"
-              canEdit={currentUser?.role === 'admin'}
-              onSave={(meta) => setRules({ emDiaNovosMeta: meta })}
+              titulo={acFilter ? acFilter : `Soma das metas dos ${acsAtivosMeta.length} AC(s)`}
+              canEdit={false}
+              onSave={() => {}}
             />
           </div>
           <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>

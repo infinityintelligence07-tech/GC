@@ -18,7 +18,8 @@ interface MetaValorEditorProps {
 
 /**
  * Botão de lápis + popover para editar uma meta em reais. Usado no card
- * "Pago · mês vigente" (Carteira do Assessor).
+ * "Pago · mês vigente" da Carteira do Assessor. No Dashboard geral a meta
+ * é só leitura (soma das metas dos ACs) — passe `canEdit={false}`.
  */
 export default function MetaValorEditor({ value, titulo, canEdit, onSave, label = 'Meta' }: MetaValorEditorProps) {
   const [open, setOpen] = useState(false);
@@ -43,7 +44,12 @@ export default function MetaValorEditor({ value, titulo, canEdit, onSave, label 
 
   return (
     <div className="relative inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-      <span className="text-[10px] text-muted-foreground whitespace-nowrap" title={`${label} do mês: ${formatCurrency(value)}`}>
+      <span
+        className="text-[10px] text-muted-foreground whitespace-nowrap"
+        title={canEdit
+          ? `${label} do mês: ${formatCurrency(value)}`
+          : `${label} do mês: ${formatCurrency(value)} — ${titulo}`}
+      >
         {label} <span className="font-semibold text-foreground">{formatCurrency(value)}</span>
       </span>
       {canEdit && (
