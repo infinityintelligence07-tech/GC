@@ -85,10 +85,14 @@ describe('isBaixaRegistradaNoGc', () => {
     expect(isBaixaRegistradaNoGc(aluno, parcela({ number: 1, numeroOriginal: 2 }), idx)).toBe(true);
   });
 
-  it('quitação conciliada cobre as parcelas baixadas no dia da conciliação (tolerância de 1 dia)', () => {
-    const idx = buildBaixasGcIndex([item({ tipo: 'quitacao', conciliadoAt: '2026-09-05T23:30:00.000Z', depois: { valorPago: 900 } })]);
-    expect(isBaixaRegistradaNoGc(aluno, parcela({ number: 3, paidDate: '2026-09-05' }), idx)).toBe(true);
-    expect(isBaixaRegistradaNoGc(aluno, parcela({ number: 4, paidDate: '2026-09-06' }), idx)).toBe(true);
+  it('quitação conciliada cobre parcelas com recebimento até 60 dias antes da aprovação', () => {
+    const idx = buildBaixasGcIndex([item({ tipo: 'quitacao', conciliadoAt: '2026-09-12T22:05:11.000Z', depois: { valorPago: 1794.6 } })]);
+    // Mesmo dia / dia seguinte (fuso)
+    expect(isBaixaRegistradaNoGc(aluno, parcela({ number: 3, paidDate: '2026-09-12' }), idx)).toBe(true);
+    expect(isBaixaRegistradaNoGc(aluno, parcela({ number: 4, paidDate: '2026-09-13' }), idx)).toBe(true);
+    // PIX dias antes da aprovação (Eduardo Soares: 08/09, aprovação 12/09)
+    expect(isBaixaRegistradaNoGc(aluno, parcela({ number: 10, paidDate: '2026-09-08' }), idx)).toBe(true);
+    expect(isBaixaRegistradaNoGc(aluno, parcela({ number: 11, paidDate: '2026-09-08' }), idx)).toBe(true);
     // Parcela paga meses antes (importada) não é da quitação.
     expect(isBaixaRegistradaNoGc(aluno, parcela({ number: 1, paidDate: '2026-03-10' }), idx)).toBe(false);
   });

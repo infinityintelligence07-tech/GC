@@ -69,14 +69,35 @@ const ROLE_COLORS: Record<UserRole, string> = {
   conciliacao: 'bg-violet-500/8 text-violet-700 border-violet-200/60',
 };
 
+const SIDEBAR_COLLAPSED_KEY = 'gc:sidebar-collapsed';
+
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { activeTab, currentUser, acs, selectedACId } = useAppStore();
   const { companies, activeCompanyId } = useCompanyStore();
   const { theme, setTheme } = useTheme();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   // Callback ref: guardar o nó em estado é o que faz o portal montar assim que
   // o cabeçalho existe no DOM.
   const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   // Aplica paleta da empresa ativa nas CSS vars (--primary / --accent)
   useEffect(() => {
@@ -114,8 +135,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
-      <main className="md:ml-[260px] min-h-screen">
+      <Sidebar
+        mobileOpen={mobileNavOpen}
+        onMobileClose={() => setMobileNavOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={toggleSidebarCollapsed}
+      />
+      <main
+        className={`min-h-screen transition-[margin] duration-300 ease-out ${
+          sidebarCollapsed ? 'md:ml-[72px]' : 'md:ml-[260px]'
+        }`}
+      >
         <header className="sticky top-0 z-30 bg-background/70 backdrop-blur-2xl border-b border-border/60 px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-2">
           {/* Hamburger — só em telas <md (mobile) */}
           <button

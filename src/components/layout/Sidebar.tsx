@@ -5,13 +5,17 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import { useAuth } from '@/hooks/useAuth';
 import { TabKey, PermissionTab, canViewTab, canManageUsers } from '@/types';
 import logoIamWhite from '@/assets/logo-iam-white.png';
-import { BarChart3, GraduationCap, Users, DollarSign, Settings, User, ChevronDown, XCircle, LogOut, Trophy, ClipboardCheck, X, ScrollText, Award, Wallet, MessageSquareText, Landmark, ShieldCheck, Eye, FileText } from 'lucide-react';
+import { BarChart3, GraduationCap, Users, DollarSign, Settings, User, ChevronDown, XCircle, LogOut, Trophy, ClipboardCheck, X, ScrollText, Award, Wallet, MessageSquareText, Landmark, ShieldCheck, Eye, FileText, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 interface SidebarProps {
   /** Quando true, mostra a sidebar em mobile (drawer). Em desktop é sempre visível. */
   mobileOpen?: boolean;
   /** Chamada quando o usuário pede para fechar (overlay click, item click, X). */
   onMobileClose?: () => void;
+  /** Desktop: barra só com ícones. */
+  collapsed?: boolean;
+  /** Alterna o modo recolhido (só desktop). */
+  onToggleCollapsed?: () => void;
 }
 
 interface NavItem {
@@ -39,7 +43,12 @@ const navItems: NavItem[] = [
   { key: 'sair', label: 'Sair', icon: <LogOut size={17} strokeWidth={1.8} />, permissionTab: 'always' },
 ];
 
-export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}) {
+export default function Sidebar({
+  mobileOpen = false,
+  onMobileClose,
+  collapsed = false,
+  onToggleCollapsed,
+}: SidebarProps = {}) {
   const { activeTab, setActiveTab, acs, setSelectedACId, selectedACId, currentUser, cancellationCases } = useAppStore();
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
   const conciliacaoErrors = useConciliacaoStore((s) => s.importErrors);
@@ -103,6 +112,12 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
       return;
     }
     if (key === 'config') {
+      if (collapsed) {
+        onToggleCollapsed?.();
+        setConfigOpen(true);
+        setActiveTab('config');
+        return;
+      }
       setConfigOpen(!configOpen);
       if (!configOpen) {
         setActiveTab('config');
@@ -111,6 +126,17 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
       return;
     }
     if (key === 'equipe') {
+      if (collapsed) {
+        onToggleCollapsed?.();
+        setEquipeOpen(true);
+        if (isACScoped && currentUser?.acId) {
+          setSelectedACId(currentUser.acId);
+          setActiveTab('ac');
+        } else {
+          setActiveTab('equipe');
+        }
+        return;
+      }
       setEquipeOpen(!equipeOpen);
       if (!equipeOpen) {
         // For ac/acn2, jumping to "equipe" should land on their own carteira
@@ -156,11 +182,14 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
       />
 
       <aside
-        className={`fixed left-0 top-0 h-screen w-[260px] max-w-[85vw] bg-sidebar flex flex-col z-50 transform transition-transform duration-300 ease-out md:translate-x-0 ${
+        className={`fixed left-0 top-0 h-screen max-w-[85vw] bg-sidebar flex flex-col z-50 transform transition-[width,transform] duration-300 ease-out md:translate-x-0 ${
+          collapsed ? 'md:w-[72px] w-[260px]' : 'w-[260px]'
+        } ${
           mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
         }`}
         role="navigation"
         aria-label="Menu principal"
+        data-collapsed={collapsed ? 'true' : 'false'}
       >
         {/* Botão fechar — visível só em mobile */}
         <button
@@ -170,16 +199,49 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         >
           <X size={18} />
         </button>
-      {/* Logo */}
-      <div className="px-6 py-7 flex items-center gap-3">
-        <img src={sidebarLogo} alt={sidebarTitle} className="h-12 max-w-[68px] w-auto object-contain select-none" draggable={false} />
-        <div className="pl-3 border-l border-sidebar-border/20 min-w-0">
-          <h1 className="text-[13px] font-bold text-sidebar-primary-foreground tracking-tight leading-tight truncate">{sidebarTitle}</h1>
-          <p className="text-[9px] text-sidebar-foreground/40 font-medium truncate">{sidebarSubtitle}</p>
+      {/* Logo + recolher (desktop) */}
+      <div className={`flex flex-col ${collapsed ? 'px-2 pt-5 pb-2 gap-2' : 'px-4 pt-5 pb-4'}`}>
+        <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3 px-2'}`}>
+          <img
+            src={sidebarLogo}
+            alt={sidebarTitle}
+            className={`w-auto object-contain select-none ${collapsed ? 'h-9 max-w-[40px]' : 'h-12 max-w-[68px]'}`}
+            draggable={false}
+          />
+          {!collapsed && (
+            <div className="pl-3 border-l border-sidebar-border/20 min-w-0 flex-1">
+              <h1 className="text-[13px] font-bold text-sidebar-primary-foreground tracking-tight leading-tight truncate">{sidebarTitle}</h1>
+              <p className="text-[9px] text-sidebar-foreground/40 font-medium truncate">{sidebarSubtitle}</p>
+            </div>
+          )}
+          {onToggleCollapsed && !collapsed && (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              className="hidden md:inline-flex p-1.5 rounded-lg text-sidebar-foreground/45 hover:text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors shrink-0"
+              title="Recolher menu"
+              aria-label="Recolher menu"
+              aria-pressed={false}
+            >
+              <PanelLeftClose size={16} strokeWidth={1.8} />
+            </button>
+          )}
         </div>
+        {onToggleCollapsed && collapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            className="hidden md:inline-flex mx-auto p-1.5 rounded-lg text-sidebar-foreground/45 hover:text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors"
+            title="Expandir menu"
+            aria-label="Expandir menu"
+            aria-pressed={true}
+          >
+            <PanelLeftOpen size={16} strokeWidth={1.8} />
+          </button>
+        )}
       </div>
 
-      <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto no-scrollbar pt-1">
+      <nav className={`flex-1 space-y-0.5 overflow-y-auto no-scrollbar pt-1 ${collapsed ? 'px-2' : 'px-3'}`}>
         {visibleItems.map((item, idx) => {
           const isEquipe = item.key === 'equipe';
           const isConfig = item.key === 'config';
@@ -192,16 +254,20 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
 
           const prevItem = visibleItems[idx - 1];
           const showSeparator = idx > 0 && (prevItem?.separator || isSair);
+          const showSubmenus = !collapsed;
 
           return (
             <div key={item.key}>
               {showSeparator && (
-                <div className="my-3 mx-3 border-t border-sidebar-border/20" />
+                <div className={`my-3 border-t border-sidebar-border/20 ${collapsed ? 'mx-1.5' : 'mx-3'}`} />
               )}
 
               <button
                 onClick={() => handleNavClick(item.key)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 group ${
+                title={collapsed ? item.label : undefined}
+                className={`w-full flex items-center rounded-xl text-[13px] font-medium transition-all duration-200 group ${
+                  collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-4 py-2.5'
+                } ${
                   isSair
                     ? 'text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10'
                     : isActive
@@ -209,13 +275,30 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
                       : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80 hover:bg-sidebar-accent/40'
                 }`}
               >
-                <span className={`transition-colors duration-200 ${
+                <span className={`relative transition-colors duration-200 ${
                   isSair
                     ? 'text-sidebar-foreground/40 group-hover:text-destructive'
                     : isActive ? 'text-primary' : 'text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60'
                 }`}>
                   {item.icon}
+                  {collapsed && item.key === 'conciliacao' && conciliacaoCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 rounded-full bg-amber-400 text-[8px] font-bold text-amber-950 flex items-center justify-center">
+                      {conciliacaoCount > 9 ? '9+' : conciliacaoCount}
+                    </span>
+                  )}
+                  {collapsed && item.key === 'cancelamentos' && cancelamentosCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 rounded-full bg-amber-400 text-[8px] font-bold text-amber-950 flex items-center justify-center">
+                      {cancelamentosCount > 9 ? '9+' : cancelamentosCount}
+                    </span>
+                  )}
+                  {collapsed && item.key === 'estornos' && estornosPendentesCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 rounded-full bg-amber-400 text-[8px] font-bold text-amber-950 flex items-center justify-center">
+                      {estornosPendentesCount > 9 ? '9+' : estornosPendentesCount}
+                    </span>
+                  )}
                 </span>
+                {!collapsed && (
+                  <>
                 <span className="flex-1 text-left">{item.label}</span>
                 {item.key === 'conciliacao' && conciliacaoCount > 0 && (
                   <span
@@ -275,10 +358,12 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
                     <ChevronDown size={13} className="opacity-40" />
                   </span>
                 )}
+                  </>
+                )}
               </button>
 
               {/* Configurações sub-items: Controle de Acesso + Régua */}
-              {isConfig && configOpen && (
+              {isConfig && configOpen && showSubmenus && (
                 <div className="ml-4 mt-1 space-y-0.5 slide-in">
                   {canManageUsers(currentUser) && (
                     <button
@@ -316,7 +401,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
               )}
 
               {/* Equipe sub-items: Ranking (todos) + ACs */}
-              {isEquipe && equipeOpen && (
+              {isEquipe && equipeOpen && showSubmenus && (
                 <div className="ml-4 mt-1 space-y-0.5 slide-in">
                   {/* Ranking — visível para todos */}
                   <button
@@ -338,7 +423,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
               )}
 
               {/* AC Sub-items */}
-              {isEquipe && equipeOpen && activeACs.length > 0 && (
+              {isEquipe && equipeOpen && showSubmenus && activeACs.length > 0 && (
                 <div className="ml-4 mt-1 space-y-0.5 slide-in">
                   {activeACs.map((ac) => {
                     const isACActive = activeTab === 'ac' && selectedACId === ac.id;
@@ -377,11 +462,13 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         })}
       </nav>
 
-      <div className="px-3 pt-2 pb-3 border-t border-sidebar-border/20">
+      <div className={`pt-2 pb-3 border-t border-sidebar-border/20 ${collapsed ? 'px-2' : 'px-3'}`}>
         {canViewTab(currentUser, 'admin') && (
           <button
             onClick={() => { setActiveTab('registros'); onMobileClose?.(); }}
-            className={`w-full flex items-center gap-2.5 px-4 py-2 rounded-lg text-[12px] font-medium transition-colors mb-2 ${
+            className={`w-full flex items-center rounded-lg text-[12px] font-medium transition-colors mb-2 ${
+              collapsed ? 'justify-center px-2 py-2' : 'gap-2.5 px-4 py-2'
+            } ${
               activeTab === 'registros'
                 ? 'bg-sidebar-accent/60 text-sidebar-foreground/80'
                 : 'text-sidebar-foreground/35 hover:text-sidebar-foreground/60 hover:bg-sidebar-accent/30'
@@ -389,10 +476,12 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
             title="Registros de ações do sistema (últimos 7 dias)"
           >
             <ScrollText size={14} strokeWidth={1.8} className="opacity-70" />
-            <span>Registros</span>
+            {!collapsed && <span>Registros</span>}
           </button>
         )}
-        <div className="text-[10px] text-sidebar-foreground/20 font-medium px-4">© 2026 Sistema IAM</div>
+        {!collapsed && (
+          <div className="text-[10px] text-sidebar-foreground/20 font-medium px-4">© 2026 Sistema IAM</div>
+        )}
       </div>
 
     </aside>

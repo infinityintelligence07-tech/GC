@@ -25,8 +25,9 @@ import type { ConciliacaoItem, ConciliacaoTipo, Installment, Student } from '@/t
  *    (o pull do IAM preserva; importações não escrevem);
  *  - item da Conciliação com status `conciliado` do tipo `pagamento_parcela`
  *    ou `baixa_kamino` apontando para a parcela (número);
- *  - item `quitacao` conciliado para o aluno — as parcelas que estavam em
- *    aberto recebem paidDate = dia da conciliação, então casamos por data.
+ *  - item `quitacao` conciliado para o aluno — as parcelas baixadas na
+ *    quitação casam pela data de RECEBIMENTO (`paidDate`), aceitando até
+ *    60 dias antes da aprovação (PIX antes da Conciliação) e 1 dia depois.
  *
  * Boleto antecipado (`antecipada: true`, baixa do banco/fundo, não pagamento
  * do aluno) NUNCA entra no Pago, mesmo com rastro de baixa — conta só no card
@@ -152,11 +153,12 @@ export function dataBaixaParaPeriodo(inst: Pick<Installment, 'paidDate' | 'paidM
 
 const DIA_MS = 86_400_000;
 
-const diffDias = (a: string, b: string): number => {
-  const ta = new Date(a.slice(0, 10) + 'T00:00:00Z').getTime();
-  const tb = new Date(b.slice(0, 10) + 'T00:00:00Z').getTime();
+/** Dias de `from` até `to` (positivo = `to` depois de `from`). */
+const signedDiffDias = (from: string, to: string): number => {
+  const ta = new Date(from.slice(0, 10) + 'T00:00:00Z').getTime();
+  const tb = new Date(to.slice(0, 10) + 'T00:00:00Z').getTime();
   if (!Number.isFinite(ta) || !Number.isFinite(tb)) return Number.POSITIVE_INFINITY;
-  return Math.abs(ta - tb) / DIA_MS;
+  return (tb - ta) / DIA_MS;
 };
 
 /**
@@ -181,8 +183,17 @@ export function isBaixaRegistradaNoGc(
 
   const quits = index.quitacoes.get(student.id);
   if (quits && inst.paidDate) {
-    // A quitação grava paidDate = dia da conciliação (UTC); tolera 1 dia de fuso.
-    if (quits.some((dia) => diffDias(dia, inst.paidDate as string) <= 1)) return true;
+    // paidDate é a data de RECEBIMENTO (PIX/boleto), que pode ser dias antes
+    // da aprovação na Conciliação — ex.: Eduardo Soares, PIX 08/09, aprovação
+    // 12/09. Aceita até 60 dias antes e 1 dia depois (fuso).
+    if (
+      quits.some((dia) => {
+        const delta = signedDiffDias(dia, inst.paidDate as string);
+        return delta >= -60 && delta <= 1;
+      })
+    ) {
+      return true;
+    }
   }
   return false;
 }
