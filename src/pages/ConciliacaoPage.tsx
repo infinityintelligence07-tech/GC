@@ -1149,9 +1149,12 @@ async function quickResolveImportError(
     installment = student.installments.find((i) => !i.paid && i.dueDate === err.vencimento);
   }
   if (!installment && err.valor != null) {
-    installment = student.installments.find(
-      (i) => !i.paid && Math.abs((i.value ?? 0) - (err.valor ?? 0)) < 0.01,
-    );
+    installment = student.installments.find((i) => {
+      if (i.paid) return false;
+      const ca = Math.round((i.value ?? 0) * 100);
+      const cb = Math.round((err.valor ?? 0) * 100);
+      return Math.abs(ca - cb) < 100; // diferença só de centavos
+    });
   }
   if (!installment) {
     installment = [...student.installments]
@@ -1163,24 +1166,38 @@ async function quickResolveImportError(
   const valor = opts.valor != null && opts.valor > 0 ? opts.valor : (err.valor ?? installment.value);
   const dataPag = opts.dataPagamento || err.dataPagamento || new Date().toISOString().split('T')[0];
   const valorOriginal = installment.value;
+  const soCentavos =
+    Math.abs(Math.round(valor * 100) - Math.round(valorOriginal * 100)) < 100 &&
+    Math.abs(valor - valorOriginal) > 0.001;
+  const valorParcelaFinal = soCentavos ? valorOriginal : valor;
 
   const updatedInstallments: Installment[] = student.installments.map((i) =>
     i.number === installment!.number
-      ? { ...i, value: valor, paid: true, paidDate: dataPag }
+      ? {
+          ...i,
+          value: valorParcelaFinal,
+          paid: true,
+          paidDate: dataPag,
+          ...(soCentavos || Math.abs(valor - valorParcelaFinal) > 0.01 ? { paidValue: valor } : {}),
+        }
       : i,
   );
   const totalPagas = updatedInstallments.filter((i) => i.paid).length;
   const restantes = updatedInstallments.length - totalPagas;
   const fmtBRL = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
   const fmtDate = (s: string) => { const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : s; };
-  const divergencia = Math.abs(valor - valorOriginal) > 0.001;
+  const divergencia = Math.abs(valor - valorOriginal) > 0.001 && !soCentavos;
   const historyEntry = {
     date: new Date().toISOString(),
     type: 'Sistema' as const,
     text:
       `Baixa via Conciliação (resolução rápida de erro Kamino) — Parcela ${installment.number}: ` +
       `${fmtBRL(valor)} pago em ${fmtDate(dataPag)}` +
-      (divergencia ? ` (valor da parcela ajustado de ${fmtBRL(valorOriginal)} para ${fmtBRL(valor)})` : '') +
+      (divergencia
+        ? ` (valor da parcela ajustado de ${fmtBRL(valorOriginal)} para ${fmtBRL(valor)})`
+        : soCentavos
+          ? ` (diferença de centavos — face ${fmtBRL(valorOriginal)} mantida)`
+          : '') +
       `. ${totalPagas}/${updatedInstallments.length} pagas (faltam ${restantes}).`,
   };
 
@@ -3889,10 +3906,29 @@ function ResolveErrorModal({
 
     setSaving(true);
     try {
+      // Diferença só de centavos: mantém o valor de face da parcela e grava o
+      // recebido em paidValue (mesma regra da importação automática).
+      const valorFace = Number(installment.value) || 0;
+      const soCentavos =
+        modo === 'pago' &&
+        Number.isFinite(valorFace) &&
+        Math.abs(Math.round(valorEditado * 100) - Math.round(valorFace * 100)) < 100 &&
+        Math.abs(valorEditado - valorFace) > 0.001;
+      const valorParcelaFinal = soCentavos ? valorFace : valorEditado;
+
       // 1. Atualiza a parcela (valor + paid + paidDate)
       const updatedInstallments: Installment[] = student.installments.map((i) =>
         i.number === installment.number
-          ? { ...i, value: valorEditado, dueDate: parcelaVencimentoEditado || i.dueDate, paid: true, paidDate: dataPagamento }
+          ? {
+              ...i,
+              value: valorParcelaFinal,
+              dueDate: parcelaVencimentoEditado || i.dueDate,
+              paid: true,
+              paidDate: dataPagamento,
+              ...(soCentavos || Math.abs(valorEditado - valorParcelaFinal) > 0.01
+                ? { paidValue: valorEditado }
+                : {}),
+            }
           : i,
       );
       const totalPagas = updatedInstallments.filter((i) => i.paid).length;
@@ -3903,9 +3939,11 @@ function ResolveErrorModal({
         text:
           `Baixa via Conciliação (resolução de erro Kamino) — Parcela ${installment.number}: ` +
           `${fmtBRL(valorEditado)} pago em ${fmtDate(dataPagamento)}` +
-          `${modo === 'pago' && Math.abs(valorEditado - valorParcelaPadrao) > 0.001
+          `${modo === 'pago' && Math.abs(valorEditado - valorParcelaPadrao) > 0.001 && !soCentavos
             ? ` (valor da parcela ajustado de ${fmtBRL(valorParcelaPadrao)} para ${fmtBRL(valorEditado)})`
-            : ''}. ` +
+            : soCentavos
+              ? ` (diferença de centavos — face ${fmtBRL(valorFace)} mantida)`
+              : ''}. ` +
           `${totalPagas}/${updatedInstallments.length} pagas (faltam ${restantes}).`,
       };
 
@@ -4148,12 +4186,20 @@ function ResolveErrorModal({
                 if (!installment || baseParc <= 0 || valorEditado <= 0) return null;
                 const diff = valorEditado - baseParc;
                 const pct = (diff / baseParc) * 100;
+                const soCentavos = Math.abs(Math.round(valorEditado * 100) - Math.round(baseParc * 100)) < 100;
                 // Tolerância: -10% a +15% (mesma regra da importação Kamino)
                 const foraTolerancia = pct > 15 || pct < -10;
                 if (foraTolerancia) {
                   return (
                     <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-900">
                       Valor fora da tolerância (-10% a +15%): {pct > 0 ? '+' : ''}{pct.toFixed(1)}% em relação à parcela ({fmtBRL(baseParc)}). Revise antes de confirmar.
+                    </div>
+                  );
+                }
+                if (soCentavos && Math.abs(diff) > 0.001) {
+                  return (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+                      Diferença só de centavos ({fmtBRL(Math.abs(diff))}) — a baixa será aceita mantendo o valor de face {fmtBRL(baseParc)}.
                     </div>
                   );
                 }

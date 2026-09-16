@@ -5,8 +5,8 @@
 //      (Alunos, Cancelamento, Renda Extra).
 //   2. Usa o assessor quando informado e só baixa automaticamente quando existe
 //      uma única combinação contrato + vencimento + valor compatível.
-//      Planilha de conferência: o valor precisa ser EXATAMENTE igual ao da
-//      parcela; Kamino legado aceita tolerância de ±15%.
+//      Planilha de conferência: ignora diferença só de centavos (< R$ 1,00);
+//      Kamino legado aceita tolerância de ±15%.
 //   3. Marca como paga (paid=true) com paidDate = Recebimento.
 // Linhas ambíguas ou sem identificação segura vão para "Erros".
 
@@ -118,9 +118,14 @@ function normName(s: string): string {
     .trim();
 }
 
-// Tolerância para comparar valores (centavos podem variar por arredondamento)
+// Tolerância para comparar valores na baixa de boletos (planilha de
+// conferência): se a diferença for só de centavos (< R$ 1,00), considera
+// o mesmo título e permite baixar. Diferença de R$ 1,00 ou mais → diverge.
 function valuesMatch(a: number, b: number): boolean {
-  return Math.abs(a - b) < 0.01;
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  const centavosA = Math.round(a * 100);
+  const centavosB = Math.round(b * 100);
+  return Math.abs(centavosA - centavosB) < 100;
 }
 
 // Tolerância de conciliação Kamino → GC:
@@ -1294,10 +1299,9 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
     }
 
     // Tenta achar parcela em algum dos alunos com aquele nome.
-    // Match exigido: dueDate === row.vencimento && value === valorPago && !paid.
-    // Planilha de conferência: o valor precisa ser EXATAMENTE igual ao da
-    // parcela (só baixa a parcela idêntica à linha da planilha). Kamino
-    // legado mantém a tolerância de ±15% (juros/desconto embutidos).
+    // Match exigido: dueDate === row.vencimento && value ≈ valorPago && !paid.
+    // Planilha de conferência: ignora diferença só de centavos (< R$ 1,00).
+    // Kamino legado mantém a tolerância de ±15% (juros/desconto embutidos).
     const installmentValueMatches = (installmentValue: number): boolean => {
       if (row.format === 'conferencia') {
         if (row.valorRecebido != null && valuesMatch(installmentValue, row.valorRecebido)) return true;
@@ -1402,7 +1406,7 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
       const fmt = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
       const sinal = diffAbs < 0 ? 'a menos' : 'a mais';
       const regra = row.format === 'conferencia'
-        ? 'A conferência só baixa a parcela com valor idêntico ao da planilha — revise antes de baixar.'
+        ? 'A conferência só baixa quando a diferença é de centavos (< R$ 1,00) — revise o valor antes de baixar.'
         : 'Fora da tolerância de ±15% — revise o valor antes de baixar.';
       const detail = `Parcela registrada ${fmt(divergeInstallmentValue)} · pago ${fmt(valorPago)} (${fmt(Math.abs(diffAbs))} ${sinal} · ${diffPct.toFixed(2).replace('.', ',')}%). ${regra}`;
       pushError(row, 'valor_diverge', divergeStudent.id, detail);
