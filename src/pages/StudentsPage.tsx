@@ -25,6 +25,7 @@ import { needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/l
 import { resolveStudentDisplayStatusVinculado, type StatusVinculado } from '@/lib/recompraVinculo';
 import { isRecompraFicha } from '@/lib/recompraConciliacao';
 import { isEmRenegociacao } from '@/lib/renegociacaoStatus';
+import { formatCpfCnpj } from '@/lib/termoDadosAluno';
 
 
 // ── Score stars renderer ───────────────────────────────────────────────────────
@@ -716,12 +717,14 @@ export default function StudentsPage() {
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportHistory(f); }}
             />
           </div>
-          <button
-            onClick={() => { setEditingStudent(null); setShowStudentModal(true); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium iam-gradient text-primary-foreground shadow-md hover:shadow-lg transition-all"
-          >
-            <Plus size={14} /> Novo Aluno
-          </button>
+          {canEditTab(currentUser, 'alunos') && (
+            <button
+              onClick={() => { setEditingStudent(null); setShowStudentModal(true); }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium iam-gradient text-primary-foreground shadow-md hover:shadow-lg transition-all"
+            >
+              <Plus size={14} /> Novo Aluno
+            </button>
+          )}
         </div>
       </div>
 
@@ -766,6 +769,11 @@ export default function StudentsPage() {
                         <div className="flex flex-col gap-0.5">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium text-foreground normal-case">{toDisplayName(student.name)}</span>
+                            {student.cpf?.replace(/\D/g, '') && (
+                              <span className="text-[10px] font-normal text-muted-foreground/70 tabular-nums" title="CPF / CNPJ">
+                                {formatCpfCnpj(student.cpf)}
+                              </span>
+                            )}
                             {student.ciclo && (
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-300 whitespace-nowrap" title={`Ciclo do contrato: ${student.ciclo}`}>
                                 {student.ciclo}
@@ -877,7 +885,7 @@ export default function StudentsPage() {
                                       const dias = calcularDiasVencido(instsAtraso);
                                       const due = nextDueDateUi(student);
                                       const viaVinculo = !!student._vinculo?.group && (calcularDiasVencido(student.installments) ?? 0) < (dias ?? 0);
-                                      return dias && dias > 0 ? (
+                                      return dias != null && dias > 0 ? (
                                         <span
                                           className="text-[9px] font-bold text-destructive shrink-0"
                                           title={viaVinculo
@@ -963,7 +971,8 @@ export default function StudentsPage() {
 
                           <button
                             onClick={() => { setEditingStudent(student); setShowStudentModal(true); }}
-                            className="action-btn" title="Editar"
+                            className="action-btn"
+                            title={canEditTab(currentUser, 'alunos') ? 'Editar ficha' : 'Editar dados cadastrais'}
                           >✏️</button>
                           <button
                             onClick={() => setFinancialStudent(student)}

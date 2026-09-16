@@ -2160,6 +2160,7 @@ export default function DashboardPage() {
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Pendências</p>
             <div className="flex items-center gap-1 shrink-0">
+              <NaoSomaBadge title="Pendência operacional (PIX/link IAM aguardando conciliação). Não entra na Carteira Total — o aluno só passa a contar nos cards de status depois da aprovação." />
               <AlertTriangle size={14} className="text-yellow-600/70" />
               <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'pendente' ? null : 'pendente'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
                 <Info size={14} />
@@ -2172,13 +2173,12 @@ export default function DashboardPage() {
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
             <p className="text-[11px] text-muted-foreground truncate">{pendentes.length} alunos</p>
-            <p className="text-[11px] font-semibold text-yellow-700 shrink-0">{pctCarteira(pendenteValue)}%</p>
           </div>
           {infoStatus === 'pendente' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
               <p>
-                Pendência de pagamento fora de boleto (PIX, link, cartão, etc.).
-                Pagamentos de boleto não entram neste indicador — permanecem em Em Dia / Vencido / À Negativar.
+                Pendência de pagamento fora de boleto (PIX, link, cartão, etc.), em geral contrato IAM ainda aguardando aprovação na Conciliação.
+                Não soma na Carteira Total (por isso 146 ≠ 147 se você incluir este card). Pagamentos de boleto não entram aqui — permanecem em Em Dia / Vencido / À Negativar.
               </p>
             </div>
           )}

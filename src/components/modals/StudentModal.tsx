@@ -61,9 +61,13 @@ function maskCEP(v: string) {
 
 export default function StudentModal({ student, onClose }: Props) {
   const { acs, products, addStudent, updateStudent, rules, studentTags, currentUser, students, cancellationCases } = useAppStore();
-  const canManageTags = canEditTab(currentUser, 'alunos');
+  /** Edição completa da ficha (financeiro, tags, AC, treinamento…) — quem já tinha acesso hoje. */
+  const canEditFull = canEditTab(currentUser, 'alunos');
+  /** Sem permissão total: só dados cadastrais (nome, contato, endereço…). */
+  const cadastralOnly = !!student && !canEditFull;
+  const canManageTags = canEditFull;
   const assignableTags = studentTags.filter((t) => (t.scope || 'student') === 'student');
-  const canChooseMode = !!student && (currentUser?.role === 'admin' || currentUser?.role === 'conciliacao');
+  const canChooseMode = canEditFull && !!student && (currentUser?.role === 'admin' || currentUser?.role === 'conciliacao');
   const [approvalMode, setApprovalMode] = useState<'total' | 'send'>('total');
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const tagPickerRef = useRef<HTMLDivElement>(null);
@@ -206,6 +210,10 @@ export default function StudentModal({ student, onClose }: Props) {
 
   const handleSave = () => {
     if (!form.name.trim()) return;
+    if (!student && !canEditFull) {
+      toast.error('Sem permissão para cadastrar novo aluno.');
+      return;
+    }
     if (!form.product || !form.product.trim()) {
       toast.error('Selecione um treinamento para concluir o cadastro.');
       return;
@@ -239,6 +247,48 @@ export default function StudentModal({ student, onClose }: Props) {
     }
 
     const now = new Date().toISOString();
+
+    // Só dados cadastrais: quem não tem permissão total em Alunos.
+    if (student && cadastralOnly) {
+      const immediateChanges: string[] = [];
+      if (form.name !== student.name) immediateChanges.push(`Nome: ${student.name} → ${form.name}`);
+      if (form.whatsapp !== student.whatsapp) immediateChanges.push(`WhatsApp: ${student.whatsapp} → ${form.whatsapp}`);
+      if (form.cpf !== student.cpf) immediateChanges.push(`CPF alterado`);
+      if ((form.email || '') !== (student.email || '')) immediateChanges.push(`E-mail alterado`);
+      if ((form.cep || '') !== (student.cep || '')) immediateChanges.push(`CEP alterado`);
+      if ((form.address || '') !== (student.address || '')) immediateChanges.push(`Endereço alterado`);
+      if ((form.numero || '') !== (student.numero || '')) immediateChanges.push(`Número alterado`);
+      if ((form.cidade || '') !== (student.cidade || '')) immediateChanges.push(`Cidade alterada`);
+      if ((form.estado || '') !== (student.estado || '')) immediateChanges.push(`Estado alterado`);
+      if ((form.detalhes || '') !== (student.detalhes || '')) immediateChanges.push(`Detalhes alterados`);
+
+      updateStudent(student.id, {
+        name: form.name,
+        whatsapp: form.whatsapp,
+        email: form.email,
+        cpf: form.cpf,
+        address: form.address,
+        numero: form.numero,
+        cidade: form.cidade,
+        estado: form.estado,
+        cep: form.cep,
+        detalhes: form.detalhes,
+        history: [
+          ...student.history,
+          {
+            date: now,
+            type: 'Sistema' as const,
+            text:
+              immediateChanges.length > 0
+                ? `Dados cadastrais editados: ${immediateChanges.join('; ')}.`
+                : 'Ficha aberta e salva sem alterações (dados cadastrais).',
+          },
+        ],
+      });
+      toast.success('Dados cadastrais salvos.');
+      onClose();
+      return;
+    }
 
     // Deriva dueDay do dueDate escolhido pelo usuário e ajusta o "enrollment" sintético
     // para que a primeira parcela caia exatamente em form.dueDate (o sistema de geração
@@ -441,6 +491,12 @@ export default function StudentModal({ student, onClose }: Props) {
         </div>
 
         <div className="p-6 space-y-6">
+          {cadastralOnly && (
+            <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-900">
+              Você pode editar apenas os <strong>dados cadastrais</strong> (nome, contato, endereço e detalhes).
+              Financeiro, tags, AC e treinamento exigem permissão total em Alunos.
+            </div>
+          )}
           {/* Identificação */}
           <div>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Dados Pessoais</h3>
@@ -573,18 +629,22 @@ export default function StudentModal({ student, onClose }: Props) {
 
 
 
-          {/* Financeiro */}
-          <div>
+          {/* Financeiro — somente quem tem permissão total em Alunos */}
+          <fieldset disabled={cadastralOnly} className={cadastralOnly ? 'opacity-60 pointer-events-none' : undefined}>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Financeiro</h3>
+            {cadastralOnly && (
+              <p className="text-[10px] text-muted-foreground mb-2">Somente visualização — sem permissão para alterar dados financeiros.</p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Modo de Status</label>
                 <select
                   className="input-field w-full"
                   value={form.statusMode}
-                  disabled={student?.status === 'Negativado'}
+                  disabled={cadastralOnly || student?.status === 'Negativado'}
                   title={student?.status === 'Negativado' ? 'Aluno em Negativado — use o badge para tirar a negativação (Quitado), reverter para À Negativar ou Em Dia antes de trocar o modo.' : undefined}
                   onChange={(e) => {
+                    if (cadastralOnly) return;
                     const newMode = e.target.value as StatusMode;
                     // Bloqueio: não permitir sair de Manual quando aluno está Negativado.
                     // Negativado só sai por ação explícita no badge (reverter/quitar).
@@ -616,7 +676,9 @@ export default function StudentModal({ student, onClose }: Props) {
                   <select
                     className="input-field w-full"
                     value={form.status}
+                    disabled={cadastralOnly}
                     onChange={(e) => {
+                      if (cadastralOnly) return;
                       const newStatus = e.target.value as StudentStatus;
                       set('status', newStatus);
                       if (student) {
@@ -645,7 +707,7 @@ export default function StudentModal({ student, onClose }: Props) {
               )}
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Assessor de Conta</label>
-                <select className="input-field w-full" value={form.ac} onChange={(e) => set('ac', e.target.value)}>
+                <select className="input-field w-full" value={form.ac} onChange={(e) => set('ac', e.target.value)} disabled={cadastralOnly}>
                   {!student && (
                     <option value="">
                       {isProductExcludedFromEsteira(form.product)
@@ -672,7 +734,7 @@ export default function StudentModal({ student, onClose }: Props) {
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
                   Treinamento <span className="text-destructive">*</span>
                 </label>
-                <select className="input-field w-full" value={form.product} onChange={(e) => set('product', e.target.value)}>
+                <select className="input-field w-full" value={form.product} onChange={(e) => set('product', e.target.value)} disabled={cadastralOnly}>
                   <option value="">— Selecione um treinamento —</option>
                   {products.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
                 </select>
@@ -687,31 +749,32 @@ export default function StudentModal({ student, onClose }: Props) {
                   placeholder="Ex.: 2026"
                   value={form.ciclo}
                   onChange={(e) => set('ciclo', e.target.value)}
+                  disabled={cadastralOnly}
                 />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Data de Inscrição</label>
-                <input className="input-field w-full" type="date" value={form.enrollmentDate} onChange={(e) => set('enrollmentDate', e.target.value)} />
+                <input className="input-field w-full" type="date" value={form.enrollmentDate} onChange={(e) => set('enrollmentDate', e.target.value)} disabled={cadastralOnly} />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Data de Competência</label>
-                <input className="input-field w-full" type="date" value={form.data_treinamento_origem} onChange={(e) => set('data_treinamento_origem', e.target.value)} />
+                <input className="input-field w-full" type="date" value={form.data_treinamento_origem} onChange={(e) => set('data_treinamento_origem', e.target.value)} disabled={cadastralOnly} />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Data Vencimento</label>
-                <input className="input-field w-full" type="date" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
+                <input className="input-field w-full" type="date" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} disabled={cadastralOnly} />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Valor Contrato</label>
-                <CurrencyInput value={form.saleValue} onChange={(v) => set('saleValue', v)} />
+                <CurrencyInput value={form.saleValue} onChange={(v) => set('saleValue', v)} disabled={cadastralOnly} />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Valor Entrada</label>
-                <CurrencyInput value={form.downPayment} onChange={(v) => set('downPayment', v)} />
+                <CurrencyInput value={form.downPayment} onChange={(v) => set('downPayment', v)} disabled={cadastralOnly} />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Número de Parcelas</label>
-                <input className="input-field w-full" type="number" placeholder="Qtd" min="1" max={rules.maxParcelasCadastro} value={form.totalInstallments || ''} onChange={(e) => {
+                <input className="input-field w-full" type="number" placeholder="Qtd" min="1" max={rules.maxParcelasCadastro} value={form.totalInstallments || ''} disabled={cadastralOnly} onChange={(e) => {
                   const v = Number(e.target.value);
                   if (v > rules.maxParcelasCadastro) return;
                   set('totalInstallments', v);
@@ -720,7 +783,7 @@ export default function StudentModal({ student, onClose }: Props) {
               </div>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Qtd Parcelas Pagas</label>
-                <input className="input-field w-full" type="number" placeholder="Qtd" min="0" value={form.paidInstallments ?? ''} onChange={(e) => set('paidInstallments', Number(e.target.value))} />
+                <input className="input-field w-full" type="number" placeholder="Qtd" min="0" value={form.paidInstallments ?? ''} disabled={cadastralOnly} onChange={(e) => set('paidInstallments', Number(e.target.value))} />
               </div>
             </div>
             <div className="mt-3 p-3 bg-muted rounded-xl flex items-center justify-between">
@@ -729,7 +792,7 @@ export default function StudentModal({ student, onClose }: Props) {
                 {formatCurrency(installmentValue)}
               </span>
             </div>
-          </div>
+          </fieldset>
         </div>
 
         {canChooseMode && (
@@ -826,7 +889,7 @@ export default function StudentModal({ student, onClose }: Props) {
             Cancelar
           </button>
           <button onClick={handleSave} className="px-4 py-2 rounded-lg text-sm font-medium iam-gradient text-primary-foreground shadow-md hover:shadow-lg transition-all">
-            Salvar
+            {cadastralOnly ? 'Salvar dados cadastrais' : 'Salvar'}
           </button>
         </div>
       </div>

@@ -28,7 +28,7 @@ import {
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, isOperationalPendente, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
-import { resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
+import { resolveStudentDisplayStatusVinculado, resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { comStatusFinanceiroParaCards, isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista, isIamForaDaCarteiraAteConciliar } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
@@ -50,6 +50,7 @@ import { statusColors } from '@/lib/statusColors';
 import { NaoSomaBadge } from '@/components/NaoSomaBadge';
 import { getTodayBrasilia, getTodayStringBrasilia, calcularDiasVencido, dueDateForDisplay, createdAtInRange, isNegativacaoEstagnada } from '@/lib/brasiliaDate';
 import { getDisplayInstallmentValue, normalizeSearch } from '@/lib/utils';
+import { formatCpfCnpj } from '@/lib/termoDadosAluno';
 import { getTagStyle } from '@/lib/tagColors';
 import {
   computeTagKpis,
@@ -927,9 +928,6 @@ export default function ACPortfolioPage() {
   const pendentes = kpiStudentsScoped.filter((s) => isOperationalPendente(s) && !_isSolic(s));
   const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
-  // Display status for table rows (always current, table is independent)
-  const displayStatus = (s: Student): StudentStatus => resolveStudentStatusComVinculo(s, students);
-
   if (!ac) return <div className="p-12 text-center text-muted-foreground">Selecione um assessor no menu.</div>;
 
 
@@ -1679,6 +1677,7 @@ export default function ACPortfolioPage() {
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Pendências</p>
             <div className="flex items-center gap-1 shrink-0">
+              <NaoSomaBadge title="Pendência operacional (PIX/link IAM aguardando conciliação). Não entra na Carteira Total — o aluno só passa a contar nos cards de status depois da aprovação." />
               <AlertTriangle size={14} className="text-yellow-600/70" />
               <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'pendente' ? null : 'pendente'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
                 <Info size={14} />
@@ -1691,13 +1690,12 @@ export default function ACPortfolioPage() {
           </p>
           <div className="flex items-center justify-between mt-1 gap-2">
             <p className="text-[11px] text-muted-foreground truncate">{pendentes.length} alunos</p>
-            <p className="text-[11px] font-semibold text-yellow-700 shrink-0">{pctCarteira(pendenteValue)}%</p>
           </div>
           {infoStatus === 'pendente' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
               <p>
-                Pendência de pagamento fora de boleto (PIX, link, cartão, etc.).
-                Pagamentos de boleto não entram neste indicador.
+                Pendência de pagamento fora de boleto (PIX, link, cartão, etc.), em geral contrato IAM ainda aguardando aprovação na Conciliação.
+                Não soma na Carteira Total. Pagamentos de boleto não entram neste indicador.
               </p>
             </div>
           )}
@@ -1904,13 +1902,19 @@ export default function ACPortfolioPage() {
                 </tr>
               ) : (
                 sorted.map((student) => {
-                  const tableStatus = displayStatus(student);
+                  const vinculo = resolveStudentDisplayStatusVinculado(student, students);
+                  const tableStatus = vinculo.status;
                   return (
                     <tr key={student.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium text-foreground">{student.name}</span>
+                            {student.cpf?.replace(/\D/g, '') && (
+                              <span className="text-[10px] font-normal text-muted-foreground/70 tabular-nums" title="CPF / CNPJ">
+                                {formatCpfCnpj(student.cpf)}
+                              </span>
+                            )}
                             {student.ciclo && (
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-300 whitespace-nowrap" title={`Ciclo do contrato: ${student.ciclo}`}>
                                 {student.ciclo}
@@ -1975,12 +1979,19 @@ export default function ACPortfolioPage() {
                                     <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                                       <StatusBadgeManual student={student} status={tableStatus} readOnly={!canMutatePortfolio} />
                                       {tableStatus !== 'Em Dia' && tableStatus !== 'Pago' && tableStatus !== 'Pendente' && tableStatus !== 'Solicitação Cancelamento' && (() => {
-                                        const dias = calcularDiasVencido(student.installments);
+                                        // Com vínculo recompra ↔ original, o atraso é o do conjunto
+                                        // (mesmo status exibido no badge) — senão o "Xd" some na
+                                        // ficha que só herda o Vencido do outro contrato.
+                                        const dias = calcularDiasVencido(vinculo.installments);
                                         const due = nextDueDateUi(student);
-                                        return dias && dias > 0 ? (
+                                        const viaVinculo = vinculo.puxadoDoVinculo
+                                          && (calcularDiasVencido(student.installments) ?? 0) < (dias ?? 0);
+                                        return dias != null && dias > 0 ? (
                                           <span
                                             className="text-[9px] font-bold text-destructive shrink-0"
-                                            title={due.rolledFromWeekend
+                                            title={viaVinculo
+                                              ? `${dias} dia(s) em atraso no contrato vinculado.`
+                                              : due.rolledFromWeekend
                                               ? `${dias} dia(s) desde o vencimento efetivo (${fmtDateBR(due.displayIso)}). Contrato: ${fmtDateBR(due.originalIso)}.`
                                               : `${dias} dia(s) em atraso`}
                                           >
@@ -2037,6 +2048,13 @@ export default function ACPortfolioPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => { setEditingStudent(student); setShowStudentModal(true); }}
+                            className="action-btn"
+                            title="Editar dados cadastrais"
+                          >
+                            ✏️
+                          </button>
                           <button
                             onClick={() => setViewStudent(student)}
                             className="action-btn !border-primary/40 !text-primary hover:!bg-primary/10"
