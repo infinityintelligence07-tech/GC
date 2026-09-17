@@ -1094,16 +1094,14 @@ export default function ACPortfolioPage() {
               <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Em Dia</p>
               <TrendingUp size={16} className="text-white/50 shrink-0" />
             </div>
-            <p className="kpi-value text-white">{pctEmDia}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate" title={`100% − Taxa Inadimplente. Em Dia ${formatCurrency(emDiaValue)} sobre a base ${formatCurrency(baseTaxa)} (Carteira Total − Alunos Novos).`}>{formatCurrencyCompact(emDiaValue)} em dia / {formatCurrencyCompact(baseTaxa)}</p>
+            <p className="kpi-value text-white" title={`100% − Taxa Inadimplente. Em Dia ${formatCurrency(emDiaValue)} sobre a base ${formatCurrency(baseTaxa)} (Carteira Total − Alunos Novos).`}>{pctEmDia}%</p>
           </div>
           <div className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-red-500 border border-red-600 transition-transform hover:-translate-y-0.5">
             <div className="flex items-start justify-between mb-2 gap-2">
               <p className="text-[10px] font-semibold text-white/70 uppercase truncate">Taxa Inadimplente</p>
               <TrendingDown size={16} className="text-white/50 shrink-0" />
             </div>
-            <p className="kpi-value text-white">{pctInadimplente}%</p>
-            <p className="text-[11px] text-white/60 mt-1 truncate" title={`Inadimplente = (Carteira Total − Alunos Novos) − Em Dia = ${formatCurrency(inadimplentesTaxa)}; ÷ base ${formatCurrency(baseTaxa)}.`}>{formatCurrencyCompact(inadimplentesTaxa)} / {formatCurrencyCompact(baseTaxa)}</p>
+            <p className="kpi-value text-white" title={`Inadimplente = (Carteira Total − Alunos Novos) − Em Dia = ${formatCurrency(inadimplentesTaxa)}; ÷ base ${formatCurrency(baseTaxa)}.`}>{pctInadimplente}%</p>
           </div>
         </div>
       </div>
