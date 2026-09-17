@@ -2267,24 +2267,54 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     </span>
                   </div>
                 )}
-                {hasEntradaPendente && student.installments.filter((i) => isEntradaPendenciaInstallment(i)).map((inst) => {
-                  const isOverdue = !inst.paid && parseDateLocal(inst.dueDate) < today;
+                {student.installments
+                  .filter((i) => isEntradaPendenciaInstallment(i))
+                  .sort(
+                    (a, b) =>
+                      parseDateLocal(a.dueDate).getTime() - parseDateLocal(b.dueDate).getTime() ||
+                      a.number - b.number,
+                  )
+                  .map((inst) => {
+                  const isPaid = !!inst.paid;
+                  const isOverdue = !isPaid && parseDateLocal(inst.dueDate) < today;
                   return (
                     <div
                       key={`entrada-pend-${inst.number}`}
                       className={`flex flex-col items-center px-2 py-1.5 rounded-lg border min-w-[80px] ${
-                        isOverdue ? 'border-amber-400 bg-amber-50' : 'border-amber-300 bg-amber-50/80'
+                        isPaid
+                          ? 'border-emerald-300 bg-emerald-50'
+                          : isOverdue
+                            ? 'border-amber-400 bg-amber-50'
+                            : 'border-amber-300 bg-amber-50/80'
                       }`}
-                      title={`Entrada pendente — ${formatCurrency(inst.value)} — Venc. ${formatDateBR(inst.dueDate)}`}
+                      title={
+                        isPaid
+                          ? `Entrada pendente quitada — ${formatCurrency(inst.value)} — Pago em ${formatDateBR(inst.paidDate || inst.dueDate)}`
+                          : `Entrada pendente — ${formatCurrency(inst.value)} — Venc. ${formatDateBR(inst.dueDate)}`
+                      }
                     >
-                      <span className="text-[9px] font-bold text-amber-800">Entrada</span>
-                      <span className="text-[8px] font-semibold text-amber-700 mt-0.5">Pendente</span>
-                      <span className="text-[10px] font-bold mt-0.5 text-amber-800">{formatCurrency(inst.value)}</span>
-                      <span className="text-[8px] text-muted-foreground mt-0.5 leading-tight text-center">
-                        Venc: {formatDateBR(inst.dueDate)}
+                      <span className={`text-[9px] font-bold ${isPaid ? 'text-emerald-800' : 'text-amber-800'}`}>Entrada</span>
+                      <span className={`text-[8px] font-semibold mt-0.5 ${isPaid ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        {isPaid ? 'Paga' : 'Pendente'}
                       </span>
-                      <span className={`mt-0.5 text-[8px] font-semibold px-1 py-0.5 rounded ${isOverdue ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {isOverdue ? 'Vencido' : 'Aguardando'}
+                      <span className={`text-[10px] font-bold mt-0.5 ${isPaid ? 'text-emerald-700' : 'text-amber-800'}`}>
+                        {formatCurrency(inst.value)}
+                      </span>
+                      <span className="text-[8px] text-muted-foreground mt-0.5 leading-tight text-center">
+                        {isPaid
+                          ? `Pago: ${formatDateBR(inst.paidDate || inst.dueDate)}`
+                          : `Venc: ${formatDateBR(inst.dueDate)}`}
+                      </span>
+                      <span
+                        className={`mt-0.5 text-[8px] font-semibold px-1 py-0.5 rounded ${
+                          isPaid
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : isOverdue
+                              ? 'bg-rose-100 text-rose-700'
+                              : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {isPaid ? '✓ Pago' : isOverdue ? 'Vencido' : 'Aguardando'}
                       </span>
                     </div>
                   );
