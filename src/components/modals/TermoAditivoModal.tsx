@@ -9,6 +9,8 @@ import {
   checkStudentZapSignSigner,
   createZapSignTermo,
   describeEnvioAutomatico,
+  pickZapSignSignerUrls,
+  withZapSignAssinaturas,
 } from '@/lib/zapsignTermo';
 import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
 import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
@@ -122,6 +124,7 @@ export default function TermoAditivoModal({
 }: Props) {
   const [linkBusy, setLinkBusy] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(signLinkInicial ?? null);
+  const [signLinkIam, setSignLinkIam] = useState<string | null>(null);
   const [enviarEmail, setEnviarEmail] = useState(true);
   const [enviarWhatsapp, setEnviarWhatsapp] = useState(false);
   // Dados do aluno para o termo — abre preenchimento manual se faltar nome/CPF/e-mail/WhatsApp
@@ -396,7 +399,7 @@ export default function TermoAditivoModal({
     setLinkBusy(true);
     try {
       const markdown = template
-        ? templateTextToZapSignMarkdown(template.text)
+        ? withZapSignAssinaturas(templateTextToZapSignMarkdown(template.text), student.name, student.cpf)
         : buildRenegociacaoTermoMarkdown({
             student,
             dateStr,
@@ -423,10 +426,11 @@ export default function TermoAditivoModal({
       });
       if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo na ZapSign.');
 
-      const signUrl = result.url_assinatura || result.file_url;
-      if (!signUrl) throw new Error('Link de assinatura não disponível.');
+      const urls = pickZapSignSignerUrls(result);
+      if (!urls.aluno) throw new Error('Link de assinatura do aluno não disponível.');
 
-      setSignLink(signUrl);
+      setSignLink(urls.aluno);
+      setSignLinkIam(urls.iam || null);
       toast.success(
         describeEnvioAutomatico({
           email: enviarEmail && signerCheck.email ? signerCheck.email : undefined,
@@ -435,7 +439,7 @@ export default function TermoAditivoModal({
       );
       onTermoGerado?.({
         id: result.id,
-        urlAssinatura: signUrl,
+        urlAssinatura: urls.aluno,
         status: result.status,
         nomeDocumento: result.nome_documento,
       });
@@ -656,9 +660,20 @@ export default function TermoAditivoModal({
 
           {signLink && (
             <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
-              Termo gerado na ZapSign. Se não escolheu envio automático, use Copiar Link para enviar ao aluno.
-              Quando ele assinar, o Confirmar da renegociação é liberado automaticamente.
-              <div className="mt-1 text-emerald-800/80 font-mono text-[10px]">{signLink}</div>
+              Termo gerado na ZapSign. Use Copiar Link Aluno e Copiar Link IAM. Quando ambos assinarem, o Confirmar da
+              renegociação é liberado automaticamente.
+              <div className="mt-1.5 space-y-1">
+                <div>
+                  <span className="font-semibold text-emerald-900">Aluno: </span>
+                  <span className="text-emerald-800/80 font-mono text-[10px]">{signLink}</span>
+                </div>
+                {signLinkIam && (
+                  <div>
+                    <span className="font-semibold text-emerald-900">IAM: </span>
+                    <span className="text-emerald-800/80 font-mono text-[10px]">{signLinkIam}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -705,6 +720,7 @@ export default function TermoAditivoModal({
           )}
           <ZapSignLinkActions
             signLink={signLink}
+            signLinkIam={signLinkIam}
             nomeAluno={student.name}
             whatsapp={student.whatsapp}
             titulo="Termo de Renegociação"

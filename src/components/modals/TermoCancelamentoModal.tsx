@@ -17,6 +17,7 @@ import {
   checkStudentZapSignSigner,
   createZapSignTermo,
   describeEnvioAutomatico,
+  pickZapSignSignerUrls,
 } from '@/lib/zapsignTermo';
 import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
 import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
@@ -79,6 +80,7 @@ export default function TermoCancelamentoModal({
 }: TermoCancelamentoModalProps) {
   const [linkBusy, setLinkBusy] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(null);
+  const [signLinkIam, setSignLinkIam] = useState<string | null>(null);
   /** ZapSign envia o link por e-mail ao aluno (grátis) além do link para copiar/WhatsApp. */
   const [enviarEmail, setEnviarEmail] = useState(true);
   /** ZapSign envia o link por WhatsApp automaticamente (consome créditos da conta ZapSign). */
@@ -196,9 +198,10 @@ export default function TermoCancelamentoModal({
         enviarWhatsapp: enviarWhatsapp && !!signerCheck.whatsapp,
       });
       if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo na ZapSign.');
-      const url = result.url_assinatura || result.file_url;
-      if (!url) throw new Error('Link de assinatura não disponível.');
-      setSignLink(url);
+      const urls = pickZapSignSignerUrls(result);
+      if (!urls.aluno) throw new Error('Link de assinatura do aluno não disponível.');
+      setSignLink(urls.aluno);
+      setSignLinkIam(urls.iam || null);
       toast.success(
         describeEnvioAutomatico({
           email: enviarEmail && signerCheck.email ? signerCheck.email : undefined,
@@ -206,7 +209,7 @@ export default function TermoCancelamentoModal({
         }),
       );
       onGenerated?.({
-        signUrl: url,
+        signUrl: urls.aluno,
         plainText,
         id: result.id,
         status: result.status,
@@ -250,6 +253,7 @@ export default function TermoCancelamentoModal({
                 onChange={(e) => {
                   setVariantChoice(e.target.value as 'auto' | CancellationTermoVariant);
                   setSignLink(null);
+                  setSignLinkIam(null);
                 }}
                 className="bg-transparent px-2.5 py-1.5 text-xs text-foreground focus:outline-none cursor-pointer max-w-[15rem]"
                 aria-label="Modelo do termo"
@@ -392,10 +396,25 @@ export default function TermoCancelamentoModal({
 
           {signLink && (
             <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
-              Termo gerado na ZapSign. Se não escolheu envio automático, envie o link ao aluno (Copiar Link ou
-              WhatsApp). Quando ele assinar, o Confirmar é liberado automaticamente e o PDF assinado fica anexado ao
+              Termo gerado na ZapSign. Envie o link ao aluno (Copiar Link Aluno ou WhatsApp) e use o link da IAM
+              para a assinatura do Instituto. Quando ambos assinarem, o Confirmar é liberado e o PDF fica anexado ao
               caso.
-              <div className="mt-1 text-emerald-800/80 font-mono text-[10px]">{signLink}</div>
+              <div className="mt-1.5 space-y-1">
+                <div>
+                  <span className="font-semibold text-emerald-900">Aluno: </span>
+                  <span className="text-emerald-800/80 font-mono text-[10px]">{signLink}</span>
+                </div>
+                {signLinkIam ? (
+                  <div>
+                    <span className="font-semibold text-emerald-900">IAM: </span>
+                    <span className="text-emerald-800/80 font-mono text-[10px]">{signLinkIam}</span>
+                  </div>
+                ) : (
+                  <div className="text-amber-700">
+                    Link da IAM indisponível neste termo (gere novamente após o deploy da integração).
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -436,6 +455,7 @@ export default function TermoCancelamentoModal({
           </button>
           <ZapSignLinkActions
             signLink={signLink}
+            signLinkIam={signLinkIam}
             nomeAluno={doc.studentName}
             whatsapp={studentTermo?.whatsapp || caseRef.studentWhatsapp}
             titulo={doc.titulo}

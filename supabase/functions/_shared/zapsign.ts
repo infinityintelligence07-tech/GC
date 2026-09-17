@@ -2,9 +2,12 @@
 // edge functions `zapsign-termo` (criar/consultar) e `zapsign-webhook` (eventos).
 //
 // Secrets:
-//   ZAPSIGN_API_TOKEN     token estático da API (Configurações > Integrações > ZapSign API)
-//   ZAPSIGN_API_URL       opcional — default produção; sandbox: https://sandbox.api.zapsign.com.br/api/v1
-//   ZAPSIGN_WEBHOOK_TOKEN valor do header `x-webhook-token` configurado no webhook da ZapSign
+//   ZAPSIGN_API_TOKEN          token estático da API (Configurações > Integrações > ZapSign API)
+//   ZAPSIGN_API_URL            opcional — default produção; sandbox: https://sandbox.api.zapsign.com.br/api/v1
+//   ZAPSIGN_WEBHOOK_TOKEN      valor do header `x-webhook-token` configurado no webhook da ZapSign
+//   ZAPSIGN_IAM_SIGNER_EMAIL   e-mail do signatário do Instituto (2º signatário). Se vazio, usa o e-mail do usuário logado.
+//   ZAPSIGN_IAM_SIGNER_NAME    opcional — default: INSTITUTO ACADEMY MIND TREINAMENTOS LTDA
+//   ZAPSIGN_IAM_SIGNER_PHONE   opcional — WhatsApp do signatário IAM (só dígitos)
 
 export const ZAPSIGN_API_URL_DEFAULT = 'https://api.zapsign.com.br/api/v1';
 const TIMEOUT_MS = 60_000;
@@ -19,6 +22,7 @@ export interface ZapSignSigner {
   email?: string;
   phone_country?: string;
   phone_number?: string;
+  external_id?: string;
   signed_at?: string | null;
   times_viewed?: number;
   last_view_at?: string | null;
@@ -107,6 +111,10 @@ export interface CreateDocSignerInput {
   send_automatic_email?: boolean;
   send_automatic_whatsapp?: boolean;
   custom_message?: string;
+  /** Âncora no markdown/PDF, ex.: "<<gc_aluno>>". */
+  signature_placement?: string;
+  /** Grupo de ordem (1, 2, …) quando `signature_order_active` está ligado. */
+  order_group?: number;
 }
 
 export interface CreateDocInput {
@@ -119,6 +127,8 @@ export interface CreateDocInput {
   brand_name?: string;
   metadata?: Array<{ key: string; value: string }>;
   date_limit_to_sign?: string;
+  /** Se true, signatários assinam na ordem de `order_group`. */
+  signature_order_active?: boolean;
 }
 
 export function createDoc(input: CreateDocInput): Promise<ZapSignDoc> {
@@ -134,6 +144,8 @@ export function createDoc(input: CreateDocInput): Promise<ZapSignDoc> {
     send_automatic_whatsapp: !!s.send_automatic_whatsapp && !!s.phone_number,
     external_id: s.external_id ?? '',
     custom_message: s.custom_message ?? '',
+    ...(s.signature_placement ? { signature_placement: s.signature_placement } : {}),
+    ...(s.order_group != null ? { order_group: s.order_group } : {}),
   }));
   return zapsignFetch<ZapSignDoc>('/docs/', {
     method: 'POST',
@@ -148,6 +160,7 @@ export function createDoc(input: CreateDocInput): Promise<ZapSignDoc> {
       brand_name: input.brand_name ?? 'Instituto Academy Mind',
       disable_signer_emails: false,
       allow_refuse_signature: true,
+      signature_order_active: input.signature_order_active === true,
       ...(input.metadata ? { metadata: input.metadata } : {}),
       ...(input.date_limit_to_sign ? { date_limit_to_sign: input.date_limit_to_sign } : {}),
     }),

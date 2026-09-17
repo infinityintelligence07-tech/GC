@@ -77,14 +77,29 @@ Deno.serve(async (req: Request) => {
 
   const agora = new Date().toISOString();
   const status = normalizeStatus(evento.status, evento.signers);
-  const signers = (evento.signers ?? []).map((s) => ({
-    nome: s.name,
-    email: s.email ?? '',
-    status: s.status,
-    tipo: 'sign' as const,
-    signed_at: s.signed_at ?? null,
-    sign_url: s.sign_url ?? '',
-  }));
+  const signers = (evento.signers ?? []).map((s, i) => {
+    const ext = String((s as { external_id?: string }).external_id ?? '').toLowerCase();
+    const papel: 'aluno' | 'instituto' =
+      ext === 'iam' || ext === 'instituto' || /instituto academy mind/i.test(String(s.name ?? ''))
+        ? 'instituto'
+        : ext === 'aluno' || i === 0
+          ? 'aluno'
+          : 'instituto';
+    const prev = Array.isArray(row.signers)
+      ? (row.signers as Array<{ papel?: string; sign_url?: string; nome?: string }>).find(
+          (p) => p.papel === papel || p.nome === s.name,
+        )
+      : undefined;
+    return {
+      nome: s.name,
+      email: s.email ?? '',
+      status: s.status,
+      tipo: 'sign' as const,
+      papel,
+      signed_at: s.signed_at ?? null,
+      sign_url: s.sign_url || prev?.sign_url || '',
+    };
+  });
 
   // Payload enxuto para auditoria (sem links temporários de arquivo).
   const payloadResumo = {

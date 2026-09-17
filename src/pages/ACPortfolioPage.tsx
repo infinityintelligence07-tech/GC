@@ -910,9 +910,12 @@ export default function ACPortfolioPage() {
   const mesPagoAlunos = pagoMesTotais.qtdAlunos;
 
   // Meta base (lápis) + acréscimo exato das pendências de entrada em aberto.
+  // Usa acStudents (carteira do AC), NÃO kpiStudentsScoped: o recorte de
+  // período dos KPIs excluía pendências com vencimento fora do intervalo
+  // (ex.: Luana / Ronaldo 31/08) e a Meta ficava só na base, sem o clique.
   const metaPendencias = useMemo(
-    () => listMetaPendenciaItems(kpiStudentsScoped),
-    [kpiStudentsScoped],
+    () => listMetaPendenciaItems(acStudents),
+    [acStudents],
   );
   const metaBase = resolveMetaBase(ac?.emDiaNovosMeta);
   const emDiaNovosMeta = metaEfetivaComPendencias(metaBase, metaPendencias);

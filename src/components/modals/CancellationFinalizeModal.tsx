@@ -13,6 +13,7 @@ import {
   checkStudentZapSignSigner,
   createZapSignTermo,
   describeEnvioAutomatico,
+  pickZapSignSignerUrls,
 } from '@/lib/zapsignTermo';
 import ZapSignLinkActions from '@/components/ui/ZapSignLinkActions';
 import ZapSignEnvioAutomatico from '@/components/ui/ZapSignEnvioAutomatico';
@@ -47,6 +48,7 @@ export default function CancellationFinalizeModal({
   const { updateCancellationCase } = useAppStore();
   const [linkBusy, setLinkBusy] = useState(false);
   const [signLink, setSignLink] = useState<string | null>(null);
+  const [signLinkIam, setSignLinkIam] = useState<string | null>(null);
   const [selectedOutcome, setSelectedOutcome] = useState<'reverter' | 'cancelar'>(type);
   const [enviarEmail, setEnviarEmail] = useState(true);
   const [enviarWhatsapp, setEnviarWhatsapp] = useState(false);
@@ -188,9 +190,10 @@ export default function CancellationFinalizeModal({
         enviarWhatsapp: enviarWhatsapp && !!signerCheck.whatsapp,
       });
       if (!result.ok) throw new Error(result.error || 'Falha ao gerar termo na ZapSign.');
-      const url = result.url_assinatura || result.file_url;
-      if (!url) throw new Error('Link de assinatura não disponível.');
-      setSignLink(url);
+      const urls = pickZapSignSignerUrls(result);
+      if (!urls.aluno) throw new Error('Link de assinatura do aluno não disponível.');
+      setSignLink(urls.aluno);
+      setSignLinkIam(urls.iam || null);
       toast.success(
         describeEnvioAutomatico({
           email: enviarEmail && signerCheck.email ? signerCheck.email : undefined,
@@ -298,6 +301,7 @@ export default function CancellationFinalizeModal({
           </button>
           <ZapSignLinkActions
             signLink={signLink}
+            signLinkIam={signLinkIam}
             nomeAluno={caseRef.studentName}
             whatsapp={studentTermo?.whatsapp || caseRef.studentWhatsapp}
             titulo={cancelDoc?.titulo ?? titulo}
@@ -319,8 +323,19 @@ export default function CancellationFinalizeModal({
         )}
         {signLink && (
           <div className="mb-4 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
-            Termo gerado na ZapSign. Se não escolheu envio automático, envie o link ao aluno (Copiar Link ou
-            WhatsApp). Ao assinar, o PDF assinado é anexado ao caso automaticamente.
+            Termo gerado na ZapSign. Envie o link ao aluno e use o link da IAM para a assinatura do Instituto.
+            <div className="mt-1.5 space-y-1">
+              <div>
+                <span className="font-semibold text-emerald-900">Aluno: </span>
+                <span className="font-mono text-[10px] text-emerald-800/80">{signLink}</span>
+              </div>
+              {signLinkIam && (
+                <div>
+                  <span className="font-semibold text-emerald-900">IAM: </span>
+                  <span className="font-mono text-[10px] text-emerald-800/80">{signLinkIam}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
         {!isReverter && !signerCheck.ok && (

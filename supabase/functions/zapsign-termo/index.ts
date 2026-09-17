@@ -41,15 +41,55 @@ function json(status: number, body: unknown): Response {
 
 const TIPOS = new Set(['cancelamento', 'renegociacao', 'aditivo', 'outro']);
 
+const IAM_SIGNER_EXTERNAL_ID = 'iam';
+const ALUNO_SIGNER_EXTERNAL_ID = 'aluno';
+const ANCHOR_ALUNO = '<<gc_aluno>>';
+const ANCHOR_IAM = '<<gc_instituto>>';
+const IAM_SIGNER_NAME_DEFAULT = 'INSTITUTO ACADEMY MIND TREINAMENTOS LTDA';
+
+function signerPapel(s: { external_id?: string; name?: string }, index: number): 'aluno' | 'instituto' {
+  const ext = String(s.external_id ?? '').toLowerCase();
+  if (ext === IAM_SIGNER_EXTERNAL_ID || ext === 'instituto') return 'instituto';
+  if (ext === ALUNO_SIGNER_EXTERNAL_ID || ext === 'aluno') return 'aluno';
+  if (/instituto academy mind/i.test(String(s.name ?? ''))) return 'instituto';
+  return index === 0 ? 'aluno' : 'instituto';
+}
+
+function signUrlOf(s: { sign_url?: string; token?: string } | undefined): string {
+  if (!s) return '';
+  if (s.sign_url) return s.sign_url;
+  return s.token ? `https://app.zapsign.com.br/verificar/${s.token}` : '';
+}
+
 function signersOut(doc: Pick<ZapSignDoc, 'signers'>) {
-  return (doc.signers ?? []).map((s) => ({
+  return (doc.signers ?? []).map((s, i) => ({
     nome: s.name,
     email: s.email ?? '',
     status: s.status,
     tipo: 'sign' as const,
+    papel: signerPapel(s, i),
     signed_at: s.signed_at ?? null,
-    sign_url: s.sign_url ?? '',
+    sign_url: signUrlOf(s),
   }));
+}
+
+type SignerOut = ReturnType<typeof signersOut>[number];
+
+function iamUrlFromSigners(signers: SignerOut[] | unknown): string {
+  if (!Array.isArray(signers)) return '';
+  const iam = signers.find((s) => (s as SignerOut).papel === 'instituto') ?? signers[1];
+  return String((iam as SignerOut | undefined)?.sign_url ?? '');
+}
+
+/** Contato do 2º signatário (Instituto). Prefere secrets; cai no usuário logado. */
+function resolveIamSigner(fallback: { email?: string | null; name?: string | null }) {
+  const email =
+    (Deno.env.get('ZAPSIGN_IAM_SIGNER_EMAIL') ?? '').trim().toLowerCase() ||
+    String(fallback.email ?? '').trim().toLowerCase();
+  const name =
+    (Deno.env.get('ZAPSIGN_IAM_SIGNER_NAME') ?? '').trim() || IAM_SIGNER_NAME_DEFAULT;
+  const phone = phoneToZapSign(Deno.env.get('ZAPSIGN_IAM_SIGNER_PHONE') ?? '');
+  return { name, email, phone };
 }
 
 Deno.serve(async (req: Request) => {
@@ -127,6 +167,7 @@ Deno.serve(async (req: Request) => {
           nome_documento: row.nome_documento,
           status: row.status,
           url_assinatura: row.sign_url,
+          url_assinatura_iam: iamUrlFromSigners(row.signers),
           signers: row.signers ?? [],
           signed_at: row.signed_at,
           signed_file_path: signedFilePath,
@@ -171,7 +212,8 @@ Deno.serve(async (req: Request) => {
         id: doc.token,
         nome_documento: doc.name,
         status,
-        url_assinatura: row.sign_url || doc.signers?.[0]?.sign_url || '',
+        url_assinatura: row.sign_url || signUrlOf(doc.signers?.[0]),
+        url_assinatura_iam: iamUrlFromSigners(signers),
         signers,
         signed_at: signedAt,
         signed_file_path: signedFilePath,
@@ -259,20 +301,47 @@ Deno.serve(async (req: Request) => {
       .eq('auth_user_id', userId)
       .maybeSingle();
 
+    const iam = resolveIamSigner({
+      email: userData.user.email,
+      name: (appUser?.name as string | undefined) ?? null,
+    });
+    if (!iam.email && !iam.phone) {
+      return json(400, {
+        ok: false,
+        error:
+          'Signatário da IAM sem e-mail. Configure ZAPSIGN_IAM_SIGNER_EMAIL ou use uma conta com e-mail no login.',
+      });
+    }
+
     const doc = await createDoc({
       name: nomeDocumento,
       markdown_text: markdown,
       external_id: externalId,
       folder_path: `/GC/${tipo}/`,
+      // Aluno assina primeiro; depois o representante do Instituto.
+      signature_order_active: true,
       signers: [
         {
           name: signerName,
           email: signerEmail || undefined,
           phone_number: signerPhone || undefined,
-          external_id: studentId ?? undefined,
+          external_id: ALUNO_SIGNER_EXTERNAL_ID,
           send_automatic_email: body.enviar_email === true,
           send_automatic_whatsapp: body.enviar_whatsapp === true,
           custom_message: body.mensagem ? String(body.mensagem) : undefined,
+          signature_placement: ANCHOR_ALUNO,
+          order_group: 1,
+        },
+        {
+          name: iam.name,
+          email: iam.email || undefined,
+          phone_number: iam.phone || undefined,
+          external_id: IAM_SIGNER_EXTERNAL_ID,
+          // Link da IAM é copiado no GC; não dispara e-mail automático por padrão.
+          send_automatic_email: false,
+          send_automatic_whatsapp: false,
+          signature_placement: ANCHOR_IAM,
+          order_group: 2,
         },
       ],
       metadata: [
@@ -283,10 +352,13 @@ Deno.serve(async (req: Request) => {
       ],
     });
 
-    const primeiro = doc.signers?.[0];
-    const signUrl = primeiro?.sign_url || (primeiro?.token ? `https://app.zapsign.com.br/verificar/${primeiro.token}` : '');
-    const status = normalizeStatus(doc.status, doc.signers);
     const signers = signersOut(doc);
+    const alunoSigner = signers.find((s) => s.papel === 'aluno') ?? signers[0];
+    const iamSigner = signers.find((s) => s.papel === 'instituto') ?? signers[1];
+    const signUrl = alunoSigner?.sign_url || signUrlOf(doc.signers?.[0]);
+    const signUrlIam = iamSigner?.sign_url || signUrlOf(doc.signers?.[1]);
+    const status = normalizeStatus(doc.status, doc.signers);
+    const primeiro = doc.signers?.[0];
 
     const { error: insErr } = await admin.from('zapsign_documents').insert({
       company_id: companyId,
@@ -336,6 +408,7 @@ Deno.serve(async (req: Request) => {
       nome_documento: doc.name || nomeDocumento,
       status,
       url_assinatura: signUrl,
+      url_assinatura_iam: signUrlIam,
       signers,
       created_at: doc.created_at,
       registro_local: !insErr,

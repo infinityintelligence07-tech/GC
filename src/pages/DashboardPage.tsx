@@ -927,11 +927,13 @@ export default function DashboardPage() {
   // Com filtro de assessor, usa só aquele AC.
   const acsAtivosMeta = acs.filter((a) => a.active);
   const metaPendencias = useMemo(() => {
+    // kpiStudents (sem recorte de período): pendência com vencimento fora do
+    // filtro de datas ainda eleva a meta.
     const pool = acFilter
-      ? kpiStudentsScoped.filter((s) => s.ac === acFilter)
-      : kpiStudentsScoped;
+      ? kpiStudents.filter((s) => s.ac === acFilter)
+      : kpiStudents;
     return listMetaPendenciaItems(pool);
-  }, [kpiStudentsScoped, acFilter]);
+  }, [kpiStudents, acFilter]);
   const metaBaseReferencia = useMemo(() => {
     const ativos = acs.filter((a) => a.active);
     if (acFilter) {

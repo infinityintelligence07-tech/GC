@@ -7,8 +7,8 @@ import { templateTextToZapSignMarkdown } from '@/lib/templateRender';
 /**
  * Integração direta com a ZapSign (edge functions `zapsign-termo` e `zapsign-webhook`).
  *
- * O termo é enviado como Markdown — a ZapSign gera o PDF, cria o documento e devolve o link
- * de assinatura do aluno. O status final chega pelo webhook e fica em `zapsign_documents`;
+ * O termo é enviado como Markdown — a ZapSign gera o PDF, cria o documento e devolve os links
+ * de assinatura (aluno + Instituto). O status final chega pelo webhook e fica em `zapsign_documents`;
  * `getZapSignTermoStatus` lê primeiro do banco e só consulta a ZapSign se ainda pendente.
  */
 
@@ -19,6 +19,8 @@ export interface ZapSignTermoSigner {
   email: string;
   status: string;
   tipo: 'sign' | 'witness';
+  /** Quem assina: aluno (1º) ou instituto/IAM (2º). */
+  papel?: 'aluno' | 'instituto';
   signed_at?: string | null;
   sign_url?: string;
 }
@@ -29,7 +31,10 @@ export interface ZapSignTermoResult {
   id?: string;
   nome_documento?: string;
   status?: string;
+  /** Link do aluno (1º signatário). */
   url_assinatura?: string;
+  /** Link do Instituto / IAM (2º signatário). */
+  url_assinatura_iam?: string;
   file_url?: string;
   signers?: ZapSignTermoSigner[];
   signed_at?: string | null;
@@ -41,15 +46,20 @@ export interface ZapSignTermoResult {
 
 export const INSTITUTO_RAZAO = 'INSTITUTO ACADEMY MIND TREINAMENTOS LTDA';
 export const INSTITUTO_CNPJ = '03.727.532/0001-13';
+/** Âncoras de posicionamento das assinaturas na ZapSign (criadas na edge `zapsign-termo`). */
+export const ZAPSIGN_ANCHOR_ALUNO = '<<gc_aluno>>';
+export const ZAPSIGN_ANCHOR_IAM = '<<gc_instituto>>';
 const INSTITUTO_QUALIFICACAO =
   `${INSTITUTO_RAZAO}, pessoa jurídica de direito privado, inscrita no CNPJ nº ${INSTITUTO_CNPJ}, ` +
   'com sede na R. Major Rehder, 248 - Vila Rehder, Americana - SP, 13465-390';
 
 /**
  * Sanitiza texto para o Markdown da ZapSign. O renderizador dela NÃO honra
- * escape com barra invertida (mostra o "\" literal) nem tabelas/HTML, então
+ * escape com barra invertida (mostra o "\" literal) nem tabelas GFM, então
  * aqui só se neutralizam os caracteres que quebrariam a estrutura do documento
  * (pipe, quebras de linha e marcadores de bloco no início do texto).
+ * HTML simples (table) é usado só no bloco de assinaturas — a ZapSign costuma
+ * preservar tags HTML embutidas no markdown_text.
  */
 function md(s: string | null | undefined): string {
   return String(s ?? '')
@@ -63,29 +73,91 @@ function linhaCampo(rotulo: string, valor: string | null | undefined): string {
   return `**${rotulo}:** ${md(valor) || '—'}`;
 }
 
-/** Linha de assinatura em texto puro (com prefixo para não virar régua horizontal). */
-const LINHA_ASSINATURA = '______________________________________';
-
 /**
- * Bloco de assinaturas em parágrafos simples: mesmo conteúdo do PDF do GC
- * (nome/CPF do aluno e razão social/CNPJ do Instituto), sem tabela — a ZapSign
- * renderizava a tabela como texto cru.
+ * Bloco de assinaturas lado a lado (como no preview/PDF do GC).
+ * Usa HTML table (markdown GFM `|` vira texto cru na ZapSign) + âncoras
+ * `<<gc_aluno>>` / `<<gc_instituto>>` para a ZapSign posicionar as rubricas.
+ * Sem underscores longos — eles viravam régua horizontal (---) no PDF.
  */
 function blocoAssinaturas(nome: string, cpf: string): string {
+  const nomeAluno = md(nome) || 'ALUNO(A)';
+  const docAluno = md(cpf) || 'CPF —';
   return [
     '',
-    `ALUNO(A): ${LINHA_ASSINATURA}`,
-    '',
-    `**${md(nome)}**`,
-    '',
-    md(cpf) || 'CPF —',
-    '',
-    `INSTITUTO: ${LINHA_ASSINATURA}`,
-    '',
-    `**${INSTITUTO_RAZAO}**`,
-    '',
+    '<table style="width:100%;border:none;border-collapse:collapse">',
+    '<tr>',
+    '<td style="width:48%;text-align:center;vertical-align:top;border:none;padding:12px 8px">',
+    ZAPSIGN_ANCHOR_ALUNO,
+    '<br/><br/>',
+    `<strong>${nomeAluno}</strong><br/>`,
+    docAluno,
+    '</td>',
+    '<td style="width:4%;border:none"></td>',
+    '<td style="width:48%;text-align:center;vertical-align:top;border:none;padding:12px 8px">',
+    ZAPSIGN_ANCHOR_IAM,
+    '<br/><br/>',
+    `<strong>${INSTITUTO_RAZAO}</strong><br/>`,
     `CNPJ ${INSTITUTO_CNPJ}`,
-  ].join('\n');
+    '</td>',
+    '</tr>',
+    '</table>',
+    '',
+  ].join('');
+}
+
+/** Remove bloco final de linhas de assinatura (underscores + nomes) de modelos da aba Documentos. */
+function stripTrailingSignatureBlock(markdown: string): string {
+  const linhas = markdown.replace(/\r\n/g, '\n').split('\n');
+  const isSigLine = (l: string) => {
+    const t = l.replace(/\u00A0/g, '').trim();
+    return /^_{8,}$/.test(t) || /^[-*]{3,}$/.test(t);
+  };
+  const isDocLabel = (l: string) => {
+    const t = l.replace(/\*\*/g, '').trim();
+    if (!t) return false;
+    if (/^CNPJ\b/i.test(t)) return true;
+    if (/^CPF\b/i.test(t)) return true;
+    if (/instituto academy mind/i.test(t)) return true;
+    if (/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(t)) return true;
+    return false;
+  };
+  const isNameLike = (l: string) => {
+    const t = l.replace(/\*\*/g, '').trim();
+    if (!t || isDocLabel(l) || isSigLine(l)) return false;
+    // Nome do aluno / razão social (sem pontuação de frase).
+    return !/[.!?;:]/.test(t) && t.length >= 3 && t.length <= 120;
+  };
+
+  let end = linhas.length;
+  while (end > 0 && !linhas[end - 1].trim()) end--;
+
+  let start = end;
+  let sawUnderline = false;
+  /** Antes da 1ª linha de underscore (de baixo p/ cima): só CNPJ/Instituto/CPF. Depois: nomes também. */
+  for (let k = end - 1; k >= 0; k--) {
+    const raw = linhas[k];
+    if (!raw.trim()) {
+      start = k;
+      continue;
+    }
+    if (isSigLine(raw)) {
+      sawUnderline = true;
+      start = k;
+      continue;
+    }
+    if (isDocLabel(raw) || (sawUnderline && isNameLike(raw))) {
+      start = k;
+      continue;
+    }
+    break;
+  }
+  if (!sawUnderline) return markdown.trimEnd();
+  return linhas.slice(0, start).join('\n').trimEnd();
+}
+
+/** Remove assinaturas antigas do markdown e anexa o bloco padronizado (âncoras + tabela). */
+export function withZapSignAssinaturas(markdown: string, nome: string, cpf: string): string {
+  return `${stripTrailingSignatureBlock(markdown)}\n${blocoAssinaturas(nome, cpf)}`;
 }
 
 /**
@@ -94,8 +166,10 @@ function blocoAssinaturas(nome: string, cpf: string): string {
  * jurídicas do caso são uso interno e NÃO entram no documento assinado.
  */
 export function buildCancelamentoTermoMarkdown(doc: CancellationTermoDocument): string {
-  // Modelo editado na aba Documentos: o termo é o texto do modelo.
-  if (doc.templateText) return templateTextToZapSignMarkdown(doc.templateText);
+  // Modelo editado na aba Documentos: corpo do modelo + bloco de assinaturas padronizado.
+  if (doc.templateText) {
+    return withZapSignAssinaturas(templateTextToZapSignMarkdown(doc.templateText), doc.studentName, doc.cpf);
+  }
   const partes: string[] = [
     `# ${md(doc.titulo)}`,
     '',
@@ -304,13 +378,34 @@ export function isZapSignTermoRecusado(result: Pick<ZapSignTermoResult, 'status'
   return /^(refused|rejected|recusad)/.test(String(result?.status ?? '').toLowerCase());
 }
 
+/** Extrai links de assinatura do aluno e da IAM a partir do retorno da ZapSign. */
+export function pickZapSignSignerUrls(
+  result: Pick<ZapSignTermoResult, 'url_assinatura' | 'url_assinatura_iam' | 'signers' | 'file_url'> | null | undefined,
+): { aluno: string; iam: string } {
+  const signers = result?.signers ?? [];
+  const alunoSigner =
+    signers.find((s) => s.papel === 'aluno') ??
+    signers.find((s) => !/instituto academy mind/i.test(s.nome)) ??
+    signers[0];
+  const iamSigner =
+    signers.find((s) => s.papel === 'instituto') ??
+    signers.find((s) => /instituto academy mind/i.test(s.nome)) ??
+    signers[1];
+  return {
+    aluno: result?.url_assinatura || alunoSigner?.sign_url || result?.file_url || '',
+    iam: result?.url_assinatura_iam || iamSigner?.sign_url || '',
+  };
+}
+
 /** Texto do toast após gerar o termo, conforme os envios automáticos escolhidos. */
 export function describeEnvioAutomatico(envio: { email?: string; whatsapp?: string }): string {
   const canais: string[] = [];
   if (envio.email) canais.push(`e-mail (${envio.email})`);
   if (envio.whatsapp) canais.push('WhatsApp');
-  if (canais.length === 0) return 'Termo gerado na ZapSign. Copie o link ou envie pelo WhatsApp.';
-  return `Termo gerado na ZapSign e enviado ao aluno por ${canais.join(' e ')}.`;
+  if (canais.length === 0) {
+    return 'Termo gerado na ZapSign. Copie o link do aluno e o da IAM para assinar.';
+  }
+  return `Termo gerado na ZapSign e enviado ao aluno por ${canais.join(' e ')}. Copie também o link da IAM.`;
 }
 
 /** Mensagem pronta para o aluno com o link de assinatura. */

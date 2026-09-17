@@ -44,7 +44,6 @@ export default function MetaValorEditor({
   const rootRef = useRef<HTMLDivElement>(null);
 
   const acrescimo = sumMetaPendenciaItems(pendencias);
-  const temDetalhe = acrescimo > 0 || pendencias.length > 0;
 
   useEffect(() => {
     if (!detailOpen && !editOpen) return;
@@ -65,7 +64,6 @@ export default function MetaValorEditor({
   };
 
   const abrirDetalhe = () => {
-    if (!temDetalhe) return;
     setEditOpen(false);
     setDetailOpen((o) => !o);
   };
@@ -88,20 +86,11 @@ export default function MetaValorEditor({
       <button
         type="button"
         onClick={abrirDetalhe}
-        disabled={!temDetalhe}
-        className={`text-[10px] text-muted-foreground whitespace-nowrap rounded px-0.5 -mx-0.5 transition-colors ${
-          temDetalhe
-            ? 'hover:text-foreground hover:bg-muted/60 cursor-pointer'
-            : 'cursor-default'
-        }`}
-        title={
-          temDetalhe
-            ? `Ver o que aumentou a ${label.toLowerCase()} por pendência`
-            : `${label} do mês: ${formatCurrency(value)} — ${titulo}`
-        }
+        className="text-[10px] text-muted-foreground whitespace-nowrap rounded px-0.5 -mx-0.5 transition-colors hover:text-foreground hover:bg-muted/60 cursor-pointer"
+        title={`Ver o que aumentou a ${label.toLowerCase()} por pendência`}
       >
         {label}{' '}
-        <span className={`font-semibold text-foreground ${temDetalhe ? 'underline decoration-dotted underline-offset-2' : ''}`}>
+        <span className="font-semibold text-foreground underline decoration-dotted underline-offset-2">
           {formatCurrency(value)}
         </span>
       </button>
