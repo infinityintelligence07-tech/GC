@@ -14,6 +14,11 @@ export interface MetaPendenciaItem {
   tipo: string;
 }
 
+/** Soma em centavos (evita erro de ponto flutuante; mantém centavos exatos). */
+function somaCentavos(valores: number[]): number {
+  return valores.reduce((acc, v) => acc + Math.round((Number(v) || 0) * 100), 0);
+}
+
 /** Pendências de entrada em aberto (entrada-pendente / entrada-restante) na carteira. */
 export function listMetaPendenciaItems(students: Student[]): MetaPendenciaItem[] {
   const items: MetaPendenciaItem[] = [];
@@ -32,55 +37,31 @@ export function listMetaPendenciaItems(students: Student[]): MetaPendenciaItem[]
   return items.sort((a, b) => b.value - a.value || a.studentName.localeCompare(b.studentName, 'pt-BR'));
 }
 
+/** Soma exata das pendências (centavos), sem arredondar para reais inteiros. */
 export function sumMetaPendenciaItems(items: MetaPendenciaItem[]): number {
-  return items.reduce((acc, i) => acc + i.value, 0);
+  return somaCentavos(items.map((i) => i.value)) / 100;
 }
 
 /**
- * Acréscimo da meta em relação ao padrão do app (ex.: 154500 − 144500 = 10000).
- * Se a meta salva for ≤ ao padrão, não há acréscimo.
+ * Meta base gravada no AC. Valores antigos com bump redondo (+10.000 sobre o
+ * padrão) voltam ao padrão — o acréscimo passa a ser a soma exata das pendências.
  */
-export function metaAcrescimoSobrePadrao(
-  metaAtual: number,
-  base: number = EM_DIA_NOVOS_META_PADRAO,
-): number {
-  return Math.max(0, Math.round((metaAtual - base) * 100) / 100);
+export function resolveMetaBase(stored?: number | null): number {
+  if (stored == null || !Number.isFinite(Number(stored))) return EM_DIA_NOVOS_META_PADRAO;
+  const n = Number(stored);
+  if (Math.abs(n - (EM_DIA_NOVOS_META_PADRAO + 10000)) < 0.51) return EM_DIA_NOVOS_META_PADRAO;
+  return n;
 }
 
-/**
- * Escolhe quais pendências explicam o acréscimo da meta:
- * 1) item único com o mesmo valor do acréscimo;
- * 2) senão, subconjunto guloso que fecha o acréscimo;
- * 3) senão, lista vazia (o UI mostra o acréscimo + pendências em aberto à parte).
- */
-export function pickPendenciasDoAcrescimo(
-  items: MetaPendenciaItem[],
-  acrescimo: number,
-): MetaPendenciaItem[] {
-  if (acrescimo <= 0.0049 || items.length === 0) return [];
-  const exact = items.filter((i) => Math.abs(i.value - acrescimo) < 0.05);
-  if (exact.length >= 1) return [exact[0]];
-
-  let restante = acrescimo;
-  const picked: MetaPendenciaItem[] = [];
-  for (const i of items) {
-    if (i.value <= restante + 0.05) {
-      picked.push(i);
-      restante = Math.round((restante - i.value) * 100) / 100;
-      if (restante <= 0.05) break;
-    }
-  }
-  if (restante <= 0.05 && picked.length > 0) return picked;
-  return [];
+/** Meta efetiva = base + soma exata das pendências em aberto. */
+export function metaEfetivaComPendencias(base: number, items: MetaPendenciaItem[]): number {
+  const cents = Math.round((Number(base) || 0) * 100) + somaCentavos(items.map((i) => i.value));
+  return cents / 100;
 }
 
-function formatDueBR(iso?: string): string {
+export function formatMetaPendenciaDue(iso?: string): string {
   if (!iso) return '';
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   if (!m) return iso;
   return `${m[3]}/${m[2]}/${m[1]}`;
-}
-
-export function formatMetaPendenciaDue(iso?: string): string {
-  return formatDueBR(iso);
 }

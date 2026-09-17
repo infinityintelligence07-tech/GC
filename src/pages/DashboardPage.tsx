@@ -10,8 +10,8 @@ import { Wallet, TrendingUp, TrendingDown, Clock, Coins, Star, Info, Users, Tag,
 import { useState, useEffect, useMemo, useRef } from 'react';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
-import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
-import { listMetaPendenciaItems } from '@/lib/metaPendenciaAjustes';
+import MetaValorEditor from '@/components/ui/MetaValorEditor';
+import { listMetaPendenciaItems, resolveMetaBase, metaEfetivaComPendencias } from '@/lib/metaPendenciaAjustes';
 import { Installment, Student, StudentStatus, canEditTab } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { getTodayBrasilia, getTodayStringBrasilia, createdAtInRange, isNegativacaoEstagnada } from '@/lib/brasiliaDate';
@@ -923,25 +923,24 @@ export default function DashboardPage() {
   const mesEmDiaNovosValue = pagoMesTotais.pago;
   const mesPagoAlunos = pagoMesTotais.qtdAlunos;
 
-  // Meta (R$) do dash geral = soma das metas das carteiras dos ACs ativos
-  // (cada um com emDiaNovosMeta ou o padrão do app). Com filtro de assessor,
-  // usa só a meta daquele AC. A fita vai até 150% da meta.
+  // Meta do dash = soma das metas efetivas dos ACs (base + pendências exatas).
+  // Com filtro de assessor, usa só aquele AC.
   const acsAtivosMeta = acs.filter((a) => a.active);
-  const emDiaNovosMetaBruta = acFilter
-    ? (acsAtivosMeta.find((a) => a.name === acFilter)?.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO)
-    : acsAtivosMeta.reduce((sum, a) => sum + (a.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO), 0);
-  const emDiaNovosMeta = emDiaNovosMetaBruta > 0
-    ? emDiaNovosMetaBruta
-    : (rules.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO);
-  const metaBaseReferencia = acFilter
-    ? EM_DIA_NOVOS_META_PADRAO
-    : Math.max(EM_DIA_NOVOS_META_PADRAO, acsAtivosMeta.length * EM_DIA_NOVOS_META_PADRAO);
   const metaPendencias = useMemo(() => {
     const pool = acFilter
       ? kpiStudentsScoped.filter((s) => s.ac === acFilter)
       : kpiStudentsScoped;
     return listMetaPendenciaItems(pool);
   }, [kpiStudentsScoped, acFilter]);
+  const metaBaseReferencia = useMemo(() => {
+    const ativos = acs.filter((a) => a.active);
+    if (acFilter) {
+      const ac = ativos.find((a) => a.name === acFilter);
+      return resolveMetaBase(ac?.emDiaNovosMeta);
+    }
+    return ativos.reduce((sum, a) => sum + resolveMetaBase(a.emDiaNovosMeta), 0);
+  }, [acs, acFilter]);
+  const emDiaNovosMeta = metaEfetivaComPendencias(metaBaseReferencia, metaPendencias);
   const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
   const ESCALA_FITA = 1.5;
   const fitaMax = emDiaNovosMeta * ESCALA_FITA;

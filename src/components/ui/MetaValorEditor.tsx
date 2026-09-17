@@ -1,11 +1,9 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Pencil } from 'lucide-react';
 import { formatCurrency } from '@/store/useAppStore';
 import {
   EM_DIA_NOVOS_META_PADRAO,
   type MetaPendenciaItem,
-  metaAcrescimoSobrePadrao,
-  pickPendenciasDoAcrescimo,
   sumMetaPendenciaItems,
   formatMetaPendenciaDue,
 } from '@/lib/metaPendenciaAjustes';
@@ -13,26 +11,23 @@ import {
 export { EM_DIA_NOVOS_META_PADRAO };
 
 interface MetaValorEditorProps {
-  /** Meta atual (R$) — valor efetivo usado na fita. */
+  /** Meta efetiva (base + pendências) — valor exibido e usado na fita. */
   value: number;
+  /** Meta base (sem pendências). É o que o lápis edita. */
+  baseReferencia?: number;
   /** Título do popover (ex.: "Dashboard geral" ou nome do assessor). */
   titulo: string;
   canEdit: boolean;
-  onSave: (meta: number) => void;
-  /** Rótulo curto exibido ao lado do lápis. */
+  /** Salva a meta base (sem incluir pendências). */
+  onSave: (metaBase: number) => void;
   label?: string;
-  /**
-   * Meta base de referência (padrão do app). O acréscimo exibido no clique
-   * é `value − baseReferencia` quando positivo.
-   */
-  baseReferencia?: number;
-  /** Pendências de entrada em aberto na carteira (para detalhar o acréscimo). */
+  /** Pendências de entrada em aberto — acréscimo = soma exata destes itens. */
   pendencias?: MetaPendenciaItem[];
 }
 
 /**
- * Meta do mês + lápis (edição admin) + clique no valor para ver o que
- * aumentou por pendência em relação à meta base.
+ * Meta do mês + lápis (edita a base) + clique no valor para ver o acréscimo
+ * exato por pendência (soma sem arredondar para real inteiro).
  */
 export default function MetaValorEditor({
   value,
@@ -48,13 +43,8 @@ export default function MetaValorEditor({
   const [draft, setDraft] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const acrescimo = metaAcrescimoSobrePadrao(value, baseReferencia);
-  const explicam = useMemo(
-    () => pickPendenciasDoAcrescimo(pendencias, acrescimo),
-    [pendencias, acrescimo],
-  );
-  const totalExplicam = sumMetaPendenciaItems(explicam);
-  const temDetalhe = acrescimo > 0.0049 || pendencias.length > 0;
+  const acrescimo = sumMetaPendenciaItems(pendencias);
+  const temDetalhe = acrescimo > 0 || pendencias.length > 0;
 
   useEffect(() => {
     if (!detailOpen && !editOpen) return;
@@ -70,7 +60,7 @@ export default function MetaValorEditor({
 
   const abrirEdicao = () => {
     setDetailOpen(false);
-    setDraft(String(value));
+    setDraft(String(baseReferencia));
     setEditOpen(true);
   };
 
@@ -83,6 +73,7 @@ export default function MetaValorEditor({
   const salvar = () => {
     const n = Number(String(draft).replace(/\./g, '').replace(',', '.'));
     if (!Number.isFinite(n) || n <= 0) return;
+    // Mantém centavos se o admin digitar; não força real inteiro.
     onSave(Math.round(n * 100) / 100);
     setEditOpen(false);
   };
@@ -119,7 +110,7 @@ export default function MetaValorEditor({
           type="button"
           onClick={() => (editOpen ? setEditOpen(false) : abrirEdicao())}
           className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-          title={`Editar ${label.toLowerCase()}`}
+          title={`Editar meta base (sem pendências)`}
         >
           <Pencil size={11} />
         </button>
@@ -136,9 +127,9 @@ export default function MetaValorEditor({
               <span className="font-medium text-foreground tabular-nums">{formatCurrency(baseReferencia)}</span>
             </div>
             <div className="flex justify-between gap-2">
-              <span>Acréscimo</span>
+              <span>Acréscimo (soma exata)</span>
               <span className="font-semibold text-amber-700 tabular-nums">
-                {acrescimo > 0.0049 ? `+${formatCurrency(acrescimo)}` : formatCurrency(0)}
+                {acrescimo > 0 ? `+${formatCurrency(acrescimo)}` : formatCurrency(0)}
               </span>
             </div>
             <div className="flex justify-between gap-2 border-t border-border pt-1">
@@ -147,13 +138,13 @@ export default function MetaValorEditor({
             </div>
           </div>
 
-          {acrescimo > 0.0049 && explicam.length > 0 ? (
+          {pendencias.length > 0 ? (
             <div className="space-y-1.5">
               <p className="text-[9px] uppercase tracking-wide text-muted-foreground font-semibold">
-                Composição do acréscimo
+                Pendências em aberto na carteira
               </p>
               <ul className="max-h-48 overflow-y-auto space-y-1.5">
-                {explicam.map((p) => (
+                {pendencias.map((p) => (
                   <li
                     key={`${p.studentId}-${p.dueDate}-${p.value}`}
                     className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-2 py-1.5"
@@ -170,46 +161,10 @@ export default function MetaValorEditor({
                   </li>
                 ))}
               </ul>
-              {Math.abs(totalExplicam - acrescimo) > 0.05 && (
-                <p className="text-[9px] text-muted-foreground">
-                  Soma listada: {formatCurrency(totalExplicam)}
-                </p>
-              )}
-            </div>
-          ) : acrescimo > 0.0049 ? (
-            <div className="space-y-1.5">
-              <p className="text-[9px] text-muted-foreground leading-snug">
-                Há acréscimo de {formatCurrency(acrescimo)} na meta, mas nenhuma pendência em aberto
-                fecha esse valor sozinha.
-              </p>
-              {pendencias.length > 0 && (
-                <>
-                  <p className="text-[9px] uppercase tracking-wide text-muted-foreground font-semibold pt-1">
-                    Pendências em aberto na carteira
-                  </p>
-                  <ul className="max-h-40 overflow-y-auto space-y-1.5">
-                    {pendencias.map((p) => (
-                      <li
-                        key={`${p.studentId}-${p.dueDate}-${p.value}`}
-                        className="rounded-lg border border-border bg-muted/40 px-2 py-1.5"
-                      >
-                        <p className="text-[10px] font-semibold text-foreground leading-tight">{p.studentName}</p>
-                        <p className="text-[9px] text-muted-foreground leading-tight mt-0.5">
-                          {p.product}
-                          {p.dueDate ? ` · venc. ${formatMetaPendenciaDue(p.dueDate)}` : ''}
-                        </p>
-                        <p className="text-[10px] font-bold text-foreground tabular-nums mt-0.5">
-                          {formatCurrency(p.value)}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
             </div>
           ) : (
             <p className="text-[9px] text-muted-foreground leading-snug">
-              Sem acréscimo sobre a meta base{pendencias.length === 0 ? '.' : '. Há pendências em aberto, mas a meta ainda não foi elevada.'}
+              Sem pendências em aberto — a meta está na base.
             </p>
           )}
         </div>
@@ -217,12 +172,12 @@ export default function MetaValorEditor({
 
       {editOpen && (
         <div className="absolute right-0 top-full z-40 mt-1 w-64 rounded-xl border border-border bg-card p-3 shadow-lg text-left cursor-default">
-          <p className="text-[11px] font-semibold text-foreground mb-2">{label} Pago do mês — {titulo}</p>
+          <p className="text-[11px] font-semibold text-foreground mb-2">{label} base — {titulo}</p>
           <label className="block text-[10px] text-muted-foreground">
-            {label} do mês (R$)
+            Meta base do mês (R$), sem pendências
             <input
               type="number"
-              step="100"
+              step="0.01"
               min={0}
               className="input-field w-full mt-1"
               value={draft}
@@ -233,7 +188,7 @@ export default function MetaValorEditor({
             />
           </label>
           <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug">
-            A fita vai de R$ 0 até 150% da meta (o traço marca a meta em 2/3 da escala); o ponteiro mostra quanto da meta o Pago do dia 01 até hoje (baixas feitas no GC e conciliadas) já alcança.
+            A meta exibida na fita é a base + a soma exata das pendências de entrada em aberto. O acréscimo por pendência não é arredondado.
           </p>
           <div className="flex justify-end gap-2 mt-3">
             <button
@@ -248,7 +203,7 @@ export default function MetaValorEditor({
               onClick={salvar}
               className="px-3 py-1.5 rounded-lg text-[11px] font-semibold iam-gradient text-primary-foreground"
             >
-              Salvar meta
+              Salvar meta base
             </button>
           </div>
         </div>
