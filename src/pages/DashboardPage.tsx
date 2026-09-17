@@ -11,6 +11,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
+import { listMetaPendenciaItems } from '@/lib/metaPendenciaAjustes';
 import { Installment, Student, StudentStatus, canEditTab } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { getTodayBrasilia, getTodayStringBrasilia, createdAtInRange, isNegativacaoEstagnada } from '@/lib/brasiliaDate';
@@ -932,6 +933,15 @@ export default function DashboardPage() {
   const emDiaNovosMeta = emDiaNovosMetaBruta > 0
     ? emDiaNovosMetaBruta
     : (rules.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO);
+  const metaBaseReferencia = acFilter
+    ? EM_DIA_NOVOS_META_PADRAO
+    : Math.max(EM_DIA_NOVOS_META_PADRAO, acsAtivosMeta.length * EM_DIA_NOVOS_META_PADRAO);
+  const metaPendencias = useMemo(() => {
+    const pool = acFilter
+      ? kpiStudentsScoped.filter((s) => s.ac === acFilter)
+      : kpiStudentsScoped;
+    return listMetaPendenciaItems(pool);
+  }, [kpiStudentsScoped, acFilter]);
   const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
   const ESCALA_FITA = 1.5;
   const fitaMax = emDiaNovosMeta * ESCALA_FITA;
@@ -1465,6 +1475,8 @@ export default function DashboardPage() {
               titulo={acFilter ? acFilter : `Soma das metas dos ${acsAtivosMeta.length} AC(s)`}
               canEdit={false}
               onSave={() => {}}
+              baseReferencia={metaBaseReferencia}
+              pendencias={metaPendencias}
             />
           </div>
           <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>

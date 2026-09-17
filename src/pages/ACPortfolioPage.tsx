@@ -64,6 +64,7 @@ import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor, { EM_DIA_NOVOS_META_PADRAO } from '@/components/ui/MetaValorEditor';
+import { listMetaPendenciaItems } from '@/lib/metaPendenciaAjustes';
 import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 
@@ -911,6 +912,10 @@ export default function ACPortfolioPage() {
   // Meta (R$) do mês por assessor: marcada em 2/3 da fita. Editável pelo admin
   // (lápis no card); sem meta salva usa o padrão do app.
   const emDiaNovosMeta = ac?.emDiaNovosMeta ?? EM_DIA_NOVOS_META_PADRAO;
+  const metaPendencias = useMemo(
+    () => listMetaPendenciaItems(kpiStudentsScoped),
+    [kpiStudentsScoped],
+  );
   const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
   // A fita vai até 150% da meta para haver espaço à direita quando o assessor
   // passar da meta.
@@ -1043,6 +1048,8 @@ export default function ACPortfolioPage() {
                 titulo={ac.name}
                 canEdit={currentUser?.role === 'admin'}
                 onSave={(meta) => updateAC(ac.id, { emDiaNovosMeta: meta })}
+                baseReferencia={EM_DIA_NOVOS_META_PADRAO}
+                pendencias={metaPendencias}
               />
               <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos_mes' ? null : 'emdia_novos_mes'); }} className="text-muted-foreground/50 hover:text-muted-foreground" title="Como este card é calculado">
                 <Info size={14} />
