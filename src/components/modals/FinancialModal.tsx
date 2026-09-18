@@ -1431,6 +1431,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       ? renegFirstDueDate || undefined
       : dataCongelamento;
     const newInst = parcelasRenegNovas;
+    const valorParcelaArred = round2Reneg(renegValues.newValue);
     // Plano proposto (mantidas + novas). Será aplicado ao aluno na conciliação.
     const proposedInst = [...keptInst, ...newInst].map((i, idx) => ({ ...i, number: idx + 1 }));
     const newTotal = proposedInst.length;
