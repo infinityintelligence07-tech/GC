@@ -41,19 +41,25 @@ export default function FlowModal({ student, onClose }: Props) {
         </div>
 
         <div className="p-6 space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="p-4 bg-muted/50 rounded-xl">
-              <p className="text-xs text-muted-foreground">Valor Total do Contrato</p>
-              <p className="text-xl font-bold iam-text-gradient mt-1">{formatCurrency(totalContract)}</p>
-            </div>
-            <div className="p-4 bg-amber-50 rounded-xl">
-              <p className="text-xs text-amber-700">Total à Vencer</p>
-              <p className="text-xl font-bold text-amber-600 mt-1">{formatCurrency(totalAVencer)}</p>
-            </div>
-            <div className="p-4 bg-destructive/5 rounded-xl">
-              <p className="text-xs text-destructive">Total em Atraso (Vencido)</p>
-              <p className="text-xl font-bold text-destructive mt-1">{formatCurrency(totalOverdue)}</p>
-            </div>
+          <div className="flex flex-wrap gap-4">
+            {totalContract > 0.0049 && (
+              <div className="flex-1 min-w-[160px] p-4 bg-muted/50 rounded-xl">
+                <p className="text-xs text-muted-foreground">Valor Total do Contrato</p>
+                <p className="text-xl font-bold iam-text-gradient mt-1">{formatCurrency(totalContract)}</p>
+              </div>
+            )}
+            {totalAVencer > 0.0049 && (
+              <div className="flex-1 min-w-[160px] p-4 bg-amber-50 rounded-xl">
+                <p className="text-xs text-amber-700">Total à Vencer</p>
+                <p className="text-xl font-bold text-amber-600 mt-1">{formatCurrency(totalAVencer)}</p>
+              </div>
+            )}
+            {totalOverdue > 0.0049 && (
+              <div className="flex-1 min-w-[160px] p-4 bg-destructive/5 rounded-xl">
+                <p className="text-xs text-destructive">Total em Atraso (Vencido)</p>
+                <p className="text-xl font-bold text-destructive mt-1">{formatCurrency(totalOverdue)}</p>
+              </div>
+            )}
           </div>
 
 
@@ -88,6 +94,7 @@ export default function FlowModal({ student, onClose }: Props) {
                 return [...student.installments]
                 .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime() || a.number - b.number)
                 .map((inst) => {
+                if (Math.abs(inst.value) < 0.005 && Math.abs(inst.paidValue ?? 0) < 0.005) return null;
                 const parcelaTagsResolved = (inst.tags || [])
                   .map((tid) => studentTags.find((t) => t.id === tid))
                   .filter((t): t is NonNullable<typeof t> => !!t);
