@@ -827,7 +827,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     [student.installments],
   );
   const hasEntradaPendente = entradaPendenteValor > 0.0049;
-  const displayParcelLabel = (instNumber: number) => (hasEntrada ? instNumber + 1 : instNumber);
+  const displayParcelLabel = (instNumber: number) =>
+    embeddedEntrada ? instNumber : hasEntrada ? instNumber + 1 : instNumber;
   const saldoContratoReal = (finance.saleValue ?? 0) - totalPagoContrato;
   const deltaContrato = totalAberto - saldoContratoReal; // >0 sobra (encargo/erro), <0 falta
   const hasDelta = Math.abs(deltaContrato) > 0.01;
@@ -2180,7 +2181,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     title={
                       entradaRenegociacaoMeta
                         ? `Entrada de renegociação — ${formatCurrency(entradaValor)} — paga em ${formatDateBR(entradaRenegociacaoMeta.date)}`
-                        : `Entrada — ${formatCurrency(entradaValor)} — quitada na matrícula`
+                        : embeddedEntrada
+                          ? `Entrada — ${formatCurrency(entradaValor)} — ${embeddedEntrada.paid ? 'paga' : 'vencimento'} em ${formatDateBR(embeddedEntrada.paidDate || embeddedEntrada.dueDate)}`
+                          : `Entrada — ${formatCurrency(entradaValor)} — quitada na matrícula`
                     }
                   >
                     <span className="text-[9px] font-bold text-emerald-800">P1</span>
@@ -2191,9 +2194,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     <span className="text-[8px] text-muted-foreground mt-0.5 leading-tight text-center">
                       {entradaRenegociacaoMeta
                         ? `Pago: ${formatDateBR(entradaRenegociacaoMeta.date)}`
-                        : student.enrollmentDate
-                          ? `Matrícula: ${formatDateBR(student.enrollmentDate)}`
-                          : 'Na matrícula'}
+                        : embeddedEntrada
+                          ? `${embeddedEntrada.paid ? 'Pago' : 'Venc'}: ${formatDateBR(embeddedEntrada.paidDate || embeddedEntrada.dueDate)}`
+                          : student.enrollmentDate
+                            ? `Matrícula: ${formatDateBR(student.enrollmentDate)}`
+                            : 'Na matrícula'}
                     </span>
                     <span className="mt-0.5 text-[8px] font-semibold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700">
                       ✓ Pago
