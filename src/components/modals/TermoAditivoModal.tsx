@@ -49,6 +49,8 @@ export interface TermoRenegociacaoNewValues {
   diaVencimento?: number;
   /** Data da entrada (DD/MM/AAAA), se houver. */
   dataEntrada?: string;
+  /** Cronograma real (valor e vencimento ISO de cada parcela nova). */
+  cronograma?: { value: number; dueDate: string }[];
 }
 
 interface Props {
@@ -160,16 +162,29 @@ export default function TermoAditivoModal({
     student.dueDay ??
     today.getDate();
 
-  const parcelamentoLines = useMemo(
-    () =>
-      buildParcelamentoLines(
-        newValues.novasParcelas,
-        newValues.novoValorParcela,
-        newValues.primeiraParcelaVencimento,
-        diaVencimento,
-      ),
-    [newValues.novasParcelas, newValues.novoValorParcela, newValues.primeiraParcelaVencimento, diaVencimento],
-  );
+  const parcelamentoLines = useMemo(() => {
+    if (newValues.cronograma && newValues.cronograma.length > 0) {
+      return newValues.cronograma.map((p, i) => {
+        const venc =
+          /^\d{4}-\d{2}-\d{2}$/.test(p.dueDate)
+            ? `${p.dueDate.slice(8, 10)}/${p.dueDate.slice(5, 7)}/${p.dueDate.slice(0, 4)}`
+            : '—';
+        return `Parcela ${String(i + 1).padStart(2, '0')}: ${formatCurrency(p.value)} — vencimento ${venc}`;
+      });
+    }
+    return buildParcelamentoLines(
+      newValues.novasParcelas,
+      newValues.novoValorParcela,
+      newValues.primeiraParcelaVencimento,
+      diaVencimento,
+    );
+  }, [
+    newValues.cronograma,
+    newValues.novasParcelas,
+    newValues.novoValorParcela,
+    newValues.primeiraParcelaVencimento,
+    diaVencimento,
+  ]);
 
   const entradaLinha =
     newValues.novaEntrada > 0.0049

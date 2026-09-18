@@ -32,6 +32,7 @@ import { resolveStudentDisplayStatusVinculado, resolveStudentStatusComVinculo } 
 import { comStatusFinanceiroParaCards, isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista, isIamForaDaCarteiraAteConciliar } from '@/lib/iamPendenteConciliacao';
 import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
+import * as XLSX from 'xlsx';
 import {
   buildBaixasGcIndex,
   dataBaixaParaPeriodo,
@@ -67,6 +68,25 @@ import MetaValorEditor from '@/components/ui/MetaValorEditor';
 import { listMetaPendenciaItems, resolveMetaBase, metaEfetivaComPendencias } from '@/lib/metaPendenciaAjustes';
 import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
+
+function exportAlunosNomeAc(rows: { name: string; ac: string }[], acName: string) {
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Nome', 'AC'],
+    ...rows.map((s) => [s.name, s.ac]),
+  ]);
+  sheet['!cols'] = [{ wch: 42 }, { wch: 28 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet, 'Alunos');
+  const today = new Date();
+  const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const slug = acName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase() || 'carteira';
+  XLSX.writeFile(wb, `alunos-${slug}-${stamp}.xlsx`);
+}
 
 function ScoreStars({ score }: { score: number }) {
   if (score === 0) {
@@ -1861,14 +1881,37 @@ export default function ACPortfolioPage() {
           </button>
         </div>
       )}
-      <div className="relative max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          className="input-field pl-8 w-full"
-          placeholder="Buscar por nome ou CPF..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative max-w-sm flex-1 min-w-[220px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            className="input-field pl-8 w-full"
+            placeholder="Buscar por nome ou CPF..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (!sorted.length) {
+              toast.message('Nenhum aluno para extrair.');
+              return;
+            }
+            try {
+              exportAlunosNomeAc(sorted, ac?.name ?? 'carteira');
+              toast.success('Planilha extraída com nome e AC.');
+            } catch (err) {
+              console.error(err);
+              toast.error('Não foi possível extrair os alunos.');
+            }
+          }}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold border border-border bg-card text-foreground hover:bg-muted transition-colors"
+          title="Baixa uma planilha só com o nome do aluno e o AC"
+        >
+          <Download size={13} />
+          Extrair alunos
+        </button>
       </div>
       {pagosOcultosCount > 0 && (
         <p className="text-[11px] text-muted-foreground -mt-2">

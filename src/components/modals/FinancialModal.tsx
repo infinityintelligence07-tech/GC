@@ -99,6 +99,8 @@ type RenegStandbyDraft = {
   renegRecomprasIncluidas?: string[];
   /** Outros treinamentos do aluno (ids) juntados à renegociação. Ausente = nenhum. */
   renegOutrosIncluidos?: string[];
+  /** Ajuste manual de valor/vencimento das novas parcelas. Ausente = cálculo automático. */
+  renegAjusteParcelas?: { value: number; dueDate: string }[];
   savedAt: string;
   /** Termo de renegociação aguardando / concluído na ZapSign. */
   termo?: RenegTermoPending;
@@ -350,6 +352,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   // os vencimentos das parcelas em aberto selecionadas; o que exceder continua
   // mês a mês no mesmo dia). Só com "alterar" aparecem data + escopo.
   const [renegAlterarDatas, setRenegAlterarDatas] = useState(false);
+  /** Edição manual das novas parcelas (valor e vencimento). null = usa o cálculo. */
+  const [renegAjusteParcelas, setRenegAjusteParcelas] = useState<{ value: number; dueDate: string }[] | null>(null);
+  const renegPlanoKeyRef = useRef<string | null>(null);
   const [entradaMode, setEntradaMode] = useState<'valor' | 'percent'>('valor');
   const [entradaPercent, setEntradaPercent] = useState<number>(0);
 
@@ -432,6 +437,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     renegSelected,
     renegRecomprasIncluidas,
     renegOutrosIncluidos,
+    renegAjusteParcelas: renegAjusteParcelas ?? undefined,
     savedAt: new Date().toISOString(),
     termo: termoOverride === undefined ? (termoPending ?? undefined) : (termoOverride ?? undefined),
     // Mantém o status de antes do primeiro rascunho (a ficha já pode estar "Em Renegociação").
@@ -490,6 +496,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       const validos = new Set(outrosContratosComSaldo.map((o) => o.id));
       setRenegOutrosIncluidos(draft.renegOutrosIncluidos.filter((id) => validos.has(id)));
     }
+    setRenegAjusteParcelas(Array.isArray(draft.renegAjusteParcelas) ? draft.renegAjusteParcelas : null);
+    renegPlanoKeyRef.current = null;
     setTermoPending(draft.termo ?? null);
     setQuitacaoMode(false);
     setQuitParcelasMode(false);
@@ -1299,6 +1307,103 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     : Math.max(0, Math.min(totalPending, discountInput));
   const quitacaoValue = Math.max(0, totalPending - descontoValor);
 
+  const round2Reneg = (n: number) => Math.round(n * 100) / 100;
+
+  /** Parcelas novas do plano (valores iguais e vencimentos), antes do ajuste manual. */
+  const montarNovasParcelasReneg = (): Installment[] => {
+    const dataCongelamento =
+      novaEntrada <= 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
+        ? entradaPaidDate
+        : undefined;
+    const firstDue = renegAlterarDatas
+      ? renegFirstDueDate || undefined
+      : dataCongelamento;
+    const aplicaTodas = renegDueScope === 'todas';
+    const renegDueDay = firstDue && aplicaTodas
+      ? new Date(firstDue + 'T00:00:00').getDate()
+      : student.dueDay;
+    const datasMantidas = !renegAlterarDatas && !dataCongelamento
+      ? renegValues.selectedInst
+          .filter((i) => !i.paid || isParcelaAntecipada(i))
+          .map((i) => i.dueDate)
+          .sort()
+      : [];
+    let novas = generateInstallments(
+      renegDueDay,
+      newInstallments,
+      renegValues.newValue,
+      0,
+      today.toISOString().split('T')[0],
+      datasMantidas.length > 0 ? datasMantidas[0] : aplicaTodas ? firstDue : undefined,
+    );
+    if (datasMantidas.length > 0) {
+      const ultima = new Date(datasMantidas[datasMantidas.length - 1] + 'T00:00:00');
+      const diaBase = new Date(datasMantidas[0] + 'T00:00:00').getDate();
+      novas = novas.map((i, idx) => {
+        if (idx < datasMantidas.length) return { ...i, dueDate: datasMantidas[idx] };
+        const d = new Date(ultima.getFullYear(), ultima.getMonth() + (idx - datasMantidas.length + 1), diaBase);
+        return { ...i, dueDate: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` };
+      });
+    }
+    if (firstDue && !aplicaTodas) {
+      novas = novas.map((i) => (i.number === 1 ? { ...i, dueDate: firstDue } : i));
+    }
+    const financiado = round2Reneg(renegValues.newValue * novas.length);
+    const valorParcelaArred = round2Reneg(renegValues.newValue);
+    return novas.map((i, idx) => ({
+      ...i,
+      value:
+        idx === novas.length - 1
+          ? round2Reneg(financiado - valorParcelaArred * (novas.length - 1))
+          : valorParcelaArred,
+    }));
+  };
+
+  const parcelasRenegBase = montarNovasParcelasReneg();
+  const parcelasRenegAjustadas =
+    renegAjusteParcelas != null && renegAjusteParcelas.length === parcelasRenegBase.length;
+  const parcelasRenegNovas = parcelasRenegAjustadas
+    ? parcelasRenegBase.map((i, idx) => ({
+        ...i,
+        value: round2Reneg(renegAjusteParcelas![idx].value),
+        dueDate: /^\d{4}-\d{2}-\d{2}$/.test(renegAjusteParcelas![idx].dueDate)
+          ? renegAjusteParcelas![idx].dueDate
+          : i.dueDate,
+      }))
+    : parcelasRenegBase;
+  const somaParcelasReneg = round2Reneg(parcelasRenegNovas.reduce((s, i) => s + i.value, 0));
+  const esperadoParcelasReneg = round2Reneg(parcelasRenegBase.reduce((s, i) => s + i.value, 0));
+
+  const renegPlanoKey = [
+    newInstallments,
+    esperadoParcelasReneg,
+    renegAlterarDatas ? 1 : 0,
+    renegDueScope,
+    renegFirstDueDate,
+    entradaPaidDate,
+    round2Reneg(novaEntrada),
+  ].join('|');
+  useEffect(() => {
+    if (renegPlanoKeyRef.current === null) {
+      renegPlanoKeyRef.current = renegPlanoKey;
+      return;
+    }
+    if (renegPlanoKeyRef.current !== renegPlanoKey) {
+      renegPlanoKeyRef.current = renegPlanoKey;
+      setRenegAjusteParcelas(null);
+    }
+  }, [renegPlanoKey]);
+
+  const editarParcelaReneg = (idx: number, patch: Partial<{ value: number; dueDate: string }>) => {
+    setRenegAjusteParcelas((prev) => {
+      const base =
+        prev && prev.length === parcelasRenegBase.length
+          ? prev
+          : parcelasRenegBase.map((i) => ({ value: i.value, dueDate: i.dueDate }));
+      return base.map((row, i) => (i === idx ? { ...row, ...patch } : row));
+    });
+  };
+
   const handleConfirmRenegotiate = () => {
     if (readOnly) return;
     if (!termoAssinado) {
@@ -1322,59 +1427,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       novaEntrada <= 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
         ? entradaPaidDate
         : undefined;
-    // "Manter as datas": só há data/escopo quando o AC optou por alterar.
-    // Congelamento sem entrada usa a data do acordo como 1ª parcela.
     const firstDue = renegAlterarDatas
       ? renegFirstDueDate || undefined
       : dataCongelamento;
-    const aplicaTodas = renegDueScope === 'todas';
-    const renegDueDay = firstDue && aplicaTodas
-      ? new Date(firstDue + 'T00:00:00').getDate()
-      : student.dueDay;
-    // Datas mantidas: as novas parcelas reaproveitam os vencimentos das parcelas
-    // em aberto/antecipadas selecionadas (em ordem); se o novo plano tiver mais
-    // parcelas, continua mês a mês no mesmo dia após o último vencimento.
-    const datasMantidas = !renegAlterarDatas && !dataCongelamento
-      ? renegValues.selectedInst
-          .filter((i) => !i.paid || isParcelaAntecipada(i))
-          .map((i) => i.dueDate)
-          .sort()
-      : [];
-    let newInst = generateInstallments(
-      renegDueDay,
-      newInstallments,
-      renegValues.newValue,
-      0,
-      today.toISOString().split('T')[0],
-      datasMantidas.length > 0 ? datasMantidas[0] : aplicaTodas ? firstDue : undefined
-    );
-    if (datasMantidas.length > 0) {
-      const ultima = new Date(datasMantidas[datasMantidas.length - 1] + 'T00:00:00');
-      const diaBase = new Date(datasMantidas[0] + 'T00:00:00').getDate();
-      newInst = newInst.map((i, idx) => {
-        if (idx < datasMantidas.length) return { ...i, dueDate: datasMantidas[idx] };
-        const d = new Date(ultima.getFullYear(), ultima.getMonth() + (idx - datasMantidas.length + 1), diaBase);
-        return { ...i, dueDate: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` };
-      });
-    }
-    // Apenas a 1ª parcela recebe a data escolhida; as demais mantêm o dia
-    // de vencimento original do aluno.
-    if (firstDue && !aplicaTodas) {
-      newInst = newInst.map((i) => (i.number === 1 ? { ...i, dueDate: firstDue } : i));
-    }
-    // Parcelas em centavos: `newValue` é saldo ÷ n (ou PMT) sem arredondar e
-    // gravava valores como 514,593125. Arredonda cada uma e a última absorve a
-    // diferença para a soma bater com o financiado.
-    const round2 = (n: number) => Math.round(n * 100) / 100;
-    const financiado = round2(renegValues.newValue * newInst.length);
-    const valorParcelaArred = round2(renegValues.newValue);
-    newInst = newInst.map((i, idx) => ({
-      ...i,
-      value:
-        idx === newInst.length - 1
-          ? round2(financiado - valorParcelaArred * (newInst.length - 1))
-          : valorParcelaArred,
-    }));
+    const newInst = parcelasRenegNovas;
     // Plano proposto (mantidas + novas). Será aplicado ao aluno na conciliação.
     const proposedInst = [...keptInst, ...newInst].map((i, idx) => ({ ...i, number: idx + 1 }));
     const newTotal = proposedInst.length;
@@ -1430,7 +1486,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               ? ` (recebida em ${formatDateBR(entradaPaidDate)})`
               : '') +
             `. ` +
-            `Plano proposto: ${newInstallments}x de ${formatCurrency(renegValues.newValue)}` +
+            `Plano proposto: ${newInstallments}x` +
+            (parcelasRenegAjustadas
+              ? ` com valores ajustados (soma ${formatCurrency(somaParcelasReneg)})`
+              : ` de ${formatCurrency(renegValues.newValue)}`) +
             (firstDue
               ? ` com vencimento em ${new Date(firstDue + 'T00:00:00').toLocaleDateString('pt-BR')} (${renegDueScope === 'todas' ? 'aplicado a todas as parcelas' : 'somente a 1ª parcela'})`
               : newInst.length > 0
@@ -1455,7 +1514,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       studentId: student.id,
       studentName: student.name,
       ac: student.ac,
-      resumo: `Renegociação (rascunho) — ${previousTotal}x ${formatCurrency(previousValue)} → ${newTotal}x (${keptPaid.length} pagas mantidas + ${newInstallments} novas de ${formatCurrency(renegValues.newValue)})` +
+      resumo: `Renegociação (rascunho) — ${previousTotal}x ${formatCurrency(previousValue)} → ${newTotal}x (${keptPaid.length} pagas mantidas + ${newInstallments} novas${parcelasRenegAjustadas ? ' com valores ajustados' : ` de ${formatCurrency(renegValues.newValue)}`})` +
         (antecipadasIncluidasCount > 0
           ? ` — ${antecipadasIncluidasCount} boleto(s) antecipado(s) incluído(s)`
           : '') +
@@ -3852,6 +3911,51 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                     </div>
                   </div>
 
+                  {parcelasRenegNovas.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Ajustar parcelas</p>
+                        {parcelasRenegAjustadas && (
+                          <button
+                            type="button"
+                            onClick={() => setRenegAjusteParcelas(null)}
+                            className="text-[10px] text-primary hover:underline"
+                          >
+                            Voltar ao cálculo
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                        {parcelasRenegNovas.map((p, idx) => (
+                          <div key={idx} className="grid grid-cols-[2.25rem_1fr_7.5rem] gap-2 items-center">
+                            <span className="text-[10px] text-muted-foreground">P{idx + 1}</span>
+                            <input
+                              type="date"
+                              value={p.dueDate}
+                              onChange={(e) => editarParcelaReneg(idx, { dueDate: e.target.value })}
+                              className="input-field text-xs py-1"
+                              title={`Vencimento da parcela ${idx + 1}`}
+                            />
+                            <CurrencyInput
+                              value={p.value}
+                              onChange={(v) => editarParcelaReneg(idx, { value: v })}
+                              className="text-xs py-1"
+                              showPrefix={false}
+                              title={`Valor da parcela ${idx + 1}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Soma: {formatCurrency(somaParcelasReneg)}
+                        {Math.abs(somaParcelasReneg - esperadoParcelasReneg) > 0.009
+                          ? ` · cálculo ${formatCurrency(esperadoParcelasReneg)} · diferença ${formatCurrency(somaParcelasReneg - esperadoParcelasReneg)}`
+                          : ' · igual ao cálculo'}
+                        . Mudar juros, entrada ou quantidade apaga este ajuste.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Botões: Voltar / [Confirmar ou Pendente assinatura — só após gerar/anexar o termo] / Rascunho */}
                   <div className={`grid gap-2 ${termoPending ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <button
@@ -4016,7 +4120,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       )}
                       <div className="flex justify-between border-t border-border/40 pt-2">
                         <span className="text-muted-foreground">Novo plano:</span>
-                        <span className="font-bold text-primary">{newInstallments}x de {formatCurrency(renegValues.newValue)}</span>
+                        <span className="font-bold text-primary">
+                          {parcelasRenegAjustadas
+                            ? `${newInstallments}x ajustadas · ${formatCurrency(somaParcelasReneg)}`
+                            : `${newInstallments}x de ${formatCurrency(renegValues.newValue)}`}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Vencimento:</span>
@@ -4031,6 +4139,16 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                               </>}
                         </span>
                       </div>
+                      {parcelasRenegAjustadas && (
+                        <div className="space-y-0.5 pt-1 text-[10px] text-muted-foreground">
+                          {parcelasRenegNovas.map((p, idx) => (
+                            <div key={idx} className="flex justify-between">
+                              <span>P{idx + 1} · {new Date(p.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                              <span>{formatCurrency(p.value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="flex justify-between text-emerald-700">
                         <span>Fluxo total do aluno:</span>
@@ -4171,6 +4289,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             novasParcelas: newInstallments,
             novoValorParcela: renegValues.newValue,
             saldoAposEntrada: renegValues.remainingAfterEntrada,
+            cronograma: parcelasRenegNovas.map((p) => ({ value: p.value, dueDate: p.dueDate })),
             primeiraParcelaVencimento: !renegAlterarDatas
               ? (novaEntrada <= 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
                 ? formatDateBR(entradaPaidDate)
