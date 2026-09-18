@@ -359,6 +359,25 @@ export function useSupabaseSync() {
         } catch (e) { console.error('Falha backfill de comissões:', e); }
       }).catch(console.error);
 
+      // Uma vez: cadastros manuais da aba Cancelamentos (PIX/cartão) atualizam
+      // o status nas turmas do IAM Control, mesmo sem ficha na aba Alunos.
+      try {
+        const key = `iam-cancelamentos-manuais-turmas-v1-${activeCompanyId}`;
+        if (!localStorage.getItem(key)) {
+          const ids = cancellationCases
+            .filter((c) => c.externalImport && c.acao !== 'Revertido')
+            .map((c) => c.id);
+          if (ids.length > 0) {
+            const { pushCancelamentosManuaisAgora } = await import('@/lib/iamControlSync');
+            void pushCancelamentosManuaisAgora(ids)
+              .then(() => localStorage.setItem(key, new Date().toISOString()))
+              .catch((e) => console.warn('[IAM Control] backfill de cancelamentos manuais falhou:', e));
+          } else {
+            localStorage.setItem(key, new Date().toISOString());
+          }
+        }
+      } catch (e) { console.error('Falha backfill cancelamentos manuais:', e); }
+
       // Persistência em background do que foi reconciliado (só onde mudou e
       // apenas quando o vínculo veio do studentId — nunca do fallback por nome).
       // Compara os CAMPOS gravados, não a identidade do objeto: a reconciliação

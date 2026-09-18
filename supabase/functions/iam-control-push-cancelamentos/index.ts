@@ -18,6 +18,16 @@ type Row = {
   iam_control_aluno_id?: string | null;
 };
 
+type CaseRow = {
+  id: string;
+  student_id: string | null;
+  student_name: string | null;
+  student_whatsapp: string | null;
+  funnel_stage: string | null;
+  stage: string | null;
+  acao: string | null;
+};
+
 function mapStatus(r: Row): 'Cancelamento solicitado' | 'Cancelado' | null {
   const sc = (r.status_cancelamento ?? '').toLowerCase();
   const st = (r.status ?? '').toLowerCase();
@@ -30,6 +40,16 @@ function mapStatus(r: Row): 'Cancelamento solicitado' | 'Cancelado' | null {
     return 'Cancelamento solicitado';
   }
   return null;
+}
+
+/** Cadastro manual da aba Cancelamentos, com ou sem ficha na aba Alunos. */
+function mapCaseStatus(r: CaseRow): 'Cancelamento solicitado' | 'Cancelado' | null {
+  const acao = (r.acao ?? '').toLowerCase();
+  const stage = (r.stage ?? '').toLowerCase();
+  const funnel = (r.funnel_stage ?? '').toLowerCase();
+  if (acao === 'revertido' || stage === 'recuperado') return null;
+  if (acao === 'cancelado' || stage === 'cancelado' || funnel === 'finalizado') return 'Cancelado';
+  return 'Cancelamento solicitado';
 }
 
 Deno.serve(async (req) => {
@@ -48,8 +68,10 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-    // Body é opcional: sem body sincroniza todos os cancelamentos.
+    // Body é opcional: sem body sincroniza alunos em cancelamento e os
+    // cadastros manuais da aba Cancelamentos (mesmo sem ficha em Alunos).
     let studentIds: string[] | null = null;
+    let caseIds: string[] | null = null;
     try {
       const raw = await req.text();
       if (raw) {
@@ -57,43 +79,84 @@ Deno.serve(async (req) => {
         if (Array.isArray(parsed?.student_ids)) {
           studentIds = parsed.student_ids.filter((v: unknown) => typeof v === 'string');
         }
+        if (Array.isArray(parsed?.case_ids)) {
+          caseIds = parsed.case_ids.filter((v: unknown) => typeof v === 'string');
+        }
       }
     } catch (_) {
       // body inválido → trata como sem body
     }
 
+    const soCasos = Boolean(caseIds && caseIds.length > 0) && !(studentIds && studentIds.length > 0);
+
     const rows: Row[] = [];
     const PAGE = 1000;
+    if (!soCasos) {
+      for (let from = 0; ; from += PAGE) {
+        let q = supabase
+          .from('students')
+          .select('id, name, email, whatsapp, status, status_cancelamento')
+          .or(
+            'status_cancelamento.in.(cancelado,solicitado,aguardando_conciliacao),status.eq.Cancelado',
+          )
+          .range(from, from + PAGE - 1);
+        if (studentIds && studentIds.length > 0) q = q.in('id', studentIds);
+
+        const { data, error } = await q;
+        if (error) return json({ error: error.message }, 500);
+        rows.push(...((data ?? []) as Row[]));
+        if (!data || data.length < PAGE) break;
+      }
+    }
+
+    const cases: CaseRow[] = [];
     for (let from = 0; ; from += PAGE) {
       let q = supabase
-        .from('students')
-        .select('id, name, email, whatsapp, status, status_cancelamento')
-        .or(
-          'status_cancelamento.in.(cancelado,solicitado,aguardando_conciliacao),status.eq.Cancelado',
-        )
+        .from('cancellation_cases')
+        .select('id, student_id, student_name, student_whatsapp, funnel_stage, stage, acao')
+        .eq('external_import', true)
         .range(from, from + PAGE - 1);
-      if (studentIds && studentIds.length > 0) q = q.in('id', studentIds);
+      if (caseIds && caseIds.length > 0) q = q.in('id', caseIds);
 
       const { data, error } = await q;
       if (error) return json({ error: error.message }, 500);
-      rows.push(...((data ?? []) as Row[]));
+      cases.push(...((data ?? []) as CaseRow[]));
       if (!data || data.length < PAGE) break;
     }
 
-    const itens = rows
-      .map((r) => {
-        const status = mapStatus(r);
-        if (!status) return null;
-        return {
-          gestao_contas_student_id: r.id,
-          nome: r.name ?? '',
-          email: r.email ?? '',
-          telefone: r.whatsapp ?? '',
-          status,
-          inadimplente: false,
-        };
-      })
-      .filter(Boolean) as Record<string, unknown>[];
+    const studentIdsJa = new Set(rows.map((r) => r.id));
+
+    const itens = [
+      ...rows
+        .map((r) => {
+          const status = mapStatus(r);
+          if (!status) return null;
+          return {
+            gestao_contas_student_id: r.id,
+            nome: r.name ?? '',
+            email: r.email ?? '',
+            telefone: r.whatsapp ?? '',
+            status,
+            inadimplente: false,
+          };
+        })
+        .filter(Boolean),
+      ...cases
+        .map((c) => {
+          if (c.student_id && studentIdsJa.has(c.student_id)) return null;
+          const status = mapCaseStatus(c);
+          if (!status) return null;
+          return {
+            gestao_contas_student_id: c.student_id || `caso-${c.id}`,
+            nome: c.student_name ?? '',
+            email: '',
+            telefone: c.student_whatsapp ?? '',
+            status,
+            inadimplente: false,
+          };
+        })
+        .filter(Boolean),
+    ] as Record<string, unknown>[];
 
     let respostaBruta = '';
     let enviados = 0;

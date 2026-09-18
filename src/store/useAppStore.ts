@@ -17,6 +17,7 @@ import {
 } from '@/lib/supabaseMutations';
 import { logActivity, formatBRL } from '@/lib/activityLog';
 import { resolveOriginalCancellationAc } from '@/lib/cancellationOriginalAc';
+import { findUnicoAlunoPorNomeEProduto } from '@/lib/nomeAluno';
 import type { KaminoDashboardForecastTotals } from '@/lib/kaminoDashboardTotals';
 
 
@@ -1611,8 +1612,54 @@ export const useAppStore = create<AppState>()(
   cancellationCases: [],
   addCancellationCase: (c) => {
     const newCase = { ...c, id: c.id || generateId() };
-    set((s) => ({ cancellationCases: [...s.cancellationCases, newCase] }));
+    // Cadastro manual (PIX/cartão): se já existe a ficha desse treinamento,
+    // vincula agora. Sem isso o caso fica solto e a ficha segue "Pago".
+    if (newCase.externalImport && !newCase.studentId && newCase.treinamento) {
+      const ficha = findUnicoAlunoPorNomeEProduto(get().students, newCase.studentName, newCase.treinamento);
+      if (ficha) newCase.studentId = ficha.id;
+    }
+    const now = new Date().toISOString();
+    const fichaVinculada = newCase.externalImport && newCase.studentId
+      ? get().students.find((s) => s.id === newCase.studentId)
+      : undefined;
+    const marcarSolicitacao = fichaVinculada
+      && (!fichaVinculada.statusCancelamento || fichaVinculada.statusCancelamento === 'nenhum');
+    set((s) => ({
+      cancellationCases: [...s.cancellationCases, newCase],
+      students: marcarSolicitacao
+        ? s.students.map((st) => st.id === fichaVinculada!.id ? {
+            ...st,
+            status: 'Solicitação Cancelamento' as StudentStatus,
+            statusMode: 'Manual' as const,
+            statusCancelamento: 'solicitado' as StatusCancelamento,
+            cancellationCaseId: newCase.id,
+            history: [...st.history, {
+              date: now,
+              type: 'Sistema' as const,
+              text: 'Cancelamento cadastrado manualmente (contrato quitado no PIX/cartão) vinculado a esta ficha.',
+            }],
+          } : st)
+        : s.students,
+    }));
     createCancellationCaseDb(newCase).catch(reportDbError("salvar alteração"));
+    if (marcarSolicitacao && fichaVinculada) {
+      updateStudentDb(fichaVinculada.id, {
+        status: 'Solicitação Cancelamento',
+        statusMode: 'Manual',
+        statusCancelamento: 'solicitado',
+        cancellationCaseId: newCase.id,
+        history: [...fichaVinculada.history, {
+          date: now,
+          type: 'Sistema',
+          text: 'Cancelamento cadastrado manualmente (contrato quitado no PIX/cartão) vinculado a esta ficha.',
+        }],
+      }).catch(reportDbError("salvar alteração"));
+    }
+    if (newCase.externalImport) {
+      import('@/lib/iamControlSync')
+        .then(({ pushCancelamentosManuais }) => pushCancelamentosManuais([newCase.id]))
+        .catch((e) => console.warn('[IAM Control] push do cadastro manual falhou:', e));
+    }
     logActivity({ action: 'cancellation.create', entity: 'cancellation', entityId: newCase.id, entityLabel: newCase.studentName, summary: `Criou caso de cancelamento — ${newCase.studentName}` });
   },
   updateCancellationCase: (id, data) => {
@@ -1621,6 +1668,14 @@ export const useAppStore = create<AppState>()(
       cancellationCases: s.cancellationCases.map((c) => c.id === id ? { ...c, ...data } : c),
     }));
     updateCancellationCaseDb(id, data).catch(reportDbError("salvar alteração"));
+    if (before?.externalImport) {
+      const mexeStatus = 'stage' in data || 'funnelStage' in data || 'acao' in data || 'studentId' in data;
+      if (mexeStatus) {
+        import('@/lib/iamControlSync')
+          .then(({ pushCancelamentosManuais }) => pushCancelamentosManuais([id]))
+          .catch((e) => console.warn('[IAM Control] push do cadastro manual falhou:', e));
+      }
+    }
     if (before) {
       const changedKeys = Object.keys(data).filter((k) => (before as any)[k] !== (data as any)[k]);
       if (changedKeys.length > 0) logActivity({ action: 'cancellation.update', entity: 'cancellation', entityId: id, entityLabel: before.studentName, summary: `Editou caso de cancelamento — ${before.studentName} (${changedKeys.join(', ')})` });
@@ -1644,6 +1699,11 @@ export const useAppStore = create<AppState>()(
       cancellationCases: s.cancellationCases.map((c) => c.id === id ? { ...c, ...updatedData } : c),
     }));
     updateCancellationCaseDb(id, updatedData).catch(reportDbError("salvar alteração"));
+    if (cancCase.externalImport) {
+      import('@/lib/iamControlSync')
+        .then(({ pushCancelamentosManuais }) => pushCancelamentosManuais([id]))
+        .catch((e) => console.warn('[IAM Control] push do cadastro manual falhou:', e));
+    }
     logActivity({ action: 'cancellation.move', entity: 'cancellation', entityId: id, entityLabel: cancCase.studentName, summary: `Moveu cancelamento de ${cancCase.studentName} de "${cancCase.stage}" para "${newStage}"` });
   },
   updateCancellationOperationalStatus: (id, status) => {

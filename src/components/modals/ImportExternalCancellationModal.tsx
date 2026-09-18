@@ -15,7 +15,7 @@ import { X, Download, Upload, FileText, Trash2 } from 'lucide-react';
 import CurrencyInput from '@/components/ui/CurrencyInput';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompanyStore } from '@/store/useCompanyStore';
-import { findUnicoAlunoPorNome } from '@/lib/nomeAluno';
+import { findUnicoAlunoPorNomeEProduto } from '@/lib/nomeAluno';
 
 interface Props {
   onClose: () => void;
@@ -162,10 +162,10 @@ export default function ImportExternalCancellationModal({ onClose }: Props) {
       observacoes.trim() ? `\nObservações do assessor:\n${observacoes.trim()}` : null,
     ].filter(Boolean).join('\n');
 
-    // Aluno "externo" que na verdade já tem ficha na base (ex.: veio do IAM
-    // Control pago à vista): vincula pelo id para o cancelamento finalizar a
-    // ficha certa e não gerar um espelho solto na lista de alunos.
-    const fichaExistente = findUnicoAlunoPorNome(students, nome);
+    // Aluno "externo" que já tem ficha deste treinamento (ex.: veio do IAM
+    // Control pago à vista): vincula pelo nome + curso. Sem o curso, um
+    // Confronto casava com a ficha de outro treinamento do mesmo aluno.
+    const fichaExistente = findUnicoAlunoPorNomeEProduto(students, nome, treinamento);
 
     const newCase: CancellationCase = {
       id: '',

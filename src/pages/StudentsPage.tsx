@@ -246,11 +246,12 @@ export default function StudentsPage() {
   // ── Espelhos de cancelamentos cadastrados manualmente ("Cadastrar Cancelamento") ──
   // Casos importados via botão externo não têm aluno cadastrado. Criamos um
   // registro virtual (somente visualização) apenas na aba Alunos — nunca na
-  // carteira do assessor.
+  // carteira do assessor. O assessor vê os da própria carteira; sem isso o
+  // cadastro manual sumia da aba Alunos para quem entra como AC.
   const mirrorStudents = useMemo(() => {
-    if (myACName) return [];
     return cancellationCases
       .filter((c) => c.externalImport && !c.studentId)
+      .filter((c) => !myACName || (c.ac || '') === myACName)
       .map((c) => {
         const revertido = c.acao === 'Revertido';
         const cancelado = !revertido && (c.acao === 'Cancelado' || c.funnelStage === 'Finalizado');
@@ -308,7 +309,9 @@ export default function StudentsPage() {
       _mirrorCaseId: undefined as string | undefined,
       _vinculo: vinculo as StatusVinculado | undefined,
     };
-  }), ...mirrorStudents.map((m) => ({ ...m, _vinculo: undefined as StatusVinculado | undefined }))], [students, mirrorStudents, tagFilters]);
+  }), ...mirrorStudents.map((m) => ({ ...m, _vinculo: undefined as StatusVinculado | undefined }))].sort((a, b) =>
+    (a.name || '').localeCompare(b.name || '', 'pt-BR'),
+  ), [students, mirrorStudents, tagFilters]);
 
   const filtered = useMemo(() => {
     const q = normalizeSearch(searchQuery);

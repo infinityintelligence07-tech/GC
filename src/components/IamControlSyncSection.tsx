@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, Upload, AlertTriangle, Link2 } from 'lucide-react';
-import { pullClientesCompleto, pushAllStatuses, diagnosticarIamControlApi, type IamPullResumo } from '@/lib/iamControlSync';
+import { pullClientesCompleto, pushAllStatuses, pushCancelamentosManuaisAgora, diagnosticarIamControlApi, type IamPullResumo } from '@/lib/iamControlSync';
 import { toast } from 'sonner';
 
 const WEBHOOK_URL =
@@ -54,9 +54,14 @@ export default function IamControlSyncSection() {
     setPushResult('');
     try {
       const data = await pushAllStatuses();
+      const cancelamentos = await pushCancelamentosManuaisAgora();
       const enviados = (data?.resumo as { enviados?: number } | undefined)?.enviados ?? data?.enviados;
+      const casos = (cancelamentos?.resumo as { enviados?: number } | undefined)?.enviados;
       setPushResult(
-        enviados != null ? `${enviados} alunos reenviados ao IAM Control.` : 'Reenvio concluído.',
+        [
+          enviados != null ? `${enviados} alunos reenviados ao IAM Control.` : 'Reenvio concluído.',
+          casos != null ? `${casos} status de cancelamento (inclui cadastro manual) enviados às turmas.` : null,
+        ].filter(Boolean).join(' '),
       );
       toast.success('Dados reenviados ao IAM Control');
     } catch (err) {

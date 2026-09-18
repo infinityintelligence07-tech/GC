@@ -36,6 +36,26 @@ export function rowAffectsIamSync(row: Record<string, unknown>): boolean {
   return STATUS_FIELDS.some((f) => f in row) || CADASTRO_FIELDS.some((f) => f in row);
 }
 
+export async function pushCancelamentosManuaisAgora(caseIds?: string[]): Promise<Record<string, unknown>> {
+  const ids = (caseIds ?? []).filter(Boolean);
+  const { data, error } = await supabase.functions.invoke('iam-control-push-cancelamentos', {
+    body: ids.length > 0 ? { case_ids: ids } : {},
+  });
+  if (error) throw error;
+  return (data ?? {}) as Record<string, unknown>;
+}
+
+/**
+ * Cadastro manual da aba Cancelamentos (contrato quitado no PIX/cartão).
+ * O IAM Control casa pelo nome/telefone e atualiza o status nas turmas,
+ * mesmo quando o aluno não tem ficha na aba Alunos.
+ */
+export function pushCancelamentosManuais(caseIds?: string[]): void {
+  void pushCancelamentosManuaisAgora(caseIds).catch((err) =>
+    console.warn('[IAM Control] push-cancelamentos falhou:', err),
+  );
+}
+
 export function pushStudentStatus(studentIds: string | string[]): void {
   const ids = (Array.isArray(studentIds) ? studentIds : [studentIds]).filter(Boolean);
   if (ids.length === 0) return;
