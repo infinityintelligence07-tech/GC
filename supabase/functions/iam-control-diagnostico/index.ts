@@ -68,10 +68,10 @@ Deno.serve(async (req: Request) => {
       treinamentos_com_status: comStatus,
       treinamentos_com_contrato_id: comContratoId,
       treinamentos_pendentes: pendentes,
+      // Sem PENDENTE na amostra (20 clientes dos últimos 7 dias) é normal —
+      // não é falha de configuração. O aviso só existe se a API estiver desatualizada.
       aviso: apiAtualizada
-        ? pendentes === 0 && treinamentos > 0
-          ? 'API atualizada, mas nenhum contrato PENDENTE na amostra recente.'
-          : null
+        ? null
         : 'Backend IAM desatualizado na VPS: vendas Pendente (link/PIX) não entram no GC até redeploy + GESTAO_CONTAS_CLOUD_ANON_KEY.',
     });
   } catch (err) {

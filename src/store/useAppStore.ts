@@ -1445,6 +1445,31 @@ export const useAppStore = create<AppState>()(
     const updatedCase = { stage: 'Cancelado' as CancellationStage, operationalStatus: 'Cancelado' as CancellationOperationalStatus, funnelStage: 'Finalizado' as const, acao: 'Cancelado' as const, movedToCurrentStageAt: now, history: [...cancCase.history, entry] };
     const historyEntry: HistoryEntry = { date: now, type: 'Sistema', text: 'Conciliação de cancelamento concluída. Status completo: Cancelado.' };
 
+    // Com estorno (ex.: CDC 7 dias — devolve o que o aluno pagou), a entrada
+    // registrada na ficha deixa de contar como "pago retido". Ajusta
+    // downPayment para o líquido (pago − estorno − abatimento do caso).
+    const refundPlanTotal = Math.max(0, Number(cancCase.refundPlan?.totalValue) || 0);
+    const abatimentoCaso = Math.max(0, Number(cancCase.abatimento?.valor) || 0);
+    const pagoBrutoFicha = Math.max(
+      0,
+      Number(cancCase.totalPagoAteMomento) || Number(linkedStudent?.downPayment) || 0,
+    ) + (linkedStudent?.installments ?? [])
+      .filter((i) => i.paid && !(i.tags ?? []).includes('multa-cancelamento'))
+      .reduce((acc, i) => acc + (Number(i.paidValue) || Number(i.value) || 0), 0);
+    // Preferir o plano de estorno do caso; se CDC sem multa e sem plano, assume estorno = tudo pago.
+    const multaCaso = Math.max(0, Number(cancCase.cancellationFineValue ?? cancCase.multaValue) || 0);
+    const estornoCaso = refundPlanTotal > 0.0049
+      ? refundPlanTotal
+      : (cancCase.dentro7Dias === true && multaCaso <= 0.0049 ? pagoBrutoFicha : 0);
+    const downPaymentRetido = Math.max(
+      0,
+      Math.round((pagoBrutoFicha - estornoCaso - abatimentoCaso) * 100) / 100,
+    );
+    const deveAjustarEntradaPorEstorno =
+      !!linkedStudent &&
+      estornoCaso > 0.0049 &&
+      Math.abs(Number(linkedStudent.downPayment) || 0) > downPaymentRetido + 0.0049;
+
     // Baixa pendente = ainda existe parcela em aberto que não é a multa (mesma
     // regra do banco em cancellation_case_finaliza_aluno). Cobre casos antigos
     // que ficaram em 'solicitado' mesmo após "Cancelamento confirmado".
@@ -1468,6 +1493,7 @@ export const useAppStore = create<AppState>()(
             paidInstallments: paidCount,
             totalInstallments: finalInstallments.length,
           } : {}),
+          ...(deveAjustarEntradaPorEstorno ? { downPayment: downPaymentRetido } : {}),
           history: [...st.history, historyEntry],
         };
       }),
@@ -1484,6 +1510,7 @@ export const useAppStore = create<AppState>()(
           paidInstallments: paidCount,
           totalInstallments: finalInstallments.length,
         } : {}),
+        ...(deveAjustarEntradaPorEstorno ? { downPayment: downPaymentRetido } : {}),
         history: [...linkedStudent.history, historyEntry],
       }).catch(reportDbError("salvar alteração"));
     }

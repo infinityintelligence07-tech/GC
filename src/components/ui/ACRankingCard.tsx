@@ -3,6 +3,7 @@ import { Trophy, TrendingUp } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import MetaGauge from './MetaGauge';
 import { isSolicitacaoCancelamento } from '@/lib/acPortfolioVisibility';
+import type { TaxaEmDiaCarteira } from '@/lib/taxaEmDiaCarteira';
 
 interface ACRankingCardProps {
   acs: AC[];
@@ -17,24 +18,28 @@ interface ACRankingCardProps {
    * Só informativo no rodapé — NÃO entra no % (mesma Taxa Em Dia da carteira).
    */
   renegByAc?: Record<string, number>;
+  /**
+   * Taxa Em Dia em R$ da carteira de cada assessor no mês vigente.
+   * Quando informada, substitui a contagem de alunos.
+   */
+  taxaByAc?: Map<string, TaxaEmDiaCarteira>;
 }
 
 /**
  * Pódio de Ranking dos Assessores.
  *
- * Regra alinhada à Taxa Em Dia da carteira do assessor:
- *   alunos "Em Dia" / (Novos + Em Dia + Inadimplentes) × 100
- *
- *   - numerador   = "Em Dia" (exclui solicitação de cancelamento)
- *   - denominador = Novos + Em Dia + Vencido 1/2 + À Negativar + Negativado
- *                   (mesma base das % da carteira, que somam 100%)
+ * Com `taxaByAc`, o % é o card Taxa Em Dia da carteira no mês vigente (por R$).
+ * Sem isso (Histórico), conta alunos:
+ *   "Em Dia" / (Novos + Em Dia + Inadimplentes) × 100
  */
-export default function ACRankingCard({ acs, students, referenceDate: _referenceDate, renegByAc }: ACRankingCardProps) {
+export default function ACRankingCard({ acs, students, referenceDate: _referenceDate, renegByAc, taxaByAc }: ACRankingCardProps) {
   const rules = useAppStore((s) => s.rules);
   const metas = { meta1: rules.meta1, meta2: rules.meta2, meta3: rules.meta3 };
+  const valueBased = !!taxaByAc;
   const acStats = acs
     .filter((ac) => ac.active)
     .map((ac) => {
+      const taxa = taxaByAc?.get(ac.name);
       const acStudents = students.filter((s) => s.ac === ac.name);
       const alunosNovos = acStudents.filter(
         (s) => s.status === 'Aluno Novo' && !isSolicitacaoCancelamento(s),
@@ -52,8 +57,12 @@ export default function ACRankingCard({ acs, students, referenceDate: _reference
       ).length;
       const denominador = alunosNovos + emDia + inadimplentes;
       const renegociado = renegByAc?.[ac.name] ?? 0;
-      const liquidezRateExact = denominador > 0 ? (emDia / denominador) * 100 : 0;
-      const liquidezRate = Math.round(liquidezRateExact * 10) / 10;
+      const liquidezRateExact = taxa
+        ? taxa.pctExact
+        : denominador > 0
+          ? (emDia / denominador) * 100
+          : 0;
+      const liquidezRate = taxa ? taxa.pct : Math.round(liquidezRateExact * 10) / 10;
 
       return {
         ...ac,
@@ -64,9 +73,13 @@ export default function ACRankingCard({ acs, students, referenceDate: _reference
         denominador,
         liquidezRate,
         liquidezRateExact,
+        temTaxa: taxa ? taxa.carteira > 0.005 : denominador > 0,
+        detalhe: valueBased
+          ? 'mês vigente'
+          : `${emDia} / ${denominador} ${denominador === 1 ? 'aluno' : 'alunos'}`,
       };
     })
-    .filter((ac) => ac.denominador > 0)
+    .filter((ac) => ac.temTaxa)
     .sort((a, b) => b.liquidezRateExact - a.liquidezRateExact);
 
   if (acStats.length === 0) {
@@ -144,7 +157,7 @@ export default function ACRankingCard({ acs, students, referenceDate: _reference
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-foreground truncate">{ac.name}</p>
                     <p className="text-[10px] text-muted-foreground">
-                      {ac.emDia} em dia / {ac.denominador} {ac.denominador === 1 ? 'aluno' : 'alunos'}
+                      {ac.detalhe}
                       {ac.renegociado > 0 ? ` · Reneg ${ac.renegociado}` : ''}
                     </p>
                   </div>
@@ -159,7 +172,9 @@ export default function ACRankingCard({ acs, students, referenceDate: _reference
 
       {/* Rodapé — fórmula */}
       <p className="mt-5 text-[10px] text-muted-foreground text-center">
-        Taxa Em Dia % = Alunos &quot;Em Dia&quot; ÷ (Novos + Em Dia + Inadimplentes) — mesma regra da carteira do assessor
+        {valueBased
+          ? 'Taxa Em Dia % = valor Em Dia ÷ (Carteira do mês − Alunos Novos) — mesma regra da carteira do assessor no mês vigente'
+          : 'Taxa Em Dia % = Alunos "Em Dia" ÷ (Novos + Em Dia + Inadimplentes) — mesma regra da carteira do assessor'}
       </p>
     </div>
   );
@@ -205,6 +220,7 @@ interface PodiumColumnProps {
     renegociado: number;
     denominador: number;
     liquidezRate: number;
+    detalhe: string;
   };
   place: 1 | 2 | 3;
   metas: { meta1: number; meta2: number; meta3: number };
@@ -296,7 +312,7 @@ function PodiumColumn({ ac, place, metas }: PodiumColumnProps) {
           </span>
         </p>
         <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-          {ac.emDia} / {ac.denominador} {ac.denominador === 1 ? 'aluno' : 'alunos'}
+          {ac.detalhe}
         </p>
         {ac.renegociado > 0 && (
           <p className="text-[9px] text-muted-foreground/80 truncate">

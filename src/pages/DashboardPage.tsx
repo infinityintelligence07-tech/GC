@@ -23,7 +23,8 @@ import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
-import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, isSolicitacaoCancelamento, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter, isStudentFullyPaid } from '@/lib/acPortfolioVisibility';
+import { getHiddenFromAcPortfolioKeys, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter, isStudentFullyPaid } from '@/lib/acPortfolioVisibility';
+import { taxaEmDiaPorAssessor } from '@/lib/taxaEmDiaCarteira';
 import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
 import { resolveStudentDisplayStatusVinculado, resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
@@ -87,6 +88,18 @@ export default function DashboardPage() {
   const conciliacaoItems = useConciliacaoStore((s) => s.items);
   // Baixas registradas no GC (Conciliação) — regra do card Pago.
   const baixasGcIndex = useMemo(() => buildBaixasGcIndex(conciliacaoItems), [conciliacaoItems]);
+  const taxaEmDiaMes = useMemo(() => {
+    const { firstDay, lastDay } = getCurrentMonthDates();
+    return taxaEmDiaPorAssessor({
+      students,
+      hidden: getHiddenFromAcPortfolioKeys(cancellationCases, conciliacaoItems, students),
+      cancellationCases,
+      range: {
+        start: new Date(firstDay + 'T00:00:00'),
+        end: new Date(lastDay + 'T23:59:59'),
+      },
+    });
+  }, [students, cancellationCases, conciliacaoItems]);
   const [dateBasis, setDateBasis] = useState<'vencimento' | 'pagamento'>('vencimento');
   const [acFilter, setAcFilter] = useState('');
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
@@ -1378,33 +1391,16 @@ export default function DashboardPage() {
     });
   }
 
-  // Ranking liquidez (top 5) — mesmo universo do card e dos KPIs de status
-  // (respeita o período de vencimento filtrado; padrão: mês vigente).
-  const rankingStudents = studentsForAcRanking(
-    kpiStudentsScoped,
-    getHiddenFromAcPortfolioKeys(cancellationCases, conciliacaoItems, students),
-    students,
-  );
+  // Ranking = Taxa Em Dia em R$ da carteira de cada assessor no mês vigente.
   const rankingRows = acs
     .filter((ac) => ac.active)
     .map((ac) => {
-      const list = rankingStudents.filter((s) => s.ac === ac.name);
-      const novos = list.filter((s) => s.status === 'Aluno Novo' && !isSolicitacaoCancelamento(s)).length;
-      const emDiaAc = list.filter((s) => s.status === 'Em Dia' && !isSolicitacaoCancelamento(s)).length;
-      const inadAc = list.filter(
-        (s) =>
-          !isSolicitacaoCancelamento(s) &&
-          (s.status === 'Vencido 1' ||
-            s.status === 'Vencido 2' ||
-            s.status === 'À Negativar' ||
-            s.status === 'Negativado'),
-      ).length;
-      const denom = novos + emDiaAc + inadAc;
-      const rate = denom > 0 ? (emDiaAc / denom) * 100 : 0;
-      return { name: ac.name, emDia: emDiaAc, denom, rate };
+      const taxa = taxaEmDiaMes.get(ac.name);
+      if (!taxa || taxa.carteira <= 0.005) return null;
+      return { name: ac.name, rate: taxa.pct, rateExact: taxa.pctExact };
     })
-    .filter((r) => r.denom > 0)
-    .sort((a, b) => b.rate - a.rate)
+    .filter((r): r is { name: string; rate: number; rateExact: number } => r != null)
+    .sort((a, b) => b.rateExact - a.rateExact)
     .slice(0, 5);
 
   if (rankingRows.length > 0) {
@@ -1413,7 +1409,7 @@ export default function DashboardPage() {
       kpis: rankingRows.map((r, i) => ({
         label: `${i + 1}º ${r.name}`,
         value: `${r.rate.toFixed(1).replace('.', ',')}%`,
-        detail: `${r.emDia} / ${r.denom} alunos`,
+        detail: 'mês vigente · mesma Taxa Em Dia da carteira',
         tone: i === 0 ? 'good' : 'default',
       })),
     });
@@ -2480,8 +2476,9 @@ export default function DashboardPage() {
           aberto dentro do período de vencimento filtrado (padrão: mês vigente). */}
       <ACRankingCard
         acs={acs}
-        students={rankingStudents}
+        students={[]}
         renegByAc={renegByAc}
+        taxaByAc={taxaEmDiaMes}
         referenceDate={mode === 'historico' && historicoEnd ? new Date(historicoEnd + 'T23:59:59') : undefined}
       />
 

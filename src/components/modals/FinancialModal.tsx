@@ -1341,8 +1341,18 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     const previousValue = student.installmentValue;
     const paidIncludedCount = renegValues.paidIncluded.length;
     const antecipadasIncluidasCount = renegValues.antecipadasIncluidas.length;
+    // Congelamento (sem entrada): a data informada é o vencimento da 1ª parcela
+    // nova, mesmo com "manter as datas atuais" — senão o campo some e o acordo
+    // fica sem data de pagamento.
+    const dataCongelamento =
+      novaEntrada <= 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
+        ? entradaPaidDate
+        : undefined;
     // "Manter as datas": só há data/escopo quando o AC optou por alterar.
-    const firstDue = renegAlterarDatas ? renegFirstDueDate || undefined : undefined;
+    // Congelamento sem entrada usa a data do acordo como 1ª parcela.
+    const firstDue = renegAlterarDatas
+      ? renegFirstDueDate || undefined
+      : dataCongelamento;
     const aplicaTodas = renegDueScope === 'todas';
     const renegDueDay = firstDue && aplicaTodas
       ? new Date(firstDue + 'T00:00:00').getDate()
@@ -1350,7 +1360,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     // Datas mantidas: as novas parcelas reaproveitam os vencimentos das parcelas
     // em aberto/antecipadas selecionadas (em ordem); se o novo plano tiver mais
     // parcelas, continua mês a mês no mesmo dia após o último vencimento.
-    const datasMantidas = !renegAlterarDatas
+    const datasMantidas = !renegAlterarDatas && !dataCongelamento
       ? renegValues.selectedInst
           .filter((i) => !i.paid || isParcelaAntecipada(i))
           .map((i) => i.dueDate)
@@ -3867,20 +3877,22 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                           ? `${entradaPercent || 0}% de ${formatCurrency(renegValues.totalWithCharges)} = ${formatCurrency(novaEntrada)}`
                           : 'Será abatida do total'}
                       </p>
-                      {novaEntrada > 0.0049 && (
-                        <div className="mt-2">
-                          <label className="text-[10px] text-muted-foreground font-medium">Data do recebimento</label>
-                          <input
-                            type="date"
-                            value={entradaPaidDate}
-                            onChange={(e) => setEntradaPaidDate(e.target.value)}
-                            className="input-field mt-1 w-full text-xs py-1"
-                          />
-                          <p className="text-[9px] text-muted-foreground mt-1">
-                            Dia em que a entrada entrou no caixa (PIX/boleto)
-                          </p>
-                        </div>
-                      )}
+                      <div className="mt-2">
+                        <label className="text-[10px] text-muted-foreground font-medium">
+                          {novaEntrada > 0.0049 ? 'Data do recebimento' : 'Data do congelamento'}
+                        </label>
+                        <input
+                          type="date"
+                          value={entradaPaidDate}
+                          onChange={(e) => setEntradaPaidDate(e.target.value)}
+                          className="input-field mt-1 w-full text-xs py-1"
+                        />
+                        <p className="text-[9px] text-muted-foreground mt-1">
+                          {novaEntrada > 0.0049
+                            ? 'Dia em que a entrada entrou no caixa (PIX/boleto)'
+                            : 'Sem entrada: esta data vira o vencimento da 1ª parcela do acordo (congelamento)'}
+                        </p>
+                      </div>
                     </div>
                     <div>
                       <label className="text-[10px] text-muted-foreground font-medium">Nº Parcelas</label>
@@ -4147,7 +4159,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         <span className="text-muted-foreground">Vencimento:</span>
                         <span className="font-medium">
                           {!renegAlterarDatas
-                            ? 'Datas atuais mantidas'
+                            ? (novaEntrada <= 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
+                              ? `${new Date(entradaPaidDate + 'T00:00:00').toLocaleDateString('pt-BR')} (congelamento)`
+                              : 'Datas atuais mantidas')
                             : <>
                                 {renegFirstDueDate ? new Date(renegFirstDueDate + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
                                 {renegDueScope === 'todas' ? ' (todas as parcelas)' : ' (somente a 1ª parcela)'}
@@ -4295,7 +4309,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             novoValorParcela: renegValues.newValue,
             saldoAposEntrada: renegValues.remainingAfterEntrada,
             primeiraParcelaVencimento: !renegAlterarDatas
-              ? (primeiraDataMantida ? formatDateBR(primeiraDataMantida) : undefined)
+              ? (novaEntrada <= 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
+                ? formatDateBR(entradaPaidDate)
+                : (primeiraDataMantida ? formatDateBR(primeiraDataMantida) : undefined))
               : renegFirstDueDate ? formatDateBR(renegFirstDueDate) : undefined,
             taxaJurosMes: applyJurosReneg ? renegJurosPercent : 0,
             qtdParcelasAberto: renegValues.selectedInst.filter((i) => !i.paid).length || renegValues.selectedInst.length,
@@ -4304,7 +4320,9 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
               student.installments.filter((i) => i.paid).reduce((s, i) => s + (i.value || 0), 0),
             quantidadeInscricoes: 1,
             diaVencimento: !renegAlterarDatas
-              ? (primeiraDataMantida ? new Date(primeiraDataMantida + 'T00:00:00').getDate() : student.dueDay)
+              ? (novaEntrada <= 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
+                ? new Date(entradaPaidDate + 'T00:00:00').getDate()
+                : (primeiraDataMantida ? new Date(primeiraDataMantida + 'T00:00:00').getDate() : student.dueDay))
               : renegDueScope === 'todas' && renegFirstDueDate
                 ? new Date(renegFirstDueDate + 'T00:00:00').getDate()
                 : student.dueDay,

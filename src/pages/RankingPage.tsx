@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Activity, History, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useAppStore, calculateStudentAutoStatus, calculateStudentAutoStatusAt } from '@/store/useAppStore';
+import { useAppStore, calculateStudentAutoStatusAt } from '@/store/useAppStore';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 import ACRankingCard from '@/components/ui/ACRankingCard';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { getHiddenFromAcPortfolioKeys, studentsForAcRanking, cancelamentoOverridesFinancialStatus } from '@/lib/acPortfolioVisibility';
+import { taxaEmDiaPorAssessor } from '@/lib/taxaEmDiaCarteira';
 import { resolveStudentDisplayStatus } from '@/lib/studentDisplayStatus';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
 import type { Student, ConciliacaoItem } from '@/types';
@@ -69,31 +70,20 @@ export default function RankingPage() {
     [cancellationCases, conciliacaoItems, students],
   );
 
-  // Performance = mesma base da Dashboard/Carteira no mês vigente: só aluno com
-  // parcela EM ABERTO vencendo entre o dia 01 e o último dia do mês atual.
-  // Sem isso o ranking somava a carteira inteira e divergia da Taxa Em Dia.
-  const performanceStudents: Student[] = useMemo(() => {
+  // Performance = card Taxa Em Dia da carteira de cada assessor no mês vigente
+  // (valor em R$, não contagem de alunos).
+  const taxaByAc = useMemo(() => {
     const { firstDay, lastDay } = getCurrentMonthDates();
-    const start = new Date(firstDay + 'T00:00:00');
-    const end = new Date(lastDay + 'T23:59:59');
-    const temAbertoNoMes = (s: Student) =>
-      (s.installments ?? []).some((i) => {
-        if (i.paid) return false;
-        const due = new Date(i.dueDate + 'T00:00:00');
-        return due >= start && due <= end;
-      });
-    return studentsForAcRanking(
-      students.filter(temAbertoNoMes).map((s) =>
-        s.statusMode === 'Automático' &&
-        s.status !== 'Negativado' &&
-        !cancelamentoOverridesFinancialStatus(s)
-          ? { ...s, status: calculateStudentAutoStatus(s) }
-          : { ...s, status: resolveStudentDisplayStatus(s) },
-      ),
-      hiddenKeys,
+    return taxaEmDiaPorAssessor({
       students,
-    );
-  }, [students, hiddenKeys]);
+      hidden: hiddenKeys,
+      cancellationCases,
+      range: {
+        start: new Date(firstDay + 'T00:00:00'),
+        end: new Date(lastDay + 'T23:59:59'),
+      },
+    });
+  }, [students, hiddenKeys, cancellationCases]);
 
   const historicoStudents: Student[] = useMemo(() => {
     if (!endDate) return [];
@@ -117,7 +107,7 @@ export default function RankingPage() {
     );
   }, [students, endDate, hiddenKeys]);
 
-  const dataset = mode === 'performance' ? performanceStudents : historicoStudents;
+  const dataset = mode === 'performance' ? [] : historicoStudents;
   const referenceDate = mode === 'historico' && endDate ? endOfDay(endDate) : undefined;
 
   const renegByAc = useMemo(() => {
@@ -144,7 +134,7 @@ export default function RankingPage() {
             </h3>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {mode === 'performance'
-                ? 'Dados ao vivo do mês vigente: alunos com parcela em aberto vencendo neste mês (mesma base da Taxa Em Dia da Dashboard e da carteira).'
+                ? 'Taxa Em Dia da carteira de cada assessor no mês vigente, em R$ (Carteira do mês − Alunos Novos).'
                 : 'Snapshot reconstruído com os dados congelados na data final do período.'}
             </p>
           </div>
@@ -250,7 +240,13 @@ export default function RankingPage() {
         )}
       </div>
 
-      <ACRankingCard acs={acs} students={dataset} referenceDate={referenceDate} renegByAc={renegByAc} />
+      <ACRankingCard
+        acs={acs}
+        students={dataset}
+        referenceDate={referenceDate}
+        renegByAc={renegByAc}
+        taxaByAc={mode === 'performance' ? taxaByAc : undefined}
+      />
     </div>
   );
 }

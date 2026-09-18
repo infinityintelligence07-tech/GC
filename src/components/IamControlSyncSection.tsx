@@ -22,8 +22,6 @@ export default function IamControlSyncSection() {
             d.aviso ??
               'O backend IAM Control na VPS está desatualizado. Vendas marcadas como Pendente (link/PIX) não chegam ao GC até redeploy.',
           );
-        } else if (d.aviso) {
-          setIamAviso(d.aviso);
         }
       })
       .catch(() => {

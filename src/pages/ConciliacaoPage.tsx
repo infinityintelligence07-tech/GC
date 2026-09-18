@@ -1017,11 +1017,31 @@ function ContractSummaryPanel({ student, conciliacaoItems = [] }: { student: Stu
   const kaminoPaid = caseDoAluno?.totalPagoAteMomento;
   const financeAluno = resolveStudentFinance(student, { kaminoPaid });
   const totalContratado = financeAluno.saleValue || Number(student.saleValue) || 0;
-  const totalPago = totalPagoEfetivoCancelamento != null
+  const totalPagoBruto = totalPagoEfetivoCancelamento != null
     ? Number(totalPagoEfetivoCancelamento)
     : getStudentTotalPaid(student, { kaminoPaid });
+  // Com estorno/abatimento (ex.: CDC 7 dias — devolve tudo), o "Total pago" do
+  // resumo é o líquido que a empresa ficou: pago − estorno − abatimento.
+  // Sem isso o card continua mostrando R$ 23.325 mesmo após conciliar o
+  // cancelamento com estorno integral (Hélio Jorge de Mattos, 17/09/2026).
+  const estornoCancelamento = conciliacaoItems
+    .filter((item) => item.tipo === 'cancelamento')
+    .map((item) => Number((item.depois as Record<string, unknown>)?.estornoAluno))
+    .find((v) => Number.isFinite(v) && v > 0.0049) ?? 0;
+  const abatimentoCancelamento = conciliacaoItems
+    .filter((item) => item.tipo === 'cancelamento')
+    .map((item) => Number((item.depois as Record<string, unknown>)?.abatimentoValor))
+    .find((v) => Number.isFinite(v) && v > 0.0049) ?? 0;
+  const totalPago = Math.max(
+    0,
+    Math.round((totalPagoBruto - estornoCancelamento - abatimentoCancelamento) * 100) / 100,
+  );
 
-  const saldoAberto = Math.max(totalContratado - totalPago, 0);
+  const saldoParcelasAbertas = abertasInst.reduce((acc, i) => acc + (Number(i.value) || 0), 0);
+  const temCancelamento = conciliacaoItems.some((item) => item.tipo === 'cancelamento');
+  const saldoAberto = temCancelamento
+    ? Math.max(0, Math.round(saldoParcelasAbertas * 100) / 100)
+    : Math.max(totalContratado - totalPagoBruto, 0);
   const parcelasAbertas = abertasInst.length;
 
   // Quantidade de inscrições: usar o valor preenchido no caso de cancelamento
@@ -1064,8 +1084,17 @@ function ContractSummaryPanel({ student, conciliacaoItems = [] }: { student: Stu
           <p className="text-sm font-bold text-foreground tabular-nums">{formatCurrency(totalContratado)}</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total pago</p>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+            Total pago{estornoCancelamento > 0.0049 || abatimentoCancelamento > 0.0049 ? ' (líquido)' : ''}
+          </p>
           <p className="text-sm font-bold text-emerald-700 tabular-nums">{formatCurrency(totalPago)}</p>
+          {(estornoCancelamento > 0.0049 || abatimentoCancelamento > 0.0049) && (
+            <p className="text-[9px] text-muted-foreground leading-tight mt-0.5">
+              bruto {formatCurrency(totalPagoBruto)}
+              {estornoCancelamento > 0.0049 ? ` − estorno ${formatCurrency(estornoCancelamento)}` : ''}
+              {abatimentoCancelamento > 0.0049 ? ` − abatimento ${formatCurrency(abatimentoCancelamento)}` : ''}
+            </p>
+          )}
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Saldo em aberto</p>
