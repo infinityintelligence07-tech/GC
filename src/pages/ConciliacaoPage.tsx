@@ -378,6 +378,48 @@ function formatValue(key: string, v: unknown, parent?: Record<string, unknown>):
   return String(v);
 }
 
+type ParcelaConciliacao = {
+  num: number;
+  due: string;
+  value: string;
+  paid: boolean;
+  /** Vencimento e valor anteriores, quando esta parcela mudou. */
+  antes?: string;
+};
+
+function lerParcelasConciliacao(v: unknown): Array<{ number: number; dueDate: string; value: number; paid: boolean }> {
+  if (!Array.isArray(v)) return [];
+  return v.map((raw, idx) => {
+    const i = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    return {
+      number: Number(i.number) || idx + 1,
+      dueDate: typeof i.dueDate === 'string' ? i.dueDate : '',
+      value: Number(i.value) || 0,
+      paid: i.paid === true,
+    };
+  });
+}
+
+/** Cada parcela do plano proposto, com o valor anterior quando houve ajuste. */
+function detalharParcelasConciliacao(propostas: unknown, snapshot: unknown): ParcelaConciliacao[] {
+  const novas = lerParcelasConciliacao(propostas);
+  const snap = snapshot && typeof snapshot === 'object' ? (snapshot as Record<string, unknown>) : undefined;
+  const orig = lerParcelasConciliacao(snap?.installments);
+  return novas.map((n) => {
+    const o = orig.find((x) => x.number === n.number);
+    const mudou = !!o && (o.dueDate !== n.dueDate || Math.abs(o.value - n.value) > 0.009 || o.paid !== n.paid);
+    return {
+      num: n.number,
+      due: formatDate(n.dueDate),
+      value: formatCurrency(n.value),
+      paid: n.paid,
+      antes: mudou && o
+        ? `${formatDate(o.dueDate)} · ${formatCurrency(o.value)}${o.paid ? ' · paga' : ''}`
+        : undefined,
+    };
+  });
+}
+
 // Extrai TODAS as alterações entre antes/depois para resumo compacto no topo
 function getAllChanges(antes: Record<string, unknown>, depois: Record<string, unknown>):
   Array<{ key: string; label: string; antes: string; depois: string }> {
@@ -483,7 +525,7 @@ function renderDiff(antes: Record<string, unknown>, depois: Record<string, unkno
 // renderiza UMA única tabela com todas as alterações do grupo. Cada linha
 // recebe um prefixo curto identificando a parcela (ex.: "Parcela 5 — Valor").
 function renderGroupDiff(items: ConciliacaoItem[], student?: Student, cases?: Array<{ id: string; quantidadeInscricoes?: number; inscricoesRevertidas?: number; multaPercent?: number; multaValue?: number; cancellationFineValue?: number; dentro7Dias?: boolean }>) {
-  type Row = { id: string; label: string; antes: string; depois: string; changed: boolean; sortKey: string; parcelaNum: number | null; antesNegative: boolean; depoisNegative: boolean };
+  type Row = { id: string; label: string; antes: string; depois: string; changed: boolean; sortKey: string; parcelaNum: number | null; antesNegative: boolean; depoisNegative: boolean; parcelas?: ParcelaConciliacao[] };
   const rows: Row[] = [];
 
 
@@ -527,16 +569,20 @@ function renderGroupDiff(items: ConciliacaoItem[], student?: Student, cases?: Ar
       const dStr = formatValue(k, rawD, item.depois as Record<string, unknown>);
       const changed = aStr !== dStr;
       if (!changed) continue; // só mostra o que mudou
+      const parcelas = k === 'novasParcelas'
+        ? detalharParcelasConciliacao(rawD, (item.antes as Record<string, unknown>)?._snapshot)
+        : undefined;
       rows.push({
         id: `${item.id}-${k}`,
         label: composeGroupLabel(ctx, k),
         antes: aStr,
-        depois: dStr,
+        depois: parcelas && parcelas.length > 0 ? `${parcelas.length} parcela(s)` : dStr,
         changed,
         sortKey,
         parcelaNum,
         antesNegative: isNegativeValue(k, rawA) || isNegativeText(aStr),
         depoisNegative: isNegativeValue(k, rawD) || isNegativeText(dStr),
+        parcelas: parcelas && parcelas.length > 0 ? parcelas : undefined,
       });
     }
 
@@ -736,6 +782,28 @@ function renderGroupDiff(items: ConciliacaoItem[], student?: Student, cases?: Ar
       <div className="divide-y divide-border">
         <ContractValueRow changed={saleChanged} antes={saleAntes} depois={saleDepois} explanation={saleExplanation} />
         {visibleRows.map((r) => (
+          r.parcelas && r.parcelas.length > 0 ? (
+            <div key={r.id} className="px-3 py-2 space-y-1.5">
+              <div className="text-foreground/80 font-medium text-xs">{r.label}</div>
+              <div className="rounded-lg border border-border/70 divide-y divide-border/60 bg-muted/20 max-h-72 overflow-y-auto">
+                {r.parcelas.map((p) => (
+                  <div key={p.num} className="grid grid-cols-[2.5rem_1fr] gap-2 px-2 py-1 text-[11px] items-baseline">
+                    <span className="font-semibold text-foreground">P{p.num}</span>
+                    <span className="text-foreground/90 tabular-nums">
+                      {p.antes && (
+                        <>
+                          <span className="text-rose-500/80 line-through decoration-rose-300/70">{p.antes}</span>
+                          <span className="text-muted-foreground mx-1">→</span>
+                        </>
+                      )}
+                      {p.due} · {p.value}
+                      {p.paid ? ' · paga' : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
           <div key={r.id} className="grid grid-cols-[1.2fr_1.4fr] items-center gap-2 px-3 py-2 text-xs">
             <div className="text-foreground/80 font-medium">{r.label}</div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -744,6 +812,7 @@ function renderGroupDiff(items: ConciliacaoItem[], student?: Student, cases?: Ar
               <span className={`px-2 py-0.5 rounded-md font-semibold text-xs tabular-nums ${r.depoisNegative ? NEGATIVE_BADGE : 'bg-emerald-50 text-emerald-700'}`}>{r.depois}</span>
             </div>
           </div>
+          )
         ))}
         {!isMultaPagamentoFlow && (
           <EncargosRow multa={totalMulta} juros={totalJuros} multaPercent={maxMultaPercent} cdc7={hasCDC7} forceShow={isCancelamento} />
@@ -2875,6 +2944,65 @@ export default function ConciliacaoPage() {
                                   }}
                                   className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-card border border-sky-200 hover:bg-sky-100 transition-colors text-[11px] font-medium text-sky-800"
                                   title="Abrir PDF do termo assinado"
+                                >
+                                  <FileText size={11} />
+                                  <span className="max-w-[220px] truncate">{t.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Termo da renegociação (ZapSign ou anexo manual) */}
+                      {(() => {
+                        const termos: { key: string; path?: string; url?: string; name: string }[] = [];
+                        for (const it of group.items) {
+                          if (it.tipo !== 'renegociacao') continue;
+                          const raw = (it.depois as Record<string, unknown> | null | undefined)?.termo;
+                          if (!raw || typeof raw !== 'object') continue;
+                          const t = raw as Record<string, unknown>;
+                          const path =
+                            (typeof t.anexoPath === 'string' && t.anexoPath.trim()) ||
+                            (typeof t.signedFilePath === 'string' && t.signedFilePath.trim()) ||
+                            '';
+                          const url = typeof t.urlAssinatura === 'string' ? t.urlAssinatura.trim() : '';
+                          if (!path && !url) continue;
+                          const key = path || url;
+                          if (termos.some((x) => x.key === key)) continue;
+                          const name =
+                            (typeof t.anexoNome === 'string' && t.anexoNome.trim()) ||
+                            (t.origem === 'anexo' ? 'Termo anexado' : 'Termo de renegociação');
+                          termos.push({ key, path: path || undefined, url: url || undefined, name });
+                        }
+                        if (!termos.length) return null;
+                        return (
+                          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2">
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <FileText size={11} className="text-emerald-700" />
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800">
+                                Termo{termos.length > 1 ? 's' : ''} de renegociação
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {termos.map((t) => (
+                                <button
+                                  key={t.key}
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      if (t.path) {
+                                        await openCancellationPdf(t.path, t.name);
+                                      } else if (t.url) {
+                                        window.open(t.url, '_blank', 'noopener,noreferrer');
+                                      }
+                                    } catch (err) {
+                                      const msg = err instanceof Error ? err.message : 'Não foi possível abrir o termo';
+                                      toast.error(msg);
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-card border border-emerald-200 hover:bg-emerald-100 transition-colors text-[11px] font-medium text-emerald-800"
+                                  title="Abrir o termo de renegociação"
                                 >
                                   <FileText size={11} />
                                   <span className="max-w-[220px] truncate">{t.name}</span>
