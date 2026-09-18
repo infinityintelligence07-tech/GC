@@ -4,10 +4,12 @@
 //   1. Procura os contratos pelo nome (Pessoa) — independentemente da aba
 //      (Alunos, Cancelamento, Renda Extra).
 //   2. Usa o assessor quando informado e só baixa automaticamente quando existe
-//      uma única combinação contrato + vencimento + valor compatível.
-//      Planilha de conferência: ignora diferença só de centavos (< R$ 1,00);
+//      uma única combinação contrato + vencimento + valor original.
+//      Planilha de conferência: o valor da parcela (face) sai do A Vencer/Vencido
+//      e o VALOR PAGO entra no card Pago. Ignora diferença só de centavos (< R$ 1,00).
 //      Kamino legado aceita tolerância de ±15%.
-//   3. Marca como paga (paid=true) com paidDate = Recebimento.
+//   3. Marca como paga (paid=true) com paidDate = Recebimento e paidValue = VALOR PAGO.
+//      Se vencimento e valor original não baterem, a pré-visualização pede a parcela.
 // Linhas ambíguas ou sem identificação segura vão para "Erros".
 
 import { useRef, useState } from 'react';
@@ -259,6 +261,36 @@ interface AjusteJaPagaEntry {
   rowRecebimento: string;
 }
 
+const PERGUNTAR_PARCELA: ConciliacaoImportErrorMotivo[] = [
+  'parcela_nao_encontrada',
+  'valor_diverge',
+  'vencimento_diverge',
+  'multiplos_alunos',
+];
+
+function parcelasEmAbertoDaLinha(
+  err: { studentName: string; studentId?: string },
+  students: Student[],
+  updates: Map<string, Partial<Student>>,
+): Array<{ student: Student; inst: Installment }> {
+  const alvo = normName(err.studentName);
+  const byName = students.filter((s) => normName(s.name) === alvo);
+  const lista = byName.length > 0
+    ? byName
+    : err.studentId
+      ? students.filter((s) => s.id === err.studentId)
+      : [];
+  const out: Array<{ student: Student; inst: Installment }> = [];
+  for (const s of lista) {
+    const insts = (updates.get(s.id)?.installments as Installment[] | undefined) ?? s.installments;
+    for (const inst of insts) {
+      if (!inst.paid) out.push({ student: s, inst });
+    }
+  }
+  out.sort((a, b) => a.inst.dueDate.localeCompare(b.inst.dueDate) || a.inst.number - b.inst.number);
+  return out;
+}
+
 interface ProcessResult {
   summary: ConciliacaoImportSummary;
   errors: Omit<ConciliacaoImportError, 'id' | 'createdAt'>[];
@@ -305,6 +337,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
   // Modal de vencimento divergente: índice do erro sendo resolvido + data editável
   const [vencModalIdx, setVencModalIdx] = useState<number | null>(null);
   const [vencModalDate, setVencModalDate] = useState<string>('');
+  const [parcelaEscolhida, setParcelaEscolhida] = useState<Record<number, string>>({});
   const QUICK_BLOCKED: ConciliacaoImportErrorMotivo[] = [
     'aluno_nao_encontrado',
     'multiplos_alunos',
@@ -511,6 +544,70 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
     setRowEditing((r) => { const c = { ...r }; delete c[idx]; return c; });
   };
 
+  const applyEscolhaParcela = (idx: number, chave: string) => {
+    const [studentId, numRaw] = chave.split('|');
+    const installmentNumber = Number(numRaw);
+    if (!studentId || !Number.isFinite(installmentNumber)) return;
+    setPreview((p) => {
+      if (!p) return p;
+      const err = p.errors[idx];
+      if (!err || !PERGUNTAR_PARCELA.includes(err.motivo)) return p;
+      const student = students.find((s) => s.id === studentId);
+      if (!student) return p;
+      const prevPatch = p.studentUpdates.get(studentId);
+      const currentInsts = (prevPatch?.installments as Installment[] | undefined) ?? student.installments.map((i) => ({ ...i }));
+      const target = currentInsts.find((i) => i.number === installmentNumber && !i.paid);
+      if (!target) {
+        alert('Essa parcela já não está em aberto.');
+        return p;
+      }
+      const paidDate = err.dataPagamento ?? new Date().toISOString().split('T')[0];
+      const paidValue = err.valor != null && err.valor > 0 ? err.valor : Number(target.value) || 0;
+      const face = Number(target.value) || 0;
+      const newInsts = currentInsts.map((i) => i.number === installmentNumber
+        ? {
+            ...i,
+            paid: true,
+            paidDate,
+            ...(Math.abs(paidValue - face) > 0.01 ? { paidValue } : {}),
+          }
+        : i);
+      const totalPagas = newInsts.filter((i) => i.paid).length;
+      const restantes = newInsts.length - totalPagas;
+      const fmtBRLh = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+      const fmtDateH = (s: string) => { const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : s; };
+      const histEntry = {
+        date: new Date().toISOString(),
+        type: 'Sistema' as const,
+        text: `Baixa via Planilha de Conferência (parcela escolhida) — Parcela ${target.number}: face ${fmtBRLh(face)} sai do A Vencer; recebido ${fmtBRLh(paidValue)} em ${fmtDateH(paidDate)}. ${totalPagas}/${newInsts.length} pagas (faltam ${restantes}).`,
+      };
+      const baseHistory = (prevPatch?.history as { date: string; type: 'Sistema'; text: string }[] | undefined) ?? (student.history ?? []);
+      const newUpdates = new Map(p.studentUpdates);
+      newUpdates.set(studentId, {
+        installments: newInsts,
+        paidInstallments: totalPagas,
+        history: [...baseHistory, histEntry],
+      });
+      return {
+        ...p,
+        studentUpdates: newUpdates,
+        baixas: [...p.baixas, {
+          studentId,
+          studentName: student.name,
+          ac: student.ac,
+          installmentNumber: target.number,
+          installmentValue: face,
+          paidValue,
+          dueDate: target.dueDate,
+          paidDate,
+        }],
+        errors: p.errors.filter((_, i) => i !== idx),
+        summary: { ...p.summary, pagas: p.summary.pagas + 1, erros: Math.max(0, p.summary.erros - 1) },
+      };
+    });
+    setParcelaEscolhida((r) => { const c = { ...r }; delete c[idx]; return c; });
+  };
+
   const selectAll = () => {
     if (!preview) return;
     const next: Record<number, boolean> = {};
@@ -539,6 +636,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
     setRowEditing({});
     setAjusteSelected({});
     setVencModalIdx(null);
+    setParcelaEscolhida({});
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -726,7 +824,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
             studentId: b.studentId,
             studentName: b.studentName,
             ac: b.ac,
-            resumo: `Parcela ${b.installmentNumber} (venc. ${fmtDate(b.dueDate)} • ${fmtBRL(b.installmentValue)}) baixada via Kamino em ${fmtDate(b.paidDate)}.`,
+            resumo: `Parcela ${b.installmentNumber} (venc. ${fmtDate(b.dueDate)} • face ${fmtBRL(b.installmentValue)}) baixada em ${fmtDate(b.paidDate)}. Recebido ${fmtBRL(b.paidValue)}.`,
             antes: { paid: false, paidDate: null, numero: b.installmentNumber, valor: b.installmentValue, vencimento: b.dueDate },
             depois: {
               paid: true,
@@ -851,8 +949,9 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
                 <p><strong>Como funciona:</strong></p>
                 <ul className="list-disc list-inside space-y-0.5 ml-1">
                   <li>Use a <strong>planilha modelo</strong> (Aluno, VALOR PAGO, Recebimento, Vencimento).</li>
-                  <li>O sistema localiza o contrato pelo nome e assessor, e baixa <strong>somente a parcela com vencimento e valor exatamente iguais</strong> aos da planilha.</li>
-                  <li>Divergências ficam na sub-aba <strong>Erros de Importação</strong> para revisão.</li>
+                  <li>Casa a parcela pelo <strong>vencimento</strong> e pelo <strong>valor original</strong>. O card A Vencer/Vencido perde esse valor; o card Pago recebe o <strong>valor pago</strong>.</li>
+                  <li>Se a data e o valor não baterem, a pré-visualização pergunta qual parcela baixar.</li>
+                  <li>Divergências que você não resolver aqui ficam na sub-aba <strong>Erros de Importação</strong>.</li>
                 </ul>
               </div>
             </div>
@@ -925,7 +1024,7 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
                     <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={16} />
                     <div className="text-xs text-amber-900 flex-1">
                       <p className="font-semibold mb-1">{preview.summary.erros} linha(s) não puderam ser baixadas automaticamente.</p>
-                      <p>Linhas ambíguas, sem parcela identificada ou com divergência ficam protegidas e devem ser resolvidas manualmente na sub-aba <strong>Erros</strong>, onde o contrato e a parcela podem ser escolhidos.</p>
+                      <p>Não achei a parcela pela data e pelo valor original. Escolha qual baixar: o card A Vencer/Vencido perde o valor da parcela e o card Pago recebe o valor pago. O que ficar sem escolha vai para a sub-aba <strong>Erros</strong>.</p>
                     </div>
                     {preview.errors.some((e) => isResolvable(e)) && (
                       <div className="flex gap-1 shrink-0">
@@ -1041,6 +1140,35 @@ export default function ImportConciliacaoModal({ isOpen, onClose }: Props) {
                                     </button>
                                   ) : (
                                     <>
+                                      {PERGUNTAR_PARCELA.includes(e.motivo) && (() => {
+                                        const opcoes = parcelasEmAbertoDaLinha(e, students, preview.studentUpdates);
+                                        const fmtD = (s: string) => { const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : s; };
+                                        const fmtV = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+                                        return (
+                                          <div className="flex flex-col items-end gap-1 mr-1">
+                                            <select
+                                              value={parcelaEscolhida[i] ?? ''}
+                                              onChange={(ev) => setParcelaEscolhida((r) => ({ ...r, [i]: ev.target.value }))}
+                                              className="max-w-[240px] border border-border rounded px-1 py-0.5 text-[10px] bg-white"
+                                            >
+                                              <option value="">Qual parcela baixar?</option>
+                                              {opcoes.map(({ student, inst }) => (
+                                                <option key={`${student.id}|${inst.number}`} value={`${student.id}|${inst.number}`}>
+                                                  {student.product || 'Contrato'} · P{inst.number} · {fmtD(inst.dueDate)} · {fmtV(inst.value)}
+                                                </option>
+                                              ))}
+                                            </select>
+                                            <button
+                                              type="button"
+                                              disabled={!parcelaEscolhida[i]}
+                                              onClick={() => applyEscolhaParcela(i, parcelaEscolhida[i])}
+                                              className="px-2 py-0.5 rounded bg-sky-600 text-white text-[10px] font-semibold disabled:opacity-40"
+                                            >
+                                              Baixar esta
+                                            </button>
+                                          </div>
+                                        );
+                                      })()}
                                       {e.motivo === 'vencimento_diverge' && Number.isFinite(Number((e.raw as Record<string, unknown>)?.__installmentNumber__)) && (
                                         <button
                                           onClick={() => { setVencModalIdx(i); setVencModalDate(e.vencimento ?? ''); }}
@@ -1227,9 +1355,12 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
     detail?: string,
     extras?: Record<string, unknown>,
   ) => {
-    const rawWithDetail = detail || extras
-      ? { ...row.raw, ...(extras ?? {}), ...(detail ? { __detail__: detail } : {}) }
-      : row.raw;
+    const rawWithDetail = {
+      ...row.raw,
+      ...(row.valorReceber != null ? { __valorOriginal__: row.valorReceber } : {}),
+      ...(extras ?? {}),
+      ...(detail ? { __detail__: detail } : {}),
+    };
     errors.push({
       batchId,
       fileName,
@@ -1299,14 +1430,17 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
     }
 
     // Tenta achar parcela em algum dos alunos com aquele nome.
-    // Match exigido: dueDate === row.vencimento && value ≈ valorPago && !paid.
-    // Planilha de conferência: ignora diferença só de centavos (< R$ 1,00).
-    // Kamino legado mantém a tolerância de ±15% (juros/desconto embutidos).
+    // Conferência: casa só vencimento + VALOR ORIGINAL (face da parcela).
+    // VALOR PAGO não entra no match — ele vai para o card Pago (paidValue).
+    // Sem coluna de valor original, cai no valor pago. Diferença só de centavos (< R$ 1).
+    // Kamino legado mantém a tolerância de ±15%.
+    const facePlanilha = row.format === 'conferencia'
+      ? (row.valorReceber ?? row.valorRecebido)
+      : valorPago;
     const installmentValueMatches = (installmentValue: number): boolean => {
       if (row.format === 'conferencia') {
-        if (row.valorRecebido != null && valuesMatch(installmentValue, row.valorRecebido)) return true;
-        if (row.valorReceber != null && valuesMatch(installmentValue, row.valorReceber)) return true;
-        return false;
+        if (facePlanilha == null) return false;
+        return valuesMatch(installmentValue, facePlanilha);
       }
       return valueWithinKaminoTolerance(installmentValue, valorPago);
     };
@@ -1455,7 +1589,12 @@ function processRows(rows: KaminoPaymentRow[], students: Student[], fileName: st
         continue;
       }
     }
-    pushError(row, 'parcela_nao_encontrada', undefined);
+    pushError(
+      row,
+      'parcela_nao_encontrada',
+      matchesStudents.length === 1 ? matchesStudents[0].id : undefined,
+      'Não achei parcela com este vencimento e este valor original.',
+    );
   }
 
   // Monta updates por aluno (apenas os que mudaram).

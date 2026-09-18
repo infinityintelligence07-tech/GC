@@ -306,8 +306,6 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const [jurosPercent, setJurosPercent] = useState(DEFAULT_JUROS);
   // (Encargo "valor específico" foi movido para dentro da edição de cada parcela —
   // ver `extraValues`/`getExtra`, atribuição manual por parcela via ícone de lápis.)
-  // Controla a expansão do detalhamento de "Encargos Atribuídos" no topo.
-  const [showEncargosBreakdown, setShowEncargosBreakdown] = useState(false);
   // Valor de encargo sendo editado em conjunto com valor/data dentro da edição da parcela.
   const [editExtra, setEditExtra] = useState(0);
 
@@ -785,7 +783,6 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const totalAVencer = unpaidInstallments
     .filter((i) => parseDateLocal(i.dueDate) >= today)
     .reduce((a, i) => a + getInstallmentOutstanding(i), 0);
-  const totalOverdueSemEncargos = overdueInstallments.reduce((a, i) => a + getInstallmentOutstanding(i), 0);
   // Check de Valor: deve dar 0. Diferença entre saldo original e soma atual (sem encargos).
   const checkDiff = saldoOriginalRef - totalAberto;
   const checkOk = Math.abs(checkDiff) <= 0.01;
@@ -808,22 +805,13 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       + totalCreditoAbatimento,
     [flowInstallments, finance.downPayment, totalCreditoAbatimento],
   );
-  /** Parcelas quitadas pelo aluno — a entrada tem card próprio e boletos
-   *  antecipados (banco/fundo) ficam no card Antecipado, não aqui. */
+  /** Parcelas quitadas pelo aluno. Boletos antecipados (banco/fundo) não entram. */
   const totalPagoParcelas = useMemo(
     () => flowInstallments
       .filter((i) => i.paid && !isParcelaAntecipada(i))
       .reduce((acc, i) => acc + ((i as { paidValue?: number }).paidValue ?? i.value), 0),
     [flowInstallments],
   );
-  /** Boletos antecipados (banco/fundo): baixados para a empresa, mas não pagos pelo aluno. */
-  const totalAntecipado = useMemo(
-    () => flowInstallments
-      .filter(isParcelaAntecipada)
-      .reduce((acc, i) => acc + i.value, 0),
-    [flowInstallments],
-  );
-  const hasAntecipado = totalAntecipado > 0.0049;
   const entradaValor = finance.downPayment ?? 0;
   const hasEntrada = finance.paidEntrada && entradaValor > 0.0049;
   const entradaPendenteValor = useMemo(
@@ -852,20 +840,6 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   }, [hasDelta, deltaContrato]);
 
   const deltaResolvido = !hasDelta || (deltaClassif === 'encargo' && Math.abs(encargoValor) > 0.01);
-
-  // Total de encargos já aplicados em alterações anteriores (somatório do
-  // histórico do aluno). Usado para sinalizar no Fluxo de Pagamento.
-  const encargosHistoricoTotal = useMemo(() => {
-    let soma = 0;
-    for (const h of student.history ?? []) {
-      const m = /Encargo declarado:\s*R\$\s*([\d.]+,\d{2}|\d+)/i.exec(h.text || '');
-      if (m) {
-        const n = Number(m[1].replace(/\./g, '').replace(',', '.'));
-        if (Number.isFinite(n)) soma += n;
-      }
-    }
-    return soma;
-  }, [student.history]);
 
   // Tags do aluno (resolvidas a partir do store)
   const allTags = useAppStore((s) => s.studentTags);
@@ -2122,132 +2096,21 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                 {hasEntrada || hasEntradaPendente ? ' (incl. entrada)' : ''}
               </span>
             </div>
-            {(() => {
-              const encargosAtribuidosTotal = Object.values(extraValues).reduce((a, b) => a + (b || 0), 0);
-              const hasAtribuidos = encargosAtribuidosTotal > 0.0049;
-              const encargosAtribuidosList = Object.entries(extraValues)
-                .map(([num, val]) => ({ num: Number(num), val: Number(val) || 0 }))
-                .filter((e) => e.val > 0.0049)
-                .sort((a, b) => a.num - b.num);
-              const cols = 5
-                + (hasEntrada ? 1 : 0)
-                + (hasEntradaPendente ? 1 : 0)
-                + (hasAntecipado ? 1 : 0)
-                + (encargosHistoricoTotal > 0.0049 ? 1 : 0)
-                + (hasAtribuidos ? 1 : 0);
-              const colsClass =
-                cols >= 8 ? 'grid-cols-8'
-                : cols >= 7 ? 'grid-cols-7'
-                : cols === 6 ? 'grid-cols-6'
-                : cols === 5 ? 'grid-cols-5'
-                : 'grid-cols-4';
-              return (
-            <div className={`grid ${colsClass} gap-2 mb-3`}>
-              <div className="p-2 bg-card border border-border rounded-lg">
-                <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Contrato</p>
-                <p className="text-xs font-bold text-foreground">{formatCurrency(valorContrato)}</p>
-                {encargosHistoricoTotal > 0.0049 && (
-                  <p className="text-[9px] text-amber-700 font-medium mt-0.5">
-                    + {formatCurrency(encargosHistoricoTotal)} encargos
-                  </p>
-                )}
-              </div>
-              {hasEntrada && (
-                <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-                  <p className="text-[9px] text-emerald-700 uppercase tracking-wide">Entrada Paga</p>
-                  <p className="text-xs font-bold text-emerald-700">{formatCurrency(entradaValor)}</p>
-                </div>
-              )}
-              {hasEntradaPendente && (
-                <div className="p-2 bg-amber-50 border border-amber-300 rounded-lg">
-                  <p className="text-[9px] text-amber-700 uppercase tracking-wide">Entrada Pendente</p>
-                  <p className="text-xs font-bold text-amber-800">{formatCurrency(entradaPendenteValor)}</p>
-                </div>
-              )}
-              {encargosHistoricoTotal > 0.0049 && (
-                <div className="p-2 bg-amber-50 border border-amber-300 rounded-lg">
-                  <p className="text-[9px] text-amber-700 uppercase tracking-wide">Encargos Aplicados</p>
-                  <p className="text-xs font-bold text-amber-700">{formatCurrency(encargosHistoricoTotal)}</p>
-                </div>
-              )}
-              {hasAtribuidos && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowEncargosBreakdown((v) => !v)}
-                    className="w-full p-2 bg-amber-50 border border-amber-300 rounded-lg text-left hover:bg-amber-100 transition"
-                    title="Clique para ver a quais parcelas os encargos foram atribuídos"
-                  >
-                    <p className="text-[9px] text-amber-700 uppercase tracking-wide flex items-center justify-between">
-                      Encargos Atribuídos
-                      <span className="text-[8px]">{showEncargosBreakdown ? '▲' : '▼'}</span>
-                    </p>
-                    <p className="text-xs font-bold text-amber-800">{formatCurrency(encargosAtribuidosTotal)}</p>
-                  </button>
-                  {showEncargosBreakdown && (
-                    <div className="absolute z-20 left-0 right-0 mt-1 bg-card border border-amber-200 rounded-lg shadow-lg p-2 space-y-1 max-h-48 overflow-auto">
-                      <p className="text-[9px] text-muted-foreground uppercase tracking-wide font-semibold pb-1 border-b border-border">
-                        Atribuído por parcela
-                      </p>
-                      {encargosAtribuidosList.map((e) => {
-                        const inst = student.installments.find((i) => i.number === e.num);
-                        return (
-                          <div key={e.num} className="flex items-center justify-between text-[10px]">
-                            <span className="text-foreground">
-                              Parcela {displayParcelLabel(e.num)}{inst ? ` • ${formatDateBR(inst.dueDate)}` : ''}
-                            </span>
-                            <span className="font-semibold text-amber-700">{formatCurrency(e.val)}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-[9px] text-amber-700 uppercase tracking-wide">À Vencer</p>
-                <p className="text-xs font-bold text-amber-700">
-                  {formatCurrency(totalAVencer)}
-                </p>
-              </div>
-              <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg">
-                <p className="text-[9px] text-rose-700 uppercase tracking-wide">Vencido</p>
-                <p className="text-xs font-bold text-rose-700">
-                  {formatCurrency(totalOverdueSemEncargos)}
-                </p>
-              </div>
-              {hasAntecipado && (
-                <div
-                  className="p-2 bg-sky-50 border border-sky-300 rounded-lg"
-                  title="Boletos antecipados (banco/fundo): baixados para a empresa, mas ainda não pagos pelo aluno. Entram no card Boletos Antecipados da dashboard."
-                >
-                  <p className="text-[9px] text-sky-700 uppercase tracking-wide">{ANTECIPADA_LABEL}</p>
-                  <p className="text-xs font-bold text-sky-700">{formatCurrency(totalAntecipado)}</p>
-                </div>
-              )}
-              <div
-                className="p-2 bg-violet-50 border border-violet-300 rounded-lg"
-                title="Parcelas já pagas + créditos de abatimento recebidos de outros contratos (a entrada não entra neste saldo)"
-              >
-                <p className="text-[9px] text-violet-700 uppercase tracking-wide">Saldo p/ Abater</p>
-                <p className="text-xs font-bold text-violet-800">
-                  {formatCurrency(totalPagoParcelas + totalCreditoAbatimento)}
-                </p>
-                {totalCreditoAbatimento > 0.0049 && (
-                  <p className="text-[8px] text-violet-700/90 mt-0.5 leading-tight">
-                    incl. {formatCurrency(totalCreditoAbatimento)} de abatimento
-                  </p>
-                )}
-              </div>
-              <div className="p-2 bg-slate-100 border border-slate-300 rounded-lg">
-                <p className="text-[9px] text-slate-700 uppercase tracking-wide">Total Aberto</p>
-                <p className="text-xs font-bold text-slate-800">
-                  {formatCurrency(totalAberto)}
-                </p>
-              </div>
-            </div>
-              );
-            })()}
+            <p className="flex flex-wrap items-baseline gap-x-5 gap-y-1 mb-3 text-[11px] text-muted-foreground">
+              {(
+                [
+                  ['Total pago', (hasEntrada ? entradaValor : 0) + totalPagoParcelas],
+                  ['À vencer', totalAVencer],
+                  ['Total do contrato', valorContrato],
+                  ['Saldo para abater', totalPagoParcelas + totalCreditoAbatimento],
+                ] as const
+              ).map(([label, value]) => (
+                <span key={label}>
+                  {label}{' '}
+                  <span className="font-medium text-foreground tabular-nums">{formatCurrency(value)}</span>
+                </span>
+              ))}
+            </p>
 
             <div className="overflow-x-auto no-scrollbar">
               <div className="flex gap-1.5 min-w-max py-1">
