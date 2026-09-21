@@ -11,7 +11,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor from '@/components/ui/MetaValorEditor';
-import { listMetaPendenciaItems, resolveMetaBase, metaEfetivaComPendencias } from '@/lib/metaPendenciaAjustes';
+import { listMetaPendenciaItems, resolveMetaBase, metaEfetivaComPendencias, sumMetaPendenciaItems } from '@/lib/metaPendenciaAjustes';
 import { Installment, Student, StudentStatus, canEditTab } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { getTodayBrasilia, getTodayStringBrasilia, createdAtInRange, isNegativacaoEstagnada } from '@/lib/brasiliaDate';
@@ -25,7 +25,7 @@ import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import KpiStudentsModal, { KpiValueMode } from '@/components/ui/KpiStudentsModal';
 import { getHiddenFromAcPortfolioKeys, filterCarteiraActiveStudents, cancelamentoOverridesFinancialStatus, matchesCancelamentoFilter, isStudentFullyPaid } from '@/lib/acPortfolioVisibility';
 import { taxaEmDiaPorAssessor } from '@/lib/taxaEmDiaCarteira';
-import { resolveStudentDisplayStatus, isOperationalPendente, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
+import { resolveStudentDisplayStatus, isOperationalPendente, isPendenciaCardStudent, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
 import { resolveStudentDisplayStatusVinculado, resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { countsInFinancialTotals, isInstallmentExcludedFromFinancialTotals, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
@@ -541,7 +541,7 @@ export default function DashboardPage() {
   const solicitacaoCancelamento = kpiStudentsScoped.filter(_isSolic);
   // Pendência = pagamento aguardando fora de boleto (PIX, link, cartão, etc.).
   // Boleto NÃO entra neste status — segue Em Dia / Vencido / etc.
-  const pendentes = kpiStudentsScoped.filter((s) => isOperationalPendente(s) && !_isSolic(s));
+  const pendentes = kpiStudents.filter((s) => isPendenciaCardStudent(s) && !_isSolic(s));
 
   // Dia de referência dos KPIs: no Histórico é o "fim" escolhido; senão, hoje.
   const _refDayMs = (() => {
@@ -936,17 +936,13 @@ export default function DashboardPage() {
   const mesEmDiaNovosValue = pagoMesTotais.pago;
   const mesPagoAlunos = pagoMesTotais.qtdAlunos;
 
-  // Meta do dash = soma das metas efetivas dos ACs (base + pendências exatas).
-  // Com filtro de assessor, usa só aquele AC.
+  // Meta do dash = soma das metas efetivas dos ACs (base + pendências de
+  // evento já pagas no mês). Pendência de entrada não entra.
   const acsAtivosMeta = acs.filter((a) => a.active);
   const metaPendencias = useMemo(() => {
-    // kpiStudents (sem recorte de período): pendência com vencimento fora do
-    // filtro de datas ainda eleva a meta.
-    const pool = acFilter
-      ? kpiStudents.filter((s) => s.ac === acFilter)
-      : kpiStudents;
-    return listMetaPendenciaItems(pool);
-  }, [kpiStudents, acFilter]);
+    const pool = acFilter ? students.filter((s) => s.ac === acFilter) : students;
+    return listMetaPendenciaItems(pool, `${mesAtualKey}-01`, hojeKey);
+  }, [students, acFilter, mesAtualKey, hojeKey]);
   const metaBaseReferencia = useMemo(() => {
     const ativos = acs.filter((a) => a.active);
     if (acFilter) {
@@ -956,6 +952,7 @@ export default function DashboardPage() {
     return ativos.reduce((sum, a) => sum + resolveMetaBase(a.emDiaNovosMeta), 0);
   }, [acs, acFilter]);
   const emDiaNovosMeta = metaEfetivaComPendencias(metaBaseReferencia, metaPendencias);
+  const pagoSemPendencia = Math.round((mesEmDiaNovosValue - sumMetaPendenciaItems(metaPendencias)) * 100) / 100;
   const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
   const ESCALA_FITA = 1.5;
   const fitaMax = emDiaNovosMeta * ESCALA_FITA;
@@ -1464,7 +1461,11 @@ export default function DashboardPage() {
           title={`Pago · ${mesAtualLabel} (${periodoMesLabel}): ${formatCurrency(mesEmDiaNovosValue)} recebidos de ${mesPagoAlunos} alunos, por data de pagamento — só baixas feitas no GC e conciliadas (mais retido de cancelamento conciliado). Zera todo dia 1º. Clique para ver os alunos.`}
         >
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide truncate">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide min-w-0">
+              <span className="font-semibold text-foreground tabular-nums normal-case" title="Pago do mês menos as pendências de evento já pagas">
+                {formatCurrency(pagoSemPendencia)}
+              </span>
+              <span className="mx-1">|</span>
               Pago · {periodoMesLabel}
             </p>
             <MetaValorEditor
@@ -2167,7 +2168,7 @@ export default function DashboardPage() {
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Pendências</p>
             <div className="flex items-center gap-1 shrink-0">
-              <NaoSomaBadge title="Pendência operacional (PIX/link IAM aguardando conciliação). Não entra na Carteira Total — o aluno só passa a contar nos cards de status depois da aprovação." />
+              <NaoSomaBadge title="Pendência de evento ainda não paga. Pendência de entrada não entra. Não soma na Carteira Total." />
               <AlertTriangle size={14} className="text-yellow-600/70" />
               <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'pendente' ? null : 'pendente'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
                 <Info size={14} />
@@ -2184,8 +2185,8 @@ export default function DashboardPage() {
           {infoStatus === 'pendente' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
               <p>
-                Pendência de pagamento fora de boleto (PIX, link, cartão, etc.), em geral contrato IAM ainda aguardando aprovação na Conciliação.
-                Não soma na Carteira Total (por isso 146 ≠ 147 se você incluir este card). Pagamentos de boleto não entram aqui — permanecem em Em Dia / Vencido / À Negativar.
+                Pendência de evento ainda não paga. Pendência de entrada não entra aqui.
+                Não soma na Carteira Total. Quando a pendência de evento é paga, sai daqui e passa a aumentar a meta do mês.
               </p>
             </div>
           )}
@@ -2446,7 +2447,7 @@ export default function DashboardPage() {
         <KpiStudentsModal
           title={`Alunos — ${kpiModalConfig.title}`}
           students={kpiModalConfig.students}
-          instInRange={_instInRange}
+          instInRange={kpiModalConfig.valueMode === 'operational_pendente' ? () => true : _instInRange}
           valueMode={kpiModalConfig.valueMode}
           todayMs={_refDayMs}
           futureOnlyStudentIds={kpiModalConfig.futureOnlyStudentIds}

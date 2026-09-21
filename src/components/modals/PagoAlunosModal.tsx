@@ -236,14 +236,26 @@ function FragmentRow({
                 </tr>
               </thead>
               <tbody>
-                {aluno.titulos.map((t, idx) => (
+                {aluno.titulos.map((t, idx) => {
+                  const face = Number(t.value) || 0;
+                  const recebido = Number(t.paidValue) || 0;
+                  const diverge = Math.abs(recebido - face) >= 0.01;
+                  return (
                   <tr key={`${t.studentId}-${t.installmentNumber}-${idx}`} className="border-t border-border/40">
                     <td className="px-3 py-1 text-foreground">{tituloLabel(t)}</td>
                     <td className="px-3 py-1 tabular-nums text-foreground">{fmtDate(t.dueDate)}</td>
                     <td className="px-3 py-1 tabular-nums text-foreground">{fmtDate(t.paidDate)}</td>
-                    <td className="px-3 py-1 text-right tabular-nums font-medium text-emerald-700">{formatCurrency(t.value)}</td>
+                    <td className="px-3 py-1 text-right tabular-nums font-medium text-emerald-700">
+                      {formatCurrency(diverge ? recebido : face)}
+                      {diverge && (
+                        <p className="text-[10px] font-normal text-muted-foreground" title="Valor de face da parcela">
+                          face {formatCurrency(face)}
+                        </p>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </td>

@@ -1,5 +1,6 @@
-import type { Student } from '@/types';
-import { getEntradaPendenteInstallments } from '@/lib/studentDisplayStatus';
+import type { Installment, Student } from '@/types';
+import { isPendenciaEventoInstallment } from '@/lib/studentDisplayStatus';
+import { isParcelaAntecipada } from '@/lib/parcelaAntecipada';
 
 /** Meta padrão (R$) da fita "Pago · mês vigente" quando ainda não há meta salva. */
 export const EM_DIA_NOVOS_META_PADRAO = 144500;
@@ -11,6 +12,8 @@ export interface MetaPendenciaItem {
   product: string;
   value: number;
   dueDate?: string;
+  /** Data em que a pendência foi paga (YYYY-MM-DD). */
+  paidDate?: string;
   tipo: string;
 }
 
@@ -19,18 +22,42 @@ function somaCentavos(valores: number[]): number {
   return valores.reduce((acc, v) => acc + Math.round((Number(v) || 0) * 100), 0);
 }
 
-/** Pendências de entrada em aberto (entrada-pendente / entrada-restante) na carteira. */
-export function listMetaPendenciaItems(students: Student[]): MetaPendenciaItem[] {
+function dataPagamentoIso(inst: Installment): string | undefined {
+  if (inst.paidDate && /^\d{4}-\d{2}-\d{2}/.test(inst.paidDate)) return inst.paidDate.slice(0, 10);
+  if (inst.paidMarkedAt && /^\d{4}-\d{2}-\d{2}/.test(inst.paidMarkedAt)) return inst.paidMarkedAt.slice(0, 10);
+  return undefined;
+}
+
+function tipoPendenciaPaga(): string {
+  return 'Pendência de evento paga';
+}
+
+/**
+ * Pendências de evento já pagas. Pendência de entrada não entra.
+ * Pendência ainda em aberto não entra. `pagoDe`/`pagoAte` recortam pela data
+ * do pagamento (mês vigente da fita). Antecipação de boleto não conta.
+ */
+export function listMetaPendenciaItems(
+  students: Student[],
+  pagoDe?: string,
+  pagoAte?: string,
+): MetaPendenciaItem[] {
   const items: MetaPendenciaItem[] = [];
   for (const s of students) {
-    for (const inst of getEntradaPendenteInstallments(s)) {
+    for (const inst of s.installments ?? []) {
+      if (!inst.paid || isParcelaAntecipada(inst) || !isPendenciaEventoInstallment(inst, s.product)) continue;
+      const paidDate = dataPagamentoIso(inst);
+      if (!paidDate) continue;
+      if (pagoDe && paidDate < pagoDe) continue;
+      if (pagoAte && paidDate > pagoAte) continue;
       items.push({
         studentId: s.id,
         studentName: s.name,
         product: s.product,
         value: Number(inst.value) || 0,
         dueDate: inst.dueDate,
-        tipo: 'Entrada pendente',
+        paidDate,
+        tipo: tipoPendenciaPaga(),
       });
     }
   }
@@ -53,7 +80,7 @@ export function resolveMetaBase(stored?: number | null): number {
   return n;
 }
 
-/** Meta efetiva = base + soma exata das pendências em aberto. */
+/** Meta efetiva = base + soma exata das pendências de entrada já pagas no período. */
 export function metaEfetivaComPendencias(base: number, items: MetaPendenciaItem[]): number {
   const cents = Math.round((Number(base) || 0) * 100) + somaCentavos(items.map((i) => i.value));
   return cents / 100;

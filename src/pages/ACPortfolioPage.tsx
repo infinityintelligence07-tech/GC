@@ -27,7 +27,7 @@ import {
   hasActiveCancellationCase,
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
-import { getCancelamentoBadge, isOperationalPendente, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
+import { getCancelamentoBadge, isOperationalPendente, isPendenciaCardStudent, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
 import { resolveStudentDisplayStatusVinculado, resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { comStatusFinanceiroParaCards, isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista, isIamForaDaCarteiraAteConciliar } from '@/lib/iamPendenteConciliacao';
@@ -65,7 +65,7 @@ import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor from '@/components/ui/MetaValorEditor';
-import { listMetaPendenciaItems, resolveMetaBase, metaEfetivaComPendencias } from '@/lib/metaPendenciaAjustes';
+import { listMetaPendenciaItems, resolveMetaBase, metaEfetivaComPendencias, sumMetaPendenciaItems } from '@/lib/metaPendenciaAjustes';
 import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 
@@ -739,7 +739,7 @@ export default function ACPortfolioPage() {
       return revertidosStudentIds.has(s.id);
     }
     if (kpiCardFilter === 'pendente') {
-      return isOperationalPendente(s) && !isSolicCancel(s);
+      return isPendenciaCardStudent(s) && !isSolicCancel(s);
     }
     if (kpiCardFilter === 'boletos_antecipados') {
       return studentMatchesTagKpiGroup(s, studentTags, 'fundo_tmf_antecipacao');
@@ -929,16 +929,17 @@ export default function ACPortfolioPage() {
   const mesEmDiaNovosValue = pagoMesTotais.pago;
   const mesPagoAlunos = pagoMesTotais.qtdAlunos;
 
-  // Meta base (lápis) + acréscimo exato das pendências de entrada em aberto.
-  // Usa acStudents (carteira do AC), NÃO kpiStudentsScoped: o recorte de
-  // período dos KPIs excluía pendências com vencimento fora do intervalo
-  // (ex.: Luana / Ronaldo 31/08) e a Meta ficava só na base, sem o clique.
+  // Meta base (lápis) + acréscimo exato das pendências de evento já pagas
+  // no mês vigente. Pendência de entrada não entra.
   const metaPendencias = useMemo(
-    () => listMetaPendenciaItems(acStudents),
-    [acStudents],
+    () => (ac
+      ? listMetaPendenciaItems(students.filter((s) => s.ac === ac.name), `${mesAtualKey}-01`, hojeKey)
+      : []),
+    [students, ac, mesAtualKey, hojeKey],
   );
   const metaBase = resolveMetaBase(ac?.emDiaNovosMeta);
   const emDiaNovosMeta = metaEfetivaComPendencias(metaBase, metaPendencias);
+  const pagoSemPendencia = Math.round((mesEmDiaNovosValue - sumMetaPendenciaItems(metaPendencias)) * 100) / 100;
   const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
   // A fita vai até 150% da meta para haver espaço à direita quando o assessor
   // passar da meta.
@@ -953,7 +954,7 @@ export default function ACPortfolioPage() {
 
   const revertPct = acCases.length > 0 ? Math.round((revertidos.length / acCases.length) * 100) : 0;
   const revertidosValue = revertidos.reduce((acc, c) => acc + (c.value ?? 0), 0);
-  const pendentes = kpiStudentsScoped.filter((s) => isOperationalPendente(s) && !_isSolic(s));
+  const pendentes = acStudents.filter((s) => isPendenciaCardStudent(s) && !_isSolic(s));
   const pendenteValue = pendentes.reduce((acc, s) => acc + sumOperationalPendenteValue(s), 0);
 
   if (!ac) return <div className="p-12 text-center text-muted-foreground">Selecione um assessor no menu.</div>;
@@ -1062,7 +1063,11 @@ export default function ACPortfolioPage() {
           className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative flex flex-col"
         >
           <div className="flex items-start justify-between mb-1.5 gap-2">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide truncate">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide min-w-0">
+              <span className="font-semibold text-foreground tabular-nums normal-case" title="Pago do mês menos as pendências de evento já pagas">
+                {formatCurrency(pagoSemPendencia)}
+              </span>
+              <span className="mx-1">|</span>
               Pago · {periodoMesLabel}
             </p>
             <div className="flex items-center gap-2 shrink-0">
@@ -1705,7 +1710,7 @@ export default function ACPortfolioPage() {
           <div className="flex items-start justify-between mb-2 gap-2">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">Pendências</p>
             <div className="flex items-center gap-1 shrink-0">
-              <NaoSomaBadge title="Pendência operacional (PIX/link IAM aguardando conciliação). Não entra na Carteira Total — o aluno só passa a contar nos cards de status depois da aprovação." />
+              <NaoSomaBadge title="Pendência de evento ainda não paga. Pendência de entrada não entra. Não soma na Carteira Total." />
               <AlertTriangle size={14} className="text-yellow-600/70" />
               <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'pendente' ? null : 'pendente'); }} className="text-muted-foreground/50 hover:text-muted-foreground">
                 <Info size={14} />
@@ -1722,8 +1727,8 @@ export default function ACPortfolioPage() {
           {infoStatus === 'pendente' && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl p-3 shadow-xl z-50 text-[11px] text-muted-foreground">
               <p>
-                Pendência de pagamento fora de boleto (PIX, link, cartão, etc.), em geral contrato IAM ainda aguardando aprovação na Conciliação.
-                Não soma na Carteira Total. Pagamentos de boleto não entram neste indicador.
+                Pendência de evento ainda não paga. Pendência de entrada não entra aqui.
+                Não soma na Carteira Total. Quando a pendência de evento é paga, sai daqui e passa a aumentar a meta do mês.
               </p>
             </div>
           )}

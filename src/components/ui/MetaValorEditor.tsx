@@ -21,7 +21,7 @@ interface MetaValorEditorProps {
   /** Salva a meta base (sem incluir pendências). */
   onSave: (metaBase: number) => void;
   label?: string;
-  /** Pendências de entrada em aberto — acréscimo = soma exata destes itens. */
+  /** Pendências de evento já pagas no mês — acréscimo = soma exata destes itens. */
   pendencias?: MetaPendenciaItem[];
 }
 
@@ -130,21 +130,21 @@ export default function MetaValorEditor({
           {pendencias.length > 0 ? (
             <div className="space-y-1.5">
               <p className="text-[9px] uppercase tracking-wide text-muted-foreground font-semibold">
-                Pendências em aberto na carteira
+                Pendências de evento pagas no mês
               </p>
               <ul className="max-h-48 overflow-y-auto space-y-1.5">
                 {pendencias.map((p) => (
                   <li
-                    key={`${p.studentId}-${p.dueDate}-${p.value}`}
-                    className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-2 py-1.5"
+                    key={`${p.studentId}-${p.paidDate}-${p.dueDate}-${p.value}`}
+                    className="rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-2 py-1.5"
                   >
                     <p className="text-[10px] font-semibold text-foreground leading-tight">{p.studentName}</p>
                     <p className="text-[9px] text-muted-foreground leading-tight mt-0.5">
                       {p.product}
-                      {p.dueDate ? ` · venc. ${formatMetaPendenciaDue(p.dueDate)}` : ''}
+                      {p.paidDate ? ` · pago ${formatMetaPendenciaDue(p.paidDate)}` : ''}
                       {` · ${p.tipo}`}
                     </p>
-                    <p className="text-[10px] font-bold text-amber-800 tabular-nums mt-0.5">
+                    <p className="text-[10px] font-bold text-emerald-800 tabular-nums mt-0.5">
                       {formatCurrency(p.value)}
                     </p>
                   </li>
@@ -153,7 +153,7 @@ export default function MetaValorEditor({
             </div>
           ) : (
             <p className="text-[9px] text-muted-foreground leading-snug">
-              Sem pendências em aberto — a meta está na base.
+              Nenhuma pendência de evento paga neste mês — a meta está na base.
             </p>
           )}
         </div>
@@ -177,7 +177,7 @@ export default function MetaValorEditor({
             />
           </label>
           <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug">
-            A meta exibida na fita é a base + a soma exata das pendências de entrada em aberto. O acréscimo por pendência não é arredondado.
+            A meta exibida na fita é a base + a soma exata das pendências de evento já pagas neste mês. Pendência de entrada não entra. O acréscimo não é arredondado.
           </p>
           <div className="flex justify-end gap-2 mt-3">
             <button

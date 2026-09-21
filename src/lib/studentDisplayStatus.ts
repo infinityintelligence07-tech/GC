@@ -1,10 +1,10 @@
-import type { Student, StudentStatus, StatusCancelamento, Installment } from '@/types';
+import type { Installment, Student, StudentStatus, StatusCancelamento } from '@/types';
 import { calculateStudentAutoStatus } from '@/store/useAppStore';
 import {
   cancelamentoOverridesFinancialStatus,
   isStudentFullyPaid,
 } from '@/lib/acPortfolioVisibility';
-import { isAwaitingIamGcApproval } from '@/lib/iamPendenteConciliacao';
+import { classifyIamTreinamentoOrigem, isAwaitingIamGcApproval } from '@/lib/iamPendenteConciliacao';
 
 /**
  * Status em que o contrato inteiro segue para negativação. As parcelas em
@@ -68,17 +68,41 @@ export function sumEntradaPendenteValue(student: Student): number {
   return getEntradaPendenteInstallments(student).reduce((acc, i) => acc + i.value, 0);
 }
 
+function foldPendenciaTexto(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 /**
- * Parcelas que representam a pendência operacional (PIX/link), não o plano de parcelas futuro.
+ * Pendência de evento: observação de pendência num treinamento de evento
+ * (Confronto, Missão Governar, Trainer, PNL, Imersão).
+ * Pendência de entrada (tag ou texto "entrada restante") não entra.
+ */
+export function isPendenciaEventoInstallment(inst: Installment, product?: string | null): boolean {
+  if (classifyIamTreinamentoOrigem(product) !== 'eventos') return false;
+  const obs = foldPendenciaTexto(inst.observacao ?? '');
+  if (!obs.includes('pend')) return false;
+  if (
+    obs.includes('entrada restante') ||
+    obs.includes('pendencia (entrada') ||
+    obs.includes('pendencia de entrada')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Parcelas da pendência de evento ainda não pagas.
+ * Sem essa marca, a pendência operacional IAM entra só se não for entrada.
  */
 export function getOperationalPendenteInstallments(student: Student): Installment[] {
+  const evento = (student.installments ?? []).filter(
+    (i) => !i.paid && isPendenciaEventoInstallment(i, student.product),
+  );
+  if (evento.length > 0) return evento;
   if (!isOperationalPendente(student)) return [];
-  const unpaid = student.installments.filter((i) => !i.paid);
+  const unpaid = student.installments.filter((i) => !i.paid && !isEntradaPendenciaInstallment(i));
   if (unpaid.length === 0) return [];
-
-  const entradaTagged = getEntradaPendenteInstallments(student);
-  if (entradaTagged.length > 0) return entradaTagged;
-
   const sorted = [...unpaid].sort((a, b) => a.number - b.number);
   return sorted.slice(0, 1);
 }
@@ -92,6 +116,7 @@ export function getEntradaDisplayValue(student: Student): number {
 /** Tipo da pendência operacional para exibição em tabelas/KPIs. */
 export function getOperationalPendenteTipoLabel(student: Student): string {
   const insts = getOperationalPendenteInstallments(student);
+  if (insts.some((i) => isPendenciaEventoInstallment(i, student.product))) return 'Pendência de evento';
   if (insts.some((i) => isEntradaPendenciaInstallment(i))) {
     const tipo = String(student.iamControlPendenteTipo ?? '').toUpperCase();
     if (tipo === 'PIX') return 'Entrada (PIX)';
@@ -106,6 +131,11 @@ export function getOperationalPendenteTipoLabel(student: Student): string {
 
 export function sumOperationalPendenteValue(student: Student): number {
   return getOperationalPendenteInstallments(student).reduce((acc, i) => acc + i.value, 0);
+}
+
+/** Entra no card Pendências: pendência de evento em aberto, ou pendência operacional que não é entrada. */
+export function isPendenciaCardStudent(student: Student): boolean {
+  return getOperationalPendenteInstallments(student).length > 0;
 }
 
 /** Pendência operacional (PIX/link IAM, PARA_CONCILIAR ou status manual Pendente). */
