@@ -13,6 +13,25 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("xlsx")) return "xlsx";
+          if (id.includes("recharts") || id.includes("d3-") || id.includes("victory-vendor")) return "charts";
+          if (
+            id.includes("react-dom") ||
+            id.includes("react-router") ||
+            id.includes(`${path.sep}react${path.sep}`) ||
+            id.includes("/react/")
+          ) {
+            return "react";
+          }
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

@@ -31,8 +31,7 @@ import { getCancelamentoBadge, isOperationalPendente, isPendenciaCardStudent, su
 import { resolveStudentDisplayStatusVinculado, resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { comStatusFinanceiroParaCards, isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista, isIamForaDaCarteiraAteConciliar } from '@/lib/iamPendenteConciliacao';
-import { exportForecastSpreadsheet, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
-import * as XLSX from 'xlsx';
+import type { ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import {
   buildBaixasGcIndex,
   dataBaixaParaPeriodo,
@@ -69,7 +68,8 @@ import { listMetaPendenciaItems, resolveMetaBase, metaEfetivaComPendencias, sumM
 import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 
-function exportAlunosNomeAc(rows: { name: string; ac: string }[], acName: string) {
+async function exportAlunosNomeAc(rows: { name: string; ac: string }[], acName: string) {
+  const XLSX = await import('xlsx');
   const sheet = XLSX.utils.aoa_to_sheet([
     ['Nome', 'AC'],
     ...rows.map((s) => [s.name, s.ac]),
@@ -798,6 +798,13 @@ export default function ACPortfolioPage() {
     return arr;
   })();
 
+  const PAGE_ROWS = 80;
+  const [visibleRows, setVisibleRows] = useState(PAGE_ROWS);
+  useEffect(() => {
+    setVisibleRows(PAGE_ROWS);
+  }, [search, statusFilter, scoreFilter, productFilter, kpiCardFilter, sortBy, sortDir, selectedACId, tagFilters]);
+  const visibleSorted = sorted.slice(0, visibleRows);
+
   // ── Média dias da carteira (para KPI compacto) ────────────────────────────
   const allPaidInstallments = acStudents.flatMap((s) => s.installments);
   const mediaCarteira = calcularMediaDiasPagamento(allPaidInstallments);
@@ -1243,17 +1250,17 @@ export default function ACPortfolioPage() {
                     toast.message('Nenhum registro para exportar no período selecionado.');
                     return;
                   }
-                  try {
+                  void import('@/lib/exportForecastSpreadsheet').then(({ exportForecastSpreadsheet }) => {
                     exportForecastSpreadsheet(rows, {
                       dateBasis,
                       periodLabel,
                       filePrefix: 'carteira-ac-projecao',
                     });
                     toast.success('Planilha exportada com sucesso.');
-                  } catch (err) {
+                  }).catch((err) => {
                     console.error(err);
                     toast.error('Não foi possível exportar a planilha.');
-                  }
+                  });
                 }}
                 className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold border border-border bg-card text-foreground hover:bg-muted transition-colors"
                 title="Exportar A Vencer/Vencido e Pago em planilha"
@@ -1902,13 +1909,12 @@ export default function ACPortfolioPage() {
               toast.message('Nenhum aluno para extrair.');
               return;
             }
-            try {
-              exportAlunosNomeAc(sorted, ac?.name ?? 'carteira');
-              toast.success('Planilha extraída com nome e AC.');
-            } catch (err) {
-              console.error(err);
-              toast.error('Não foi possível extrair os alunos.');
-            }
+            void exportAlunosNomeAc(sorted, ac?.name ?? 'carteira')
+              .then(() => toast.success('Planilha extraída com nome e AC.'))
+              .catch((err) => {
+                console.error(err);
+                toast.error('Não foi possível extrair os alunos.');
+              });
           }}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold border border-border bg-card text-foreground hover:bg-muted transition-colors"
           title="Baixa uma planilha só com o nome do aluno e o AC"
@@ -1956,7 +1962,7 @@ export default function ACPortfolioPage() {
                   </td>
                 </tr>
               ) : (
-                sorted.map((student) => {
+                visibleSorted.map((student) => {
                   const vinculo = resolveStudentDisplayStatusVinculado(student, students);
                   const tableStatus = vinculo.status;
                   return (
@@ -2197,6 +2203,19 @@ export default function ACPortfolioPage() {
                     </tr>
                   );
                 })
+              )}
+              {sorted.length > visibleSorted.length && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleRows((v) => v + PAGE_ROWS)}
+                      className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-muted hover:bg-muted/70 text-foreground transition-colors"
+                    >
+                      Mostrar mais {Math.min(PAGE_ROWS, sorted.length - visibleSorted.length)} de {sorted.length - visibleSorted.length} restantes
+                    </button>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

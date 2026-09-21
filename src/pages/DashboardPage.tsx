@@ -40,7 +40,7 @@ import CancellationCasesModal from '@/components/ui/CancellationCasesModal';
 import DashboardReportModal, { type DashboardReportSection } from '@/components/ui/DashboardReportModal';
 import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import FinancialModal from '@/components/modals/FinancialModal';
-import { exportForecastSpreadsheet, type ForecastExportBucket, type ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
+import type { ForecastExportBucket, ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
 import {
   buildBaixasGcIndex,
   dataBaixaParaPeriodo,
@@ -1634,17 +1634,17 @@ export default function DashboardPage() {
                     toast.message('Nenhum registro para exportar no período selecionado.');
                     return;
                   }
-                  try {
+                  void import('@/lib/exportForecastSpreadsheet').then(({ exportForecastSpreadsheet }) => {
                     exportForecastSpreadsheet(rows, {
                       dateBasis,
                       periodLabel,
                       filePrefix: 'dashboard-projecao',
                     });
                     toast.success('Planilha exportada com sucesso.');
-                  } catch (err) {
+                  }).catch((err) => {
                     console.error(err);
                     toast.error('Não foi possível exportar a planilha.');
-                  }
+                  });
                 }}
                 className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold border border-border bg-card text-foreground hover:bg-muted transition-colors"
                 title="Exportar A Vencer/Vencido e Pago em planilha"

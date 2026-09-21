@@ -409,7 +409,8 @@ export function useSupabaseSync() {
     // Debounce do reload disparado por eventos realtime: durante uma importação
     // ou limpeza em massa, o Postgres emite dezenas/centenas de eventos em
     // rajada. Sem debounce, cada evento dispara um fetchAll() (10 tabelas) em
-    // paralelo, congelando a UI. Com debounce de 400ms, todos colapsam em 1.
+    // paralelo, congelando a UI. 1,5s junta a rajada numa recarga só e deixa
+    // a troca de aba pintar antes de recalcular a base inteira.
     let reloadTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleReload = () => {
       if ((window as any).__suppressFullSync) return;
@@ -417,7 +418,7 @@ export function useSupabaseSync() {
       reloadTimer = setTimeout(() => {
         reloadTimer = null;
         reload().catch((e) => console.error('reload falhou:', e));
-      }, 400);
+      }, 1500);
     };
 
     reload().then(() => {

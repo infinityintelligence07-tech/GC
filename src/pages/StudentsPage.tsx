@@ -12,7 +12,6 @@ import ImportStudentsModal from '@/components/modals/ImportStudentsModal';
 import CancelDivergenceEditModal from '@/components/modals/CancelDivergenceEditModal';
 import { MOTIVOS_CANCELAMENTO } from '@/types';
 import { Plus, Search, DollarSign, Clock, Trash2, Eye, XCircle, ChevronDown, ChevronUp, Star, RotateCcw, Calendar, Upload, Download, Tag, FileText, PencilLine } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import { statusColors } from '@/lib/statusColors';
 import { calcularDiasVencido, dueDateForDisplay } from '@/lib/brasiliaDate';
@@ -436,7 +435,7 @@ export default function StudentsPage() {
     return `${d}/${m}/${y}`;
   };
 
-  const handleExportKamino = () => {
+  const handleExportKamino = async () => {
     // Sem filtro: usa lista completa (já escopada por AC quando aplicável),
     // incluindo Pagos, Cancelados e Renda Extra. Com filtro: usa lista filtrada.
     const source: Student[] = hasActiveFilter ? sorted : students;
@@ -489,6 +488,7 @@ export default function StudentsPage() {
       'Conta de Recebimento', 'Forma de Recebimento', 'Detalhe',
       'Valor a Receber (R$)', 'Valor Recebido (R$)', 'Vencimento', 'Recebimento', 'Competência',
     ];
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(rows, { header });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Kamino');
