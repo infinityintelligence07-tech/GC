@@ -7,14 +7,40 @@
 
 const TZ = 'America/Sao_Paulo';
 
+// Construir Intl.DateTimeFormat é caro (dezenas/centenas de µs). Estas funções
+// rodam para cada aluno em cada render do Dashboard/Carteira, então os
+// formatadores são criados uma única vez e reaproveitados.
+const ymdBrasiliaFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+const dateBrFmt = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: TZ,
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+const timeBrFmt = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: TZ,
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+// "Hoje" muda no máximo uma vez por dia; recalcular a cada chamada é desperdício.
+// Cache válido por 1s garante a virada do dia sem custo perceptível.
+let todayCacheAt = 0;
+let todayCacheValue = '';
+
 /** Retorna a data/hora atual formatada em Brasília como string YYYY-MM-DD */
 export function getTodayStringBrasilia(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
+  const now = Date.now();
+  if (now - todayCacheAt >= 1000 || !todayCacheValue) {
+    todayCacheValue = ymdBrasiliaFmt.format(new Date(now));
+    todayCacheAt = now;
+  }
+  return todayCacheValue;
 }
 
 /**
@@ -35,12 +61,7 @@ export function createdAtInRange(createdAt: string | undefined, start: string, e
 export function toDateStringBrasilia(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
+  return ymdBrasiliaFmt.format(d);
 }
 
 /**
@@ -54,21 +75,12 @@ export function getTodayBrasilia(): Date {
 
 /** Data de Brasília formatada como DD/MM/AAAA (pt-BR) */
 export function getFormattedDateBrasilia(): string {
-  return new Intl.DateTimeFormat('pt-BR', {
-    timeZone: TZ,
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date());
+  return dateBrFmt.format(new Date());
 }
 
 /** Horário de Brasília formatado como HH:MM (pt-BR) */
 export function getFormattedTimeBrasilia(): string {
-  return new Intl.DateTimeFormat('pt-BR', {
-    timeZone: TZ,
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date());
+  return timeBrFmt.format(new Date());
 }
 
 /** Data + horário completos de Brasília: "17/04/2026 14:32" */

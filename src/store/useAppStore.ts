@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { reportDbError } from '@/lib/dbError';
 import { persist } from 'zustand/middleware';
 import { Student, AC, Product, FinancialRules, TabKey, StudentStatus, Installment, HistoryEntry, CancellationCase, CancellationStage, CancellationOperationalStatus, RendaExtraStatus, AppUser, StatusCancelamento, StudentTag, AbatimentoInfo } from '@/types';
-import { getTodayBrasilia, effectiveDueDate, faixaAtrasoPorMes } from '@/lib/brasiliaDate';
+import { getTodayBrasilia, getTodayStringBrasilia, effectiveDueDate, faixaAtrasoPorMes } from '@/lib/brasiliaDate';
 import { isAntecipadaVencida, isParcelaAntecipada } from '@/lib/parcelaAntecipada';
 import { installmentHasBoletoAntecipadoTag } from '@/lib/tagKpis';
 import { getInstallmentOutstanding } from '@/lib/utils';
@@ -2144,12 +2144,41 @@ export function calculateStudentAutoStatusAt(
   });
 }
 
+// ── Memo de cálculos por ficha ───────────────────────────────────────────────
+// O Dashboard/Carteira chamam calculateAutoStatus e calcularScoreComportamento
+// para cada aluno em cada render. Os arrays de parcelas só mudam por referência
+// (nunca são mutados in-place), então o resultado pode ser reaproveitado
+// enquanto a referência, o dia e o catálogo de tags forem os mesmos.
+type StatusMemoEntry = { day: string; tags: unknown; result: StudentStatus };
+const autoStatusMemo = new WeakMap<Installment[], Map<string, StatusMemoEntry>>();
+type ScoreMemoEntry = { day: string; result: number };
+const scoreMemo = new WeakMap<Installment[], ScoreMemoEntry>();
+
 export function calculateAutoStatus(
   installments: Installment[],
   opts?: { includeRecompraParcelas?: boolean },
 ): StudentStatus {
-  const today = getTodayBrasilia();
+  const todayStr = getTodayStringBrasilia();
   const tagsCatalog = useAppStore.getState().studentTags;
+  const memoKey = opts?.includeRecompraParcelas ? 'r' : 'n';
+  let byOpts = autoStatusMemo.get(installments);
+  const cached = byOpts?.get(memoKey);
+  if (cached && cached.day === todayStr && cached.tags === tagsCatalog) return cached.result;
+  const result = computeAutoStatus(installments, opts, tagsCatalog);
+  if (!byOpts) {
+    byOpts = new Map();
+    autoStatusMemo.set(installments, byOpts);
+  }
+  byOpts.set(memoKey, { day: todayStr, tags: tagsCatalog, result });
+  return result;
+}
+
+function computeAutoStatus(
+  installments: Installment[],
+  opts: { includeRecompraParcelas?: boolean } | undefined,
+  tagsCatalog: ReturnType<typeof useAppStore.getState>['studentTags'],
+): StudentStatus {
+  const today = getTodayBrasilia();
   const emAberto = (i: Installment) => !i.paid || isAntecipadaVencida(i, today);
   const paid = installments.filter((i) => i.paid && !isAntecipadaVencida(i, today));
   const unpaid = installments.filter(emAberto);
@@ -2174,8 +2203,17 @@ export function calculateAutoStatus(
   return faixaAtrasoPorMes(oldestOverdue.dueDate, today);
 }
 
+// Formatadores criados uma vez: Intl.NumberFormat é caro e formatCurrency roda
+// por linha de tabela/KPI.
+const brlFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const brlFmtNoCents = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  maximumFractionDigits: 0,
+});
+
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  return brlFmt.format(value);
 }
 
 /**
@@ -2199,7 +2237,7 @@ export function formatCurrencyCompact(value: number): string {
     const n = Math.round(abs / 1_000).toLocaleString('pt-BR');
     return `${sign}R$ ${n} mil`;
   }
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
+  return brlFmtNoCents.format(v);
 }
 
 export function calculateAutoStatusAt(
@@ -2252,6 +2290,15 @@ export function getInstallmentFinancialValueExport(i: Installment): number {
 }
 
 export function calcularScoreComportamento(installments: Installment[]): number {
+  const todayStr = getTodayStringBrasilia();
+  const cached = scoreMemo.get(installments);
+  if (cached && cached.day === todayStr) return cached.result;
+  const result = computeScoreComportamento(installments);
+  scoreMemo.set(installments, { day: todayStr, result });
+  return result;
+}
+
+function computeScoreComportamento(installments: Installment[]): number {
   const today = getTodayBrasilia();
 
   // Pontuação por parcela:

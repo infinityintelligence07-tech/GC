@@ -25,6 +25,7 @@ import { resolveStudentDisplayStatusVinculado, type StatusVinculado } from '@/li
 import { isRecompraFicha } from '@/lib/recompraConciliacao';
 import { isEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { formatCpfCnpj } from '@/lib/termoDadosAluno';
+import { supabase } from '@/integrations/supabase/client';
 
 
 // ── Score stars renderer ───────────────────────────────────────────────────────
@@ -502,10 +503,31 @@ export default function StudentsPage() {
   const normalizeName = (n: string) => (n || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const normalizeCpf = (c: string) => (c || '').replace(/\D/g, '');
 
-  const handleExportHistory = () => {
-    const payload = students
-      .filter((s) => Array.isArray(s.history) && s.history.length > 0)
-      .map((s) => ({ nome: s.name, cpf: s.cpf || '', history: s.history }));
+  const handleExportHistory = async () => {
+    // O histórico não fica em memória (sync leve); busca direto do banco.
+    const rows: Array<{ name: string; cpf: string | null; history: unknown }> = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('students')
+        .select('name, cpf, history')
+        .order('name')
+        .range(from, from + PAGE - 1);
+      if (error) {
+        alert('Erro ao carregar o histórico do banco: ' + error.message);
+        return;
+      }
+      const page = (data ?? []) as typeof rows;
+      rows.push(...page);
+      if (page.length < PAGE) break;
+    }
+    const payload = rows
+      .map((r) => {
+        const raw = r.history;
+        const history = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return { nome: r.name, cpf: r.cpf || '', history };
+      })
+      .filter((s) => Array.isArray(s.history) && s.history.length > 0);
     if (payload.length === 0) {
       alert('Nenhum aluno com histórico para exportar.');
       return;

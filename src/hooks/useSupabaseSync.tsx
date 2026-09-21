@@ -51,6 +51,29 @@ async function fetchAllPaged<T = any>(
   return { data: all, error: null };
 }
 
+// Lista de colunas de students SEM `history` (JSON pesado, >1 MB no total, que
+// o sync descarta de qualquer forma). Montada a partir de uma linha real para
+// nunca pedir coluna inexistente — se algo falhar, cai no `*` de sempre.
+let studentsSyncSelect: string | null = null;
+
+async function fetchStudentsForSync(): Promise<{ data: any[]; error: any }> {
+  if (!studentsSyncSelect) {
+    const { data } = await supabase.from('students').select('*').limit(1);
+    const sample = (data ?? [])[0] as Record<string, unknown> | undefined;
+    if (sample && 'history' in sample) {
+      const cols = Object.keys(sample).filter((c) => c !== 'history');
+      if (cols.length > 0) studentsSyncSelect = cols.join(',');
+    }
+  }
+  if (studentsSyncSelect) {
+    const res = await fetchAllPaged('students', 'name', true, { select: studentsSyncSelect });
+    if (!res.error) return res;
+    console.warn('[sync] select leve de students falhou; usando *:', res.error);
+    studentsSyncSelect = null;
+  }
+  return fetchAllPaged('students', 'name');
+}
+
 function applyStudentRealtimeRow(row: any) {
   if (!row?.id) return;
   const student = rowToStudent(row, { omitHistory: true });
@@ -81,7 +104,7 @@ async function fetchAll(activeCompanyId?: string | null) {
     supabase.from('financial_rules').select('*').limit(1).maybeSingle(),
     // Sem filtro company_id aqui: o RLS do Supabase já limita pela empresa.
     // Um .eq extra + select com coluna inexistente zerava a carteira inteira.
-    fetchAllPaged('students', 'name'),
+    fetchStudentsForSync(),
     fetchAllPaged('cancellation_cases', 'created_at'),
     supabase.from('app_users').select('*').order('name'),
     fetchAllPaged('antecipacao_items', 'created_at'),

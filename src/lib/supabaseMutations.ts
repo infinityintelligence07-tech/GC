@@ -443,7 +443,7 @@ export async function createStudentsBulkDb(students: Omit<Student, 'id'>[]): Pro
   const rows = students.map((s) => studentToRow(s as any));
   const { data, error } = await supabase.from('students').insert(rows).select();
   if (error) throw error;
-  return (data ?? []).map(rowToStudent);
+  return (data ?? []).map((r) => rowToStudent(r));
 }
 
 // ─── Fila de gravação por aluno ──────────────────────────────────────────────
