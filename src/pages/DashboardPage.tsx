@@ -17,7 +17,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, L
 import { getTodayBrasilia, getTodayStringBrasilia, createdAtInRange, isNegativacaoEstagnada } from '@/lib/brasiliaDate';
 import { getTagStyle } from '@/lib/tagColors';
 import { computeTagKpis } from '@/lib/tagKpis';
-import { isParcelaAntecipada } from '@/lib/parcelaAntecipada';
+import { contaNoSaldoEmAberto, isAntecipadaVencida, isParcelaAntecipada } from '@/lib/parcelaAntecipada';
 import { studentMatchesTagFilter, applyTagFilterToStudent } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import { supabase } from '@/integrations/supabase/client';
@@ -520,13 +520,22 @@ export default function DashboardPage() {
     const due = new Date(i.dueDate + 'T00:00:00');
     return due >= _fcRange.start && due <= _fcRange.end;
   };
+  // Dia de referência dos KPIs: no Histórico é o "fim" escolhido; senão, hoje.
+  const _refDayMs = (() => {
+    if (mode === 'historico' && historicoEnd) {
+      return new Date(historicoEnd + 'T00:00:00').getTime();
+    }
+    const d = getTodayBrasilia();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  })();
   // Quando há filtro de período (modo de pesquisa), a carteira mostra somente
   // alunos com parcelas EM ABERTO (vencidas ou a vencer) dentro do intervalo —
   // parcelas já pagas no período não devem inflar o contador de alunos, já que
   // o valor da carteira (sumUnpaid) também ignora pagas. Isso alinha o
   // "Carteira Total" com a aba Alunos.
   const kpiStudentsScoped = _fcRange
-    ? kpiStudents.filter((s) => s.installments.some((i) => !i.paid && _instInRange(i)))
+    ? kpiStudents.filter((s) => s.installments.some((i) => contaNoSaldoEmAberto(i, new Date(_refDayMs)) && _instInRange(i)))
     : kpiStudents;
   const _isSolic = (s: Student) => matchesCancelamentoFilter(s, cancellationCases);
   const emDia = kpiStudentsScoped.filter((s) => s.status === 'Em Dia' && !_isSolic(s));
@@ -543,16 +552,6 @@ export default function DashboardPage() {
   // Boleto NÃO entra neste status — segue Em Dia / Vencido / etc.
   const pendentes = kpiStudents.filter((s) => isPendenciaCardStudent(s) && !_isSolic(s));
 
-  // Dia de referência dos KPIs: no Histórico é o "fim" escolhido; senão, hoje.
-  const _refDayMs = (() => {
-    if (mode === 'historico' && historicoEnd) {
-      return new Date(historicoEnd + 'T00:00:00').getTime();
-    }
-    const d = getTodayBrasilia();
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  })();
-
   // Fichas "Em Renegociação" contam no card da posição real das parcelas; a
   // sub-linha do card mostra quantas estão nessa situação.
   const emRenegociacaoIds = new Set(students.filter(isEmRenegociacao).map((s) => s.id));
@@ -566,12 +565,12 @@ export default function DashboardPage() {
     arr.reduce((acc, s) => {
       if (s.statusCancelamento === 'cancelado') {
         return acc + s.installments
-          .filter((i) => !i.paid && _instInRange(i) && extra(i) && (i.tags ?? []).includes('multa-cancelamento'))
+          .filter((i) => contaNoSaldoEmAberto(i, new Date(_refDayMs)) && _instInRange(i) && extra(i) && (i.tags ?? []).includes('multa-cancelamento'))
           .reduce((a, i) => a + i.value, 0);
       }
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
       return acc + s.installments
-        .filter((i) => !i.paid && _instInRange(i) && extra(i) && !isInstallmentExcludedFromFinancialTotals(s, i))
+        .filter((i) => contaNoSaldoEmAberto(i, new Date(_refDayMs)) && _instInRange(i) && extra(i) && !isInstallmentExcludedFromFinancialTotals(s, i))
         .reduce((a, i) => a + i.value, 0);
     }, 0);
   // Parcela já vencida na data de referência (hoje ou o "fim" do Histórico).
@@ -623,7 +622,7 @@ export default function DashboardPage() {
     (s) => s.statusCancelamento === 'cancelado' && countsInFinancialTotals(s) && fcMatchesCadastro(s),
   );
   const carteiraModalStudents = forecastBase.filter((s) =>
-    s.installments.some((i) => !i.paid && _instInRange(i) && !isInstallmentExcludedFromFinancialTotals(s, i)),
+    s.installments.some((i) => contaNoSaldoEmAberto(i, new Date(_refDayMs)) && _instInRange(i) && !isInstallmentExcludedFromFinancialTotals(s, i)),
   );
 
   // KPIs por tag (Fundo / TMF / Antecipação) — somente parcelas marcadas.
@@ -718,6 +717,9 @@ export default function DashboardPage() {
   }) => {
     const range = opts?.range !== undefined ? opts.range : getForecastRange();
     const basis = opts?.basis ?? dateBasis;
+    const refAtrasoCarteira = mode === 'historico' && historicoEnd
+      ? new Date(historicoEnd + 'T00:00:00')
+      : getTodayBrasilia();
     let total = 0, aVencer = 0, pago = 0;
     let totalReal = 0, pagoReal = 0;
     // Parcelas em aberto de alunos À Negativar / Negativado: o contrato inteiro
@@ -799,7 +801,7 @@ export default function DashboardPage() {
         }
 
         // Vencimento: em aberto pelo dueDate; pago somente se paidDate estiver no período.
-        if (i.paid) {
+        if (i.paid && !isAntecipadaVencida(i, refAtrasoCarteira)) {
           // Paga sem baixa no GC (veio paga da planilha/IAM/Kamino): fora do
           // Pago e também fora do A Vencer.
           if (!baixaGc(st, i)) return;
@@ -1383,7 +1385,7 @@ export default function DashboardPage() {
       kpis: tagKpis.map((t) => ({
         label: t.label,
         value: formatCurrency(t.value),
-        detail: `${t.count} alunos${t.overdueValue > 0 ? ` · Vencido ${formatCurrency(t.overdueValue)}` : ''}`,
+        detail: `${t.count} alunos`,
       })),
     });
   }
@@ -1473,8 +1475,8 @@ export default function DashboardPage() {
               pendencias={metaPendencias}
             />
           </div>
-          <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums flex items-baseline gap-2 flex-wrap" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>
-            <span className="text-base sm:text-lg font-semibold text-foreground" title="Pago do mês menos as pendências de evento já pagas">
+          <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums flex items-center gap-2 flex-wrap" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>
+            <span className="text-foreground" title="Pago do mês menos as pendências de evento já pagas">
               {formatCurrency(pagoSemPendencia)}
             </span>
             <span className="text-muted-foreground font-normal">|</span>
@@ -1960,13 +1962,13 @@ export default function DashboardPage() {
             <p
               className="text-[11px] text-muted-foreground truncate"
               title={[
-                `${carteiraTotalAlunos} alunos com parcela em aberto (compõem o valor da Carteira Total).`,
+                `${carteiraTotalAlunos} contratos com parcela em aberto (compõem o valor da Carteira Total).`,
                 solicCancQuitados > 0
                   ? `${solicCancQuitados} com contrato quitado aguardando fechamento do cancelamento (R$ 0,00). Soma dos cards de status: ${carteiraTotalAlunos + solicCancQuitados}.`
                   : '',
               ].filter(Boolean).join(' ')}
             >
-              {carteiraTotalAlunos} alunos
+              {carteiraTotalAlunos} contratos
               {solicCancQuitados > 0 && (
                 <span className="text-muted-foreground/80"> · {solicCancQuitados} quitados em cancelamento</span>
               )}
@@ -2233,7 +2235,7 @@ export default function DashboardPage() {
           >
             <div className="flex items-start justify-between mb-2 gap-2">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">{tagKpis[0].label}</p>
-              <NaoSomaBadge title="Recorte por tag: estes alunos e valores já estão contados nos cards de status (Em Dia, Vencido, À Negativar)." />
+              <NaoSomaBadge title="Só boletos antecipados que ainda não venceram. Se vencer, o valor vai para Vencido 1, Vencido 2 ou À Negativar, conforme o tempo. Se o aluno pagar, sai deste card." />
             </div>
             <p className={`kpi-value ${tagKpis[0].text}`} title={formatCurrency(tagKpis[0].value)}>
               <span className="hidden sm:inline">{formatCurrency(tagKpis[0].value)}</span>
@@ -2241,9 +2243,6 @@ export default function DashboardPage() {
             </p>
             <div className="flex items-center justify-between mt-1 gap-2">
               <p className="text-[11px] text-muted-foreground truncate">{tagKpis[0].count} alunos</p>
-              {tagKpis[0].overdueValue > 0 && (
-                <p className="text-[11px] font-semibold text-red-600 shrink-0">Vencido: {formatCurrency(tagKpis[0].overdueValue)}</p>
-              )}
             </div>
           </div>
         )}

@@ -4,6 +4,7 @@
 
 import type { Student, Installment, StudentStatus } from '@/types';
 import { effectiveDueDate, faixaAtrasoPorMes, getTodayBrasilia } from '@/lib/brasiliaDate';
+import { isAntecipadaVencida } from '@/lib/parcelaAntecipada';
 
 /**
  * Retorna todas as tags visíveis do aluno, incluindo tags aplicadas em parcelas.
@@ -71,10 +72,10 @@ export function calculateStatusFromInstallments(installments: Installment[]): St
   if (installments.length === 0) return 'Em Dia';
   const today = getTodayBrasilia();
 
-  const unpaid = installments.filter((i) => !i.paid);
-  if (unpaid.length === 0) return 'Pago';
+  const owed = installments.filter((i) => !i.paid || isAntecipadaVencida(i, today));
+  if (owed.length === 0) return 'Pago';
 
-  const overdue = unpaid.filter((i) => effectiveDueDate(i.dueDate).getTime() < today.getTime());
+  const overdue = owed.filter((i) => effectiveDueDate(i.dueDate).getTime() < today.getTime());
   if (overdue.length === 0) return 'Em Dia';
 
   // A parcela vencida mais antiga define a faixa (mesma regra de

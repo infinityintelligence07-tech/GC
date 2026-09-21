@@ -10,7 +10,7 @@ import {
   getOperationalPendenteTipoLabel,
 } from '@/lib/studentDisplayStatus';
 import { isInstallmentExcludedFromFinancialTotals } from '@/lib/iamPendenteConciliacao';
-import { ANTECIPADA_BADGE_CLASS, ANTECIPADA_LABEL, isParcelaAntecipada } from '@/lib/parcelaAntecipada';
+import { ANTECIPADA_BADGE_CLASS, ANTECIPADA_LABEL, isAntecipadaVencida, isParcelaAntecipada } from '@/lib/parcelaAntecipada';
 
 /**
  * - unpaid: parcelas em aberto
@@ -85,8 +85,11 @@ export default function KpiStudentsModal({
         : s.installments;
     const unpaid = source.filter((i) => {
       if (!instInRange(i)) return false;
-      // Boletos antecipados já constam como pagos para a empresa, mas seguem no KPI.
-      if (i.paid && !(valueMode === 'boletos_antecipados' && isParcelaAntecipada(i))) return false;
+      const ref = new Date(todayMs);
+      const aberto = !i.paid || isAntecipadaVencida(i, ref);
+      // Boletos antecipados ainda a vencer constam como pagos para a empresa, mas seguem neste KPI.
+      // Vencido e pago pelo aluno não entram aqui.
+      if (!aberto && !(valueMode === 'boletos_antecipados' && isParcelaAntecipada(i))) return false;
       if (valueMode !== 'operational_pendente' && isInstallmentExcludedFromFinancialTotals(s, i)) return false;
       if (valueMode === 'overdue') {
         return new Date(i.dueDate + 'T00:00:00').getTime() < todayMs;

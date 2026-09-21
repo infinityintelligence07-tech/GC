@@ -3,6 +3,8 @@ import { reportDbError } from '@/lib/dbError';
 import { persist } from 'zustand/middleware';
 import { Student, AC, Product, FinancialRules, TabKey, StudentStatus, Installment, HistoryEntry, CancellationCase, CancellationStage, CancellationOperationalStatus, RendaExtraStatus, AppUser, StatusCancelamento, StudentTag, AbatimentoInfo } from '@/types';
 import { getTodayBrasilia, effectiveDueDate, faixaAtrasoPorMes } from '@/lib/brasiliaDate';
+import { isAntecipadaVencida, isParcelaAntecipada } from '@/lib/parcelaAntecipada';
+import { installmentHasBoletoAntecipadoTag } from '@/lib/tagKpis';
 import { getInstallmentOutstanding } from '@/lib/utils';
 import { resolveStudentFinance, getStudentTotalPaid, getLatestCancellationCaseForStudent } from '@/lib/studentFinance';
 import { cancellationCasesToResyncAc } from '@/lib/cancellationCaseAc';
@@ -2103,6 +2105,26 @@ export function isRecompraFichaProduct(product?: string | null): boolean {
   return /recompra/i.test(product ?? '');
 }
 
+/**
+ * Parcela vencida que define a faixa de atraso.
+ * Recompra antiga numa ficha comum continua de fora.
+ * Boleto antecipado vencido (tag Fundo/TMF/Antecipação, ou baixa do fundo) entra.
+ */
+function parcelaContaNoAtraso(
+  installment: Installment,
+  ref: Date,
+  includeRecompraParcelas: boolean | undefined,
+  tagsCatalog: { id: string; name: string }[],
+): boolean {
+  if (effectiveDueDate(installment.dueDate).getTime() >= ref.getTime()) return false;
+  if (isParcelaAntecipada(installment)) return true;
+  if (installment.paid) return false;
+  if (includeRecompraParcelas) return true;
+  if (installmentHasBoletoAntecipadoTag(installment, tagsCatalog)) return true;
+  if (isRecompraOuFundoParcela(installment, tagsCatalog)) return false;
+  return true;
+}
+
 /** Status automático da ficha — recompra conta as próprias parcelas como vencidas. */
 export function calculateStudentAutoStatus(
   student: Pick<Student, 'installments' | 'product'>,
@@ -2128,17 +2150,16 @@ export function calculateAutoStatus(
 ): StudentStatus {
   const today = getTodayBrasilia();
   const tagsCatalog = useAppStore.getState().studentTags;
-  const paid = installments.filter((i) => i.paid);
-  const unpaid = installments.filter((i) => !i.paid);
-  // Pago: todas pagas (inclui recompra quitada)
-  if (unpaid.length === 0 && installments.length > 0 && paid.length === installments.length) return 'Pago';
-  // Vencido = só parcelas do fluxo normal (recompra/fundo ficam de fora).
-  // `includeRecompraParcelas`: status conjunto contrato original + recompra
-  // vinculada — aí a parcela da recompra vencida conta como vencida.
-  const overdueInstallments = unpaid.filter(
-    (i) =>
-      (opts?.includeRecompraParcelas || !isRecompraOuFundoParcela(i, tagsCatalog)) &&
-      effectiveDueDate(i.dueDate).getTime() < today.getTime(),
+  const emAberto = (i: Installment) => !i.paid || isAntecipadaVencida(i, today);
+  const paid = installments.filter((i) => i.paid && !isAntecipadaVencida(i, today));
+  const unpaid = installments.filter(emAberto);
+  // Pago: nada em aberto. Antecipada já vencida ainda é dívida do aluno.
+  if (unpaid.length === 0 && installments.length > 0) return 'Pago';
+  // Vencido = fluxo normal. Recompra antiga numa ficha comum continua de fora.
+  // Boleto antecipado vencido (tag Fundo/TMF/Antecipação ou baixa do fundo) entra
+  // na faixa pelo tempo: Vencido 1, Vencido 2 ou À Negativar.
+  const overdueInstallments = installments.filter((i) =>
+    parcelaContaNoAtraso(i, today, opts?.includeRecompraParcelas, tagsCatalog),
   );
   // Aluno Novo (regra item 4): 0 pagamentos de parcelas E nenhuma vencida ainda.
   // Pessoas que ainda não pagaram nenhuma parcela das que vão vencer.
@@ -2194,21 +2215,19 @@ export function calculateAutoStatusAt(
   // "Pagas até a data de referência": precisa estar paga E a data de pagamento <= ref.
   const paidAtRef = installments.filter((i) => {
     if (!i.paid || !i.paidDate) return false;
+    if (isAntecipadaVencida(i, refDayStart)) return false;
     return new Date(i.paidDate + 'T00:00:00') <= ref;
   });
   const unpaidAtRef = installments.filter((i) => !paidAtRef.includes(i));
 
-  // Pago: todas as parcelas já estavam pagas até a data de referência.
-  if (unpaidAtRef.length === 0 && installments.length > 0 && paidAtRef.length === installments.length) {
+  // Pago: nada em aberto até a data. Antecipada já vencida nessa data ainda é dívida.
+  if (unpaidAtRef.length === 0 && installments.length > 0) {
     return 'Pago';
   }
 
-  // Vencido = fluxo normal apenas (recompra/fundo não interferem),
-  // salvo quando a própria ficha é de recompra (`includeRecompraParcelas`).
-  const overdueAtRef = unpaidAtRef.filter(
-    (i) =>
-      (opts?.includeRecompraParcelas || !isRecompraOuFundoParcela(i, tagsCatalog)) &&
-      effectiveDueDate(i.dueDate).getTime() < refDayStart.getTime()
+  // Vencido = fluxo normal. Boleto antecipado vencido entra na faixa pelo tempo.
+  const overdueAtRef = installments.filter((i) =>
+    parcelaContaNoAtraso(i, refDayStart, opts?.includeRecompraParcelas, tagsCatalog),
   );
 
   // Aluno Novo (mesma regra do modo atual): 0 pagamentos até a ref E nenhuma vencida ainda,

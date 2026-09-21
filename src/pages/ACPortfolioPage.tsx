@@ -58,7 +58,7 @@ import {
   studentMatchesTagKpiGroup,
   applyTagKpiGroupToStudent,
 } from '@/lib/tagKpis';
-import { isParcelaAntecipada } from '@/lib/parcelaAntecipada';
+import { contaNoSaldoEmAberto, isAntecipadaVencida, isParcelaAntecipada } from '@/lib/parcelaAntecipada';
 import { studentMatchesTagFilter, applyTagFilterToStudent, getVisibleStudentTagRefs } from '@/lib/tagFilter';
 import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
@@ -488,6 +488,9 @@ export default function ACPortfolioPage() {
   }) => {
     const range = opts?.range !== undefined ? opts.range : getForecastRange();
     const basis = opts?.basis ?? dateBasis;
+    const refAtrasoCarteira = mode === 'historico' && historicoEnd
+      ? new Date(historicoEnd + 'T00:00:00')
+      : getTodayBrasilia();
     let total = 0, aVencer = 0, pago = 0;
     let totalReal = 0, pagoReal = 0;
     // Parcelas em aberto de alunos À Negativar / Negativado: o contrato inteiro
@@ -556,7 +559,7 @@ export default function ACPortfolioPage() {
         }
 
         // Vencimento: em aberto pelo dueDate; pago somente se paidDate estiver no período.
-        if (i.paid) {
+        if (i.paid && !isAntecipadaVencida(i, refAtrasoCarteira)) {
           // Paga sem baixa no GC (veio paga da planilha/IAM/Kamino): fora do
           // Pago e também fora do A Vencer.
           if (!isBaixaRegistradaNoGc(st, i, baixasGcIndex)) return;
@@ -807,12 +810,18 @@ export default function ACPortfolioPage() {
     const due = new Date(i.dueDate + 'T00:00:00');
     return due >= _fcRange.start && due <= _fcRange.end;
   };
+  const _refDayMs = (() => {
+    if (mode === 'historico' && historicoEnd) return new Date(historicoEnd + 'T00:00:00').getTime();
+    const d = getTodayBrasilia();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  })();
   // Mesma regra de contagem da Dashboard: com filtro de período, só conta aluno
   // com parcela EM ABERTO dentro do intervalo (parcela já paga no período não
   // infla o contador — o valor, sumUnpaid, também ignora pagas). Alinha os
   // cards com a tabela (hasInstallmentInForecastRange).
   const kpiStudentsScoped = _fcRange
-    ? kpiStudents.filter((s) => s.installments.some((i) => !i.paid && _instInRange(i)))
+    ? kpiStudents.filter((s) => s.installments.some((i) => contaNoSaldoEmAberto(i, new Date(_refDayMs)) && _instInRange(i)))
     : kpiStudents;
   // Pedido de cancelamento: critério unificado da Dashboard (status OU caso
   // ativo no funil Cancelamentos). Sobrepõe visualmente qualquer outro status.
@@ -836,21 +845,14 @@ export default function ACPortfolioPage() {
     arr.reduce((acc, s) => {
       if (s.statusCancelamento === 'cancelado') {
         return acc + s.installments
-          .filter((i) => !i.paid && _instInRange(i) && extra(i) && (i.tags ?? []).includes('multa-cancelamento'))
+          .filter((i) => contaNoSaldoEmAberto(i, new Date(_refDayMs)) && _instInRange(i) && extra(i) && (i.tags ?? []).includes('multa-cancelamento'))
           .reduce((a, i) => a + i.value, 0);
       }
       if (isRendaExtraAtivo(s) && s.rendaExtraStatus !== 'Conciliar Exclusão') return acc;
       return acc + s.installments
-        .filter((i) => !i.paid && _instInRange(i) && extra(i) && !isInstallmentExcludedFromAcPortfolio(s, i))
+        .filter((i) => contaNoSaldoEmAberto(i, new Date(_refDayMs)) && _instInRange(i) && extra(i) && !isInstallmentExcludedFromAcPortfolio(s, i))
         .reduce((a, i) => a + i.value, 0);
     }, 0);
-  // Parcela já vencida na data de referência (hoje ou o "fim" do Histórico).
-  const _refDayMs = (() => {
-    if (mode === 'historico' && historicoEnd) return new Date(historicoEnd + 'T00:00:00').getTime();
-    const d = getTodayBrasilia();
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  })();
   const _isOverdue = (i: Installment) => new Date(i.dueDate + 'T00:00:00').getTime() < _refDayMs;
   const sumOverdue = (arr: Student[]) => sumUnpaid(arr, _isOverdue);
 
@@ -1080,8 +1082,8 @@ export default function ACPortfolioPage() {
               </button>
             </div>
           </div>
-          <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums mb-1.5 flex items-baseline gap-2 flex-wrap" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>
-            <span className="text-base sm:text-lg font-semibold text-foreground" title="Pago do mês menos as pendências de evento já pagas">
+          <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums mb-1.5 flex items-center gap-2 flex-wrap" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>
+            <span className="text-foreground" title="Pago do mês menos as pendências de evento já pagas">
               {formatCurrency(pagoSemPendencia)}
             </span>
             <span className="text-muted-foreground font-normal">|</span>
@@ -1468,14 +1470,14 @@ export default function ACPortfolioPage() {
             <p
               className="text-[11px] text-muted-foreground truncate"
               title={[
-                `${carteiraTotalAlunos} alunos com parcela em aberto (compõem o valor da Carteira Total).`,
+                `${carteiraTotalAlunos} contratos com parcela em aberto (compõem o valor da Carteira Total).`,
                 solicCancQuitados > 0
                   ? `${solicCancQuitados} com contrato quitado aguardando fechamento do cancelamento (R$ 0,00). Soma dos cards de status: ${carteiraTotalAlunos + solicCancQuitados}.`
                   : '',
                 carteiraCancelados > 0 ? `${carteiraCancelados} cancelados — fora da carteira.` : '',
               ].filter(Boolean).join(' ')}
             >
-              {carteiraTotalAlunos} alunos
+              {carteiraTotalAlunos} contratos
               {solicCancQuitados > 0 && (
                 <span className="text-muted-foreground/80"> · {solicCancQuitados} quitados em cancelamento</span>
               )}
@@ -1792,7 +1794,7 @@ export default function ACPortfolioPage() {
           >
             <div className="flex items-start justify-between mb-2 gap-2">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase truncate">{tagKpis[0].label}</p>
-              <NaoSomaBadge title="Recorte por tag: estes alunos e valores já estão contados nos cards de status (Em Dia, Vencido, À Negativar)." />
+              <NaoSomaBadge title="Só boletos antecipados que ainda não venceram. Se vencer, o valor vai para Vencido 1, Vencido 2 ou À Negativar, conforme o tempo. Se o aluno pagar, sai deste card." />
             </div>
             <p className={`kpi-value ${tagKpis[0].text}`} title={formatCurrency(tagKpis[0].value)}>
               <span className="hidden sm:inline">{formatCurrency(tagKpis[0].value)}</span>
@@ -1800,9 +1802,6 @@ export default function ACPortfolioPage() {
             </p>
             <div className="flex items-center justify-between mt-1 gap-2">
               <p className="text-[11px] text-muted-foreground truncate">{tagKpis[0].count} alunos</p>
-              {tagKpis[0].overdueValue > 0 && (
-                <p className="text-[11px] font-semibold text-red-600 shrink-0">Vencido: {formatCurrency(tagKpis[0].overdueValue)}</p>
-              )}
             </div>
           </div>
         )}

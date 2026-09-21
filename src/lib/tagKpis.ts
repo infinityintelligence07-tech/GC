@@ -1,12 +1,10 @@
 // KPI combinado: Boletos Antecipados (tags Fundo / TMF / Antecipação + parcelas `antecipada`).
-// Considera as parcelas em aberto marcadas com alguma dessas tags (por parcela) ou,
-// quando a tag está no nível do aluno, todas as parcelas em aberto dele — e também
-// toda parcela marcada como boleto antecipado (`antecipada: true`, baixa do banco/fundo),
-// mesmo que já conste como paga para a empresa.
-// Não interfere nos demais indicadores — uma parcela pode aparecer aqui e em outros KPIs.
+// Só entra o que ainda não venceu e o aluno não pagou. Vencido sai daqui e conta nos
+// cards de atraso pela faixa (Vencido 1, Vencido 2, À Negativar). Pago pelo aluno sai.
 
 import type { Installment, Student, StudentTag } from '@/types';
-import { isParcelaAntecipada } from '@/lib/parcelaAntecipada';
+import { isParcelaAntecipada, parcelaVencidaNaData } from '@/lib/parcelaAntecipada';
+import { getTodayBrasilia } from '@/lib/brasiliaDate';
 
 export type TagKpiGroupKey = 'fundo_tmf_antecipacao';
 
@@ -39,15 +37,10 @@ export function computeTagKpis(
   studentTags: StudentTag[],
   instInRange: (i: { dueDate: string }) => boolean = () => true,
 ): TagKpiResult[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayMs = today.getTime();
-
   const group = TAG_KPI_GROUPS[0];
   const refs = getTagKpiGroupRefs(studentTags, group.key);
 
   let value = 0;
-  let overdueValue = 0;
   const hit: Student[] = [];
 
   students.forEach((s) => {
@@ -56,15 +49,11 @@ export function computeTagKpis(
       (i) => instInRange(i) && isBoletoAntecipadoKpiInstallment(i, studentLevel, refs, group.matchers),
     );
     if (relevant.length === 0) return;
-    const sum = relevant.reduce((a, i) => a + (i.value || 0), 0);
-    value += sum;
-    overdueValue += relevant
-      .filter((i) => new Date(i.dueDate + 'T00:00:00').getTime() < todayMs)
-      .reduce((a, i) => a + (i.value || 0), 0);
+    value += relevant.reduce((a, i) => a + (i.value || 0), 0);
     hit.push({ ...s, installments: relevant });
   });
 
-  return [{ key: group.key, label: group.label, color: group.color, text: group.text, value, overdueValue, count: hit.length, students: hit }];
+  return [{ key: group.key, label: group.label, color: group.color, text: group.text, value, overdueValue: 0, count: hit.length, students: hit }];
 }
 
 /** IDs das tags do catálogo que pertencem a um grupo de KPI (ex.: Fundo/TMF/Antecipação). */
@@ -100,10 +89,24 @@ function tagsHitGroup(tags: string[] | null | undefined, refs: Set<string>, matc
   });
 }
 
+/** Tag de boleto antecipado na parcela (Fundo, TMF ou Antecipação). Recompra pura não entra. */
+export function installmentHasBoletoAntecipadoTag(
+  installment: Installment,
+  tagsCatalog: { id: string; name: string }[],
+): boolean {
+  const tags = installment.tags ?? [];
+  if (tags.length === 0) return false;
+  const byId = new Map(tagsCatalog.map((t) => [t.id, t.name]));
+  const matchers = TAG_KPI_GROUPS[0].matchers;
+  return tags.some((t) => {
+    const name = norm(byId.get(t) ?? String(t));
+    return matchers.some((m) => name.includes(m));
+  });
+}
+
 /**
- * Parcela entra no KPI Boletos Antecipados se:
- *  - está em aberto e tem tag do grupo (na parcela ou no aluno), ou
- *  - está marcada como boleto antecipado (`antecipada`), mesmo já baixada.
+ * Parcela fica no card Boletos Antecipados só enquanto não venceu e o aluno não pagou.
+ * Vencida sai para os cards de atraso. Paga pelo aluno (`paid` sem `antecipada`) sai.
  */
 function isBoletoAntecipadoKpiInstallment(
   i: Installment,
@@ -111,6 +114,8 @@ function isBoletoAntecipadoKpiInstallment(
   refs: Set<string>,
   matchers: string[],
 ): boolean {
+  if (parcelaVencidaNaData(i.dueDate, getTodayBrasilia())) return false;
+  if (i.paid && !isParcelaAntecipada(i)) return false;
   if (isParcelaAntecipada(i)) return true;
   return !i.paid && (studentLevel || tagsHitGroup(i.tags, refs, matchers));
 }

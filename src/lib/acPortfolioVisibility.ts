@@ -4,6 +4,7 @@ import {
   isIamForaDaCarteiraAteConciliar,
 } from '@/lib/iamPendenteConciliacao';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
+import { isAntecipadaVencida } from '@/lib/parcelaAntecipada';
 import {
   caseHasCancelamentoFinalPending,
   isCancelamentoFinalPendingItem,
@@ -96,6 +97,8 @@ export function isStudentFullyPaid(student: Student): boolean {
   // divergindo do card Pago, que soma o mesmo valor pela entrada. Array vazio
   // sozinho não basta — cadastro incompleto também tem zero parcelas.
   if (inst.length === 0) return isIamConciliadoQuitadoAvista(student);
+  // Baixa do fundo que já venceu ainda é dívida: volta para a faixa de atraso.
+  if (inst.some((i) => isAntecipadaVencida(i))) return false;
   return inst.every((i) => i.paid);
 }
 
