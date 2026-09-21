@@ -91,6 +91,11 @@ export function findDuplicateStudent(
     }
   }
 
+  // Com CPF, a identidade já foi decidida acima (CPF + treinamento).
+  // Telefone e e-mail só apontam duplicata quando a ficha ainda não tem CPF:
+  // pessoas diferentes podem ter o contato copiado na importação.
+  if (normalizeCpfDigits(candidate.cpf).length >= 11) return null;
+
   const phone = normalizePhoneDigits(candidate.whatsapp);
   const email = normalizeEmail(candidate.email);
   const addr = normalizeAddressKey(candidate);

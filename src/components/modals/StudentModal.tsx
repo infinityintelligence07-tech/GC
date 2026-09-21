@@ -240,8 +240,11 @@ export default function StudentModal({ student, onClose }: Props) {
       student?.id,
     );
     if (dup) {
+      const complemento = dup.reason === 'cpf_produto'
+        ? 'Mesmo CPF em outro treinamento é permitido; no mesmo treinamento deve existir só uma ficha.'
+        : 'Esta ficha ainda não tem CPF, e o telefone ou o e-mail coincide com outra ficha do mesmo treinamento.';
       toast.error('Cadastro duplicado', {
-        description: `${dup.detail}. Mesmo CPF em outro treinamento é permitido; no mesmo treinamento deve existir só uma ficha.`,
+        description: `${dup.detail}. ${complemento}`,
       });
       return;
     }
