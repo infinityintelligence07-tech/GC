@@ -21,41 +21,27 @@ function isStudentHiddenFromGc(s: Student): boolean {
   return Boolean(s.iamControlAlunoId) && !String(s.product ?? '').trim();
 }
 
-// Histórico fica fora do sync de lista: cada ficha traz ~centenas de bytes de
-// history e, com ~4k contratos, isso + o reload a cada realtime derruba a aba
-// (Chrome Out of Memory). O modal Histórico busca sob demanda.
-const STUDENTS_SYNC_SELECT = [
-  'id', 'name', 'whatsapp', 'email', 'cpf', 'address', 'numero', 'cidade', 'estado', 'cep',
-  'status', 'status_mode', 'ac', 'product', 'enrollment_date', 'data_treinamento_origem',
-  'due_day', 'sale_value', 'down_payment', 'total_installments', 'paid_installments',
-  'installment_value', 'installments', 'is_renda_extra', 'renda_extra_status', 'renda_extra_ac',
-  'renda_extra_ac_assigned_at', 'renda_extra_inclusion_date', 'renda_extra_inscription_date',
-  'renda_extra_acordo_value', 'renda_extra_payment_date', 'renda_extra_payment_method',
-  'renda_extra_directed_at', 'renda_extra_value_at_direction', 'status_cancelamento',
-  'cancellation_case_id', 'status_antes_cancelamento', 'tags', 'product_history', 'ciclo',
-  'kamino_synced_at', 'recompra_treinamento', 'iam_control_aluno_id', 'iam_control_synced_at',
-  'iam_control_contrato_id', 'iam_control_contrato_status', 'iam_control_pendente_tipo',
-  'iam_control_pendente_link', 'iam_gc_conciliado_at', 'created_at', 'updated_at', 'company_id',
-].join(',');
+// Histórico fica fora da memória da lista (omitHistory no rowToStudent).
+// O modal Histórico busca sob demanda. Não filtrar students por company_id
+// no client: o RLS do Supabase já limita; um .eq extra + select quebrado
+// zerou a carteira.
 
 // Pagina resultados acima do limite default do Supabase (1000 linhas).
 async function fetchAllPaged<T = any>(
   table: string,
   orderColumn: string,
   ascending = true,
-  opts?: { select?: string; eq?: { column: string; value: string } },
+  opts?: { select?: string },
 ): Promise<{ data: T[]; error: any }> {
   const PAGE = 1000;
   const all: T[] = [];
   let from = 0;
   while (true) {
-    let q = supabase
+    const { data, error } = await supabase
       .from(table as any)
       .select(opts?.select ?? '*')
       .order(orderColumn, { ascending })
       .range(from, from + PAGE - 1);
-    if (opts?.eq) q = q.eq(opts.eq.column, opts.eq.value);
-    const { data, error } = await q;
     if (error) return { data: all, error };
     const rows = (data ?? []) as T[];
     all.push(...rows);
@@ -65,9 +51,8 @@ async function fetchAllPaged<T = any>(
   return { data: all, error: null };
 }
 
-function applyStudentRealtimeRow(row: any, companyId: string | null) {
+function applyStudentRealtimeRow(row: any) {
   if (!row?.id) return;
-  if (companyId && row.company_id && row.company_id !== companyId) return;
   const student = rowToStudent(row, { omitHistory: true });
   useAppStore.setState((state) => {
     const hidden = isStudentHiddenFromGc(student);
@@ -89,15 +74,14 @@ function applyStudentRealtimeRow(row: any, companyId: string | null) {
 }
 
 async function fetchAll(activeCompanyId?: string | null) {
-  const studentsEq = activeCompanyId
-    ? { column: 'company_id', value: activeCompanyId }
-    : undefined;
   const [acsRes, productsRes, tagsRes, rulesRes, studentsRes, casesRes, usersRes, antRes, concRes, concErrRes, userCompaniesRes, userCompanyAcsRes] = await Promise.all([
     supabase.from('acs').select('*').order('name'),
     supabase.from('products').select('*').order('name'),
     supabase.from('student_tags').select('*').order('name'),
     supabase.from('financial_rules').select('*').limit(1).maybeSingle(),
-    fetchAllPaged('students', 'name', true, { select: STUDENTS_SYNC_SELECT, eq: studentsEq }),
+    // Sem filtro company_id aqui: o RLS do Supabase já limita pela empresa.
+    // Um .eq extra + select com coluna inexistente zerava a carteira inteira.
+    fetchAllPaged('students', 'name'),
     fetchAllPaged('cancellation_cases', 'created_at'),
     supabase.from('app_users').select('*').order('name'),
     fetchAllPaged('antecipacao_items', 'created_at'),
@@ -491,7 +475,7 @@ export function useSupabaseSync() {
         return;
       }
       if (payload.new?.id) {
-        applyStudentRealtimeRow(payload.new, activeCompanyId);
+        applyStudentRealtimeRow(payload.new);
         return;
       }
       // Payload incompleto: agenda reload completo como fallback.
