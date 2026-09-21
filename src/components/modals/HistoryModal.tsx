@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Student, HistoryEntry, CaseNoteAttachment } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchStudentHistory } from '@/lib/supabaseMutations';
 import { registrarConciliacao } from '@/store/useConciliacaoStore';
 import { downloadCancellationPdf, openCancellationPdf, isViewableInBrowser } from '@/lib/openCancellationPdf';
 import { toast } from 'sonner';
@@ -38,8 +39,34 @@ export default function HistoryModal({ student, onClose }: Props) {
     forma: 'PIX' as 'PIX' | 'Cartão' | 'Boleto' | 'Dinheiro' | 'Outro',
   });
   const [saving, setSaving] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Histórico não vem no sync da carteira (economia de memória). Carrega aqui.
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingHistory(true);
+    fetchStudentHistory(student.id)
+      .then((history) => {
+        if (cancelled) return;
+        useAppStore.setState((s) => ({
+          students: s.students.map((st) => (st.id === student.id ? { ...st, history } : st)),
+        }));
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          console.error(e);
+          setError('Não foi possível carregar o histórico.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [student.id]);
 
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -213,11 +240,21 @@ export default function HistoryModal({ student, onClose }: Props) {
       <div className="bg-card rounded-2xl w-full max-w-lg max-h-[90vh] overflow-auto shadow-2xl border border-border">
         <div className="flex items-center justify-between p-6 border-b border-border">
           <h2 className="text-lg font-semibold text-foreground">Histórico</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted transition-colors"><X size={18} /></button>
+          <button onClick={() => {
+            // Libera o histórico da memória ao fechar o modal.
+            useAppStore.setState((s) => ({
+              students: s.students.map((st) => (st.id === student.id ? { ...st, history: [] } : st)),
+            }));
+            onClose();
+          }} className="p-1 rounded-lg hover:bg-muted transition-colors"><X size={18} /></button>
         </div>
 
         <div className="p-6 space-y-3 max-h-80 overflow-auto no-scrollbar">
-          {(() => {
+          {loadingHistory ? (
+            <p className="text-xs text-muted-foreground text-center py-8 inline-flex items-center justify-center gap-2 w-full">
+              <Loader2 size={14} className="animate-spin" /> Carregando histórico…
+            </p>
+          ) : (() => {
             const liveHistory = (students.find((s) => s.id === student.id)?.history ?? student.history);
             return liveHistory.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">Nenhum registro.</p>
@@ -314,7 +351,7 @@ export default function HistoryModal({ student, onClose }: Props) {
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              disabled={saving}
+              disabled={saving || loadingHistory}
               className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-muted transition-colors disabled:opacity-60"
               title="Anexar comprovante (até 10 MB)"
             >
@@ -340,7 +377,7 @@ export default function HistoryModal({ student, onClose }: Props) {
             </label>
             <button
               onClick={handleAdd}
-              disabled={saving}
+              disabled={saving || loadingHistory}
               className="ml-auto inline-flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-semibold iam-gradient text-primary-foreground disabled:opacity-60"
             >
               {saving ? <Loader2 size={12} className="animate-spin" /> : null}

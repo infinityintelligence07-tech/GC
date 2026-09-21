@@ -1,4 +1,4 @@
-// Sync Bridge — carrega TODAS as entidades do Supabase e mantém o
+// Sync Bridge — carrega as entidades do Supabase e mantém o
 // useAppStore + useAntecipacaoStore espelhados. Realtime via canais Postgres.
 
 import { useEffect } from 'react';
@@ -21,23 +21,41 @@ function isStudentHiddenFromGc(s: Student): boolean {
   return Boolean(s.iamControlAlunoId) && !String(s.product ?? '').trim();
 }
 
+// Histórico fica fora do sync de lista: cada ficha traz ~centenas de bytes de
+// history e, com ~4k contratos, isso + o reload a cada realtime derruba a aba
+// (Chrome Out of Memory). O modal Histórico busca sob demanda.
+const STUDENTS_SYNC_SELECT = [
+  'id', 'name', 'whatsapp', 'email', 'cpf', 'address', 'numero', 'cidade', 'estado', 'cep',
+  'status', 'status_mode', 'ac', 'product', 'enrollment_date', 'data_treinamento_origem',
+  'due_day', 'sale_value', 'down_payment', 'total_installments', 'paid_installments',
+  'installment_value', 'installments', 'is_renda_extra', 'renda_extra_status', 'renda_extra_ac',
+  'renda_extra_ac_assigned_at', 'renda_extra_inclusion_date', 'renda_extra_inscription_date',
+  'renda_extra_acordo_value', 'renda_extra_payment_date', 'renda_extra_payment_method',
+  'renda_extra_directed_at', 'renda_extra_value_at_direction', 'status_cancelamento',
+  'cancellation_case_id', 'status_antes_cancelamento', 'tags', 'product_history', 'ciclo',
+  'kamino_synced_at', 'recompra_treinamento', 'iam_control_aluno_id', 'iam_control_synced_at',
+  'iam_control_contrato_id', 'iam_control_contrato_status', 'iam_control_pendente_tipo',
+  'iam_control_pendente_link', 'iam_gc_conciliado_at', 'created_at', 'updated_at', 'company_id',
+].join(',');
+
 // Pagina resultados acima do limite default do Supabase (1000 linhas).
-// Sem isso, tabelas com 1001+ registros (ex.: students) chegavam truncadas
-// ao front e o KPI "Carteira Total" aparecia menor que o real.
 async function fetchAllPaged<T = any>(
   table: string,
   orderColumn: string,
-  ascending = true
+  ascending = true,
+  opts?: { select?: string; eq?: { column: string; value: string } },
 ): Promise<{ data: T[]; error: any }> {
   const PAGE = 1000;
   const all: T[] = [];
   let from = 0;
   while (true) {
-    const { data, error } = await supabase
+    let q = supabase
       .from(table as any)
-      .select('*')
+      .select(opts?.select ?? '*')
       .order(orderColumn, { ascending })
       .range(from, from + PAGE - 1);
+    if (opts?.eq) q = q.eq(opts.eq.column, opts.eq.value);
+    const { data, error } = await q;
     if (error) return { data: all, error };
     const rows = (data ?? []) as T[];
     all.push(...rows);
@@ -47,13 +65,39 @@ async function fetchAllPaged<T = any>(
   return { data: all, error: null };
 }
 
+function applyStudentRealtimeRow(row: any, companyId: string | null) {
+  if (!row?.id) return;
+  if (companyId && row.company_id && row.company_id !== companyId) return;
+  const student = rowToStudent(row, { omitHistory: true });
+  useAppStore.setState((state) => {
+    const hidden = isStudentHiddenFromGc(student);
+    const idx = state.students.findIndex((s) => s.id === student.id);
+    if (hidden) {
+      if (idx < 0) return state;
+      return { students: state.students.filter((s) => s.id !== student.id) };
+    }
+    if (idx < 0) return { students: [...state.students, student] };
+    const prev = state.students[idx];
+    const next = state.students.slice();
+    // Preserva histórico já carregado no modal, se houver.
+    next[idx] = {
+      ...student,
+      history: prev.history?.length ? prev.history : [],
+    };
+    return { students: next };
+  });
+}
+
 async function fetchAll(activeCompanyId?: string | null) {
+  const studentsEq = activeCompanyId
+    ? { column: 'company_id', value: activeCompanyId }
+    : undefined;
   const [acsRes, productsRes, tagsRes, rulesRes, studentsRes, casesRes, usersRes, antRes, concRes, concErrRes, userCompaniesRes, userCompanyAcsRes] = await Promise.all([
     supabase.from('acs').select('*').order('name'),
     supabase.from('products').select('*').order('name'),
     supabase.from('student_tags').select('*').order('name'),
     supabase.from('financial_rules').select('*').limit(1).maybeSingle(),
-    fetchAllPaged('students', 'name'),
+    fetchAllPaged('students', 'name', true, { select: STUDENTS_SYNC_SELECT, eq: studentsEq }),
     fetchAllPaged('cancellation_cases', 'created_at'),
     supabase.from('app_users').select('*').order('name'),
     fetchAllPaged('antecipacao_items', 'created_at'),
@@ -123,7 +167,9 @@ async function fetchAll(activeCompanyId?: string | null) {
       }
     : null;
 
-  const students = (studentsRes.data ?? []).map(rowToStudent).filter((s) => !isStudentHiddenFromGc(s));
+  const students = (studentsRes.data ?? [])
+    .map((r) => rowToStudent(r, { omitHistory: true }))
+    .filter((s) => !isStudentHiddenFromGc(s));
   const cancellationCases = (casesRes.data ?? []).map(rowToCancellationCase);
   const ucRows = (userCompaniesRes.data ?? []) as Array<{ user_id: string; company_id: string }>;
   const ucByAuthId = new Map<string, string[]>();
@@ -406,19 +452,50 @@ export function useSupabaseSync() {
 
     };
 
-    // Debounce do reload disparado por eventos realtime: durante uma importação
-    // ou limpeza em massa, o Postgres emite dezenas/centenas de eventos em
-    // rajada. Sem debounce, cada evento dispara um fetchAll() (10 tabelas) em
-    // paralelo, congelando a UI. 1,5s junta a rajada numa recarga só e deixa
-    // a troca de aba pintar antes de recalcular a base inteira.
+    // Debounce do reload disparado por eventos realtime (tabelas auxiliares).
+    // students usa patch pontual — não passa por aqui — para não reconstruir
+    // 4k fichas a cada INSERT do IAM. Aba oculta: só marca pendência e recarrega
+    // quando o usuário volta.
     let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    let reloadPendingWhileHidden = false;
     const scheduleReload = () => {
       if ((window as any).__suppressFullSync) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        reloadPendingWhileHidden = true;
+        return;
+      }
       if (reloadTimer) clearTimeout(reloadTimer);
       reloadTimer = setTimeout(() => {
         reloadTimer = null;
         reload().catch((e) => console.error('reload falhou:', e));
-      }, 1500);
+      }, 2500);
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible' || !reloadPendingWhileHidden) return;
+      reloadPendingWhileHidden = false;
+      scheduleReload();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    const onStudentChange = (payload: { eventType?: string; new?: any; old?: any }) => {
+      if ((window as any).__suppressFullSync) return;
+      const event = payload.eventType;
+      if (event === 'DELETE') {
+        const id = payload.old?.id;
+        if (id) {
+          useAppStore.setState((s) => ({
+            students: s.students.filter((st) => st.id !== id),
+          }));
+        }
+        return;
+      }
+      if (payload.new?.id) {
+        applyStudentRealtimeRow(payload.new, activeCompanyId);
+        return;
+      }
+      // Payload incompleto: agenda reload completo como fallback.
+      scheduleReload();
     };
 
     reload().then(() => {
@@ -456,7 +533,7 @@ export function useSupabaseSync() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'student_tags' }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'financial_rules' }, scheduleReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, onStudentChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cancellation_cases' }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_users' }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_company_acs' }, scheduleReload)
@@ -474,6 +551,7 @@ export function useSupabaseSync() {
     return () => {
       mounted = false;
       if (reloadTimer) clearTimeout(reloadTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
       supabase.removeChannel(channel);
     };
   }, [session, activeCompanyId]);

@@ -9,7 +9,7 @@ import {
   mergeHistory,
   FINANCIAL_COLUMNS,
 } from '@/lib/studentWriteGuard';
-import type { AC, Product, StudentTag, FinancialRules, Student, CancellationCase, AntecipacaoItem, AppUser, Notification, NotificationType } from '@/types';
+import type { AC, Product, StudentTag, FinancialRules, Student, CancellationCase, AntecipacaoItem, AppUser, Notification, NotificationType, HistoryEntry } from '@/types';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function studentToRow(s: Partial<Student>): Record<string, unknown> {
@@ -72,7 +72,7 @@ function studentToRow(s: Partial<Student>): Record<string, unknown> {
   return row;
 }
 
-export function rowToStudent(r: any): Student {
+export function rowToStudent(r: any, opts?: { omitHistory?: boolean }): Student {
   // Guarda a versão lida para detectar gravações a partir de snapshot velho
   noteStudentVersion(r?.id, r?.updated_at);
   return {
@@ -99,7 +99,11 @@ export function rowToStudent(r: any): Student {
     paidInstallments: r.paid_installments ?? 0,
     installmentValue: Number(r.installment_value ?? 0),
     installments: typeof r.installments === 'string' ? JSON.parse(r.installments) : (r.installments ?? []),
-    history: typeof r.history === 'string' ? JSON.parse(r.history) : (r.history ?? []),
+    // Histórico completo só sob demanda (modal Histórico). Manter 3.7k fichas
+    // com history na memória estoura a aba do Chrome (Out of Memory).
+    history: opts?.omitHistory
+      ? []
+      : (typeof r.history === 'string' ? JSON.parse(r.history) : (r.history ?? [])),
     isRendaExtra: r.is_renda_extra ?? false,
     rendaExtraStatus: r.renda_extra_status ?? undefined,
     rendaExtraAC: r.renda_extra_ac ?? undefined,
@@ -130,6 +134,19 @@ export function rowToStudent(r: any): Student {
     iamGcConciliadoAt: r.iam_gc_conciliado_at ?? undefined,
     createdAt: r.created_at ?? undefined,
   };
+}
+
+/** Busca só o histórico de uma ficha — usado pelo modal Histórico. */
+export async function fetchStudentHistory(studentId: string): Promise<HistoryEntry[]> {
+  const { data, error } = await supabase
+    .from('students')
+    .select('history')
+    .eq('id', studentId)
+    .maybeSingle();
+  if (error) throw error;
+  const raw = data?.history;
+  if (!raw) return [];
+  return (typeof raw === 'string' ? JSON.parse(raw) : raw) as HistoryEntry[];
 }
 
 function cancellationToRow(c: Partial<CancellationCase>): Record<string, unknown> {

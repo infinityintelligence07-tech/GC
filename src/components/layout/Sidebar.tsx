@@ -54,28 +54,35 @@ export default function Sidebar({
   const conciliacaoErrors = useConciliacaoStore((s) => s.importErrors);
   // Conta alunos distintos com ajustes pendentes (não número de ajustes)
   // Separa Renda Extra (badge cinza) do restante Kamino↔GC (badge âmbar)
-  const conciliacaoPendingItems = conciliacaoItems.filter((i) => i.status === 'pendente' && i.tipo !== 'baixa_kamino');
+  const conciliacaoPendingItems = useMemo(
+    () => conciliacaoItems.filter((i) => i.status === 'pendente' && i.tipo !== 'baixa_kamino'),
+    [conciliacaoItems],
+  );
   const isRendaExtraTipo = (t: string) => t === 'renda_extra_exclusao' || t === 'renda_extra_acordo';
   const isCancelConcTipo = (t: string) => t === 'cancelamento' || t === 'reversao';
-  const rendaExtraItems = conciliacaoPendingItems.filter((i) => isRendaExtraTipo(i.tipo));
-  const iamPendingItems = conciliacaoPendingItems.filter((i) => i.tipo === 'iam_pendente');
-  const recompraPendingItems = conciliacaoPendingItems.filter((i) => i.tipo === 'recompra_vinculo');
-  const cancelPendingItems = conciliacaoPendingItems.filter((i) => isCancelConcTipo(i.tipo));
-  const kaminoItems = conciliacaoPendingItems.filter(
-    (i) => !isRendaExtraTipo(i.tipo) && i.tipo !== 'iam_pendente' && i.tipo !== 'recompra_vinculo' && !isCancelConcTipo(i.tipo),
-  );
-  const distinctStudentsKamino = new Set(kaminoItems.map((i) => i.studentId).filter(Boolean)).size;
-  const distinctStudentsIam = new Set(iamPendingItems.map((i) => i.studentId).filter(Boolean)).size;
-  const distinctStudentsRecompra = new Set(recompraPendingItems.map((i) => i.studentId).filter(Boolean)).size;
-  const distinctStudentsCancel = new Set(cancelPendingItems.map((i) => i.studentId ?? i.studentName)).size;
-  const distinctStudentsRE = new Set(rendaExtraItems.map((i) => i.studentId).filter(Boolean)).size;
-  const errorCount = conciliacaoErrors.filter((e) => e.status === 'pendente').length;
-  const conciliacaoCount = distinctStudentsKamino + distinctStudentsIam + distinctStudentsRecompra + distinctStudentsCancel + errorCount;
-  const rendaExtraCount = distinctStudentsRE;
+  const { conciliacaoCount, rendaExtraCount } = useMemo(() => {
+    const rendaExtraItems = conciliacaoPendingItems.filter((i) => isRendaExtraTipo(i.tipo));
+    const iamPendingItems = conciliacaoPendingItems.filter((i) => i.tipo === 'iam_pendente');
+    const recompraPendingItems = conciliacaoPendingItems.filter((i) => i.tipo === 'recompra_vinculo');
+    const cancelPendingItems = conciliacaoPendingItems.filter((i) => isCancelConcTipo(i.tipo));
+    const kaminoItems = conciliacaoPendingItems.filter(
+      (i) => !isRendaExtraTipo(i.tipo) && i.tipo !== 'iam_pendente' && i.tipo !== 'recompra_vinculo' && !isCancelConcTipo(i.tipo),
+    );
+    const distinctStudentsKamino = new Set(kaminoItems.map((i) => i.studentId).filter(Boolean)).size;
+    const distinctStudentsIam = new Set(iamPendingItems.map((i) => i.studentId).filter(Boolean)).size;
+    const distinctStudentsRecompra = new Set(recompraPendingItems.map((i) => i.studentId).filter(Boolean)).size;
+    const distinctStudentsCancel = new Set(cancelPendingItems.map((i) => i.studentId ?? i.studentName)).size;
+    const errorCount = conciliacaoErrors.filter((e) => e.status === 'pendente').length;
+    return {
+      conciliacaoCount: distinctStudentsKamino + distinctStudentsIam + distinctStudentsRecompra + distinctStudentsCancel + errorCount,
+      rendaExtraCount: new Set(rendaExtraItems.map((i) => i.studentId).filter(Boolean)).size,
+    };
+  }, [conciliacaoPendingItems, conciliacaoErrors]);
   // Cancelamentos: contagem de casos com ação "Aguardando Contato"
-  const cancelamentosCount = cancellationCases.filter(
-    (c) => c.acao === 'Aguardando Contato'
-  ).length;
+  const cancelamentosCount = useMemo(
+    () => cancellationCases.filter((c) => c.acao === 'Aguardando Contato').length,
+    [cancellationCases],
+  );
 
   // Estornos: alunos (casos) com ao menos uma parcela de estorno não lançada
   const estornosPendentesCount = useMemo(() => {
