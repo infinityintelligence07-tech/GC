@@ -2,8 +2,9 @@ import * as XLSX from 'xlsx';
 import type { StudentStatus } from '@/types';
 
 /**
- * `negativacao`: parcela em aberto de aluno À Negativar/Negativado — sai do
- * card "A Vencer / Vencido" (vai para os cards de negativação) e ganha aba própria.
+ * `negativacao`: parcela em aberto de aluno À Negativar/Negativado.
+ * Na tela esses valores ficam fora do card A Vencer/Vencido. Na planilha
+ * entram na mesma aba, com a Situação preenchida, para não faltar aluno.
  */
 export type ForecastExportBucket = 'pago' | 'a_vencer' | 'negativacao';
 
@@ -208,18 +209,13 @@ export function buildForecastWorkbook(
   rows: ForecastExportRow[],
   opts: ForecastExportOpts,
 ): XLSX.WorkBook {
-  const aVencer = rows.filter((r) => r.bucket === 'a_vencer');
-  const negativacao = rows.filter((r) => r.bucket === 'negativacao');
+  const emAberto = rows.filter((r) => r.bucket === 'a_vencer' || r.bucket === 'negativacao');
   const pago = rows.filter((r) => r.bucket === 'pago');
 
   const wb = XLSX.utils.book_new();
 
-  if (opts.dateBasis === 'vencimento' || aVencer.length > 0) {
-    XLSX.utils.book_append_sheet(wb, montarAba(aVencer, COLUNAS_A_VENCER), 'A Vencer Vencido');
-  }
-  // Mesmas colunas do A Vencer: nada foi pago; a Situação separa À Negativar de Negativado.
-  if (negativacao.length > 0) {
-    XLSX.utils.book_append_sheet(wb, montarAba(negativacao, COLUNAS_A_VENCER), 'Negativação');
+  if (opts.dateBasis === 'vencimento' || emAberto.length > 0) {
+    XLSX.utils.book_append_sheet(wb, montarAba(emAberto, COLUNAS_A_VENCER), 'A Vencer Vencido');
   }
   XLSX.utils.book_append_sheet(wb, montarAba(pago, COLUNAS_PAGO), 'Pago');
 
