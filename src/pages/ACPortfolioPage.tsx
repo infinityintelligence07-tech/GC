@@ -1063,11 +1063,7 @@ export default function ACPortfolioPage() {
           className="min-w-0 rounded-2xl p-3 sm:p-4 saas-shadow-md bg-card border border-border border-l-4 border-l-emerald-500 transition-all hover:-translate-y-0.5 relative flex flex-col"
         >
           <div className="flex items-start justify-between mb-1.5 gap-2">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide min-w-0">
-              <span className="font-semibold text-foreground tabular-nums normal-case" title="Pago do mês menos as pendências de evento já pagas">
-                {formatCurrency(pagoSemPendencia)}
-              </span>
-              <span className="mx-1">|</span>
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide truncate">
               Pago · {periodoMesLabel}
             </p>
             <div className="flex items-center gap-2 shrink-0">
@@ -1084,8 +1080,12 @@ export default function ACPortfolioPage() {
               </button>
             </div>
           </div>
-          <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums mb-1.5" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>
-            {formatCurrency(mesEmDiaNovosValue)}
+          <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums mb-1.5 flex items-baseline gap-2 flex-wrap" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>
+            <span className="text-base sm:text-lg font-semibold text-foreground" title="Pago do mês menos as pendências de evento já pagas">
+              {formatCurrency(pagoSemPendencia)}
+            </span>
+            <span className="text-muted-foreground font-normal">|</span>
+            <span>{formatCurrency(mesEmDiaNovosValue)}</span>
           </p>
           <div className="mt-auto">
             <RibbonGauge

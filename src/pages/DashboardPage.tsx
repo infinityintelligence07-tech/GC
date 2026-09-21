@@ -1461,11 +1461,7 @@ export default function DashboardPage() {
           title={`Pago · ${mesAtualLabel} (${periodoMesLabel}): ${formatCurrency(mesEmDiaNovosValue)} recebidos de ${mesPagoAlunos} alunos, por data de pagamento — só baixas feitas no GC e conciliadas (mais retido de cancelamento conciliado). Zera todo dia 1º. Clique para ver os alunos.`}
         >
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide min-w-0">
-              <span className="font-semibold text-foreground tabular-nums normal-case" title="Pago do mês menos as pendências de evento já pagas">
-                {formatCurrency(pagoSemPendencia)}
-              </span>
-              <span className="mx-1">|</span>
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide truncate">
               Pago · {periodoMesLabel}
             </p>
             <MetaValorEditor
@@ -1477,8 +1473,12 @@ export default function DashboardPage() {
               pendencias={metaPendencias}
             />
           </div>
-          <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>
-            {formatCurrency(mesEmDiaNovosValue)}
+          <p className="text-xl sm:text-2xl font-bold leading-none tabular-nums flex items-baseline gap-2 flex-wrap" style={{ color: ribbonColorAt(pctMetaEmDiaNovos) }}>
+            <span className="text-base sm:text-lg font-semibold text-foreground" title="Pago do mês menos as pendências de evento já pagas">
+              {formatCurrency(pagoSemPendencia)}
+            </span>
+            <span className="text-muted-foreground font-normal">|</span>
+            <span>{formatCurrency(mesEmDiaNovosValue)}</span>
           </p>
           <RibbonGauge
             variant="minimal"
