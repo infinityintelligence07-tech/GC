@@ -2653,13 +2653,15 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   const isAntecipada = isParcelaAntecipada(inst);
                   const toggleAntecipada = () => {
                     const marcar = !isAntecipada;
-                    const updated = student.installments.map((i) =>
+                    const updated = draftInstallments.map((i) =>
                       i.number === inst.number ? { ...i, antecipada: marcar ? true : undefined } : i,
                     );
-                    updateStudent(student.id, {
+                    // Rascunho local alimenta a UI; sem isso o botão parece não fazer nada.
+                    setDraftInstallments(updated);
+                    void updateStudent(student.id, {
                       installments: updated,
                       history: [
-                        ...student.history,
+                        ...(baseStudent.history ?? []),
                         addHistoryEntry(
                           marcar
                             ? `Parcela ${inst.number} marcada como boleto antecipado (${formatCurrency(inst.value)}). Baixa veio da antecipação (banco/fundo), não de pagamento do aluno.`
@@ -2749,20 +2751,44 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                         });
                         if (!ok) return;
                         setEditingPaidDates(null);
-                        const updated = student.installments.map((i) =>
-                          i.number === inst.number
-                            ? { ...i, paid: false, paidDate: undefined, paidMarkedAt: undefined, antecipada: undefined }
-                            : i
+                        // Usa o rascunho (fonte da UI). Antes só atualizava o store —
+                        // a lista "Parcelas Pagas" continuava mostrando a parcela.
+                        const clearPaid = (i: Installment): Installment => {
+                          const next = {
+                            ...i,
+                            paid: false,
+                            paidDate: undefined,
+                            paidMarkedAt: undefined,
+                            antecipada: undefined,
+                            paidValue: undefined,
+                          };
+                          return next;
+                        };
+                        const updated = draftInstallments.map((i) =>
+                          i.number === inst.number ? clearPaid(i) : i,
                         );
                         const paidCount = updated.filter((i) => i.paid).length;
-                        updateStudent(student.id, {
-                          installments: updated,
-                          paidInstallments: paidCount,
-                          history: [
-                            ...student.history,
-                            addHistoryEntry(`Pagamento da parcela ${inst.number} desconciliado (${formatCurrency(inst.value)}). Voltou para pendente.`),
-                          ],
-                        });
+                        setDraftInstallments(updated);
+                        setOriginalInstallmentsRef((prev) =>
+                          prev.map((i) => (i.number === inst.number ? clearPaid(i) : i)),
+                        );
+                        try {
+                          await updateStudent(student.id, {
+                            installments: updated,
+                            paidInstallments: paidCount,
+                            history: [
+                              ...(baseStudent.history ?? []),
+                              addHistoryEntry(
+                                `Pagamento da parcela ${inst.number} desconciliado (${formatCurrency(inst.value)}). Voltou para pendente.`,
+                              ),
+                            ],
+                          });
+                        } catch {
+                          // updateStudent já reverte o store e mostra toast de erro.
+                          setDraftInstallments(draftInstallments);
+                          setOriginalInstallmentsRef(originalInstallmentsRef);
+                          return;
+                        }
                         registrarConc({
                           tipo: 'parcela_valor',
                           studentSnapshot: buildStudentSnapshot(baseStudent),
@@ -2770,19 +2796,16 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                           studentName: student.name,
                           ac: student.ac,
                           resumo: `Parcela ${inst.number} — pagamento desconciliado (${formatCurrency(inst.value)})`,
-                          antes: { parcela: inst.number, valor: inst.value, paid: true, paidDate: inst.paidDate },
+                          antes: {
+                            parcela: inst.number,
+                            valor: inst.value,
+                            paid: true,
+                            paidDate: inst.paidDate,
+                            paidValue: inst.paidValue,
+                          },
                           depois: { parcela: inst.number, valor: inst.value, paid: false },
                           autorObservacao: obsConciliacao.trim() || undefined,
                         });
-                        // Atualiza snapshot original p/ que a parcela desconciliada
-                        // entre no Check de Valor e aumente a carteira pendente.
-                        setOriginalInstallmentsRef((prev) =>
-                          prev.map((i) =>
-                            i.number === inst.number
-                              ? { ...i, paid: false, paidDate: undefined, paidMarkedAt: undefined, antecipada: undefined }
-                              : i,
-                          ),
-                        );
                         toast.success(`Parcela ${inst.number} marcada como pendente.`);
                       }}
                       className="px-2 py-1 rounded-lg text-[10px] font-semibold border border-rose-200 text-rose-700 hover:bg-rose-50 transition-colors"
@@ -2844,7 +2867,7 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                             });
                             if (!ok) return;
 
-                            const updated = student.installments.map((i) =>
+                            const updated = draftInstallments.map((i) =>
                               i.number === inst.number
                                 ? { ...i, paidDate: nextPaid, dueDate: nextDue, paid: true }
                                 : i,
@@ -2860,10 +2883,11 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                                 `vencimento ${formatDateBR(inst.dueDate)} → ${formatDateBR(nextDue)}`,
                               );
                             }
-                            updateStudent(student.id, {
+                            setDraftInstallments(updated);
+                            void updateStudent(student.id, {
                               installments: updated,
                               history: [
-                                ...student.history,
+                                ...(baseStudent.history ?? []),
                                 addHistoryEntry(
                                   `Datas da parcela ${inst.number} alteradas (admin): ${histParts.join('; ')}.`,
                                 ),
