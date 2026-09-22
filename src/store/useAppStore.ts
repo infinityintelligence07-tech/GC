@@ -1132,7 +1132,16 @@ export const useAppStore = create<AppState>()(
     // EXCEÇÃO: importações externas (PIX/Cartão pago à vista) não têm
     // carteira a impactar — o contrato já foi quitado fora do sistema.
     const isExternal = cancCase.externalImport === true;
-    const saleValueRef = Number(linkedStudent?.saleValue) || (totalPagoAluno + totalPendentesValor);
+    // Usa o saleValue normalizado (resolveStudentFinance): quando a entrada está
+    // separada no down_payment e o sale_value do banco só soma as parcelas, o
+    // valor bruto subestima o contrato. Subtrair o total pago desse valor
+    // "curto" contava a entrada duas vezes (ex.: Viviane Rovêda — contrato
+    // R$ 20.020, pago R$ 2.000, saldo R$ 18.020, mas impacto saía −R$ 16.020).
+    const saleValueRef =
+      (financeAluno && financeAluno.saleValue > 0.0049
+        ? financeAluno.saleValue
+        : Number(linkedStudent?.saleValue) || 0)
+      || (totalPagoAluno + totalPendentesValor);
     // Quando há estorno ao aluno, o valor pago é devolvido — logo ele volta a
     // compor o impacto na carteira (ex.: 14.237,12 − 2.000,00 + 2.000,00 estorno
     // = -14.237,12).
