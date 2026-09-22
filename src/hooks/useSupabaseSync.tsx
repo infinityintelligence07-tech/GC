@@ -415,7 +415,7 @@ export function useSupabaseSync() {
       // Uma vez: cadastros manuais da aba Cancelamentos (PIX/cartão) atualizam
       // o status nas turmas do IAM Control, mesmo sem ficha na aba Alunos.
       try {
-        const key = `iam-cancelamentos-manuais-turmas-v1-${activeCompanyId}`;
+        const key = `iam-cancelamentos-manuais-turmas-v2-${activeCompanyId}`;
         if (!localStorage.getItem(key)) {
           const ids = cancellationCases
             .filter((c) => c.externalImport && c.acao !== 'Revertido')

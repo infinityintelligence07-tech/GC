@@ -7,6 +7,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const BATCH = 500;
+const PAGE = 1000;
 
 type Row = {
   id: string;
@@ -15,7 +16,7 @@ type Row = {
   whatsapp: string | null;
   status: string | null;
   status_cancelamento: string | null;
-  iam_control_aluno_id?: string | null;
+  iam_control_aluno_id: number | null;
 };
 
 type CaseRow = {
@@ -52,6 +53,34 @@ function mapCaseStatus(r: CaseRow): 'Cancelamento solicitado' | 'Cancelado' | nu
   return 'Cancelamento solicitado';
 }
 
+function normalizePhone(raw: unknown): string {
+  let d = String(raw ?? '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) d = d.slice(2);
+  if (d.length === 10) d = d.slice(0, 2) + '9' + d.slice(2);
+  return d;
+}
+
+function normalizeEmail(raw: unknown): string {
+  const e = String(raw ?? '').trim().toLowerCase().replace(/\s+/g, '');
+  if (!e || !e.includes('@')) return '';
+  return /^[^@\s]+@[^@\s.]+\.[a-z]{2,}$/.test(e) ? e : '';
+}
+
+function itemFromStudent(r: Row, status: string): Record<string, unknown> {
+  const email = normalizeEmail(r.email);
+  const telefone = normalizePhone(r.whatsapp);
+  return {
+    ...(r.iam_control_aluno_id != null ? { iam_control_aluno_id: r.iam_control_aluno_id } : {}),
+    gestao_contas_student_id: r.id,
+    nome: r.name ?? '',
+    ...(email ? { email } : {}),
+    telefone,
+    status,
+    inadimplente: false,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -68,8 +97,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-    // Body é opcional: sem body sincroniza alunos em cancelamento e os
-    // cadastros manuais da aba Cancelamentos (mesmo sem ficha em Alunos).
+    // Body opcional: sem body sincroniza alunos em cancelamento + cadastros manuais.
     let studentIds: string[] | null = null;
     let caseIds: string[] | null = null;
     try {
@@ -89,13 +117,12 @@ Deno.serve(async (req) => {
 
     const soCasos = Boolean(caseIds && caseIds.length > 0) && !(studentIds && studentIds.length > 0);
 
-    const rows: Row[] = [];
-    const PAGE = 1000;
+    const rowsById = new Map<string, Row>();
     if (!soCasos) {
       for (let from = 0; ; from += PAGE) {
         let q = supabase
           .from('students')
-          .select('id, name, email, whatsapp, status, status_cancelamento')
+          .select('id, name, email, whatsapp, status, status_cancelamento, iam_control_aluno_id')
           .or(
             'status_cancelamento.in.(cancelado,solicitado,aguardando_conciliacao),status.eq.Cancelado',
           )
@@ -104,7 +131,7 @@ Deno.serve(async (req) => {
 
         const { data, error } = await q;
         if (error) return json({ error: error.message }, 500);
-        rows.push(...((data ?? []) as Row[]));
+        for (const r of (data ?? []) as Row[]) rowsById.set(r.id, r);
         if (!data || data.length < PAGE) break;
       }
     }
@@ -124,33 +151,56 @@ Deno.serve(async (req) => {
       if (!data || data.length < PAGE) break;
     }
 
-    const studentIdsJa = new Set(rows.map((r) => r.id));
+    // Casos vinculados a ficha: carrega contato + iam_control_aluno_id.
+    // Sem isso o push só com case_ids ia sem e-mail e o IAM não atualizava a turma.
+    const linkedIds = [
+      ...new Set(
+        cases
+          .map((c) => c.student_id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0 && !rowsById.has(id)),
+      ),
+    ];
+    for (let i = 0; i < linkedIds.length; i += PAGE) {
+      const chunk = linkedIds.slice(i, i + PAGE);
+      const { data, error } = await supabase
+        .from('students')
+        .select('id, name, email, whatsapp, status, status_cancelamento, iam_control_aluno_id')
+        .in('id', chunk);
+      if (error) return json({ error: error.message }, 500);
+      for (const r of (data ?? []) as Row[]) {
+        // Cadastro manual já marca a ficha; se ainda não estiver em cancelamento,
+        // trata como solicitado para o IAM (espelha o caso ativo).
+        if (!r.status_cancelamento || r.status_cancelamento === 'nenhum') {
+          r.status_cancelamento = 'solicitado';
+          if (!r.status || !String(r.status).toLowerCase().includes('cancela')) {
+            r.status = 'Solicitação Cancelamento';
+          }
+        }
+        rowsById.set(r.id, r);
+      }
+    }
+
+    const studentIdsJa = new Set(rowsById.keys());
 
     const itens = [
-      ...rows
+      ...[...rowsById.values()]
         .map((r) => {
           const status = mapStatus(r);
           if (!status) return null;
-          return {
-            gestao_contas_student_id: r.id,
-            nome: r.name ?? '',
-            email: r.email ?? '',
-            telefone: r.whatsapp ?? '',
-            status,
-            inadimplente: false,
-          };
+          return itemFromStudent(r, status);
         })
         .filter(Boolean),
       ...cases
         .map((c) => {
+          // Ficha vinculada já vai pelo caminho do aluno (com e-mail / iam id).
           if (c.student_id && studentIdsJa.has(c.student_id)) return null;
           const status = mapCaseStatus(c);
           if (!status) return null;
+          const telefone = normalizePhone(c.student_whatsapp);
           return {
             gestao_contas_student_id: c.student_id || `caso-${c.id}`,
             nome: c.student_name ?? '',
-            email: '',
-            telefone: c.student_whatsapp ?? '',
+            telefone,
             status,
             inadimplente: false,
           };
@@ -188,7 +238,6 @@ Deno.serve(async (req) => {
         erros.push(`lote ${lotes}: HTTP ${res.status} ${text.slice(0, 200)}`);
       } else {
         enviados += lote.length;
-        // Extrai resultados por item, quando o IAM devolve detalhamento.
         try {
           const parsed = JSON.parse(text);
           const lista: Record<string, unknown>[] = Array.isArray(parsed)
@@ -201,7 +250,13 @@ Deno.serve(async (req) => {
                 (r as Record<string, unknown>)?.result ??
                 '',
             ).toLowerCase();
-            if (!resultado.includes('nao_encontrado') && !resultado.includes('ambiguo') && !resultado.includes('não_encontrado')) continue;
+            if (
+              !resultado.includes('nao_encontrado') &&
+              !resultado.includes('ambiguo') &&
+              !resultado.includes('não_encontrado')
+            ) {
+              continue;
+            }
             const gid = String((r as Record<string, unknown>)?.gestao_contas_student_id ?? '');
             const orig = byId.get(gid);
             problemas.push({
@@ -229,7 +284,6 @@ Deno.serve(async (req) => {
       problemas,
       resposta_iam: respostaBruta,
     });
-
   } catch (err) {
     console.error('[iam-control-push-cancelamentos]', err);
     return json({ error: String((err as Error)?.message ?? err) }, 500);
