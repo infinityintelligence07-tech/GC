@@ -960,6 +960,18 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
       },
       autorObservacao: obsConciliacao.trim() || undefined,
     });
+    // Confirma se a baixa realmente gravou no store (registrarConc pode
+    // abortar em silêncio se a parcela já estiver paga/pendente).
+    const gravou = !!useAppStore
+      .getState()
+      .students.find((s) => s.id === student.id)
+      ?.installments.find((i) => i.number === inst.number)?.paid;
+    if (!gravou) {
+      toast.error(
+        `A parcela ${inst.number} não foi gravada como paga. Tente de novo ou confira se já não está paga.`,
+      );
+      return;
+    }
     // Reflete localmente no rascunho p/ que a UI atualize imediatamente.
     setDraftInstallments((prev) =>
       prev.map((i) =>

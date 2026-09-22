@@ -432,20 +432,27 @@ export function registrarConciliacao(input: {
   }
 
   // Evita baixa duplicada da mesma parcela (gerava histórico sem gravar o pagamento).
+  // Só bloqueia se a parcela AINDA está paga OU se já há baixa PENDENTE na fila.
+  // Item antigo `conciliado` NÃO bloqueia: depois de Desconciliar a parcela volta
+  // a unpaid e precisa poder ser baixada de novo (bug: UI marcava pago e o DB não).
   if (input.tipo === 'pagamento_parcela' && input.studentId) {
     const parcela = Number(input.depois?.parcela);
     if (Number.isFinite(parcela)) {
       const st = useAppStore.getState().students.find((s) => s.id === input.studentId);
       const jaPaga = !!st?.installments.find((i) => i.number === parcela)?.paid;
-      const jaConciliada = useConciliacaoStore.getState().items.some(
+      const jaPendente = useConciliacaoStore.getState().items.some(
         (it) =>
           it.studentId === input.studentId &&
           it.tipo === 'pagamento_parcela' &&
-          it.status === 'conciliado' &&
+          it.status === 'pendente' &&
           Number((it.depois as Record<string, unknown>)?.parcela) === parcela,
       );
-      if (jaPaga || jaConciliada) {
-        toast.warning(`Parcela ${parcela} de ${input.studentName} já está paga ou conciliada.`);
+      if (jaPaga || jaPendente) {
+        toast.warning(
+          jaPaga
+            ? `Parcela ${parcela} de ${input.studentName} já está paga.`
+            : `Parcela ${parcela} de ${input.studentName} já tem baixa aguardando Conciliação.`,
+        );
         return;
       }
     }
