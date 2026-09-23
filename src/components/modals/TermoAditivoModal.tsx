@@ -146,10 +146,9 @@ export default function TermoAditivoModal({
     (student.downPayment ?? 0) +
       (student.installments ?? []).filter((i) => i.paid).reduce((s, i) => s + (i.value || 0), 0);
 
-  const totalAposReneg =
-    newValues.saldoAposEntrada != null
-      ? newValues.novaEntrada + newValues.saldoAposEntrada
-      : newValues.novoSaldo + newValues.multaAplicada + newValues.jurosAplicados;
+  /** Total após renegociação no termo: saldo + multa, SEM embutir juros.
+   * A taxa de juros aparece à parte; não entra no valor total do contrato. */
+  const totalAposReneg = newValues.novoSaldo + newValues.multaAplicada;
 
   const qtdInscricoes = newValues.quantidadeInscricoes ?? 1;
   const qtdParcelasAberto =
