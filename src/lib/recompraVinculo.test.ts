@@ -4,6 +4,8 @@ import {
   findRecompraOriginal,
   findRecomprasVinculadas,
   getRecompraVinculoGroup,
+  installmentsSemEspelhoRecompra,
+  parcelaEspelhadaNaRecompra,
   resolveStudentDisplayStatusVinculado,
 } from '@/lib/recompraVinculo';
 import { calculateStudentAutoStatus } from '@/store/useAppStore';
@@ -193,5 +195,32 @@ describe('vínculo recompra ↔ contrato original', () => {
     const emCancelamento = ficha({ statusCancelamento: 'solicitado', status: 'Solicitação Cancelamento', installments: [parcela(1, diasAtras(5), true)] });
     const negativado = ficha({ product: 'Fundo - Receita (Recompra)', recompraTreinamento: 'Confronto', statusMode: 'Manual', status: 'Negativado', installments: [parcela(1, diasAtras(200), false, ['recompra'])] });
     expect(resolveStudentDisplayStatusVinculado(negativado, [emCancelamento, negativado]).status).toBe('Negativado');
+  });
+});
+
+describe('parcelaEspelhadaNaRecompra / installmentsSemEspelhoRecompra', () => {
+  it('detecta parcela do original com mesmo vencimento+valor na recompra vinculada', () => {
+    const due = '2026-08-20';
+    const original = ficha({
+      product: 'Missão Governar',
+      installments: [
+        { number: 7, dueDate: '2026-07-20', value: 2416.66, paid: true, paidDate: '2026-03-05' },
+        { number: 8, dueDate: due, value: 2416.66, paid: true, paidDate: '2026-03-05' },
+        { number: 9, dueDate: '2026-09-20', value: 2416.66, paid: false },
+      ],
+    });
+    const recompra = ficha({
+      product: 'Fundo - Receita (Recompra)',
+      recompraTreinamento: 'Missão Governar',
+      installments: [
+        { number: 1, dueDate: '2026-07-20', value: 2416.66, paid: false },
+        { number: 2, dueDate: due, value: 2416.66, paid: false },
+      ],
+    });
+    expect(parcelaEspelhadaNaRecompra(original.installments[0], [recompra])).toBe(true);
+    expect(parcelaEspelhadaNaRecompra(original.installments[1], [recompra])).toBe(true);
+    expect(parcelaEspelhadaNaRecompra(original.installments[2], [recompra])).toBe(false);
+    const fluxo = installmentsSemEspelhoRecompra(original, [original, recompra]);
+    expect(fluxo.map((i) => i.number)).toEqual([9]);
   });
 });

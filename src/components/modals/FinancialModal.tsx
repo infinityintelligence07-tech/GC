@@ -18,6 +18,7 @@ import { resolveStudentFinance } from '@/lib/studentFinance';
 import {
   findOutrosContratosComSaldo,
   findRecomprasComSaldo,
+  installmentsSemEspelhoRecompra,
   recompraSaldoAberto,
   type RecompraIncorporada,
 } from '@/lib/recompraVinculo';
@@ -241,10 +242,13 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     [student.downPayment, student.saleValue, student.installments, student.installmentValue],
   );
   const embeddedEntrada = finance.embeddedEntradaInstallment;
+  // Carteira completa — usada no fluxo (esconder espelho da recompra) e na renegociação.
+  const allStudents = useAppStore((s) => s.students);
   const flowInstallments = useMemo(() => {
-    if (!embeddedEntrada) return student.installments;
-    return student.installments.filter((i) => i.number !== embeddedEntrada.number);
-  }, [student.installments, embeddedEntrada]);
+    const base = installmentsSemEspelhoRecompra(student, allStudents);
+    if (!embeddedEntrada) return base;
+    return base.filter((i) => i.number !== embeddedEntrada.number);
+  }, [student, allStudents, embeddedEntrada]);
   const podeConfirmarPagto = !readOnly && canConfirmarPagamento(currentUser);
   // Confirmar Ajuste Financeiro (data/valor) — liberado para qualquer usuário
   // que tenha permissão de edição nas abas de Alunos ou Equipe (assessores
@@ -375,7 +379,6 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   };
   // Recompras vinculadas a este contrato com saldo em aberto: entram na
   // renegociação por padrão (é o mesmo contrato), mas o AC pode desmarcar.
-  const allStudents = useAppStore((s) => s.students);
   const recomprasComSaldo = useMemo(
     () => findRecomprasComSaldo(student, allStudents),
     [student, allStudents],

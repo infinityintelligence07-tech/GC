@@ -9,6 +9,7 @@ import {
   ANTECIPADA_TEXT_CLASS,
   isParcelaAntecipada,
 } from '@/lib/parcelaAntecipada';
+import { installmentsSemEspelhoRecompra } from '@/lib/recompraVinculo';
 import { X, Tag } from 'lucide-react';
 
 interface Props {
@@ -17,18 +18,19 @@ interface Props {
 }
 
 export default function FlowModal({ student, onClose }: Props) {
-  const { studentTags, toggleInstallmentTag } = useAppStore();
+  const { studentTags, toggleInstallmentTag, students } = useAppStore();
   const [tagPopoverFor, setTagPopoverFor] = useState<number | null>(null);
 
   const totalContract = student.saleValue;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const fluxoInstallments = installmentsSemEspelhoRecompra(student, students);
 
-  const totalOverdue = student.installments
+  const totalOverdue = fluxoInstallments
     .filter((i) => !i.paid && new Date(i.dueDate) < today)
     .reduce((acc, i) => acc + i.value, 0);
 
-  const totalAVencer = student.installments
+  const totalAVencer = fluxoInstallments
     .filter((i) => !i.paid && new Date(i.dueDate) >= today)
     .reduce((acc, i) => acc + i.value, 0);
 
@@ -88,10 +90,10 @@ export default function FlowModal({ student, onClose }: Props) {
               )}
               {(() => {
                 const dateCount = new Map<string, number>();
-                (student.installments || []).forEach((i) => {
+                fluxoInstallments.forEach((i) => {
                   dateCount.set(i.dueDate, (dateCount.get(i.dueDate) || 0) + 1);
                 });
-                return [...student.installments]
+                return [...fluxoInstallments]
                 .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime() || a.number - b.number)
                 .map((inst) => {
                 if (Math.abs(inst.value) < 0.005 && Math.abs(inst.paidValue ?? 0) < 0.005) return null;

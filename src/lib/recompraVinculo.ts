@@ -142,6 +142,39 @@ export function recompraSaldoAberto(ficha: Student): { parcelas: Installment[]; 
 }
 
 /**
+ * Parcela do treinamento de origem que já existe na recompra vinculada
+ * (mesmo vencimento + valor). A dívida vive na ficha de recompra — não deve
+ * aparecer de novo no Fluxo de Pagamento do contrato original (evita P7/P8
+ * "Pago" duplicados com a recompra em aberto).
+ */
+export function parcelaEspelhadaNaRecompra(
+  parcela: Pick<Installment, 'dueDate' | 'value'>,
+  recompras: Student[],
+  tolerancia = 0.02,
+): boolean {
+  if (!recompras.length) return false;
+  const due = parcela.dueDate;
+  const val = Number(parcela.value) || 0;
+  for (const r of recompras) {
+    for (const i of r.installments ?? []) {
+      if (i.dueDate !== due) continue;
+      if (Math.abs((Number(i.value) || 0) - val) <= tolerancia) return true;
+    }
+  }
+  return false;
+}
+
+/** Parcelas do fluxo do treinamento, sem as que já estão na recompra vinculada. */
+export function installmentsSemEspelhoRecompra(
+  original: Student,
+  students: Student[],
+): Installment[] {
+  const recompras = findRecomprasVinculadas(original, students);
+  if (recompras.length === 0) return original.installments ?? [];
+  return (original.installments ?? []).filter((i) => !parcelaEspelhadaNaRecompra(i, recompras));
+}
+
+/**
  * Outros treinamentos do mesmo aluno (fichas que não são recompra) com saldo em
  * aberto — podem ser juntados à renegociação, mas só se o AC marcar (ao contrário
  * da recompra vinculada, que entra por padrão).
