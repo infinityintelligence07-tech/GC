@@ -57,6 +57,42 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+/** Campos de vencimento impressos no PDF do contrato IAM (página 1). */
+type DatasContratoPdf = {
+  melhor_dia: number | null;
+  primeiro_boleto: string | null;
+};
+
+function extrairDatasDoTextoContrato(text: string): DatasContratoPdf {
+  const melhor = text.match(/Melhor\s+dia\s+de\s+vencimento\s*:\s*(\d{1,2})\b/i);
+  const primeiro = text.match(
+    /1[ºo°]?\s*boleto\s+para\s*:\s*(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})/i,
+  );
+  let primeiroIso: string | null = null;
+  if (primeiro) {
+    let y = primeiro[3];
+    if (y.length === 2) y = `20${y}`;
+    primeiroIso = `${y}-${primeiro[2].padStart(2, '0')}-${primeiro[1].padStart(2, '0')}`;
+  }
+  const dia = melhor ? Number(melhor[1]) : null;
+  return {
+    melhor_dia: dia != null && dia >= 1 && dia <= 31 ? dia : null,
+    primeiro_boleto: primeiroIso,
+  };
+}
+
+async function extrairDatasDoPdf(bytes: ArrayBuffer): Promise<DatasContratoPdf> {
+  try {
+    const { extractText, getDocumentProxy } = await import('npm:unpdf');
+    const pdf = await getDocumentProxy(new Uint8Array(bytes));
+    const { text } = await extractText(pdf, { mergePages: true });
+    const joined = Array.isArray(text) ? text.join('\n') : String(text ?? '');
+    return extrairDatasDoTextoContrato(joined);
+  } catch {
+    return { melhor_dia: null, primeiro_boleto: null };
+  }
+}
+
 type ContratoMeta = {
   contrato_id?: string;
   treinamento?: string;
@@ -239,10 +275,13 @@ Deno.serve(async (req: Request) => {
 
     try {
       const bytes = await carregarPdfContrato(id, meta.signed_file_url);
+      const datas = await extrairDatasDoPdf(bytes);
       return apiResult({
         ...basePayload,
         pdf_base64: arrayBufferToBase64(bytes),
         filename: `contrato-${id}.pdf`,
+        melhor_dia_vencimento: datas.melhor_dia,
+        data_primeiro_boleto: datas.primeiro_boleto,
       });
     } catch (pdfErr) {
       if (pendente) {
