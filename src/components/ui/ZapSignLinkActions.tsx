@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Check, Copy, MessageCircle, ExternalLink, Building2 } from 'lucide-react';
+import { Check, Copy, MessageCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildTermoWhatsAppMessage, buildWhatsAppShareUrl, whatsappDigitsBR } from '@/lib/zapsignTermo';
 
 interface Props {
-  /** Link de assinatura do aluno. Sem link, os botões do aluno ficam desabilitados. */
+  /** Link de assinatura do aluno. Sem link, os botões ficam desabilitados. */
   signLink: string | null | undefined;
-  /** Link de assinatura do Instituto (IAM). Opcional — termos antigos podem não ter. */
+  /** @deprecated Mantido só por compatibilidade — o Instituto não assina mais. */
   signLinkIam?: string | null;
   nomeAluno: string;
   whatsapp?: string | null;
@@ -20,12 +20,11 @@ interface Props {
 }
 
 /**
- * Ações para enviar o link de assinatura ao aluno e copiar o link da IAM.
+ * Ações para enviar o link de assinatura ao aluno.
  * Usado nos modais de termo (cancelamento e renegociação).
  */
 export default function ZapSignLinkActions({
   signLink,
-  signLinkIam,
   nomeAluno,
   whatsapp,
   titulo,
@@ -34,9 +33,7 @@ export default function ZapSignLinkActions({
   showWhatsApp = true,
 }: Props) {
   const [copied, setCopied] = useState(false);
-  const [copiedIam, setCopiedIam] = useState(false);
   const off = disabled || !signLink;
-  const offIam = disabled || !signLinkIam;
   const waDigits = whatsappDigitsBR(whatsapp);
 
   const copiar = async () => {
@@ -50,20 +47,6 @@ export default function ZapSignLinkActions({
       toast.success('Link do aluno copiado. Envie para ele assinar.');
     } catch {
       toast.error('Não foi possível copiar o link.');
-    }
-  };
-
-  const copiarIam = async () => {
-    if (!signLinkIam) {
-      toast.error('Link da IAM não disponível neste termo.');
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(signLinkIam);
-      setCopiedIam(true);
-      toast.success('Link da IAM copiado. Use para a assinatura do Instituto.');
-    } catch {
-      toast.error('Não foi possível copiar o link da IAM.');
     }
   };
 
@@ -91,28 +74,11 @@ export default function ZapSignLinkActions({
       >
         {copied ? (
           <>
-            <Check size={16} /> Link aluno
+            <Check size={16} /> Link copiado
           </>
         ) : (
           <>
-            <Copy size={16} /> Copiar Link Aluno
-          </>
-        )}
-      </button>
-      <button
-        type="button"
-        onClick={() => void copiarIam()}
-        disabled={offIam}
-        title={signLinkIam ? 'Copiar link de assinatura do Instituto (IAM)' : 'Gere o termo novamente para obter o link da IAM'}
-        className="px-4 py-2 rounded-lg text-sm font-medium bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 transition-colors flex items-center gap-2 disabled:opacity-50"
-      >
-        {copiedIam ? (
-          <>
-            <Check size={16} /> Link IAM
-          </>
-        ) : (
-          <>
-            <Building2 size={16} /> Copiar Link IAM
+            <Copy size={16} /> Copiar Link
           </>
         )}
       </button>

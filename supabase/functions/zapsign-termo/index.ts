@@ -44,8 +44,6 @@ const TIPOS = new Set(['cancelamento', 'renegociacao', 'aditivo', 'outro']);
 const IAM_SIGNER_EXTERNAL_ID = 'iam';
 const ALUNO_SIGNER_EXTERNAL_ID = 'aluno';
 const ANCHOR_ALUNO = '<<gc_aluno>>';
-const ANCHOR_IAM = '<<gc_instituto>>';
-const IAM_SIGNER_NAME_DEFAULT = 'INSTITUTO ACADEMY MIND TREINAMENTOS LTDA';
 
 function signerPapel(s: { external_id?: string; name?: string }, index: number): 'aluno' | 'instituto' {
   const ext = String(s.external_id ?? '').toLowerCase();
@@ -79,17 +77,6 @@ function iamUrlFromSigners(signers: SignerOut[] | unknown): string {
   if (!Array.isArray(signers)) return '';
   const iam = signers.find((s) => (s as SignerOut).papel === 'instituto') ?? signers[1];
   return String((iam as SignerOut | undefined)?.sign_url ?? '');
-}
-
-/** Contato do 2º signatário (Instituto). Prefere secrets; cai no usuário logado. */
-function resolveIamSigner(fallback: { email?: string | null; name?: string | null }) {
-  const email =
-    (Deno.env.get('ZAPSIGN_IAM_SIGNER_EMAIL') ?? '').trim().toLowerCase() ||
-    String(fallback.email ?? '').trim().toLowerCase();
-  const name =
-    (Deno.env.get('ZAPSIGN_IAM_SIGNER_NAME') ?? '').trim() || IAM_SIGNER_NAME_DEFAULT;
-  const phone = phoneToZapSign(Deno.env.get('ZAPSIGN_IAM_SIGNER_PHONE') ?? '');
-  return { name, email, phone };
 }
 
 Deno.serve(async (req: Request) => {
@@ -301,25 +288,13 @@ Deno.serve(async (req: Request) => {
       .eq('auth_user_id', userId)
       .maybeSingle();
 
-    const iam = resolveIamSigner({
-      email: userData.user.email,
-      name: (appUser?.name as string | undefined) ?? null,
-    });
-    if (!iam.email && !iam.phone) {
-      return json(400, {
-        ok: false,
-        error:
-          'Signatário da IAM sem e-mail. Configure ZAPSIGN_IAM_SIGNER_EMAIL ou use uma conta com e-mail no login.',
-      });
-    }
-
     const doc = await createDoc({
       name: nomeDocumento,
       markdown_text: markdown,
       external_id: externalId,
       folder_path: `/GC/${tipo}/`,
-      // Aluno assina primeiro; depois o representante do Instituto.
-      signature_order_active: true,
+      // Somente o aluno assina.
+      signature_order_active: false,
       signers: [
         {
           name: signerName,
@@ -332,17 +307,6 @@ Deno.serve(async (req: Request) => {
           signature_placement: ANCHOR_ALUNO,
           order_group: 1,
         },
-        {
-          name: iam.name,
-          email: iam.email || undefined,
-          phone_number: iam.phone || undefined,
-          external_id: IAM_SIGNER_EXTERNAL_ID,
-          // Link da IAM é copiado no GC; não dispara e-mail automático por padrão.
-          send_automatic_email: false,
-          send_automatic_whatsapp: false,
-          signature_placement: ANCHOR_IAM,
-          order_group: 2,
-        },
       ],
       metadata: [
         { key: 'gc_tipo', value: tipo },
@@ -354,9 +318,8 @@ Deno.serve(async (req: Request) => {
 
     const signers = signersOut(doc);
     const alunoSigner = signers.find((s) => s.papel === 'aluno') ?? signers[0];
-    const iamSigner = signers.find((s) => s.papel === 'instituto') ?? signers[1];
     const signUrl = alunoSigner?.sign_url || signUrlOf(doc.signers?.[0]);
-    const signUrlIam = iamSigner?.sign_url || signUrlOf(doc.signers?.[1]);
+    const signUrlIam = '';
     const status = normalizeStatus(doc.status, doc.signers);
     const primeiro = doc.signers?.[0];
 

@@ -8,10 +8,10 @@ import {
 } from '@/lib/zapsignTermo';
 
 describe('withZapSignAssinaturas', () => {
-  it('anexa bloco com âncoras e tabela lado a lado', () => {
+  it('anexa bloco com âncora do aluno (única assinatura)', () => {
     const out = withZapSignAssinaturas('# TERMO\n\nCorpo do termo.', 'Maria Silva', '123.456.789-00');
     expect(out).toContain(ZAPSIGN_ANCHOR_ALUNO);
-    expect(out).toContain(ZAPSIGN_ANCHOR_IAM);
+    expect(out).not.toContain(ZAPSIGN_ANCHOR_IAM);
     expect(out).toContain('<table');
     expect(out).toContain('Maria Silva');
     expect(out).toContain(INSTITUTO_RAZAO);
@@ -39,7 +39,7 @@ describe('withZapSignAssinaturas', () => {
 });
 
 describe('pickZapSignSignerUrls', () => {
-  it('separa link do aluno e da IAM', () => {
+  it('extrai o link do aluno (IAM opcional / legado)', () => {
     const urls = pickZapSignSignerUrls({
       url_assinatura: 'https://aluno',
       url_assinatura_iam: 'https://iam',

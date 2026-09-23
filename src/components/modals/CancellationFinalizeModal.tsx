@@ -323,18 +323,12 @@ export default function CancellationFinalizeModal({
         )}
         {signLink && (
           <div className="mb-4 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
-            Termo gerado na ZapSign. Envie o link ao aluno e use o link da IAM para a assinatura do Instituto.
+            Termo gerado na ZapSign. Envie o link ao aluno para assinar.
             <div className="mt-1.5 space-y-1">
               <div>
-                <span className="font-semibold text-emerald-900">Aluno: </span>
+                <span className="font-semibold text-emerald-900">Link: </span>
                 <span className="font-mono text-[10px] text-emerald-800/80">{signLink}</span>
               </div>
-              {signLinkIam && (
-                <div>
-                  <span className="font-semibold text-emerald-900">IAM: </span>
-                  <span className="font-mono text-[10px] text-emerald-800/80">{signLinkIam}</span>
-                </div>
-              )}
             </div>
           </div>
         )}

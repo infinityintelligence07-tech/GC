@@ -7,8 +7,8 @@ import { templateTextToZapSignMarkdown } from '@/lib/templateRender';
 /**
  * Integração direta com a ZapSign (edge functions `zapsign-termo` e `zapsign-webhook`).
  *
- * O termo é enviado como Markdown — a ZapSign gera o PDF, cria o documento e devolve os links
- * de assinatura (aluno + Instituto). O status final chega pelo webhook e fica em `zapsign_documents`;
+ * O termo é enviado como Markdown — a ZapSign gera o PDF, cria o documento e devolve o link
+ * de assinatura do aluno. O status final chega pelo webhook e fica em `zapsign_documents`;
  * `getZapSignTermoStatus` lê primeiro do banco e só consulta a ZapSign se ainda pendente.
  */
 
@@ -74,10 +74,9 @@ function linhaCampo(rotulo: string, valor: string | null | undefined): string {
 }
 
 /**
- * Bloco de assinaturas lado a lado (como no preview/PDF do GC).
- * Usa HTML table (markdown GFM `|` vira texto cru na ZapSign) + âncoras
- * `<<gc_aluno>>` / `<<gc_instituto>>` para a ZapSign posicionar as rubricas.
- * Sem underscores longos — eles viravam régua horizontal (---) no PDF.
+ * Bloco de assinatura do aluno (única rubrica exigida).
+ * Usa HTML + âncora `<<gc_aluno>>` para a ZapSign posicionar a assinatura.
+ * O Instituto consta no texto do termo, mas não assina eletronicamente.
  */
 function blocoAssinaturas(nome: string, cpf: string): string {
   const nomeAluno = md(nome) || 'ALUNO(A)';
@@ -86,21 +85,16 @@ function blocoAssinaturas(nome: string, cpf: string): string {
     '',
     '<table style="width:100%;border:none;border-collapse:collapse">',
     '<tr>',
-    '<td style="width:48%;text-align:center;vertical-align:top;border:none;padding:12px 8px">',
+    '<td style="width:100%;text-align:center;vertical-align:top;border:none;padding:12px 8px">',
     ZAPSIGN_ANCHOR_ALUNO,
     '<br/><br/>',
     `<strong>${nomeAluno}</strong><br/>`,
     docAluno,
     '</td>',
-    '<td style="width:4%;border:none"></td>',
-    '<td style="width:48%;text-align:center;vertical-align:top;border:none;padding:12px 8px">',
-    ZAPSIGN_ANCHOR_IAM,
-    '<br/><br/>',
-    `<strong>${INSTITUTO_RAZAO}</strong><br/>`,
-    `CNPJ ${INSTITUTO_CNPJ}`,
-    '</td>',
     '</tr>',
     '</table>',
+    '',
+    `<p style="text-align:center;font-size:11px;color:#555">${md(INSTITUTO_RAZAO)} · CNPJ ${INSTITUTO_CNPJ}</p>`,
     '',
   ].join('');
 }
@@ -358,7 +352,7 @@ export async function deleteZapSignTermo(docToken: string, motivo?: string): Pro
   return data;
 }
 
-/** Interpreta se o termo já foi assinado (status normalizado pela edge function). */
+/** Interpreta se o termo já foi assinado pelo aluno (única assinatura exigida). */
 export function isZapSignTermoAssinado(
   result: Pick<ZapSignTermoResult, 'status' | 'signers'> | null | undefined,
 ): boolean {
@@ -366,12 +360,13 @@ export function isZapSignTermoAssinado(
   const status = String(result.status ?? '').toLowerCase();
   if (/^(signed|completed)$|assinad|conclu|finaliz/.test(status)) return true;
   const signers = result.signers ?? [];
-  if (signers.length > 0) {
-    const relevant = signers.filter((s) => s.tipo !== 'witness');
-    const pool = relevant.length ? relevant : signers;
-    return pool.every((s) => /signed|assinad|completed|conclu/.test(String(s.status ?? '').toLowerCase()));
-  }
-  return false;
+  if (signers.length === 0) return false;
+  const aluno =
+    signers.find((s) => s.papel === 'aluno') ??
+    signers.find((s) => s.tipo !== 'witness' && !/instituto academy mind/i.test(s.nome)) ??
+    signers.find((s) => s.tipo !== 'witness') ??
+    signers[0];
+  return /signed|assinad|completed|conclu/.test(String(aluno?.status ?? '').toLowerCase());
 }
 
 export function isZapSignTermoRecusado(result: Pick<ZapSignTermoResult, 'status'> | null | undefined): boolean {
@@ -403,9 +398,9 @@ export function describeEnvioAutomatico(envio: { email?: string; whatsapp?: stri
   if (envio.email) canais.push(`e-mail (${envio.email})`);
   if (envio.whatsapp) canais.push('WhatsApp');
   if (canais.length === 0) {
-    return 'Termo gerado na ZapSign. Copie o link do aluno e o da IAM para assinar.';
+    return 'Termo gerado na ZapSign. Copie o link e envie ao aluno para assinar.';
   }
-  return `Termo gerado na ZapSign e enviado ao aluno por ${canais.join(' e ')}. Copie também o link da IAM.`;
+  return `Termo gerado na ZapSign e enviado ao aluno por ${canais.join(' e ')}.`;
 }
 
 /** Mensagem pronta para o aluno com o link de assinatura. */

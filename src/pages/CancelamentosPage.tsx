@@ -1751,19 +1751,21 @@ function CancellationReviewModal({
 
   const [termoExcluindo, setTermoExcluindo] = useState(false);
   /**
-   * Exclui o termo pendente na ZapSign e volta o cancelamento ao início da
-   * etapa de termo (sem link, sem verificação): o "Visualizar termo" fica
-   * disponível de novo para gerar outro. Só vale para termo ainda não assinado.
+   * Exclui o termo na ZapSign (se ainda existir) e volta o cancelamento ao início da
+   * etapa de termo: o "Visualizar termo" fica disponível de novo. Também vale após
+   * "Já assinou" sem PDF anexado — para poder gerar outro termo.
    */
   const excluirTermoERecomecar = async () => {
-    if (!cancelTermoPending || termoZapAssinado) return;
+    if (!cancelTermoPending && !termoZapAssinado) return;
     const ok = window.confirm(
-      'Excluir o termo pendente na ZapSign e recomeçar o cancelamento? O link de assinatura enviado ao aluno deixará de funcionar e será preciso gerar um novo termo.',
+      cancelTermoPending?.id && cancelTermoPending.status !== 'signed'
+        ? 'Excluir o termo pendente na ZapSign e recomeçar o cancelamento? O link de assinatura enviado ao aluno deixará de funcionar e será preciso gerar um novo termo.'
+        : 'Limpar o status de assinatura e permitir gerar um novo termo? Se houver link antigo na ZapSign, ele deixa de valer.',
     );
     if (!ok) return;
     setTermoExcluindo(true);
     try {
-      if (cancelTermoPending.id) {
+      if (cancelTermoPending?.id && cancelTermoPending.status !== 'signed') {
         const r = await deleteZapSignTermo(cancelTermoPending.id, 'cancelamento reiniciado');
         if (!r.ok) {
           toast.error(`Termo não excluído na ZapSign: ${r.error ?? 'falha na exclusão.'}`);
@@ -1771,8 +1773,8 @@ function CancellationReviewModal({
         }
       }
       // Remove o link ZapSign deste termo dos anexos do caso e registra no histórico.
-      const urlTermo = cancelTermoPending.urlAssinatura;
-      const idTermo = cancelTermoPending.id;
+      const urlTermo = cancelTermoPending?.urlAssinatura;
+      const idTermo = cancelTermoPending?.id;
       const restantes = (caseRef.termAttachments ?? []).filter((a) => {
         if (a.type !== 'outro' || !a.name.toLowerCase().includes('zapsign')) return true;
         if (urlTermo && a.url === urlTermo) return false;
@@ -1781,7 +1783,7 @@ function CancellationReviewModal({
       });
       const entry = makeCaseHistoryEntry(
         caseRef,
-        'Termo de cancelamento pendente excluído na ZapSign; cancelamento reiniciado (novo termo a gerar).',
+        'Status do termo limpo; cancelamento reiniciado (novo termo a gerar).',
         currentUser,
       );
       await updateCancellationCase(caseRef.id, {
@@ -1790,9 +1792,9 @@ function CancellationReviewModal({
         history: [...(caseRef.history ?? []), entry],
       });
       setCancelTermoPending(null);
-      toast.success('Termo excluído na ZapSign. Gere um novo termo quando quiser.');
+      toast.success('Pronto. Gere um novo termo quando quiser.');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Não foi possível excluir o termo.');
+      toast.error(err instanceof Error ? err.message : 'Não foi possível reiniciar o termo.');
     } finally {
       setTermoExcluindo(false);
     }
@@ -2762,6 +2764,19 @@ function CancellationReviewModal({
                       </button>
                     </div>
                   )}
+                  {termoLiberado && termos.length === 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => void excluirTermoERecomecar()}
+                        disabled={termoExcluindo}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white border border-violet-200 text-violet-800 hover:bg-violet-50 transition-colors disabled:opacity-60"
+                        title="Limpa o status de assinado e permite gerar um novo termo"
+                      >
+                        {termoExcluindo ? 'Limpando…' : 'Gerar termo novamente'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3074,7 +3089,14 @@ function CancellationReviewModal({
                     : 'Aguardando termo assinado'}
               </button>
             )}
-            <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors">
+            <button onClick={() => {
+              // Após "Já assinou" sem PDF anexado, limpa o status para poder gerar termo de novo.
+              if (termoZapAssinado && termos.length === 0) {
+                setCancelTermoPending(null);
+                void updateCancellationCase(caseRef.id, { termSignedByStudent: false });
+              }
+              onClose();
+            }} className="px-5 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors">
               Voltar
             </button>
           </div>

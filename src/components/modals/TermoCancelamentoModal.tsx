@@ -396,24 +396,13 @@ export default function TermoCancelamentoModal({
 
           {signLink && (
             <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
-              Termo gerado na ZapSign. Envie o link ao aluno (Copiar Link Aluno ou WhatsApp) e use o link da IAM
-              para a assinatura do Instituto. Quando ambos assinarem, o Confirmar é liberado e o PDF fica anexado ao
-              caso.
+              Termo gerado na ZapSign. Envie o link ao aluno (Copiar Link ou WhatsApp). Quando ele assinar, o Confirmar
+              é liberado e o PDF fica anexado ao caso.
               <div className="mt-1.5 space-y-1">
                 <div>
-                  <span className="font-semibold text-emerald-900">Aluno: </span>
+                  <span className="font-semibold text-emerald-900">Link: </span>
                   <span className="text-emerald-800/80 font-mono text-[10px]">{signLink}</span>
                 </div>
-                {signLinkIam ? (
-                  <div>
-                    <span className="font-semibold text-emerald-900">IAM: </span>
-                    <span className="text-emerald-800/80 font-mono text-[10px]">{signLinkIam}</span>
-                  </div>
-                ) : (
-                  <div className="text-amber-700">
-                    Link da IAM indisponível neste termo (gere novamente após o deploy da integração).
-                  </div>
-                )}
               </div>
             </div>
           )}

@@ -4015,7 +4015,18 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   {/* Botões: Voltar / [Confirmar ou Pendente assinatura — só após gerar/anexar o termo] / Rascunho */}
                   <div className={`grid gap-2 ${termoPending ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <button
-                      onClick={() => setRenegMode('initial')}
+                      onClick={() => {
+                        // "Já assinou" sem PDF/anexo: ao voltar, libera gerar o termo de novo.
+                        const soManual =
+                          termoPending?.status === 'signed' &&
+                          !termoPending.signedFilePath &&
+                          !termoPending.anexoPath;
+                        if (soManual) {
+                          setTermoPending(null);
+                          persistRenegStandby('initial', null);
+                        }
+                        setRenegMode('initial');
+                      }}
                       className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
                       title="Voltar para configuração de parcelas e encargos"
                     >
@@ -4079,14 +4090,24 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                   <div className="grid grid-cols-2 gap-2">
                     {/* Antes de gerar: "Gerar Termo". Depois de gerado/anexado, o botão
                         vira o status da assinatura (consulta a ZapSign ao clicar). */}
-                    {!termoPending ? (
+                    {!termoPending || (termoAssinado && !termoPdfPath(termoPending)) ? (
                       <button
                         type="button"
-                        onClick={() => setTermoModal(true)}
+                        onClick={() => {
+                          if (termoPending) {
+                            setTermoPending(null);
+                            persistRenegStandby(
+                              renegMode !== 'none' ? renegMode : 'detailed',
+                              null,
+                            );
+                          }
+                          setTermoModal(true);
+                        }}
                         className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-purple-700 hover:bg-purple-50 border border-purple-200 transition-colors"
                         title="Gerar termo de renegociação (PDF, copiar link de assinatura)"
                       >
-                        <FileText size={12} /> Gerar Termo de Renegociação
+                        <FileText size={12} />{' '}
+                        {termoPending ? 'Gerar termo novamente' : 'Gerar Termo de Renegociação'}
                       </button>
                     ) : termoAssinado ? (
                       <button

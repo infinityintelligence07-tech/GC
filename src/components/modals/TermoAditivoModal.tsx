@@ -5,6 +5,8 @@ import { useTermoDadosAluno } from '@/hooks/useTermoDadosAluno';
 import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
 import {
+  INSTITUTO_CNPJ,
+  INSTITUTO_RAZAO,
   buildRenegociacaoTermoMarkdown,
   checkStudentZapSignSigner,
   createZapSignTermo,
@@ -621,17 +623,11 @@ export default function TermoAditivoModal({
             </p>
 
             <p className="pt-2">Americana, {dateStr}.</p>
-            <div className="grid grid-cols-2 gap-4 pt-6 text-center text-[10px]">
-              <div>
-                <div className="border-t border-foreground/40 mt-8 mb-1" />
-                <p className="font-medium">{student.name}</p>
-                <p>{student.cpf || ''}</p>
-              </div>
-              <div>
-                <div className="border-t border-foreground/40 mt-8 mb-1" />
-                <p className="font-medium">INSTITUTO ACADEMY MIND TREINAMENTOS LTDA.</p>
-                <p>CNPJ 03.727.532/0001-13</p>
-              </div>
+            <div className="pt-6 text-center text-[10px] max-w-xs mx-auto">
+              <div className="border-t border-foreground/40 mt-8 mb-1" />
+              <p className="font-medium">{student.name}</p>
+              <p>{student.cpf || ''}</p>
+              <p className="mt-4 text-muted-foreground">{INSTITUTO_RAZAO} · CNPJ {INSTITUTO_CNPJ}</p>
             </div>
             </>
             )}
@@ -675,19 +671,13 @@ export default function TermoAditivoModal({
 
           {signLink && (
             <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-700 break-all">
-              Termo gerado na ZapSign. Use Copiar Link Aluno e Copiar Link IAM. Quando ambos assinarem, o Confirmar da
+              Termo gerado na ZapSign. Use Copiar Link e envie ao aluno. Quando ele assinar, o Confirmar da
               renegociação é liberado automaticamente.
               <div className="mt-1.5 space-y-1">
                 <div>
-                  <span className="font-semibold text-emerald-900">Aluno: </span>
+                  <span className="font-semibold text-emerald-900">Link: </span>
                   <span className="text-emerald-800/80 font-mono text-[10px]">{signLink}</span>
                 </div>
-                {signLinkIam && (
-                  <div>
-                    <span className="font-semibold text-emerald-900">IAM: </span>
-                    <span className="text-emerald-800/80 font-mono text-[10px]">{signLinkIam}</span>
-                  </div>
-                )}
               </div>
             </div>
           )}
