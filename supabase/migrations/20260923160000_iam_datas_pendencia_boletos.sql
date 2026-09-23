@@ -161,6 +161,8 @@ DECLARE
   v_boleto date;
   v_carencia int := 5; -- dias após a venda quando o IAM não manda vencimento
 BEGIN
+  -- Preferência: campo explícito do IAM; senão o dia da data_venda
+  -- (data_venda + N meses). Não usar o default genérico 10.
   v_due_day := coalesce(
     public.iam_json_first_int(p_treinamento, 'dia_vencimento', 'melhor_dia', 'dia_venc', 'due_day'),
     (
@@ -171,7 +173,7 @@ BEGIN
         AND NOT public.iam_forma_is_cartao_credito(fp->>'forma')
       LIMIT 1
     ),
-    10
+    EXTRACT(DAY FROM v_base)::int
   );
 
   -- Pendência: campos da forma marcada como pendência, depois do treinamento.
