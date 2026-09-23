@@ -194,6 +194,47 @@ export function getRecompraVinculoGroup(student: Student, students: Student[]): 
   return getVinculoIndex(students).get(student.id) ?? null;
 }
 
+/** Texto da badge na lista de alunos / carteira (recompra ↔ treinamento). */
+export type RecompraVinculoBadgeInfo = {
+  kind: 'recompra-linked' | 'recompra-pending' | 'original';
+  label: string;
+  title: string;
+};
+
+/**
+ * Rótulo de vínculo para a UI.
+ * Na recompra: sempre prioriza o treinamento gravado (`recompraTreinamento`) —
+ * assim a badge aparece mesmo se o contrato de origem não estiver no recorte
+ * da tela (filtro de AC, etc.).
+ */
+export function describeRecompraVinculoBadge(
+  student: Student,
+  group: RecompraVinculoGroup | null,
+): RecompraVinculoBadgeInfo | null {
+  if (isRecompraFicha(student)) {
+    const treinamento = (group?.original.product || student.recompraTreinamento || '').trim();
+    if (treinamento) {
+      return {
+        kind: 'recompra-linked',
+        label: `Vinculada a ${treinamento}`,
+        title: `Recompra vinculada ao treinamento "${treinamento}". Status lido em conjunto com o contrato original: devendo em um, devendo nos dois.`,
+      };
+    }
+    return {
+      kind: 'recompra-pending',
+      label: 'Sem treinamento vinculado',
+      title: 'Recompra ainda sem vínculo com o treinamento de origem. Resolva em Conciliação → Recompras.',
+    };
+  }
+  if (!group || group.recompras.length === 0) return null;
+  const n = group.recompras.length;
+  return {
+    kind: 'original',
+    label: n === 1 ? '1 recompra vinculada' : `${n} recompras vinculadas`,
+    title: `${n} recompra(s) vinculada(s) a este treinamento. Status lido em conjunto: devendo em um, devendo nos dois.`,
+  };
+}
+
 function contaNoStatusConjunto(s: Student): boolean {
   if (s.statusCancelamento === 'cancelado' || s.status === 'Cancelado' || s.status === 'Excluído') return false;
   if (cancelamentoOverridesFinancialStatus(s)) return false;

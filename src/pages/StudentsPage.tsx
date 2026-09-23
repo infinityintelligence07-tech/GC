@@ -21,7 +21,7 @@ import TagMultiSelect from '@/components/ui/TagMultiSelect';
 import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
 import { getDisplayInstallmentValue, normalizeSearch, toDisplayName } from '@/lib/utils';
 import { needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
-import { resolveStudentDisplayStatusVinculado, type StatusVinculado } from '@/lib/recompraVinculo';
+import { describeRecompraVinculoBadge, resolveStudentDisplayStatusVinculado, type StatusVinculado } from '@/lib/recompraVinculo';
 import { isRecompraFicha } from '@/lib/recompraConciliacao';
 import { isEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { formatCpfCnpj } from '@/lib/termoDadosAluno';
@@ -819,24 +819,19 @@ export default function StudentsPage() {
                             </span>
                           )}
                           {(() => {
-                            const grp = student._vinculo?.group;
-                            if (!grp) return null;
-                            if (isRecompraFicha(student)) {
-                              return (
-                                <span
-                                  className="inline-flex items-center gap-1 w-fit text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 leading-none"
-                                  title={`Recompra vinculada ao contrato "${grp.original.product}". Status lido em conjunto com o contrato original: devendo em um, devendo nos dois.`}
-                                >
-                                  <RotateCcw size={9} /> Vinculada a {grp.original.product}
-                                </span>
-                              );
-                            }
+                            const badge = describeRecompraVinculoBadge(student, student._vinculo?.group ?? null);
+                            if (!badge) return null;
+                            const linked = badge.kind !== 'recompra-pending';
                             return (
                               <span
-                                className="inline-flex items-center gap-1 w-fit text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 leading-none"
-                                title={`${grp.recompras.length} recompra(s) vinculada(s) a este contrato. Status lido em conjunto: devendo em um, devendo nos dois.`}
+                                className={
+                                  linked
+                                    ? 'inline-flex items-center gap-1 w-fit text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 leading-none'
+                                    : 'inline-flex items-center gap-1 w-fit text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 leading-none'
+                                }
+                                title={badge.title}
                               >
-                                <RotateCcw size={9} /> {grp.recompras.length === 1 ? '1 recompra vinculada' : `${grp.recompras.length} recompras vinculadas`}
+                                <RotateCcw size={9} /> {badge.label}
                               </span>
                             );
                           })()}

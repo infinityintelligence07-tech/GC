@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Installment, Student } from '@/types';
 import {
+  describeRecompraVinculoBadge,
   findRecompraOriginal,
   findRecomprasVinculadas,
   getRecompraVinculoGroup,
@@ -222,5 +223,39 @@ describe('parcelaEspelhadaNaRecompra / installmentsSemEspelhoRecompra', () => {
     expect(parcelaEspelhadaNaRecompra(original.installments[2], [recompra])).toBe(false);
     const fluxo = installmentsSemEspelhoRecompra(original, [original, recompra]);
     expect(fluxo.map((i) => i.number)).toEqual([9]);
+  });
+
+  it('badge da recompra usa recompraTreinamento mesmo sem grupo resolvido', () => {
+    const recompra = ficha({
+      product: 'Fundo - Receita (Recompra)',
+      recompraTreinamento: 'PMR',
+      installments: [parcela(1, diasFrente(10), false)],
+    });
+    const badge = describeRecompraVinculoBadge(recompra, null);
+    expect(badge?.kind).toBe('recompra-linked');
+    expect(badge?.label).toBe('Vinculada a PMR');
+  });
+
+  it('badge da recompra sem vínculo avisa pendência', () => {
+    const recompra = ficha({
+      product: 'Fundo - Receita (Recompra)',
+      installments: [parcela(1, diasFrente(10), false)],
+    });
+    const badge = describeRecompraVinculoBadge(recompra, null);
+    expect(badge?.kind).toBe('recompra-pending');
+    expect(badge?.label).toBe('Sem treinamento vinculado');
+  });
+
+  it('badge do treinamento original conta recompras do grupo', () => {
+    const original = ficha({ product: 'Missão Governar', installments: [parcela(1, diasFrente(10), false)] });
+    const recompra = ficha({
+      product: 'Fundo - Receita (Recompra)',
+      recompraTreinamento: 'Missão Governar',
+      installments: [parcela(1, diasFrente(10), false)],
+    });
+    const group = getRecompraVinculoGroup(original, [original, recompra]);
+    const badge = describeRecompraVinculoBadge(original, group);
+    expect(badge?.kind).toBe('original');
+    expect(badge?.label).toBe('1 recompra vinculada');
   });
 });

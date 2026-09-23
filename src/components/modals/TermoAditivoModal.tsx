@@ -4,6 +4,7 @@ import TermoDadosAlunoForm from '@/components/ui/TermoDadosAlunoForm';
 import { useTermoDadosAluno } from '@/hooks/useTermoDadosAluno';
 import { Student } from '@/types';
 import { formatCurrency } from '@/store/useAppStore';
+import { formatContratoAssinadoBR } from '@/lib/contratoAssinadoDate';
 import {
   INSTITUTO_CNPJ,
   INSTITUTO_RAZAO,
@@ -155,9 +156,7 @@ export default function TermoAditivoModal({
     newValues.qtdParcelasAberto ??
     (student.installments ?? []).filter((i) => !i.paid).length;
   const taxaJuros = newValues.taxaJurosMes ?? 0;
-  const contratoAssinado = student.enrollmentDate
-    ? formatDateBR(new Date(student.enrollmentDate + (student.enrollmentDate.includes('T') ? '' : 'T12:00:00')))
-    : '—';
+  const contratoAssinado = formatContratoAssinadoBR(student);
   const diaVencimento =
     newValues.diaVencimento ??
     parseBrDate(newValues.primeiraParcelaVencimento)?.getDate() ??

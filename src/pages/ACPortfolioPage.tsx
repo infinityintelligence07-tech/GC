@@ -13,7 +13,7 @@ import RendaExtraMetricsCard from '@/components/ui/RendaExtraMetricsCard';
 import DashDateFilter, { AnalysisModeToggle, DashFilterMode, PerfPreset, getPerfRange } from '@/components/ui/DashDateFilter';
 import HeaderActions from '@/components/layout/HeaderActions';
 import { getCurrentMonthDates } from '@/lib/periodFilter';
-import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, CalendarClock, AlertTriangle, Coins, Star, Wallet, X, Tag, ChevronUp, ChevronDown, Download } from 'lucide-react';
+import { Search, DollarSign, Clock, Eye, Info, Users, TrendingUp, TrendingDown, CalendarClock, AlertTriangle, Coins, Star, Wallet, X, Tag, ChevronUp, ChevronDown, Download, RotateCcw } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { isRendaExtraAtivo } from '@/lib/rendaExtraEligibility';
 import {
@@ -28,7 +28,7 @@ import {
   matchesCancelamentoFilter,
 } from '@/lib/acPortfolioVisibility';
 import { getCancelamentoBadge, isOperationalPendente, isPendenciaCardStudent, sumOperationalPendenteValue, isStatusNegativacao } from '@/lib/studentDisplayStatus';
-import { resolveStudentDisplayStatusVinculado, resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
+import { describeRecompraVinculoBadge, resolveStudentDisplayStatusVinculado, resolveStudentStatusComVinculo } from '@/lib/recompraVinculo';
 import { comStatusFinanceiroParaCards, isEmRenegociacao, statusFinanceiroEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { countsInAcPortfolioTotals, isInstallmentExcludedFromAcPortfolio, needsIamGcConciliacaoApproval, isIamConciliadoQuitadoAvista, isIamForaDaCarteiraAteConciliar } from '@/lib/iamPendenteConciliacao';
 import type { ForecastExportRow } from '@/lib/exportForecastSpreadsheet';
@@ -1987,6 +1987,23 @@ export default function ACPortfolioPage() {
                               {student.product}
                             </span>
                           )}
+                          {(() => {
+                            const badge = describeRecompraVinculoBadge(student, vinculo.group);
+                            if (!badge) return null;
+                            const linked = badge.kind !== 'recompra-pending';
+                            return (
+                              <span
+                                className={
+                                  linked
+                                    ? 'inline-flex items-center gap-1 w-fit text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 leading-none'
+                                    : 'inline-flex items-center gap-1 w-fit text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 leading-none'
+                                }
+                                title={badge.title}
+                              >
+                                <RotateCcw size={9} /> {badge.label}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
