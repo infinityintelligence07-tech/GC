@@ -35,6 +35,7 @@ import {
   ANTECIPADA_TEXT_CLASS,
   isParcelaAntecipada,
 } from '@/lib/parcelaAntecipada';
+import { datasMantidasAposEntrada } from '@/lib/renegParcelasDatas';
 
 interface Props {
   student: Student;
@@ -1301,13 +1302,17 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   const renegValues = calculateRenegValues();
   // Com "manter as datas", a 1ª nova parcela herda o vencimento mais antigo
   // entre as parcelas em aberto OU antecipadas selecionadas (antecipadas ainda
-  // são dívida do aluno e carregam o vencimento original do boleto).
-  const primeiraDataMantida = !renegAlterarDatas
-    ? renegValues.selectedInst
-        .filter((i) => !i.paid || isParcelaAntecipada(i))
-        .map((i) => i.dueDate)
-        .sort()[0]
-    : undefined;
+  // são dívida do aluno e carregam o vencimento original do boleto) — sempre
+  // estritamente após a data da entrada, para não gerar parcela retroativa.
+  const entradaRefParaDatas =
+    novaEntrada > 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate) ? entradaPaidDate : undefined;
+  const datasAbertasMantidas = datasMantidasAposEntrada(
+    renegValues.selectedInst
+      .filter((i) => !i.paid || isParcelaAntecipada(i))
+      .map((i) => i.dueDate),
+    entradaRefParaDatas,
+  );
+  const primeiraDataMantida = !renegAlterarDatas ? datasAbertasMantidas[0] : undefined;
   // Recalcula entrada quando em modo percentual e o total muda
   useEffect(() => {
     if (entradaMode === 'percent') {
@@ -1335,12 +1340,17 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
     const renegDueDay = firstDue && aplicaTodas
       ? new Date(firstDue + 'T00:00:00').getDate()
       : student.dueDay;
-    const datasMantidas = !renegAlterarDatas && !dataCongelamento
-      ? renegValues.selectedInst
-          .filter((i) => !i.paid || isParcelaAntecipada(i))
-          .map((i) => i.dueDate)
-          .sort()
-      : [];
+    const datasMantidas =
+      !renegAlterarDatas && !dataCongelamento
+        ? datasMantidasAposEntrada(
+            renegValues.selectedInst
+              .filter((i) => !i.paid || isParcelaAntecipada(i))
+              .map((i) => i.dueDate),
+            novaEntrada > 0.0049 && /^\d{4}-\d{2}-\d{2}$/.test(entradaPaidDate)
+              ? entradaPaidDate
+              : undefined,
+          )
+        : [];
     let novas = generateInstallments(
       renegDueDay,
       newInstallments,
@@ -3901,7 +3911,8 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
                       </div>
                       {!renegAlterarDatas && (
                         <p className="text-[9px] text-muted-foreground mt-1">
-                          As novas parcelas seguem os vencimentos das parcelas em aberto selecionadas; se houver mais parcelas que datas, continuam mês a mês no mesmo dia.
+                          As novas parcelas seguem os vencimentos em aberto após a data da entrada; se houver mais
+                          parcelas que datas, continuam mês a mês no mesmo dia.
                         </p>
                       )}
                       {renegAlterarDatas && (<>
