@@ -1289,6 +1289,7 @@ export default function ACPortfolioPage() {
                       dateBasis,
                       periodLabel,
                       filePrefix: 'carteira-ac-projecao',
+                      students,
                     });
                     toast.success('Planilha exportada com sucesso.');
                   }).catch((err) => {

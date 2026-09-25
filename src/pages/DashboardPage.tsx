@@ -1640,6 +1640,7 @@ export default function DashboardPage() {
                       dateBasis,
                       periodLabel,
                       filePrefix: 'dashboard-projecao',
+                      students,
                     });
                     toast.success('Planilha exportada com sucesso.');
                   }).catch((err) => {

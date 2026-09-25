@@ -20,6 +20,21 @@ const rows: ForecastExportRow[] = [
   },
   {
     bucket: 'a_vencer',
+    studentId: '1',
+    studentName: 'Adrian de Souza Ferreira Nascimento',
+    ac: 'Luana dos Santos',
+    product: 'Missão GC',
+    whatsapp: '(11) 98601-0000',
+    email: 'rian7707@exemplo.com',
+    displayStatus: 'Em Dia',
+    saleValue: 15231.12,
+    installmentNumber: 12,
+    dueDate: '2026-10-15',
+    value: 891.76,
+    paidValue: 0,
+  },
+  {
+    bucket: 'a_vencer',
     studentId: '2',
     studentName: 'Acir Amalfi',
     ac: 'Elaine Val',
@@ -63,7 +78,6 @@ const rows: ForecastExportRow[] = [
     displayStatus: 'Em Dia',
     saleValue: 12053.57,
     installmentNumber: 11,
-    // Vence em setembro, mas o dinheiro só entrou em outubro.
     dueDate: '2026-09-15',
     value: 302.33,
     paidValue: 302.33,
@@ -89,77 +103,62 @@ function roundTrip(wb: XLSX.WorkBook): XLSX.WorkBook {
 }
 
 describe('exportForecastSpreadsheet', () => {
-  it('gera planilha com moeda, larguras e filtro', () => {
+  it('gera planilha com um aluno por linha e parcelas em colunas de mês', () => {
     const wb = roundTrip(
       buildForecastWorkbook(rows, { dateBasis: 'vencimento', periodLabel: 'Setembro 2026' }),
     );
     expect(wb.SheetNames).toEqual(['A Vencer Vencido', 'Pago']);
 
     const ws = wb.Sheets['A Vencer Vencido'];
-    const header = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })[0];
-    // Coluna A fica livre para anotações; sem parcela paga nesta aba, data de
-    // pagamento e valor recebido saem fora.
-    expect(header).toEqual([
+    const header = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })[0] as string[];
+    expect(header.slice(0, 10)).toEqual([
       '', 'Aluno', 'WhatsApp', 'Email', 'Produto', 'Assessor', 'Valor Venda',
-      'Parcela', 'Vencimento', 'Mês/Ano', 'Valor Parcela', 'Situação',
+      'Nº Parcelas', 'Vencimentos', 'Situação',
     ]);
-    expect(ws['A2']?.v).toBeUndefined();
+    expect(header).toContain('Abril/26');
+    expect(header).toContain('Setembro/26');
+    expect(header).toContain('Outubro/26');
 
-    // Ordenado por nome: Acir vem antes de Adrian.
-    expect(ws['B2'].v).toBe('Acir Amalfi');
-    // Valor Parcela (coluna K) continua numérico, com formato de dinheiro.
-    expect(ws['K2'].t).toBe('n');
-    expect(ws['K2'].v).toBe(625);
-    expect(ws['K2'].z).toBe('R$ #,##0.00');
-    expect(ws['K3'].z).toBe('R$ #,##0.00');
-    // Valor Venda vazio não vira texto: a célula simplesmente não existe.
-    expect(ws['G2']).toBeUndefined();
-    // Valor Venda preenchido também sai formatado.
-    expect(ws['G3'].t).toBe('n');
-    expect(ws['G3'].z).toBe('R$ #,##0.00');
-    // Vencimento legível, com a competência ao lado.
-    expect(ws['I2'].v).toBe('20/04/2026');
-    expect(ws['J2'].v).toBe('Abril/26');
-    expect(ws['J3'].v).toBe('Setembro/26');
-    expect(ws['J4'].v).toBe('Outubro/26');
+    const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+    // Um aluno com 2 parcelas vira UMA linha (não duas).
+    const adrian = json.filter((r) => r.Aluno === 'Adrian de Souza Ferreira Nascimento');
+    expect(adrian).toHaveLength(1);
+    expect(adrian[0]['Nº Parcelas']).toBe('11 | 12');
+    expect(adrian[0].Vencimentos).toBe('15/09/2026 | 15/10/2026');
+    expect(adrian[0]['Setembro/26']).toBe(891.76);
+    expect(adrian[0]['Outubro/26']).toBe(891.76);
+    expect(adrian[0].Situação).toBe('Em Dia');
 
-    // Situação desmembrada pelo card do aluno, com o mesmo nome da tela.
-    expect(ws['L2'].v).toBe('À Negativar');
-    expect(ws['L3'].v).toBe('Em Dia');
-    expect(ws['L4'].v).toBe('Alunos Novos');
-    // Status fora dos cards cai no rótulo genérico em vez de sumir.
-    expect(ws['L5'].v).toBe('A Vencer / Vencido');
+    const acir = json.find((r) => r.Aluno === 'Acir Amalfi')!;
+    expect(acir['Nº Parcelas']).toBe('2');
+    expect(acir.Vencimentos).toBe('20/04/2026');
+    expect(acir['Abril/26']).toBe(625);
+    expect(acir.Situação).toBe('À Negativar');
 
-    // Filtro começa em B: a coluna de anotações não entra.
+    const bruno = json.find((r) => r.Aluno === 'Bruno Recem Chegado')!;
+    expect(bruno.Situação).toBe('Alunos Novos');
+
+    const carlos = json.find((r) => r.Aluno === 'Carlos Sem Card')!;
+    expect(carlos.Situação).toBe('A Vencer / Vencido');
+
     expect(ws['!autofilter']!.ref).toMatch(/^B1:/);
-    const cols = ws['!cols']!;
-    expect(cols).toHaveLength(12);
-    // Coluna de anotações nasce larga o bastante para escrever.
-    expect(cols[0].wch).toBe(18);
-    // Coluna do nome acompanha o aluno mais longo.
-    expect(cols[1].wch).toBeGreaterThan(30);
-    // Coluna de vencimento cabe dd/mm/aaaa inteiro.
-    expect(cols[8].wch).toBeGreaterThanOrEqual(12);
 
     const pago = wb.Sheets['Pago'];
-    // A aba Pago mantém as colunas de pagamento e dispensa a Situação, que
-    // repetiria "Pago" em todas as linhas.
-    const headerPago = XLSX.utils.sheet_to_json<string[]>(pago, { header: 1 })[0];
-    expect(headerPago).toEqual([
+    const headerPago = XLSX.utils.sheet_to_json<string[]>(pago, { header: 1 })[0] as string[];
+    expect(headerPago.slice(0, 10)).toEqual([
       '', 'Aluno', 'WhatsApp', 'Email', 'Produto', 'Assessor', 'Valor Venda',
-      'Parcela', 'Vencimento', 'Mês/Ano', 'Data Pagamento', 'Valor Parcela', 'Valor Recebido',
+      'Nº Parcelas', 'Vencimentos', 'Datas Pagamento',
     ]);
-    expect(pago['A2']?.v).toBeUndefined();
-    // Aqui a competência segue o caixa: vence em setembro, pago em outubro.
-    expect(pago['I2'].v).toBe('15/09/2026');
-    expect(pago['J2'].v).toBe('Outubro/26');
-    expect(pago['K2'].v).toBe('02/10/2026');
-    // Sem data de baixa, cai no vencimento em vez de ficar em branco.
-    expect(pago['K3'].v).toBe('');
-    expect(pago['J3'].v).toBe('Agosto/26');
-    // Valor Recebido preenchido só na aba Pago.
-    expect(pago['M2'].t).toBe('n');
-    expect(pago['M2'].z).toBe('R$ #,##0.00');
+    const pagoJson = XLSX.utils.sheet_to_json<Record<string, unknown>>(pago);
+    const adriana = pagoJson.find((r) => r.Aluno === 'Adriana Gomes')!;
+    expect(adriana.Vencimentos).toBe('15/09/2026');
+    expect(adriana['Datas Pagamento']).toBe('02/10/2026');
+    // Competência pelo caixa: pago em outubro.
+    expect(adriana['Outubro/26']).toBe(302.33);
+
+    const zilda = pagoJson.find((r) => r.Aluno === 'Zilda Sem Data De Baixa')!;
+    expect(zilda['Datas Pagamento']).toBe('');
+    expect(zilda['Agosto/26']).toBe(150);
   });
 
   it('inclui alunos em negativação na mesma aba dos demais', () => {
@@ -184,11 +183,123 @@ describe('exportForecastSpreadsheet', () => {
     expect(wb.SheetNames).toEqual(['A Vencer Vencido', 'Pago']);
     const aVencer = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets['A Vencer Vencido']);
     const linha = aVencer.find((r) => r.Aluno === 'Sivanildo Soares');
-    expect(linha).toMatchObject({ Aluno: 'Sivanildo Soares', 'Valor Parcela': 9181.81, Situação: 'À Negativar' });
+    expect(linha).toMatchObject({
+      Aluno: 'Sivanildo Soares',
+      'Nº Parcelas': '5',
+      Vencimentos: '15/09/2026',
+      Situação: 'À Negativar',
+      'Setembro/26': 9181.81,
+    });
   });
 
-  it('monta o nome do arquivo com base, período e data', () => {
-    const nome = forecastFileName({ dateBasis: 'pagamento', periodLabel: 'Setembro 2026' });
-    expect(nome).toMatch(/^projecao-carteira-pagamento-setembro-2026-\d{4}-\d{2}-\d{2}\.xlsx$/);
+  it('nomeia o arquivo com base, período e data', () => {
+    expect(
+      forecastFileName({ dateBasis: 'vencimento', periodLabel: 'Setembro 2026', filePrefix: 'bianca' }),
+    ).toMatch(/^bianca-vencimento-setembro-2026-\d{4}-\d{2}-\d{2}\.xlsx$/);
+  });
+
+  it('exclui cancelados e quitados quando students é passado', () => {
+    const comExtras: ForecastExportRow[] = [
+      ...rows,
+      {
+        bucket: 'a_vencer',
+        studentId: 'cancelado-1',
+        studentName: 'Aluno Cancelado',
+        ac: 'Luana',
+        product: 'Confronto',
+        displayStatus: 'Em Dia',
+        installmentNumber: 1,
+        dueDate: '2026-09-15',
+        value: 500,
+        paidValue: 0,
+      },
+      {
+        bucket: 'pago',
+        studentId: 'pago-1',
+        studentName: 'Aluno Quitado',
+        ac: 'Luana',
+        product: 'Confronto',
+        displayStatus: 'Em Dia',
+        installmentNumber: 1,
+        dueDate: '2026-08-15',
+        value: 500,
+        paidValue: 500,
+        paidDate: '2026-08-15',
+      },
+    ];
+    const students = [
+      {
+        id: '1',
+        name: 'Adrian',
+        status: 'Em Dia',
+        statusCancelamento: undefined,
+        installments: [
+          { number: 11, dueDate: '2026-09-15', value: 891.76, paid: false },
+          { number: 12, dueDate: '2026-10-15', value: 891.76, paid: false },
+        ],
+      },
+      {
+        id: '2',
+        name: 'Acir',
+        status: 'À Negativar',
+        installments: [{ number: 2, dueDate: '2026-04-20', value: 625, paid: false }],
+      },
+      {
+        id: '4',
+        name: 'Bruno',
+        status: 'Aluno Novo',
+        installments: [{ number: 1, dueDate: '2026-10-10', value: 100, paid: false }],
+      },
+      {
+        id: '5',
+        name: 'Carlos',
+        status: 'Em Dia',
+        installments: [{ number: 1, dueDate: '2026-10-11', value: 200, paid: false }],
+      },
+      {
+        id: '3',
+        name: 'Adriana',
+        status: 'Em Dia',
+        installments: [
+          { number: 11, dueDate: '2026-09-15', value: 302.33, paid: true, paidDate: '2026-10-02' },
+          { number: 12, dueDate: '2026-10-15', value: 302.33, paid: false },
+        ],
+      },
+      {
+        id: '6',
+        name: 'Zilda',
+        status: 'Em Dia',
+        installments: [
+          { number: 3, dueDate: '2026-08-20', value: 150, paid: true },
+          { number: 4, dueDate: '2026-09-20', value: 150, paid: false },
+        ],
+      },
+      {
+        id: 'cancelado-1',
+        name: 'Aluno Cancelado',
+        status: 'Cancelado',
+        statusCancelamento: 'cancelado',
+        installments: [{ number: 1, dueDate: '2026-09-15', value: 500, paid: false }],
+      },
+      {
+        id: 'pago-1',
+        name: 'Aluno Quitado',
+        status: 'Pago',
+        installments: [{ number: 1, dueDate: '2026-08-15', value: 500, paid: true, paidDate: '2026-08-15' }],
+      },
+    ] as import('@/types').Student[];
+
+    const wb = roundTrip(
+      buildForecastWorkbook(comExtras, {
+        dateBasis: 'vencimento',
+        periodLabel: 'Todos',
+        students,
+      }),
+    );
+    const aVencer = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets['A Vencer Vencido']);
+    const pago = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets['Pago']);
+    expect(aVencer.some((r) => r.Aluno === 'Aluno Cancelado')).toBe(false);
+    expect(pago.some((r) => r.Aluno === 'Aluno Quitado')).toBe(false);
+    expect(aVencer.some((r) => r.Aluno === 'Acir Amalfi')).toBe(true);
   });
 });
