@@ -26,6 +26,8 @@ import { isRecompraFicha } from '@/lib/recompraConciliacao';
 import { isEmRenegociacao } from '@/lib/renegociacaoStatus';
 import { formatCpfCnpj } from '@/lib/termoDadosAluno';
 import { supabase } from '@/integrations/supabase/client';
+import { downloadModeloGcIam } from '@/lib/exportModeloGcIam';
+import { useCompanyStore } from '@/store/useCompanyStore';
 
 
 // ── Score stars renderer ───────────────────────────────────────────────────────
@@ -97,6 +99,9 @@ const cancelStatusConfig: Record<string, { label: string; color: string }> = {
 
 export default function StudentsPage() {
   const { students: allStudents, deleteStudent, updateStudent, cancelStudentToFlow, studentTags, toggleStudentTag, currentUser, acs, rules, cancellationCases } = useAppStore();
+  const { companies, activeCompanyId } = useCompanyStore();
+  const activeCompanyName = companies.find((c) => c.id === activeCompanyId)?.name ?? '';
+  const isIamGcCompany = /iam/i.test(activeCompanyName);
   // Scope by AC for ac/acn2 roles
   const myACName = (currentUser?.role === 'ac' || currentUser?.role === 'acn2') && currentUser.acId
     ? acs.find((a) => a.id === currentUser.acId)?.name
@@ -499,6 +504,12 @@ export default function StudentsPage() {
     XLSX.writeFile(wb, `alunos-kamino-${suffix}-${stamp}.xlsx`);
   };
 
+  /** Planilha no modelo GC IAM (forma, entrada PIX/Cartão, meses). Verde = parcela paga. */
+  const handleExportModeloGcIam = (format: 'xls' | 'csv') => {
+    const source: Student[] = hasActiveFilter ? sorted : students;
+    downloadModeloGcIam(source, format);
+  };
+
   // ── Histórico: exporta / importa (chave: cpf → fallback nome) ─────────────
   const normalizeName = (n: string) => (n || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const normalizeCpf = (c: string) => (c || '').replace(/\D/g, '');
@@ -700,7 +711,7 @@ export default function StudentsPage() {
             {showDataMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowDataMenu(false)} />
-                <div className="absolute right-0 mt-1 w-64 bg-card border border-border rounded-xl shadow-lg z-20 py-1 overflow-hidden">
+                <div className="absolute right-0 mt-1 w-72 bg-card border border-border rounded-xl shadow-lg z-20 py-1 overflow-hidden">
                   <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Alunos (Kamino)</div>
                   <button
                     onClick={() => { handleExportKamino(); setShowDataMenu(false); }}
@@ -715,6 +726,26 @@ export default function StudentsPage() {
                   >
                     <Upload size={13} className="text-blue-600" /> Importar Alunos
                   </button>
+                  {isIamGcCompany && (
+                    <>
+                      <div className="my-1 border-t border-border" />
+                      <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Planilha IAM (modelo)</div>
+                      <button
+                        onClick={() => { handleExportModeloGcIam('xls'); setShowDataMenu(false); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
+                        title={hasActiveFilter ? 'Exportar alunos filtrados (pago em verde)' : 'Exportar TODOS os alunos (pago em verde)'}
+                      >
+                        <Download size={13} className="text-emerald-600" /> Exportar modelo IAM
+                      </button>
+                      <button
+                        onClick={() => { handleExportModeloGcIam('csv'); setShowDataMenu(false); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
+                        title="Mesmos dados em CSV (sem cores — CSV não guarda formatação)"
+                      >
+                        <Download size={13} className="text-slate-600" /> Exportar modelo IAM (CSV)
+                      </button>
+                    </>
+                  )}
                   <div className="my-1 border-t border-border" />
                   <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Histórico (JSON)</div>
                   <button
