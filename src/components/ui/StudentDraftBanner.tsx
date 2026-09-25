@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 import { Clock, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
+import { isDraftAlreadyApplied } from '@/lib/conciliacaoApply';
 import type { ConciliacaoItem } from '@/types';
 
 interface Props {
@@ -99,6 +100,11 @@ function extractChanges(item: ConciliacaoItem): Array<{ key: string; label: stri
   return out;
 }
 
+/** Ajuste antigo (antes de 25/09/2026) que já foi aplicado na ficha no envio. */
+function jaNaFicha(item: ConciliacaoItem): boolean {
+  return item.tipo !== 'renegociacao' && isDraftAlreadyApplied(item);
+}
+
 function fmtDateTime(iso: string): string {
   try {
     return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -154,6 +160,7 @@ export default function StudentDraftBanner({ studentId }: Props) {
                 <span className="font-semibold leading-snug">{d.resumo}</span>
                 <span className="text-[9px] uppercase tracking-wider opacity-70 shrink-0">
                   {d.status === 'aprovado' ? 'Aprovado' : 'Pendente'}
+                  {jaNaFicha(d) ? ' · já na ficha' : ''}
                 </span>
               </div>
               {changes.length > 0 ? (
@@ -181,6 +188,8 @@ export default function StudentDraftBanner({ studentId }: Props) {
         <AlertTriangle size={11} className="mt-0.5 shrink-0" />
         <span>
           Os valores reais só serão atualizados após a Conciliação. Se reprovada, o rascunho é descartado.
+          {drafts.some(jaNaFicha) &&
+            ' Itens marcados "já na ficha" foram enviados antes de 25/09/2026 e já estão aplicados; se reprovados, a ficha volta ao valor anterior.'}
         </span>
       </div>
     </div>

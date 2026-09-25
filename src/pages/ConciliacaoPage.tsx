@@ -10,6 +10,7 @@ import { useConciliacaoStore, notifyConciliacaoGrupo } from '@/store/useConcilia
 import { toast } from 'sonner';
 import { isDoubleCheckItem } from '@/lib/doubleCheckRejection';
 import { desfazerAjustesReprovados } from '@/lib/desfazerAjusteReprovado';
+import { isRascunhoNaoAplicado, planejarEfetivacaoRascunho } from '@/lib/rascunhoAjuste';
 import { useAppStore } from '@/store/useAppStore';
 import type { ConciliacaoItem, ConciliacaoTipo, ConciliacaoImportError, ConciliacaoImportErrorMotivo, Student, Installment, FunnelStage } from '@/types';
 import { canEditTab } from '@/types';
@@ -1733,6 +1734,21 @@ export default function ConciliacaoPage() {
       toast.error('Somente Admin ou usuários com permissão de Conciliação podem conciliar.');
       return;
     }
+    // Rascunho de ajuste só entra na ficha agora: se ela mudou depois do envio
+    // de um jeito que não dá para juntar, não concilia (reprovar e reenviar).
+    const alunoGrupo = group.studentId ? useAppStore.getState().students.find((s) => s.id === group.studentId) : undefined;
+    const rascunhoBloqueado = alunoGrupo
+      ? group.items
+          .filter(isRascunhoNaoAplicado)
+          .map((it) => planejarEfetivacaoRascunho(it, alunoGrupo))
+          .find((p) => p.acao === 'bloqueado')
+      : undefined;
+    if (rascunhoBloqueado?.acao === 'bloqueado') {
+      toast.error('Não dá para conciliar este ajuste.', {
+        description: `Na ficha de ${group.studentName}, ${rascunhoBloqueado.motivo}. Reprove e peça para o assessor reenviar o ajuste a partir da ficha atual.`,
+      });
+      return;
+    }
     if (group.items.some(isCancelamentoEspelhoItem) && groupBlocksEspelhoConciliacao(group.items, group.studentId ? useAppStore.getState().students.find((s) => s.id === group.studentId) : undefined, useConciliacaoStore.getState().items)) {
       toast.error('Este aluno está em cancelamento em andamento. Finalize na aba Cancelamentos antes de conciliar no GC.');
       return;
@@ -2096,11 +2112,11 @@ export default function ConciliacaoPage() {
     }
     setReprovarLoading(true);
     try {
-      // Regra: a Conciliação é um DOUBLE-CHECK. Itens ligados a cancelamento
-      // mantêm os valores (não há rollback) — o caso volta para
-      // "Em Tratativas" com a ação "Corrigir por Erro" e o motivo visível.
-      // Demais ajustes aplicados na hora (parcelas/contrato) são desfeitos na
-      // ficha, se ela não mudou depois do envio (ver desfazerAjusteReprovado).
+      // Itens ligados a cancelamento mantêm os valores (não há rollback) — o
+      // caso volta para "Em Tratativas" com a ação "Corrigir por Erro" e o
+      // motivo visível. Rascunhos de ajuste novos não estão na ficha: reprovar
+      // só os descarta. Ajustes antigos aplicados no envio são desfeitos na
+      // ficha, se ela não mudou depois (ver desfazerAjusteReprovado).
       const affectedCaseIds = new Set<string>();
       const ajustesADesfazer: ConciliacaoItem[] = [];
       for (const it of reprovarGroup.items) {

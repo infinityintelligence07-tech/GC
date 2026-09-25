@@ -1,8 +1,8 @@
 // ─── Efetivação de rascunhos da Conciliação ──────────────────────────────────
 // Quando uma alteração é registrada como RASCUNHO (`depois._after` presente),
 // o aluno NÃO é alterado no momento do envio. As mudanças ficam pendentes na
-// aba Conciliação e só são aplicadas quando o setor clicar em "Conciliar"
-// (sub-aba Aprovados). Este módulo centraliza essa aplicação.
+// aba Conciliação e só são aplicadas quando o setor clicar em "Conciliar".
+// Este módulo centraliza essa aplicação.
 
 import { useAppStore } from '@/store/useAppStore';
 import type { ConciliacaoItem, Student, HistoryEntry, Installment } from '@/types';
@@ -35,16 +35,16 @@ export function isDraftItem(item: ConciliacaoItem): boolean {
 }
 
 /**
- * Rascunhos com efeito imediato (double-check): o `_after` já foi aplicado no
- * aluno no momento do envio. Reaplicar ao conciliar sobrescreve o estado atual
- * (pagamentos posteriores, etc.) e "desconcilia" tudo.
+ * Rascunhos enviados até 25/09/2026 tinham efeito imediato (double-check): o
+ * `_after` já foi aplicado no aluno no envio (`_appliedUpfront: true` ou sem a
+ * flag, nos mais antigos) — reaplicar ao conciliar sobrescreveria o estado
+ * atual. Rascunhos novos são gravados com `_appliedUpfront: false` e só são
+ * aplicados no "Conciliar" (ver rascunhoAjuste.ts).
  */
 export function isDraftAlreadyApplied(item: ConciliacaoItem): boolean {
   if (!isDraftItem(item)) return false;
   const depois = item.depois as Record<string, unknown>;
-  // Flag explícita (itens novos) OU presença de `_after` sob a regra atual
-  // de efeito imediato — nunca reaplicar no "Conciliar".
-  return depois._appliedUpfront === true || !!depois._after;
+  return depois._appliedUpfront !== false;
 }
 
 /**

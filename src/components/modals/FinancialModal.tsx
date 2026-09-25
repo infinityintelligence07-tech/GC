@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, Installment, canConfirmarPagamento, canEditTab } from '@/types';
 import { useAppStore, formatCurrency, generateInstallments, isRecompraOuFundoParcela } from '@/store/useAppStore';
-import { registrarConciliacao, useConciliacaoStore, buildStudentSnapshot } from '@/store/useConciliacaoStore';
+import { registrarConciliacao, useConciliacaoStore, buildStudentSnapshot, rascunhoAjustePendente } from '@/store/useConciliacaoStore';
 import { X, ToggleLeft, ToggleRight, Edit2, Check, Zap, DollarSign, ArrowLeft, FileText, CheckCircle2, Lock, Copy, Trash2, AlertOctagon, BadgeCheck, Clock, Paperclip } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import { getTagStyle } from '@/lib/tagColors';
 import { getTodayBrasilia } from '@/lib/brasiliaDate';
 import { getInstallmentCreditApplied, getInstallmentOutstanding, getStudentCreditAppliedTotal } from '@/lib/utils';
 import { isEntradaPendenciaInstallment, sumEntradaPendenteValue } from '@/lib/studentDisplayStatus';
+import { entradasRenegociacaoDoAluno, separarEntradas } from '@/lib/entradaSeparada';
 import { resolveStudentFinance } from '@/lib/studentFinance';
 import {
   findOutrosContratosComSaldo,
@@ -891,24 +892,13 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
   );
 
   /** Entrada de renegociação já conciliada: data de recebimento (ou aprovação) para o card P1. */
-  const entradaRenegociacaoMeta = useMemo(() => {
-    let best: { date: string; valor: number } | null = null;
-    for (const it of conciliacaoItems) {
-      if (it.studentId !== student.id || it.tipo !== 'renegociacao' || it.status !== 'conciliado') continue;
-      const depois = it.depois as Record<string, unknown> | undefined;
-      const valor = Number(depois?.entrada);
-      if (!(valor > 0.0049)) continue;
-      const recebimento = String(depois?.entradaPaidDate ?? depois?.entradaDataRecebimento ?? '').slice(0, 10);
-      const date = /^\d{4}-\d{2}-\d{2}$/.test(recebimento)
-        ? recebimento
-        : String(it.conciliadoAt ?? it.createdAt ?? '').slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-      if (!best || date > best.date || (date === best.date && valor >= best.valor)) {
-        best = { date, valor };
-      }
-    }
-    return best;
-  }, [conciliacaoItems, student.id]);
+  // Entrada da venda × entradas de renegociação (o campo de entrada soma as duas).
+  const entradasSeparadas = useMemo(
+    () => separarEntradas(entradaValor, entradasRenegociacaoDoAluno(conciliacaoItems, student.id)),
+    [conciliacaoItems, student.id, entradaValor],
+  );
+  const entradaVendaValor = entradasSeparadas.venda;
+  const temEntradaVenda = entradaVendaValor > 0.0049;
 
   const toggleParcel = (num: number) => {
     const iso = todayIsoDate();
@@ -1038,6 +1028,24 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
           : deltaClassif === 'encargo'
             ? 'Informe o valor do encargo aplicado.'
             : 'A correção exige uma justificativa de pelo menos 10 caracteres.'
+      );
+      return;
+    }
+
+    // Um rascunho de ajuste por vez (o registro também barra — aqui evita
+    // gravar o histórico "Ajuste financeiro confirmado" de algo que não foi).
+    const origByNum = new Map(originalInstallmentsRef.map((i) => [i.number, i]));
+    const temAjusteParcelas =
+      originalInstallmentsRef.length !== student.installments.length ||
+      student.installments.some((i) => {
+        const o = origByNum.get(i.number);
+        return !o || Math.abs((o.value ?? 0) - (i.value ?? 0)) > 0.001 || o.dueDate !== i.dueDate;
+      }) ||
+      (deltaClassif !== 'none' && hasDelta);
+    const vaiEfetivarNaHora = canChooseMode ? isImmediate : currentUser?.role === 'conciliacao';
+    if (temAjusteParcelas && !vaiEfetivarNaHora && rascunhoAjustePendente(student.id)) {
+      toast.warning(
+        `${student.name} já tem um ajuste aguardando Conciliação. Peça para conciliar ou reprovar o ajuste atual antes de enviar outro.`,
       );
       return;
     }
@@ -2178,7 +2186,10 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fluxo de Pagamento</h3>
               <span className="text-[10px] text-muted-foreground">
-                {flowInstallments.length + (hasEntrada ? 1 : 0) + (hasEntradaPendente ? 1 : 0)} parcelas
+                {flowInstallments.length +
+                  (hasEntrada ? (temEntradaVenda ? 1 : 0) + entradasSeparadas.renegociacoes.length : 0) +
+                  (hasEntradaPendente ? 1 : 0)}{' '}
+                parcelas
                 {hasEntrada || hasEntradaPendente ? ' (incl. entrada)' : ''}
               </span>
             </div>
@@ -2200,36 +2211,52 @@ function FinancialModalInner({ student: studentProp, onClose, banner, immediateA
 
             <div className="overflow-x-auto no-scrollbar">
               <div className="flex gap-1.5 min-w-max py-1">
-                {hasEntrada && (
+                {hasEntrada && temEntradaVenda && (
                   <div
                     className="flex flex-col items-center px-2 py-1.5 rounded-lg border min-w-[80px] border-emerald-300 bg-emerald-50"
                     title={
-                      entradaRenegociacaoMeta
-                        ? `Entrada de renegociação — ${formatCurrency(entradaValor)} — paga em ${formatDateBR(entradaRenegociacaoMeta.date)}`
-                        : embeddedEntrada
-                          ? `Entrada — ${formatCurrency(entradaValor)} — ${embeddedEntrada.paid ? 'paga' : 'vencimento'} em ${formatDateBR(embeddedEntrada.paidDate || embeddedEntrada.dueDate)}`
-                          : `Entrada — ${formatCurrency(entradaValor)} — quitada na matrícula`
+                      embeddedEntrada
+                        ? `Entrada — ${formatCurrency(entradaVendaValor)} — ${embeddedEntrada.paid ? 'paga' : 'vencimento'} em ${formatDateBR(embeddedEntrada.paidDate || embeddedEntrada.dueDate)}`
+                        : `Entrada da venda — ${formatCurrency(entradaVendaValor)} — quitada na matrícula`
                     }
                   >
                     <span className="text-[9px] font-bold text-emerald-800">P1</span>
                     <span className="text-[8px] font-semibold text-emerald-700 mt-0.5">Entrada</span>
                     <span className="text-[10px] font-bold mt-0.5 text-emerald-700">
-                      {formatCurrency(entradaValor)}
+                      {formatCurrency(entradaVendaValor)}
                     </span>
                     <span className="text-[8px] text-muted-foreground mt-0.5 leading-tight text-center">
-                      {entradaRenegociacaoMeta
-                        ? `Pago: ${formatDateBR(entradaRenegociacaoMeta.date)}`
-                        : embeddedEntrada
-                          ? `${embeddedEntrada.paid ? 'Pago' : 'Venc'}: ${formatDateBR(embeddedEntrada.paidDate || embeddedEntrada.dueDate)}`
-                          : student.enrollmentDate
-                            ? `Matrícula: ${formatDateBR(student.enrollmentDate)}`
-                            : 'Na matrícula'}
+                      {embeddedEntrada
+                        ? `${embeddedEntrada.paid ? 'Pago' : 'Venc'}: ${formatDateBR(embeddedEntrada.paidDate || embeddedEntrada.dueDate)}`
+                        : student.enrollmentDate
+                          ? `Matrícula: ${formatDateBR(student.enrollmentDate)}`
+                          : 'Na matrícula'}
                     </span>
                     <span className="mt-0.5 text-[8px] font-semibold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700">
                       ✓ Pago
                     </span>
                   </div>
                 )}
+                {hasEntrada &&
+                  entradasSeparadas.renegociacoes.map((r, idx) => (
+                    <div
+                      key={`entrada-reneg-${r.data}-${idx}`}
+                      className="flex flex-col items-center px-2 py-1.5 rounded-lg border min-w-[80px] border-teal-300 bg-teal-50"
+                      title={`Entrada de renegociação — ${formatCurrency(r.valor)} — paga em ${formatDateBR(r.data)}`}
+                    >
+                      <span className="text-[9px] font-bold text-teal-800">
+                        {!temEntradaVenda && idx === 0 ? 'P1' : 'Reneg.'}
+                      </span>
+                      <span className="text-[8px] font-semibold text-teal-700 mt-0.5">Entrada reneg.</span>
+                      <span className="text-[10px] font-bold mt-0.5 text-teal-700">{formatCurrency(r.valor)}</span>
+                      <span className="text-[8px] text-muted-foreground mt-0.5 leading-tight text-center">
+                        Pago: {formatDateBR(r.data)}
+                      </span>
+                      <span className="mt-0.5 text-[8px] font-semibold px-1 py-0.5 rounded bg-teal-100 text-teal-700">
+                        ✓ Pago
+                      </span>
+                    </div>
+                  ))}
                 {student.installments
                   .filter((i) => isEntradaPendenciaInstallment(i))
                   .sort(

@@ -24,6 +24,7 @@ import {
 } from '@/lib/supabaseMutations';
 import { logActivity } from '@/lib/activityLog';
 import { applyConciliacaoEfetivacao, isDraftItem } from '@/lib/conciliacaoApply';
+import { isRascunhoNaoAplicado, planejarEfetivacaoRascunho } from '@/lib/rascunhoAjuste';
 import { computeConciliacaoImmediateUpdate } from '@/lib/conciliacaoImmediate';
 
 
@@ -118,16 +119,18 @@ export const useConciliacaoStore = create<ConciliacaoState>()((set, get) => ({
     const now = new Date().toISOString();
     const item = get().items.find((i) => i.id === id);
     // ─── RASCUNHO → EFETIVAÇÃO ─────────────────────────────────────────────
-    // Double-check: rascunhos com `_after` já foram aplicados no envio
-    // (`_appliedUpfront`). Reaplicar aqui sobrescreve o aluno e desfaz
-    // pagamentos/ajustes posteriores. Só efetivar se ainda não aplicado.
-    if (item) {
-      import('@/lib/conciliacaoApply')
-        .then(({ applyConciliacaoEfetivacao, isDraftAlreadyApplied }) => {
-          if (isDraftAlreadyApplied(item)) return;
-          applyConciliacaoEfetivacao(item);
-        })
-        .catch((e) => console.error('Falha ao efetivar rascunho:', e));
+    // Rascunho ainda não aplicado (`_appliedUpfront: false`): aplica o `_after`
+    // agora, levando junto baixas feitas depois do envio. Itens antigos já
+    // aplicados no envio não são reaplicados (sobrescreveria o aluno).
+    // A tela de Conciliação bloqueia antes quando o plano é 'bloqueado'.
+    if (item && isRascunhoNaoAplicado(item) && item.studentId) {
+      const student = useAppStore.getState().students.find((s) => s.id === item.studentId);
+      const plano = student ? planejarEfetivacaoRascunho(item, student) : null;
+      if (plano?.acao === 'aplicar') {
+        applyConciliacaoEfetivacao({ ...item, depois: { ...item.depois, _after: plano.after } });
+      } else if (plano?.acao === 'bloqueado') {
+        console.warn('[conciliar] rascunho não efetivado:', item.id, plano.motivo);
+      }
     }
     set((state) => ({
       items: state.items.map((i) =>
@@ -379,6 +382,16 @@ export function buildStudentSnapshot(student: {
   };
 }
 
+/** Rascunho de ajuste do aluno ainda não conciliado (nem aplicado na ficha). */
+export function rascunhoAjustePendente(studentId: string): ConciliacaoItem | undefined {
+  return useConciliacaoStore.getState().items.find(
+    (it) =>
+      it.studentId === studentId &&
+      (it.status === 'pendente' || it.status === 'aprovado') &&
+      isRascunhoNaoAplicado(it),
+  );
+}
+
 // ─── Helper público ──────────────────────────────────────────────────────────
 // Cria uma pendência de conciliação. Chamado a partir dos pontos de
 // alteração manual (FinancialModal, fluxo de cancelamento, etc.).
@@ -482,16 +495,37 @@ export function registrarConciliacao(input: {
   if (input.studentSnapshot) {
     input = { ...input, antes: { ...input.antes, _snapshot: input.studentSnapshot } };
   }
+  // Um rascunho de ajuste por vez: o `_after` de um segundo envio partiria da
+  // ficha sem o primeiro (ainda não aplicado) e o desfaria ao conciliar.
+  // Itens do MESMO envio compartilham o mesmo `draftAfter` e passam.
+  if (input.draftAfter && !input.executaImediatamente && input.studentId) {
+    const novo = JSON.stringify(input.draftAfter);
+    const outro = useConciliacaoStore.getState().items.find(
+      (it) =>
+        it.studentId === input.studentId &&
+        (it.status === 'pendente' || it.status === 'aprovado') &&
+        isRascunhoNaoAplicado(it) &&
+        JSON.stringify((it.depois as Record<string, unknown>)._after) !== novo,
+    );
+    if (outro) {
+      toast.warning(
+        `${input.studentName} já tem um ajuste aguardando Conciliação. ` +
+          'Peça para conciliar ou reprovar o ajuste atual antes de enviar outro.',
+      );
+      return;
+    }
+  }
+
   // Embute rascunho dentro do depois (chave reservada `_after`).
-  // `_appliedUpfront` marca que o efeito imediato será (e é) aplicado abaixo —
-  // o Conciliar só confirma, sem reaplicar o snapshot.
+  // `_appliedUpfront: false` → rascunho: a ficha só muda no "Conciliar".
+  // Na conciliação imediata (admin/conciliação) o efeito é aplicado abaixo.
   if (input.draftAfter) {
     input = {
       ...input,
       depois: {
         ...input.depois,
         _after: input.draftAfter,
-        _appliedUpfront: true,
+        _appliedUpfront: !!input.executaImediatamente,
       },
     };
   }
@@ -581,11 +615,6 @@ export function registrarConciliacao(input: {
         });
       }
     }
-  }
-
-  if (!imediato && input.draftAfter && input.studentId) {
-    // ─── RASCUNHO COM EFEITO IMEDIATO ────────────────────────────────────────
-    applyConciliacaoEfetivacao(optimistic, { upfront: true });
   }
 
   createConciliacaoItemDb({
