@@ -323,6 +323,7 @@ export async function updateACDb(id: string, data: Partial<AC>) {
   if ('emDiaNovosBase' in data) patch.em_dia_novos_base = data.emDiaNovosBase ?? null;
   if ('emDiaNovosBaseMes' in data) patch.em_dia_novos_base_mes = data.emDiaNovosBaseMes ?? null;
   if ('emDiaNovosMeta' in data) patch.em_dia_novos_meta = data.emDiaNovosMeta ?? null;
+  if ('emDiaNovosMetaPct' in data) patch.em_dia_novos_meta_pct = data.emDiaNovosMetaPct ?? null;
   const { error } = await supabase.from('acs').update(patch).eq('id', id);
   if (error) throw error;
 }

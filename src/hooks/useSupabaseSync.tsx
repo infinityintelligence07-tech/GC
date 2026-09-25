@@ -139,6 +139,7 @@ async function fetchAll(activeCompanyId?: string | null) {
     emDiaNovosBase: r.em_dia_novos_base != null ? Number(r.em_dia_novos_base) : undefined,
     emDiaNovosBaseMes: r.em_dia_novos_base_mes ?? undefined,
     emDiaNovosMeta: r.em_dia_novos_meta != null ? Number(r.em_dia_novos_meta) : undefined,
+    emDiaNovosMetaPct: r.em_dia_novos_meta_pct != null ? Number(r.em_dia_novos_meta_pct) : undefined,
   }));
 
   const products: Product[] = (productsRes.data ?? []).map((r: any) => ({

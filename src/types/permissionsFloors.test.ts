@@ -26,12 +26,15 @@ describe('getEffectivePermissions floors', () => {
     expect(canViewTab(user({ permissions: { equipe: 'edit' } }), 'alunos')).toBe(true);
   });
 
-  it('respeita alunos none explícito', () => {
-    const perms = getEffectivePermissions(user({
-      permissions: { alunos: 'none', equipe: 'edit' },
-    }));
-    expect(perms.alunos).toBe('none');
-    expect(canViewTab(user({ permissions: { alunos: 'none' } }), 'alunos')).toBe(false);
+  it('assessor com alunos none explícito ainda vê a aba', () => {
+    const u = user({ permissions: { alunos: 'none', equipe: 'edit' } });
+    expect(getEffectivePermissions(u).alunos).toBe('view');
+    expect(canViewTab(u, 'alunos')).toBe(true);
+  });
+
+  it('preserva edit de alunos no assessor', () => {
+    const u = user({ permissions: { alunos: 'edit', equipe: 'edit' } });
+    expect(getEffectivePermissions(u).alunos).toBe('edit');
   });
 
   it('AC vinculado recebe Registros own', () => {

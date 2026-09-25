@@ -183,6 +183,11 @@ export interface AC {
   emDiaNovosBaseMes?: string;
   /** Meta (R$) do mês para "Em Dia + Novos" na carteira do assessor — fim da fita. */
   emDiaNovosMeta?: number;
+  /**
+   * Liberty: % do A Vencer/Vencido usado como meta (padrão 95).
+   * Só se aplica na empresa Liberty; nas demais a meta continua em R$.
+   */
+  emDiaNovosMetaPct?: number;
 }
 
 export interface Product {
@@ -297,7 +302,8 @@ export const PERMISSION_TABS: { key: PermissionTab; label: string }[] = [
 
 /**
  * Pisos de acesso aplicados quando a chave não está em `permissions`:
- * - alunos: todo mundo vê a aba (view), salvo `none` explícito
+ * - alunos: assessores (role ac/acn2 ou com acId) sempre veem a aba,
+ *   mesmo com `none` explícito no JSON salvo
  * - registros: AC vinculado vê só os próprios (`own`); admin vê tudo via branch admin
  */
 function applyPermissionFloors(
@@ -305,12 +311,24 @@ function applyPermissionFloors(
   perms: UserPermissions,
 ): UserPermissions {
   const next: UserPermissions = { ...perms };
-  if (next.alunos === undefined) next.alunos = 'view';
+  const isAssessor =
+    user.role === 'ac' ||
+    user.role === 'acn2' ||
+    Boolean(user.acId) ||
+    Object.values(user.perCompanyAcIds ?? {}).some(Boolean);
+
+  // Assessores sempre enxergam Alunos (no mínimo view). Edit salvo no JSON prevalece.
+  if (isAssessor) {
+    if (next.alunos !== 'edit') next.alunos = 'view';
+  } else if (next.alunos === undefined) {
+    next.alunos = 'view';
+  }
+
   // Quem já tinha acesso Admin à página antiga de Registros continua vendo tudo.
   if (next.registros === undefined && (next.admin === 'view' || next.admin === 'edit')) {
     next.registros = 'edit';
   }
-  if (next.registros === undefined && user.acId) next.registros = 'own';
+  if (next.registros === undefined && isAssessor) next.registros = 'own';
   return next;
 }
 

@@ -1468,6 +1468,7 @@ export default function DashboardPage() {
             </p>
             <MetaValorEditor
               value={emDiaNovosMeta}
+              valorExibido={metaBaseReferencia}
               titulo={acFilter ? acFilter : `Soma das metas dos ${acsAtivosMeta.length} AC(s)`}
               canEdit={false}
               onSave={() => {}}

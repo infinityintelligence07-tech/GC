@@ -11,37 +11,59 @@ import {
 export { EM_DIA_NOVOS_META_PADRAO };
 
 interface MetaValorEditorProps {
-  /** Meta efetiva (base + pendências) — valor exibido e usado na fita. */
+  /** Meta efetiva (base + pendências) — usada no detalhe como "Meta atual". */
   value: number;
-  /** Meta base (sem pendências). É o que o lápis edita. */
+  /**
+   * Valor ao lado do rótulo "Meta". No IAM costuma ser só a base (ex.: 144.500);
+   * a efetiva (com pendências) aparece ao clicar. Se omitido, usa `value`.
+   */
+  valorExibido?: number;
+  /** Meta base (sem pendências). É o que o lápis edita em modo reais. */
   baseReferencia?: number;
   /** Título do popover (ex.: "Dashboard geral" ou nome do assessor). */
   titulo: string;
   canEdit: boolean;
-  /** Salva a meta base (sem incluir pendências). */
-  onSave: (metaBase: number) => void;
+  /** Salva a meta base em R$ (modo reais) ou o percentual (modo percentual). */
+  onSave: (valor: number) => void;
   label?: string;
   /** Pendências de evento já pagas no mês — acréscimo = soma exata destes itens. */
   pendencias?: MetaPendenciaItem[];
+  /**
+   * Quando definido (ex.: Liberty % do A Vencer), o detalhe mostra esta
+   * explicação. O lápis continua disponível se canEdit.
+   */
+  explicacaoFixa?: string;
+  /**
+   * `reais` (padrão): edita valor R$.
+   * `percentual`: edita % sobre o A Vencer / Vencido (Liberty).
+   */
+  modoEdicao?: 'reais' | 'percentual';
+  /** Percentual atual quando modoEdicao === 'percentual'. */
+  percentualAtual?: number;
 }
 
 /**
- * Meta do mês + lápis (edita a base) + clique no valor para ver o acréscimo
- * exato por pendência (soma sem arredondar para real inteiro).
+ * Meta do mês + lápis (edita a base ou o %) + clique no valor para detalhe.
  */
 export default function MetaValorEditor({
   value,
+  valorExibido,
   titulo,
   canEdit,
   onSave,
   label = 'Meta',
   baseReferencia = EM_DIA_NOVOS_META_PADRAO,
   pendencias = [],
+  explicacaoFixa,
+  modoEdicao = 'reais',
+  percentualAtual = 95,
 }: MetaValorEditorProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
+  const isPct = modoEdicao === 'percentual';
+  const mostrado = valorExibido ?? value;
 
   const acrescimo = sumMetaPendenciaItems(pendencias);
 
@@ -58,8 +80,9 @@ export default function MetaValorEditor({
   }, [detailOpen, editOpen]);
 
   const abrirEdicao = () => {
+    if (!canEdit) return;
     setDetailOpen(false);
-    setDraft(String(baseReferencia));
+    setDraft(String(isPct ? percentualAtual : baseReferencia));
     setEditOpen(true);
   };
 
@@ -71,8 +94,12 @@ export default function MetaValorEditor({
   const salvar = () => {
     const n = Number(String(draft).replace(/\./g, '').replace(',', '.'));
     if (!Number.isFinite(n) || n <= 0) return;
-    // Mantém centavos se o admin digitar; não força real inteiro.
-    onSave(Math.round(n * 100) / 100);
+    if (isPct) {
+      if (n > 100) return;
+      onSave(Math.round(n * 100) / 100);
+    } else {
+      onSave(Math.round(n * 100) / 100);
+    }
     setEditOpen(false);
   };
 
@@ -87,19 +114,22 @@ export default function MetaValorEditor({
         type="button"
         onClick={abrirDetalhe}
         className="text-[10px] text-muted-foreground whitespace-nowrap rounded px-0.5 -mx-0.5 transition-colors hover:text-foreground hover:bg-muted/60 cursor-pointer"
-        title={`Ver o que aumentou a ${label.toLowerCase()} por pendência`}
+        title={explicacaoFixa || `Ver o que aumentou a ${label.toLowerCase()} por pendência`}
       >
         {label}{' '}
         <span className="font-semibold text-foreground underline decoration-dotted underline-offset-2">
-          {formatCurrency(value)}
+          {formatCurrency(mostrado)}
         </span>
+        {isPct && (
+          <span className="ml-1 font-medium text-muted-foreground">({String(percentualAtual).replace('.', ',')}%)</span>
+        )}
       </button>
       {canEdit && (
         <button
           type="button"
           onClick={() => (editOpen ? setEditOpen(false) : abrirEdicao())}
           className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-          title={`Editar meta base (sem pendências)`}
+          title={isPct ? 'Editar percentual da meta' : 'Editar meta base (sem pendências)'}
         >
           <Pencil size={11} />
         </button>
@@ -107,6 +137,21 @@ export default function MetaValorEditor({
 
       {detailOpen && (
         <div className="absolute right-0 top-full z-40 mt-1 w-72 max-w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-3 shadow-lg text-left cursor-default">
+          {explicacaoFixa ? (
+            <>
+              <p className="text-[11px] font-semibold text-foreground mb-2">
+                Como a {label.toLowerCase()} é calculada — {titulo}
+              </p>
+              <p className="text-[10px] text-muted-foreground leading-snug whitespace-pre-line">
+                {explicacaoFixa}
+              </p>
+              <div className="flex justify-between gap-2 border-t border-border pt-2 mt-2 text-[10px]">
+                <span className="text-muted-foreground">Meta atual</span>
+                <span className="font-semibold text-foreground tabular-nums">{formatCurrency(value)}</span>
+              </div>
+            </>
+          ) : (
+            <>
           <p className="text-[11px] font-semibold text-foreground mb-2">
             Acréscimo na {label.toLowerCase()} por pendência
           </p>
@@ -156,18 +201,25 @@ export default function MetaValorEditor({
               Nenhuma pendência de evento paga neste mês — a meta está na base.
             </p>
           )}
+            </>
+          )}
         </div>
       )}
 
       {editOpen && (
         <div className="absolute right-0 top-full z-40 mt-1 w-64 rounded-xl border border-border bg-card p-3 shadow-lg text-left cursor-default">
-          <p className="text-[11px] font-semibold text-foreground mb-2">{label} base — {titulo}</p>
+          <p className="text-[11px] font-semibold text-foreground mb-2">
+            {isPct ? `${label} (%) — ${titulo}` : `${label} base — ${titulo}`}
+          </p>
           <label className="block text-[10px] text-muted-foreground">
-            Meta base do mês (R$), sem pendências
+            {isPct
+              ? '% sobre o A Vencer / Vencido (padrão 95)'
+              : 'Meta base do mês (R$), sem pendências'}
             <input
               type="number"
-              step="0.01"
+              step={isPct ? '0.1' : '0.01'}
               min={0}
+              max={isPct ? 100 : undefined}
               className="input-field w-full mt-1"
               value={draft}
               autoFocus
@@ -177,22 +229,24 @@ export default function MetaValorEditor({
             />
           </label>
           <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug">
-            A meta exibida na fita é a base + a soma exata das pendências de evento já pagas neste mês. Pendência de entrada não entra. O acréscimo não é arredondado.
+            {isPct
+              ? `A meta em R$ = ${String(percentualAtual).replace('.', ',')}% × A Vencer/Vencido. Altere o % e salve.`
+              : 'Pendências de evento pagas no mês somam em cima desta base.'}
           </p>
           <div className="flex justify-end gap-2 mt-3">
             <button
               type="button"
               onClick={() => setEditOpen(false)}
-              className="px-3 py-1.5 rounded-lg text-[11px] bg-muted hover:bg-muted/70"
+              className="px-2.5 py-1 rounded-md text-[11px] border border-border hover:bg-muted"
             >
               Cancelar
             </button>
             <button
               type="button"
               onClick={salvar}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-semibold iam-gradient text-primary-foreground"
+              className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-primary text-primary-foreground hover:opacity-90"
             >
-              Salvar meta base
+              Salvar
             </button>
           </div>
         </div>

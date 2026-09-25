@@ -5,6 +5,31 @@ import { isParcelaAntecipada } from '@/lib/parcelaAntecipada';
 /** Meta padrão (R$) da fita "Pago · mês vigente" quando ainda não há meta salva. */
 export const EM_DIA_NOVOS_META_PADRAO = 144500;
 
+/** Na Liberty, a meta da carteira é % do A Vencer / Vencido (padrão 95). */
+export const LIBERTY_META_PCT_A_VENCER = 95;
+
+/** Empresa Liberty (slug ou nome). */
+export function isLibertyGcCompany(company?: { slug?: string | null; name?: string | null } | null): boolean {
+  const slug = (company?.slug ?? '').toLowerCase().trim();
+  if (slug === 'liberty') return true;
+  const name = (company?.name ?? '').toLowerCase();
+  return /\bliberty\b/.test(name);
+}
+
+/** Percentual efetivo da meta Liberty (1–100). Ausente/inválido → 95. */
+export function resolveLibertyMetaPct(stored?: number | null): number {
+  const n = Number(stored);
+  if (!Number.isFinite(n) || n <= 0 || n > 100) return LIBERTY_META_PCT_A_VENCER;
+  return Math.round(n * 100) / 100;
+}
+
+/** Meta Liberty = pct% do card A Vencer / Vencido (centavos). */
+export function metaLibertyDeAVencer(aVencer: number, pct?: number | null): number {
+  const base = Math.max(0, Number(aVencer) || 0);
+  const p = resolveLibertyMetaPct(pct) / 100;
+  return Math.round(base * p * 100) / 100;
+}
+
 /** Item de pendência que explica acréscimo na meta do mês. */
 export interface MetaPendenciaItem {
   studentId: string;

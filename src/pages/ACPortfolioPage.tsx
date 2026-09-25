@@ -64,7 +64,8 @@ import StatusBadgeManual from '@/components/ui/StatusBadgeManual';
 import MetaTaxaEmDiaHeader from '@/components/ui/MetaTaxaEmDiaHeader';
 import RibbonGauge, { ribbonColorAt } from '@/components/ui/RibbonGauge';
 import MetaValorEditor from '@/components/ui/MetaValorEditor';
-import { listMetaPendenciaItems, resolveMetaBase, metaEfetivaComPendencias, sumMetaPendenciaItems } from '@/lib/metaPendenciaAjustes';
+import { listMetaPendenciaItems, resolveMetaBase, metaEfetivaComPendencias, sumMetaPendenciaItems, isLibertyGcCompany, metaLibertyDeAVencer, resolveLibertyMetaPct } from '@/lib/metaPendenciaAjustes';
+import { useCompanyStore } from '@/store/useCompanyStore';
 import PagoAlunosModal from '@/components/modals/PagoAlunosModal';
 import { useConciliacaoStore } from '@/store/useConciliacaoStore';
 
@@ -131,6 +132,11 @@ function resolveAssignedStudentTags(student: Student, studentTags: ReturnType<ty
 
 export default function ACPortfolioPage() {
   const { selectedACId, setSelectedACId, acs, students, updateStudent, deleteStudent, cancellationCases, products, cancelStudentToFlow, studentTags, toggleStudentTag, currentUser, rules, updateAC } = useAppStore();
+  const { companies, activeCompanyId } = useCompanyStore();
+  const isLibertyCompany = useMemo(() => {
+    const c = companies.find((x) => x.id === activeCompanyId);
+    return isLibertyGcCompany(c);
+  }, [companies, activeCompanyId]);
   const [search, setSearch] = useState('');
   const [scoreFilter, setScoreFilter] = useState<number | null>(null);
   const [productFilter, setProductFilter] = useState('');
@@ -938,17 +944,27 @@ export default function ACPortfolioPage() {
   const mesEmDiaNovosValue = pagoMesTotais.pago;
   const mesPagoAlunos = pagoMesTotais.qtdAlunos;
 
-  // Meta base (lápis) + acréscimo exato das pendências de evento já pagas
-  // no mês vigente. Pendência de entrada não entra.
+  // Meta: na Liberty é % (padrão 95) do A Vencer/Vencido (carteira aberta, sem
+  // filtro de período). Nas outras empresas: base (lápis) + pendências pagas.
+  const aVencerParaMetaLiberty = isLibertyCompany
+    ? getForecastTotals({ range: null, basis: 'vencimento' }).aVencer
+    : 0;
+  const libertyMetaPct = resolveLibertyMetaPct(ac?.emDiaNovosMetaPct);
   const metaPendencias = useMemo(
-    () => (ac
+    () => (ac && !isLibertyCompany
       ? listMetaPendenciaItems(students.filter((s) => s.ac === ac.name), `${mesAtualKey}-01`, hojeKey)
       : []),
-    [students, ac, mesAtualKey, hojeKey],
+    [students, ac, mesAtualKey, hojeKey, isLibertyCompany],
   );
-  const metaBase = resolveMetaBase(ac?.emDiaNovosMeta);
-  const emDiaNovosMeta = metaEfetivaComPendencias(metaBase, metaPendencias);
-  const pagoSemPendencia = Math.round((mesEmDiaNovosValue - sumMetaPendenciaItems(metaPendencias)) * 100) / 100;
+  const metaBase = isLibertyCompany
+    ? metaLibertyDeAVencer(aVencerParaMetaLiberty, libertyMetaPct)
+    : resolveMetaBase(ac?.emDiaNovosMeta);
+  const emDiaNovosMeta = isLibertyCompany
+    ? metaBase
+    : metaEfetivaComPendencias(metaBase, metaPendencias);
+  const pagoSemPendencia = isLibertyCompany
+    ? mesEmDiaNovosValue
+    : Math.round((mesEmDiaNovosValue - sumMetaPendenciaItems(metaPendencias)) * 100) / 100;
   const faltaMetaEmDiaNovos = Math.max(0, emDiaNovosMeta - mesEmDiaNovosValue);
   // A fita vai até 150% da meta para haver espaço à direita quando o assessor
   // passar da meta.
@@ -1078,11 +1094,25 @@ export default function ACPortfolioPage() {
             <div className="flex items-center gap-2 shrink-0">
               <MetaValorEditor
                 value={emDiaNovosMeta}
+                valorExibido={isLibertyCompany ? emDiaNovosMeta : metaBase}
                 titulo={ac.name}
                 canEdit={currentUser?.role === 'admin'}
-                onSave={(meta) => updateAC(ac.id, { emDiaNovosMeta: meta })}
+                onSave={(valor) => {
+                  if (isLibertyCompany) {
+                    updateAC(ac.id, { emDiaNovosMetaPct: valor });
+                  } else {
+                    updateAC(ac.id, { emDiaNovosMeta: valor });
+                  }
+                }}
                 baseReferencia={metaBase}
                 pendencias={metaPendencias}
+                modoEdicao={isLibertyCompany ? 'percentual' : 'reais'}
+                percentualAtual={libertyMetaPct}
+                explicacaoFixa={
+                  isLibertyCompany
+                    ? `Na Liberty a meta é ${String(libertyMetaPct).replace('.', ',')}% do A Vencer / Vencido.\n\nA Vencer / Vencido: ${formatCurrency(aVencerParaMetaLiberty)}\n${String(libertyMetaPct).replace('.', ',')}% → ${formatCurrency(emDiaNovosMeta)}\n\nUse o lápis para alterar o percentual.`
+                    : undefined
+                }
               />
               <button onClick={(e) => { e.stopPropagation(); setInfoStatus(infoStatus === 'emdia_novos_mes' ? null : 'emdia_novos_mes'); }} className="text-muted-foreground/50 hover:text-muted-foreground" title="Como este card é calculado">
                 <Info size={14} />
@@ -1118,8 +1148,12 @@ export default function ACPortfolioPage() {
               <p>
                 Pago de {periodoMesLabel} na carteira de {ac.name}: {formatCurrency(mesEmDiaNovosValue)} recebidos de {mesPagoAlunos} alunos,
                 por data de pagamento — mesma regra do card Pago (só baixas feitas no GC e conciliadas, mais o retido de cancelamento conciliado).
-                A fita vai de R$ 0 até {formatCurrency(fitaMax)}; o traço marca a meta de {formatCurrency(emDiaNovosMeta)}
-                e o ponteiro mostra o acumulado até agora. Zera automaticamente todo dia 1º.
+                {isLibertyCompany ? (
+                  <> A meta é {String(libertyMetaPct).replace('.', ',')}% do A Vencer / Vencido ({formatCurrency(aVencerParaMetaLiberty)} → {formatCurrency(emDiaNovosMeta)}); o lápis altera o percentual.</>
+                ) : (
+                  <> A fita vai de R$ 0 até {formatCurrency(fitaMax)}; o traço marca a meta de {formatCurrency(emDiaNovosMeta)}</>
+                )}
+                {' '}e o ponteiro mostra o acumulado até agora. Zera automaticamente todo dia 1º.
               </p>
             </div>
           )}
