@@ -9,6 +9,7 @@ import { useConciliacaoStore, notifyConciliacaoGrupo } from '@/store/useConcilia
 
 import { toast } from 'sonner';
 import { isDoubleCheckItem } from '@/lib/doubleCheckRejection';
+import { desfazerAjustesReprovados } from '@/lib/desfazerAjusteReprovado';
 import { useAppStore } from '@/store/useAppStore';
 import type { ConciliacaoItem, ConciliacaoTipo, ConciliacaoImportError, ConciliacaoImportErrorMotivo, Student, Installment, FunnelStage } from '@/types';
 import { canEditTab } from '@/types';
@@ -2095,10 +2096,13 @@ export default function ConciliacaoPage() {
     }
     setReprovarLoading(true);
     try {
-      // Regra: a Conciliação é um DOUBLE-CHECK. Na reprovação os valores
-      // permanecem como estão (não há rollback) — o caso volta para
+      // Regra: a Conciliação é um DOUBLE-CHECK. Itens ligados a cancelamento
+      // mantêm os valores (não há rollback) — o caso volta para
       // "Em Tratativas" com a ação "Corrigir por Erro" e o motivo visível.
+      // Demais ajustes aplicados na hora (parcelas/contrato) são desfeitos na
+      // ficha, se ela não mudou depois do envio (ver desfazerAjusteReprovado).
       const affectedCaseIds = new Set<string>();
+      const ajustesADesfazer: ConciliacaoItem[] = [];
       for (const it of reprovarGroup.items) {
         reprovar(it.id, motivo, { silent: true });
         if (it.relatedCaseId) {
@@ -2111,8 +2115,11 @@ export default function ConciliacaoPage() {
             (x) => x.studentId === it.studentId && x.funnelStage !== 'Finalizado',
           );
           if (openCase) affectedCaseIds.add(openCase.id);
+        } else {
+          ajustesADesfazer.push(it);
         }
       }
+      const desfazer = desfazerAjustesReprovados(ajustesADesfazer);
 
       const nowIso = new Date().toISOString();
       const revisor = currentUser?.name ?? 'Conciliação';
@@ -2152,15 +2159,26 @@ export default function ConciliacaoPage() {
       }
       // Notificação consolidada VERMELHA para o autor
       notifyConciliacaoGrupo(reprovarGroup.items, 'reprovada', motivo);
+      const desfeitos = desfazer.desfeito.length + desfazer.ja_desfeito.length;
       toast.success(
         reprovarGroup.items.length > 1
           ? `${reprovarGroup.items.length} alterações reprovadas.`
           : 'Alteração reprovada.',
         {
-          description:
-            'Assessor notificado para resolver. Valores mantidos. Caso retornou para "Em Tratativas" com a ação "Corrigir por Erro".',
+          description: [
+            'Assessor notificado para resolver.',
+            desfeitos > 0 ? 'Ficha voltou ao estado de antes do envio.' : '',
+            affectedCaseIds.size > 0
+              ? 'Valores do cancelamento mantidos. Caso retornou para "Em Tratativas" com a ação "Corrigir por Erro".'
+              : '',
+          ].filter(Boolean).join(' '),
         },
       );
+      if (desfazer.ficha_mudou.length > 0) {
+        toast.warning('Ajuste não desfeito automaticamente.', {
+          description: `A ficha de ${[...new Set(desfazer.ficha_mudou.map((i) => i.studentName))].join(', ')} mudou depois do envio — corrija os valores manualmente.`,
+        });
+      }
       setReprovarGroup(null);
       setReprovarMotivo('');
     } finally {
