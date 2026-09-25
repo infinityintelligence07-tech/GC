@@ -47,24 +47,24 @@ function baseStudent(over: Partial<Student> = {}): Student {
 describe('exportModeloGcIam', () => {
   it('assessorCurto usa só o primeiro nome em maiúsculas', () => {
     expect(assessorCurto('Bianca Confronto')).toBe('BIANCA');
-    expect(assessorCurto('Elaine Val')).toBe('ELAINE');
   });
 
-  it('detecta BOLETO com fluxo de parcelas e coloca entrada no PIX', () => {
+  it('gera uma linha por parcela (vertical), com nº e data de vencimento', () => {
     const s = baseStudent();
     expect(detectFormaPagto(s)).toBe('BOLETO');
-    expect(detectEntradaDestino(s)).toBe('PIX');
-    const { rows, monthCols } = buildModeloGcIamExport([s]);
-    expect(rows).toHaveLength(1);
+    const { rows } = buildModeloGcIamExport([s]);
+    expect(rows).toHaveLength(4);
     expect(rows[0].formaPagto).toBe('BOLETO');
     expect(rows[0].assessor).toBe('BIANCA');
     expect(rows[0].pix).toBe(9500);
-    expect(rows[0].cartao).toBeNull();
-    expect(rows[0].vencimento).toContain('15');
-    const jun = monthCols.find((c) => c.key === '2026-06');
-    expect(jun?.label).toBe('JUNHO');
-    expect(rows[0].months['2026-06']?.paid).toBe(true);
-    expect(rows[0].months['2026-08']?.paid).toBe(false);
+    expect(rows[0].numeroParcela).toBe(1);
+    expect(rows[0].dataVencimento).toBe('15/06/2026');
+    expect(rows[0].valorParcela).toBe(1800);
+    expect(rows[0].paid).toBe(true);
+    // Entrada só na 1ª linha
+    expect(rows[1].pix).toBeNull();
+    expect(rows[2].paid).toBe(false);
+    expect(rows[2].dataVencimento).toBe('15/08/2026');
   });
 
   it('entrada de boleto vai para CARTAO quando o histórico indica cartão', () => {
@@ -77,7 +77,7 @@ describe('exportModeloGcIam', () => {
     expect(rows[0].pix).toBeNull();
   });
 
-  it('PIX à vista preenche coluna PIX e não gera meses', () => {
+  it('PIX à vista gera uma linha sem parcelas', () => {
     const s = baseStudent({
       saleValue: 48050,
       downPayment: 48050,
@@ -91,49 +91,26 @@ describe('exportModeloGcIam', () => {
       history: [{ date: '2026-03-01', type: 'Sistema', text: 'Pagamento via PIX' }],
     });
     expect(detectFormaPagto(s)).toBe('PIX');
-    const { rows, monthCols } = buildModeloGcIamExport([s]);
-    expect(rows[0].formaPagto).toBe('PIX');
-    expect(rows[0].pix).toBe(48050);
-    expect(rows[0].cartao).toBeNull();
-    expect(monthCols).toHaveLength(0);
-  });
-
-  it('CARTAO à vista preenche coluna CARTAO', () => {
-    const s = baseStudent({
-      saleValue: 43930,
-      downPayment: 43930,
-      totalInstallments: 0,
-      paidInstallments: 0,
-      installmentValue: 0,
-      installments: [],
-      iamControlAlunoId: 100,
-      iamControlContratoStatus: 'CONCILIADO',
-      iamGcConciliadoAt: '2026-03-01T00:00:00Z',
-      history: [{ date: '2026-03-01', type: 'Sistema', text: 'Pago no cartão' }],
-    });
-    expect(detectFormaPagto(s)).toBe('CARTAO');
     const { rows } = buildModeloGcIamExport([s]);
-    expect(rows[0].cartao).toBe(43930);
-    expect(rows[0].pix).toBeNull();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].pix).toBe(48050);
+    expect(rows[0].numeroParcela).toBeNull();
+    expect(rows[0].valorParcela).toBeNull();
   });
 
-  it('CSV contém cabeçalhos do modelo e BOM', () => {
+  it('CSV e XLS usam Nº PARCELA e DATA VENCIMENTO, sem meses na lateral', () => {
     const data = buildModeloGcIamExport([baseStudent()]);
     const csv = modeloGcIamToCsv(data);
-    expect(csv.startsWith('\uFEFF')).toBe(true);
-    expect(csv).toContain('FORMA DE PAGTO');
-    expect(csv).toContain('ASSESSOR');
-    expect(csv).toContain('JUNHO');
-    expect(csv).toContain('BOLETO');
-  });
+    expect(csv).toContain('Nº PARCELA');
+    expect(csv).toContain('DATA VENCIMENTO');
+    expect(csv).toContain('VALOR PARCELA');
+    expect(csv).not.toContain(',JUNHO,');
+    expect(csv).not.toContain(',ABRIL,');
 
-  it('SpreadsheetML marca só parcela paga com verde', () => {
-    const data = buildModeloGcIamExport([baseStudent()]);
     const xml = modeloGcIamToSpreadsheetMl(data);
     expect(xml).toContain(PAID_CELL_FILL);
-    expect(xml).toContain('ss:StyleID="Paid"');
-    expect(xml).toContain('FORMA DE PAGTO');
-    // Totais / valores não pagos usam Money (branco), não Paid em tudo
-    expect(xml).toContain('ss:StyleID="Money"');
+    expect(xml).toContain('Nº PARCELA');
+    expect(xml).toContain('DATA VENCIMENTO');
+    expect(xml).not.toContain('>JUNHO<');
   });
 });

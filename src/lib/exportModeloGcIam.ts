@@ -7,20 +7,11 @@ import { toDisplayName } from '@/lib/utils';
 /** Forma de pagamento no modelo da planilha IAM. */
 export type FormaPagtoModelo = 'BOLETO' | 'CARTAO' | 'PIX';
 
-export type ModeloGcIamMonthCol = {
-  /** YYYY-MM */
-  key: string;
-  /** Ex.: MARÇO */
-  label: string;
-};
-
-export type ModeloGcIamMoneyCell = {
-  value: number;
-  /** Célula verde só quando a(s) parcela(s) do mês estão pagas. */
-  paid: boolean;
-};
-
-export type ModeloGcIamRow = {
+/**
+ * Uma linha = uma parcela (formato vertical).
+ * PIX/CARTAO (entrada) só na 1ª linha do aluno.
+ */
+export type ModeloGcIamParcelaRow = {
   formaPagto: FormaPagtoModelo;
   assessor: string;
   nomeAluno: string;
@@ -29,42 +20,26 @@ export type ModeloGcIamRow = {
   email: string;
   contrato: string;
   valorContrato: number;
-  /** Dia(s) de vencimento, ex. "15" ou "15 | 25". */
-  vencimento: string;
-  /** Data da entrada (matrícula) DD/MM/YYYY. */
+  /** Número da parcela; vazio em linha só de entrada/à vista. */
+  numeroParcela: number | null;
+  /** Data de vencimento DD/MM/YYYY. */
+  dataVencimento: string;
   dataEntrada: string;
   pix: number | null;
   cartao: number | null;
-  /** Valor por mês (chave YYYY-MM). */
-  months: Record<string, ModeloGcIamMoneyCell>;
+  valorParcela: number | null;
+  /** Verde na célula do valor da parcela. */
+  paid: boolean;
 };
 
 export type ModeloGcIamExport = {
-  monthCols: ModeloGcIamMonthCol[];
-  rows: ModeloGcIamRow[];
-  /** Totais por coluna de mês (soma dos valores). */
-  monthTotals: Record<string, number>;
+  rows: ModeloGcIamParcelaRow[];
 };
-
-const MESES_PT = [
-  'JANEIRO',
-  'FEVEREIRO',
-  'MARÇO',
-  'ABRIL',
-  'MAIO',
-  'JUNHO',
-  'JULHO',
-  'AGOSTO',
-  'SETEMBRO',
-  'OUTUBRO',
-  'NOVEMBRO',
-  'DEZEMBRO',
-] as const;
 
 /** Verde claro — só parcelas pagas (fundo branco no restante). */
 export const PAID_CELL_FILL = '#C6EFCE';
 
-const FIXED_HEADERS = [
+const HEADERS = [
   'FORMA DE PAGTO',
   'ASSESSOR',
   'NOME ALUNO',
@@ -73,10 +48,12 @@ const FIXED_HEADERS = [
   'E-MAIL',
   'CONTRATOS',
   'VALOR DO CONTRATO',
-  'VENCIMENTO',
+  'Nº PARCELA',
+  'DATA VENCIMENTO',
   'DATA DA ENTRADA',
   'PIX',
   'CARTAO',
+  'VALOR PARCELA',
 ] as const;
 
 function roundMoney(n: number): number {
@@ -90,41 +67,11 @@ function fold(text: string): string {
     .toLowerCase();
 }
 
-function ymFromIso(iso?: string): string | null {
-  if (!iso) return null;
-  const m = iso.slice(0, 7);
-  return /^\d{4}-\d{2}$/.test(m) ? m : null;
-}
-
-function dayFromIso(iso?: string): number | null {
-  if (!iso || iso.length < 10) return null;
-  const d = Number(iso.slice(8, 10));
-  return Number.isFinite(d) && d >= 1 && d <= 31 ? d : null;
-}
-
 function fmtBR(iso?: string): string {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return '';
   return `${d}/${m}/${y}`;
-}
-
-function monthLabel(ym: string): string {
-  const idx = Number(ym.slice(5, 7)) - 1;
-  return MESES_PT[idx] ?? ym;
-}
-
-function addMonths(ym: string, delta: number): string {
-  const y = Number(ym.slice(0, 4));
-  const m = Number(ym.slice(5, 7));
-  const total = y * 12 + (m - 1) + delta;
-  const ny = Math.floor(total / 12);
-  const nm = (total % 12) + 1;
-  return `${ny}-${String(nm).padStart(2, '0')}`;
-}
-
-function compareYm(a: string, b: string): number {
-  return a.localeCompare(b);
 }
 
 /** Primeiro nome do assessor em MAIÚSCULAS (modelo: BIANCA, ELAINE, LUANA). */
@@ -146,11 +93,6 @@ function blobHints(student: Student): string {
   return fold(parts.join(' '));
 }
 
-/**
- * Detecta forma de pagamento no espírito do modelo:
- * - fluxo de boletos → BOLETO
- * - quitado à vista / sem parcelas de fluxo → PIX ou CARTAO (hints no histórico/tags)
- */
 export function detectFormaPagto(student: Student): FormaPagtoModelo {
   const finance = resolveStudentFinance(student);
   const fluxo = (student.installments ?? []).filter((i) => !isEntradaPendenciaInstallment(i));
@@ -175,7 +117,6 @@ export function detectFormaPagto(student: Student): FormaPagtoModelo {
   return 'BOLETO';
 }
 
-/** Para boleto: entrada vai em PIX ou CARTAO conforme hint do método. */
 export function detectEntradaDestino(student: Student): 'PIX' | 'CARTAO' {
   const hints = blobHints(student);
   const hasCartao = /\bcartao\b|\bcredito\b/.test(hints);
@@ -184,171 +125,105 @@ export function detectEntradaDestino(student: Student): 'PIX' | 'CARTAO' {
   return 'PIX';
 }
 
-function isMultaInstallment(inst: Installment): boolean {
-  return (inst.tags ?? []).includes('multa-cancelamento');
-}
-
 /**
- * Parcelas que entram nas colunas de mês (exclui entrada embutida/pendência
- * já representada em PIX/CARTAO).
+ * Parcelas do fluxo (exclui entrada embutida/pendência já representada em PIX/CARTAO).
  */
-export function installmentsForMonthColumns(student: Student): Installment[] {
+export function installmentsForExport(student: Student): Installment[] {
   const finance = resolveStudentFinance(student);
   const embeddedId = finance.embeddedEntradaInstallment?.number;
-  return (student.installments ?? []).filter((i) => {
-    if (isEntradaPendenciaInstallment(i)) return false;
-    if (embeddedId != null && i.number === embeddedId) return false;
-    if (isMultaInstallment(i)) return true;
-    return true;
-  });
+  return [...(student.installments ?? [])]
+    .filter((i) => {
+      if (isEntradaPendenciaInstallment(i)) return false;
+      if (embeddedId != null && i.number === embeddedId) return false;
+      return true;
+    })
+    .sort((a, b) => a.number - b.number || (a.dueDate || '').localeCompare(b.dueDate || ''));
 }
 
-function buildVencimento(student: Student, monthInsts: Installment[]): string {
-  const days = new Set<number>();
-  if (student.dueDay >= 1 && student.dueDay <= 31) days.add(student.dueDay);
-  for (const i of monthInsts) {
-    const d = dayFromIso(i.dueDate);
-    if (d != null) days.add(d);
+function resolvePixCartao(student: Student, forma: FormaPagtoModelo): { pix: number | null; cartao: number | null } {
+  const finance = resolveStudentFinance(student);
+  const entrada = roundMoney(finance.downPayment);
+  const sale = roundMoney(finance.saleValue);
+  let pix: number | null = null;
+  let cartao: number | null = null;
+
+  if (forma === 'BOLETO') {
+    if (entrada > 0.0049) {
+      if (detectEntradaDestino(student) === 'CARTAO') cartao = entrada;
+      else pix = entrada;
+    }
+  } else if (forma === 'PIX') {
+    const v = entrada > 0.0049 ? entrada : sale;
+    if (v > 0.0049) pix = v;
+  } else if (entrada > 0.0049 && sale > entrada + 0.05 && detectEntradaDestino(student) === 'PIX') {
+    pix = entrada;
+    cartao = roundMoney(sale - entrada);
+  } else {
+    const v = entrada > 0.0049 ? entrada : sale;
+    if (v > 0.0049) cartao = v;
   }
-  if (days.size === 0) return '';
-  return [...days].sort((a, b) => a - b).join(' | ');
-}
-
-function buildMonthRange(keys: string[]): ModeloGcIamMonthCol[] {
-  if (keys.length === 0) return [];
-  const sorted = [...keys].sort(compareYm);
-  const start = sorted[0];
-  const end = sorted[sorted.length - 1];
-  const cols: ModeloGcIamMonthCol[] = [];
-  let cur = start;
-  // Proteção: no máximo 48 meses
-  for (let n = 0; n < 48; n++) {
-    cols.push({ key: cur, label: monthLabel(cur) });
-    if (cur === end) break;
-    cur = addMonths(cur, 1);
-  }
-  return cols;
-}
-
-function accumulateMonth(
-  map: Record<string, { value: number; paidValue: number; openValue: number }>,
-  ym: string,
-  value: number,
-  paid: boolean,
-) {
-  const cur = map[ym] ?? { value: 0, paidValue: 0, openValue: 0 };
-  cur.value = roundMoney(cur.value + value);
-  if (paid) cur.paidValue = roundMoney(cur.paidValue + value);
-  else cur.openValue = roundMoney(cur.openValue + value);
-  map[ym] = cur;
+  return { pix, cartao };
 }
 
 /**
- * Monta as linhas no formato do modelo GC IAM a partir dos alunos da empresa ativa.
+ * Monta linhas verticais: 1 parcela = 1 linha (sem colunas de mês na lateral).
  */
 export function buildModeloGcIamExport(students: Student[]): ModeloGcIamExport {
   const sorted = [...students].sort((a, b) =>
     toDisplayName(a.name).localeCompare(toDisplayName(b.name), 'pt-BR'),
   );
 
-  const draftRows: Array<{
-    row: Omit<ModeloGcIamRow, 'months'> & {
-      monthAcc: Record<string, { value: number; paidValue: number; openValue: number }>;
-    };
-  }> = [];
-
-  const allYm = new Set<string>();
+  const rows: ModeloGcIamParcelaRow[] = [];
 
   for (const student of sorted) {
     const finance = resolveStudentFinance(student);
     const forma = detectFormaPagto(student);
-    const monthInsts = installmentsForMonthColumns(student);
-    const monthAcc: Record<string, { value: number; paidValue: number; openValue: number }> = {};
-
-    for (const inst of monthInsts) {
-      const ym = ymFromIso(inst.dueDate);
-      if (!ym) continue;
-      const val = roundMoney(Number(inst.value) || 0);
-      if (val <= 0.0049) continue;
-      allYm.add(ym);
-      accumulateMonth(monthAcc, ym, val, !!inst.paid);
-    }
-
-    let pix: number | null = null;
-    let cartao: number | null = null;
-    const entrada = roundMoney(finance.downPayment);
+    const insts = installmentsForExport(student);
+    const { pix, cartao } = resolvePixCartao(student, forma);
     const sale = roundMoney(finance.saleValue);
+    const entrada = roundMoney(finance.downPayment);
+    const valorContrato = sale > 0.0049 ? sale : entrada;
+    const base = {
+      formaPagto: forma,
+      assessor: assessorCurto(student.ac),
+      nomeAluno: toDisplayName(student.name),
+      telefone: student.whatsapp || '',
+      treinamento: student.product || '',
+      email: student.email || '',
+      contrato: toDisplayName(student.name),
+      valorContrato,
+      dataEntrada: fmtBR(student.enrollmentDate),
+    };
 
-    if (forma === 'BOLETO') {
-      if (entrada > 0.0049) {
-        if (detectEntradaDestino(student) === 'CARTAO') cartao = entrada;
-        else pix = entrada;
-      }
-    } else if (forma === 'PIX') {
-      const v = entrada > 0.0049 ? entrada : sale;
-      if (v > 0.0049) pix = v;
-    } else {
-      // CARTAO — à vista / valor no cartão; se houver entrada PIX no hint, separa
-      if (entrada > 0.0049 && sale > entrada + 0.05 && detectEntradaDestino(student) === 'PIX') {
-        pix = entrada;
-        cartao = roundMoney(sale - entrada);
-      } else {
-        const v = entrada > 0.0049 ? entrada : sale;
-        if (v > 0.0049) cartao = v;
-      }
-    }
-
-    draftRows.push({
-      row: {
-        formaPagto: forma,
-        assessor: assessorCurto(student.ac),
-        nomeAluno: toDisplayName(student.name),
-        telefone: student.whatsapp || '',
-        treinamento: student.product || '',
-        email: student.email || '',
-        contrato: toDisplayName(student.name),
-        valorContrato: sale > 0.0049 ? sale : entrada,
-        vencimento: forma === 'BOLETO' ? buildVencimento(student, monthInsts) : '',
-        dataEntrada: fmtBR(student.enrollmentDate),
+    if (insts.length === 0) {
+      rows.push({
+        ...base,
+        numeroParcela: null,
+        dataVencimento: '',
         pix,
         cartao,
-        monthAcc,
-      },
+        valorParcela: null,
+        paid: false,
+      });
+      continue;
+    }
+
+    insts.forEach((inst, idx) => {
+      const val = roundMoney(Number(inst.value) || 0);
+      rows.push({
+        ...base,
+        numeroParcela: inst.number > 0 ? inst.number : null,
+        dataVencimento: fmtBR(inst.dueDate),
+        // Entrada PIX/CARTAO só na primeira linha do aluno.
+        pix: idx === 0 ? pix : null,
+        cartao: idx === 0 ? cartao : null,
+        valorParcela: val > 0.0049 ? val : null,
+        paid: !!inst.paid && val > 0.0049,
+      });
     });
   }
 
-  const monthCols = buildMonthRange([...allYm]);
-  const monthTotals: Record<string, number> = {};
-  for (const col of monthCols) monthTotals[col.key] = 0;
-
-  const rows: ModeloGcIamRow[] = draftRows.map(({ row }) => {
-    const months: Record<string, ModeloGcIamMoneyCell> = {};
-    for (const col of monthCols) {
-      const acc = row.monthAcc[col.key];
-      if (!acc || acc.value <= 0.0049) continue;
-      // Verde só se não há saldo em aberto naquele mês (todas as parcelas pagas).
-      const paid = acc.openValue <= 0.0049 && acc.paidValue > 0.0049;
-      months[col.key] = { value: acc.value, paid };
-      monthTotals[col.key] = roundMoney((monthTotals[col.key] ?? 0) + acc.value);
-    }
-    return {
-      formaPagto: row.formaPagto,
-      assessor: row.assessor,
-      nomeAluno: row.nomeAluno,
-      telefone: row.telefone,
-      treinamento: row.treinamento,
-      email: row.email,
-      contrato: row.contrato,
-      valorContrato: row.valorContrato,
-      vencimento: row.vencimento,
-      dataEntrada: row.dataEntrada,
-      pix: row.pix,
-      cartao: row.cartao,
-      months,
-    };
-  });
-
-  return { monthCols, rows, monthTotals };
+  return { rows };
 }
 
 function moneyCsv(n: number | null | undefined): string {
@@ -361,29 +236,8 @@ function csvEscape(v: string): string {
   return v;
 }
 
-/** CSV no modelo (sem cores — CSV não guarda formatação). */
 export function modeloGcIamToCsv(data: ModeloGcIamExport): string {
-  const headers = [...FIXED_HEADERS, ...data.monthCols.map((c) => c.label)];
-  const lines: string[] = [headers.map(csvEscape).join(',')];
-
-  // Linha de totais (como no modelo — só meses preenchidos)
-  const totalCells = [
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    ...data.monthCols.map((c) => moneyCsv(data.monthTotals[c.key] || null)),
-  ];
-  lines.push(totalCells.map(csvEscape).join(','));
-
+  const lines: string[] = [HEADERS.map(csvEscape).join(',')];
   for (const r of data.rows) {
     const cells = [
       r.formaPagto,
@@ -394,15 +248,15 @@ export function modeloGcIamToCsv(data: ModeloGcIamExport): string {
       r.email,
       r.contrato,
       moneyCsv(r.valorContrato),
-      r.vencimento,
+      r.numeroParcela != null ? String(r.numeroParcela) : '',
+      r.dataVencimento,
       r.dataEntrada,
       moneyCsv(r.pix),
       moneyCsv(r.cartao),
-      ...data.monthCols.map((c) => moneyCsv(r.months[c.key]?.value ?? null)),
+      moneyCsv(r.valorParcela),
     ];
     lines.push(cells.map(csvEscape).join(','));
   }
-
   return `\uFEFF${lines.join('\r\n')}`;
 }
 
@@ -414,14 +268,7 @@ function xmlEscape(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/**
- * SpreadsheetML (.xls) — Excel / Google Sheets abrem com fundo branco e
- * verde só nas parcelas pagas. CSV não permite cor de célula.
- */
 export function modeloGcIamToSpreadsheetMl(data: ModeloGcIamExport): string {
-  const headers = [...FIXED_HEADERS, ...data.monthCols.map((c) => c.label)];
-  const colCount = headers.length;
-
   const styles = `
   <Styles>
     <Style ss:ID="Default" ss:Name="Normal">
@@ -449,26 +296,13 @@ export function modeloGcIamToSpreadsheetMl(data: ModeloGcIamExport): string {
 
   const cellText = (v: string, style = 'Text') =>
     `<Cell ss:StyleID="${style}"><Data ss:Type="String">${xmlEscape(v)}</Data></Cell>`;
-  const cellNum = (n: number, paid: boolean) =>
+  const cellNum = (n: number, paid = false) =>
     `<Cell ss:StyleID="${paid ? 'Paid' : 'Money'}"><Data ss:Type="Number">${n}</Data></Cell>`;
   const cellEmpty = () => `<Cell ss:StyleID="Text"><Data ss:Type="String"></Data></Cell>`;
 
-  const rowsXml: string[] = [];
-
-  rowsXml.push(
-    `<Row>${headers.map((h) => cellText(h, 'Header')).join('')}</Row>`,
-  );
-
-  // Totais
-  {
-    const cells: string[] = [];
-    for (let i = 0; i < 12; i++) cells.push(cellEmpty());
-    for (const col of data.monthCols) {
-      const t = data.monthTotals[col.key] ?? 0;
-      cells.push(t > 0.0049 ? cellNum(t, false) : cellEmpty());
-    }
-    rowsXml.push(`<Row>${cells.join('')}</Row>`);
-  }
+  const rowsXml: string[] = [
+    `<Row>${HEADERS.map((h) => cellText(h, 'Header')).join('')}</Row>`,
+  ];
 
   for (const r of data.rows) {
     const cells: string[] = [
@@ -479,21 +313,18 @@ export function modeloGcIamToSpreadsheetMl(data: ModeloGcIamExport): string {
       cellText(r.treinamento),
       cellText(r.email),
       cellText(r.contrato),
-      r.valorContrato > 0.0049 ? cellNum(r.valorContrato, false) : cellEmpty(),
-      cellText(r.vencimento),
+      r.valorContrato > 0.0049 ? cellNum(r.valorContrato) : cellEmpty(),
+      r.numeroParcela != null ? cellText(String(r.numeroParcela)) : cellEmpty(),
+      cellText(r.dataVencimento),
       cellText(r.dataEntrada),
-      r.pix != null && r.pix > 0.0049 ? cellNum(r.pix, false) : cellEmpty(),
-      r.cartao != null && r.cartao > 0.0049 ? cellNum(r.cartao, false) : cellEmpty(),
+      r.pix != null && r.pix > 0.0049 ? cellNum(r.pix) : cellEmpty(),
+      r.cartao != null && r.cartao > 0.0049 ? cellNum(r.cartao) : cellEmpty(),
+      r.valorParcela != null && r.valorParcela > 0.0049
+        ? cellNum(r.valorParcela, r.paid)
+        : cellEmpty(),
     ];
-    for (const col of data.monthCols) {
-      const cell = r.months[col.key];
-      if (!cell || cell.value <= 0.0049) cells.push(cellEmpty());
-      else cells.push(cellNum(cell.value, cell.paid));
-    }
     rowsXml.push(`<Row>${cells.join('')}</Row>`);
   }
-
-  void colCount;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -531,11 +362,6 @@ function triggerDownload(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-/**
- * Exporta no modelo IAM.
- * - `xls`: SpreadsheetML com fundo branco e verde só em parcelas pagas
- * - `csv`: mesmos dados sem formatação (CSV não guarda cor)
- */
 export function downloadModeloGcIam(students: Student[], format: 'xls' | 'csv' = 'xls') {
   const data = buildModeloGcIamExport(students);
   if (format === 'csv') {
