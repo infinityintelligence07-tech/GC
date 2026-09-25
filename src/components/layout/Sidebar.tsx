@@ -38,6 +38,7 @@ const navItems: NavItem[] = [
   { key: 'conciliacao', label: 'Conciliação', icon: <ClipboardCheck size={17} strokeWidth={1.8} />, permissionTab: 'conciliacao' },
   { key: 'extrato', label: 'Extrato de Conferência', icon: <Landmark size={17} strokeWidth={1.8} />, permissionTab: 'conciliacao' },
   { key: 'documentos', label: 'Documentos', icon: <FileText size={17} strokeWidth={1.8} />, separator: true, permissionTab: 'documentos' },
+  { key: 'registros', label: 'Registros', icon: <ScrollText size={17} strokeWidth={1.8} />, permissionTab: 'registros' },
   { key: 'config', label: 'Configurações', icon: <Settings size={17} strokeWidth={1.8} />, separator: true, permissionTab: 'config' },
   { key: 'perfil', label: 'Perfil', icon: <User size={17} strokeWidth={1.8} />, permissionTab: 'always' },
   { key: 'sair', label: 'Sair', icon: <LogOut size={17} strokeWidth={1.8} />, permissionTab: 'always' },
@@ -470,22 +471,6 @@ export default function Sidebar({
       </nav>
 
       <div className={`pt-2 pb-3 border-t border-sidebar-border/20 ${collapsed ? 'px-2' : 'px-3'}`}>
-        {canViewTab(currentUser, 'admin') && (
-          <button
-            onClick={() => { setActiveTab('registros'); onMobileClose?.(); }}
-            className={`w-full flex items-center rounded-lg text-[12px] font-medium transition-colors mb-2 ${
-              collapsed ? 'justify-center px-2 py-2' : 'gap-2.5 px-4 py-2'
-            } ${
-              activeTab === 'registros'
-                ? 'bg-sidebar-accent/60 text-sidebar-foreground/80'
-                : 'text-sidebar-foreground/35 hover:text-sidebar-foreground/60 hover:bg-sidebar-accent/30'
-            }`}
-            title="Registros de ações do sistema (últimos 7 dias)"
-          >
-            <ScrollText size={14} strokeWidth={1.8} className="opacity-70" />
-            {!collapsed && <span>Registros</span>}
-          </button>
-        )}
         {!collapsed && (
           <div className="text-[10px] text-sidebar-foreground/20 font-medium px-4">© 2026 Sistema IAM</div>
         )}

@@ -12,8 +12,9 @@ import {
 } from '@/types';
 
 const EMPTY_PERMS: UserPermissions = {
-  dashboard: 'none', alunos: 'none', equipe: 'none', rendaExtra: 'none', cancelamentos: 'none',
+  dashboard: 'none', alunos: 'view', equipe: 'none', rendaExtra: 'none', cancelamentos: 'none',
   comissoes: 'none', estornos: 'none', conciliacao: 'none', documentos: 'none', config: 'none',
+  registros: 'none',
 };
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
@@ -401,6 +402,7 @@ function PermissionGrid({ value, onChange, canToggleAdmin = false }: { value: Us
           const lvl = (value[key] ?? 'none') as PermissionLevel;
           const isAdminRow = key === 'admin';
           const isComissoesRow = key === 'comissoes';
+          const isRegistrosRow = key === 'registros';
           const isLocked = isAdminRow && !canToggleAdmin;
           const isAdminActive = isAdminRow && lvl === 'edit';
           const accent = isLocked
@@ -436,6 +438,7 @@ function PermissionGrid({ value, onChange, canToggleAdmin = false }: { value: Us
                 <option value="view">Só visualizar</option>
                 <option value="edit">Ver e editar</option>
                 {isComissoesRow && <option value="own">Apenas visualizar sua comissão</option>}
+                {isRegistrosRow && <option value="own">Apenas os próprios registros</option>}
               </select>
             </div>
           );
@@ -465,7 +468,11 @@ function PermissionsSummary({ user }: { user: AppUser }) {
           : isOwn
             ? 'bg-violet-500/10 text-violet-700'
             : 'bg-sky-500/10 text-sky-700';
-        const title = isEdit ? 'Ver e editar' : isOwn ? 'Apenas visualizar sua comissão' : 'Só visualizar';
+        const title = isEdit
+          ? 'Ver e editar'
+          : isOwn
+            ? (key === 'registros' ? 'Apenas os próprios registros' : 'Apenas visualizar sua comissão')
+            : 'Só visualizar';
         const suffix = isEdit ? '' : isOwn ? ' 👤' : ' 👁';
         return (
           <span key={key} className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${cls}`} title={title}>

@@ -77,10 +77,10 @@ const TAB_TO_PERMISSION: Record<TabKey, PermissionTab | 'always'> = {
   documentos: 'documentos',
   config: 'config',
   perfil: 'always',
-  registros: 'admin',
+  registros: 'registros',
 };
 
-const TAB_ORDER: TabKey[] = ['dashboard', 'alunos', 'equipe', 'ac', 'ranking', 'rendaExtra', 'cancelamentos', 'comissoes', 'estornos', 'conciliacao', 'extrato', 'documentos', 'config', 'configUsuarios', 'regua', 'perfil', 'registros'];
+const TAB_ORDER: TabKey[] = ['dashboard', 'alunos', 'equipe', 'ac', 'ranking', 'rendaExtra', 'cancelamentos', 'comissoes', 'estornos', 'conciliacao', 'extrato', 'documentos', 'registros', 'config', 'configUsuarios', 'regua', 'perfil'];
 
 
 const Index = () => {

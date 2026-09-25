@@ -264,7 +264,19 @@ export type UserRole = 'admin' | 'ac' | 'acn2' | 'juridico' | 'conciliacao';
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'own';
 
 // Abas que podem ser permissionadas (perfil é sempre liberado)
-export type PermissionTab = 'dashboard' | 'alunos' | 'equipe' | 'rendaExtra' | 'cancelamentos' | 'comissoes' | 'estornos' | 'conciliacao' | 'documentos' | 'config' | 'admin';
+export type PermissionTab =
+  | 'dashboard'
+  | 'alunos'
+  | 'equipe'
+  | 'rendaExtra'
+  | 'cancelamentos'
+  | 'comissoes'
+  | 'estornos'
+  | 'conciliacao'
+  | 'documentos'
+  | 'config'
+  | 'registros'
+  | 'admin';
 
 export type UserPermissions = Partial<Record<PermissionTab, PermissionLevel>>;
 
@@ -279,8 +291,28 @@ export const PERMISSION_TABS: { key: PermissionTab; label: string }[] = [
   { key: 'conciliacao', label: 'Conciliação' },
   { key: 'documentos', label: 'Documentos' },
   { key: 'config', label: 'Configurações' },
+  { key: 'registros', label: 'Registros' },
   { key: 'admin', label: 'Admin' },
 ];
+
+/**
+ * Pisos de acesso aplicados quando a chave não está em `permissions`:
+ * - alunos: todo mundo vê a aba (view), salvo `none` explícito
+ * - registros: AC vinculado vê só os próprios (`own`); admin vê tudo via branch admin
+ */
+function applyPermissionFloors(
+  user: AppUser,
+  perms: UserPermissions,
+): UserPermissions {
+  const next: UserPermissions = { ...perms };
+  if (next.alunos === undefined) next.alunos = 'view';
+  // Quem já tinha acesso Admin à página antiga de Registros continua vendo tudo.
+  if (next.registros === undefined && (next.admin === 'view' || next.admin === 'edit')) {
+    next.registros = 'edit';
+  }
+  if (next.registros === undefined && user.acId) next.registros = 'own';
+  return next;
+}
 
 
 export interface AppUser {
@@ -318,7 +350,7 @@ export function getEffectivePermissions(user: AppUser | null | undefined): UserP
     return {
       dashboard: 'edit', alunos: 'edit', equipe: 'edit', rendaExtra: 'edit',
       cancelamentos: 'edit', comissoes: 'edit', estornos: 'edit', conciliacao: 'edit',
-      documentos: 'edit', config: 'edit',
+      documentos: 'edit', config: 'edit', registros: 'edit',
       admin: stored.admin ?? 'edit',
     };
   }
@@ -326,26 +358,32 @@ export function getEffectivePermissions(user: AppUser | null | undefined): UserP
   // Role 'conciliacao' sempre vê a aba Conciliação, mesmo se permissions
   // salvas não tiverem a chave (retrocompatibilidade com usuários antigos).
   if (user.role === 'conciliacao') {
-    return { ...(user.permissions || {}), conciliacao: 'edit' };
+    return applyPermissionFloors(user, { ...(user.permissions || {}), conciliacao: 'edit' });
   }
   if (user.permissions) {
     // Jurídico antigo sem chave documentos: libera edição de modelos.
     if (user.role === 'juridico' && !user.permissions.documentos) {
-      return { ...user.permissions, documentos: 'edit' };
+      return applyPermissionFloors(user, { ...user.permissions, documentos: 'edit' });
     }
-    return user.permissions;
+    return applyPermissionFloors(user, user.permissions);
   }
   // Fallback derivado do role (retrocompatibilidade)
   switch (user.role) {
     case 'ac':
-      return { equipe: 'edit', rendaExtra: 'edit' };
+      return applyPermissionFloors(user, { equipe: 'edit', rendaExtra: 'edit' });
     case 'acn2':
-      return { equipe: 'edit', rendaExtra: 'edit', cancelamentos: 'edit' };
+      return applyPermissionFloors(user, { equipe: 'edit', rendaExtra: 'edit', cancelamentos: 'edit' });
     case 'juridico':
-      return { cancelamentos: 'edit', documentos: 'edit' };
+      return applyPermissionFloors(user, { cancelamentos: 'edit', documentos: 'edit' });
     default:
-      return {};
+      return applyPermissionFloors(user, {});
   }
+}
+
+/** Registros: `own` = só as próprias ações; `view`/`edit` = todas. */
+export function canViewAllRegistros(user: AppUser | null | undefined): boolean {
+  const lvl = getEffectivePermissions(user).registros;
+  return lvl === 'view' || lvl === 'edit';
 }
 
 export function canViewTab(user: AppUser | null | undefined, tab: PermissionTab): boolean {

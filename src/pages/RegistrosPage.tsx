@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, ScrollText, Search, Filter, RefreshCw, User as UserIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAppStore } from '@/store/useAppStore';
-import { canViewTab, canEditTab } from '@/types';
+import { canViewTab, canViewAllRegistros, getEffectivePermissions } from '@/types';
 
 interface ActivityLogRow {
   id: string;
@@ -48,6 +48,9 @@ const ENTITY_COLORS: Record<string, string> = {
   system: 'bg-muted text-muted-foreground border-border',
 };
 
+/** Janela padrão: 90 dias (AC vê o próprio histórico recente). */
+const RETENTION_DAYS = 90;
+
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   const dd = String(d.getDate()).padStart(2, '0');
@@ -59,24 +62,42 @@ function formatDateTime(iso: string): string {
 }
 
 export default function RegistrosPage() {
-  const { currentUser } = useAppStore();
+  const { currentUser, acs } = useAppStore();
   const [rows, setRows] = useState<ActivityLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterEntity, setFilterEntity] = useState<string>('');
   const [filterActor, setFilterActor] = useState<string>('');
 
-  const canView = canViewTab(currentUser, 'admin') || canEditTab(currentUser, 'admin');
+  const canView = canViewTab(currentUser, 'registros');
+  const seeAll = canViewAllRegistros(currentUser);
+  const ownOnly = getEffectivePermissions(currentUser).registros === 'own';
+
+  const acName = useMemo(() => {
+    if (!currentUser?.acId) return currentUser?.name ?? '';
+    return acs.find((a) => a.id === currentUser.acId)?.name || currentUser.name;
+  }, [acs, currentUser]);
 
   const load = async () => {
     setLoading(true);
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { data, error } = await supabase
+    const since = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    let query = supabase
       .from('activity_logs' as any)
       .select('*')
       .gte('created_at', since)
       .order('created_at', { ascending: false })
-      .limit(1000);
+      .limit(2000);
+
+    // AC com escopo próprio: só o que ele mesmo fez (RLS também garante).
+    if (ownOnly) {
+      if (currentUser?.authUserId) {
+        query = query.eq('actor_user_id', currentUser.authUserId);
+      } else if (currentUser?.name) {
+        query = query.eq('actor_name', currentUser.name);
+      }
+    }
+
+    const { data, error } = await query;
     if (error) console.error('[Registros] falha ao carregar:', error.message);
     setRows(((data ?? []) as unknown) as ActivityLogRow[]);
     setLoading(false);
@@ -88,12 +109,16 @@ export default function RegistrosPage() {
     const channel = supabase
       .channel('activity_logs_feed')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_logs' }, (payload) => {
-        setRows((prev) => [payload.new as ActivityLogRow, ...prev].slice(0, 1000));
+        const row = payload.new as ActivityLogRow;
+        if (ownOnly && currentUser?.authUserId && row.actor_user_id !== currentUser.authUserId) {
+          return;
+        }
+        setRows((prev) => [row, ...prev].slice(0, 2000));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView]);
+  }, [canView, ownOnly, currentUser?.authUserId]);
 
   const actors = useMemo(() => {
     const set = new Map<string, string>();
@@ -135,6 +160,13 @@ export default function RegistrosPage() {
     );
   }
 
+  const title = ownOnly
+    ? `Registros · ${acName || 'Meus'}`
+    : 'Registros';
+  const subtitle = ownOnly
+    ? `Tudo o que você fez no sistema nos últimos ${RETENTION_DAYS} dias`
+    : `Ações feitas no sistema nos últimos ${RETENTION_DAYS} dias`;
+
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
       <header className="flex items-start justify-between gap-4 flex-wrap">
@@ -143,8 +175,8 @@ export default function RegistrosPage() {
             <ScrollText size={20} className="text-muted-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">Registros</h1>
-            <p className="text-sm text-muted-foreground">Ações feitas no sistema nos últimos 7 dias</p>
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">{title}</h1>
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
           </div>
         </div>
         <button
@@ -161,7 +193,7 @@ export default function RegistrosPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por descrição, usuário ou aluno…"
+            placeholder={ownOnly ? 'Buscar por descrição ou aluno…' : 'Buscar por descrição, usuário ou aluno…'}
             className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
@@ -177,16 +209,18 @@ export default function RegistrosPage() {
               <option key={e} value={e}>{ENTITY_LABELS[e] ?? e}</option>
             ))}
           </select>
-          <select
-            value={filterActor}
-            onChange={(e) => setFilterActor(e.target.value)}
-            className="text-xs px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="">Todos os usuários</option>
-            {actors.map(([k, name]) => (
-              <option key={k} value={k}>{name}</option>
-            ))}
-          </select>
+          {seeAll && (
+            <select
+              value={filterActor}
+              onChange={(e) => setFilterActor(e.target.value)}
+              className="text-xs px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">Todos os usuários</option>
+              {actors.map(([k, name]) => (
+                <option key={k} value={k}>{name}</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -197,7 +231,7 @@ export default function RegistrosPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-sm text-muted-foreground">
-            Nenhum registro encontrado nos últimos 7 dias.
+            Nenhum registro encontrado nos últimos {RETENTION_DAYS} dias.
           </div>
         ) : (
           <ul className="divide-y divide-border">
@@ -212,10 +246,14 @@ export default function RegistrosPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground leading-snug">{r.summary}</p>
                     <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground">
-                      <span className="inline-flex items-center gap-1">
-                        <UserIcon size={11} /> {r.actor_name || 'Sistema'}
-                      </span>
-                      <span>·</span>
+                      {!ownOnly && (
+                        <>
+                          <span className="inline-flex items-center gap-1">
+                            <UserIcon size={11} /> {r.actor_name || 'Sistema'}
+                          </span>
+                          <span>·</span>
+                        </>
+                      )}
                       <span>{formatDateTime(r.created_at)}</span>
                       {r.entity_label && (
                         <>
@@ -233,7 +271,7 @@ export default function RegistrosPage() {
       </div>
 
       <p className="text-[11px] text-muted-foreground text-center">
-        Exibindo {filtered.length} registro{filtered.length === 1 ? '' : 's'} · retenção de 7 dias
+        Exibindo {filtered.length} registro{filtered.length === 1 ? '' : 's'} · janela de {RETENTION_DAYS} dias
       </p>
     </div>
   );
