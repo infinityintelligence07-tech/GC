@@ -429,7 +429,8 @@ export default function StudentsPage() {
     (s.downPayment || 0) >= (s.saleValue || 0) - 0.01;
 
   // Detecta se algum filtro está ativo. Quando nenhum filtro está ativo,
-  // exporta TODOS os alunos (inclusive Pagos / Cancelados / Renda Extra).
+  // exporta a lista completa no Kamino. No MODELO GC IAM, cancelados e
+  // quitados (tudo pago) já saem em buildModeloGcIamExport.
   const hasActiveFilter = Boolean(
     search || acFilter || scoreFilter !== null || statusFilter || tagFilters.length > 0 || dueDateStart || dueDateEnd || recompraFilter
   );

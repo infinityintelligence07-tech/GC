@@ -77,7 +77,7 @@ describe('exportModeloGcIam', () => {
     expect(rows[0].pix).toBeNull();
   });
 
-  it('PIX à vista gera uma linha sem parcelas', () => {
+  it('PIX à vista quitado não entra na planilha (tudo pago)', () => {
     const s = baseStudent({
       saleValue: 48050,
       downPayment: 48050,
@@ -92,10 +92,7 @@ describe('exportModeloGcIam', () => {
     });
     expect(detectFormaPagto(s)).toBe('PIX');
     const { rows } = buildModeloGcIamExport([s]);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].pix).toBe(48050);
-    expect(rows[0].numeroParcela).toBeNull();
-    expect(rows[0].valorParcela).toBeNull();
+    expect(rows).toHaveLength(0);
   });
 
   it('CSV e XLS usam Nº PARCELA e DATA VENCIMENTO, sem meses na lateral', () => {
@@ -112,5 +109,34 @@ describe('exportModeloGcIam', () => {
     expect(xml).toContain('Nº PARCELA');
     expect(xml).toContain('DATA VENCIMENTO');
     expect(xml).not.toContain('>JUNHO<');
+  });
+
+  it('exclui contratos cancelados da planilha', () => {
+    const ativo = baseStudent({ id: 'ativo', name: 'Aluno Ativo' });
+    const cancelado = baseStudent({
+      id: 'canc',
+      name: 'Aluno Cancelado',
+      status: 'Cancelado',
+      statusCancelamento: 'cancelado',
+    });
+    const { rows } = buildModeloGcIamExport([ativo, cancelado]);
+    expect(rows.every((r) => r.nomeAluno !== 'Aluno Cancelado')).toBe(true);
+    expect(rows.some((r) => r.nomeAluno === 'Aluno Ativo')).toBe(true);
+  });
+
+  it('exclui alunos com tudo pago da planilha', () => {
+    const ativo = baseStudent({ id: 'ativo', name: 'Aluno Ativo' });
+    const quitado = baseStudent({
+      id: 'pago',
+      name: 'Aluno Quitado',
+      status: 'Pago',
+      installments: [
+        { number: 1, dueDate: '2026-06-15', value: 1800, paid: true, paidDate: '2026-06-15' },
+        { number: 2, dueDate: '2026-07-15', value: 1800, paid: true, paidDate: '2026-07-15' },
+      ],
+    });
+    const { rows } = buildModeloGcIamExport([ativo, quitado]);
+    expect(rows.every((r) => r.nomeAluno !== 'Aluno Quitado')).toBe(true);
+    expect(rows.some((r) => r.nomeAluno === 'Aluno Ativo')).toBe(true);
   });
 });

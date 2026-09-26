@@ -1,6 +1,7 @@
 import type { Installment, Student } from '@/types';
+import { isStudentFullyPaid } from '@/lib/acPortfolioVisibility';
 import { isEntradaPendenciaInstallment } from '@/lib/studentDisplayStatus';
-import { isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
+import { isContratoCancelado, isIamConciliadoQuitadoAvista } from '@/lib/iamPendenteConciliacao';
 import { resolveStudentFinance } from '@/lib/studentFinance';
 import { toDisplayName } from '@/lib/utils';
 
@@ -167,11 +168,12 @@ function resolvePixCartao(student: Student, forma: FormaPagtoModelo): { pix: num
 
 /**
  * Monta linhas verticais: 1 parcela = 1 linha (sem colunas de mês na lateral).
+ * Cancelados e quitados (tudo pago) não entram na planilha.
  */
 export function buildModeloGcIamExport(students: Student[]): ModeloGcIamExport {
-  const sorted = [...students].sort((a, b) =>
-    toDisplayName(a.name).localeCompare(toDisplayName(b.name), 'pt-BR'),
-  );
+  const sorted = students
+    .filter((s) => !isContratoCancelado(s) && s.status !== 'Pago' && !isStudentFullyPaid(s))
+    .sort((a, b) => toDisplayName(a.name).localeCompare(toDisplayName(b.name), 'pt-BR'));
 
   const rows: ModeloGcIamParcelaRow[] = [];
 
